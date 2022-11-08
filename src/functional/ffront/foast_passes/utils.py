@@ -3,7 +3,7 @@ from functional.ffront import field_operator_ast as foast
 
 def compute_assign_indices(
     targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred],
-    values: list
+    num_values: int
 ) -> list[int | tuple]:
     """Computes a list of relative indices, mapping each target to its respective value(s).
 
@@ -26,7 +26,7 @@ def compute_assign_indices(
         [0, 1, (2, 5)]
     """
     indices = list(range(len(targets)))
-    values = values.elts
+
     for idx, elt in enumerate(targets):
         if isinstance(elt, foast.Starred):
             break
@@ -36,7 +36,7 @@ def compute_assign_indices(
         if isinstance(elt, foast.Starred):
             star_lower, star_upper = max(indices), min(indices)
             if star_upper == 0:
-                star_upper = len(values)
+                star_upper = num_values
             indices[idx] = (star_lower, star_upper)
             break
         indices[idx] = rel_idx

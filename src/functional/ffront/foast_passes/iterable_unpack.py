@@ -55,14 +55,12 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
         for pos, node in enumerate(body):
             if isinstance(node, foast.TupleTargetAssign):
-                values = node.value
-                targets = node.targets
-                indices = compute_assign_indices(targets, values)
+                num_values, targets = len(node.value.type.types), node.targets
+                indices = compute_assign_indices(targets, num_values)
                 tuple_symbol = self._unique_tuple_symbol(node)
-                tuple_assign = foast.Assign(
+                unrolled.append(foast.Assign(
                     target=tuple_symbol, value=node.value, location=node.location
-                )
-                unrolled.append(tuple_assign)
+                ))
 
                 for i, index in enumerate(indices):
                     subtarget = targets[i]
@@ -72,8 +70,11 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     )
                     if isinstance(index, tuple):  # handle starred target
                         lower, upper = index[0], index[1]
+                        slice_indices = list(range(num_values)[lower:upper])
+                        slice = [foast.Subscript(value=tuple_name, index=i, type=el_type, location=node.location) for i in slice_indices]
+
                         new_tuple = foast.TupleExpr(
-                            elts=values.elts[lower:upper],
+                            elts=slice,
                             type=subtarget.type,
                             location=node.location,
                         )

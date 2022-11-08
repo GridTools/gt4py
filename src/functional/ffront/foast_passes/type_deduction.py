@@ -257,12 +257,13 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
-        targets = node.targets
         values = self.visit(node.value, **kwargs)
-        indices = compute_assign_indices(targets, values)
+        num_values = len(values.type.types)
+        targets = node.targets
+        indices = compute_assign_indices(targets, num_values)
 
         if isinstance(values, foast.TupleExpr):
-            if not any(isinstance(i, tuple) for i in indices) and len(indices) != len(values.elts):
+            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_values:
                 raise FieldOperatorTypeDeductionError(f"Too many values to unpack (expected {len(indices)}).")
 
         new_target_list = []
@@ -272,7 +273,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
             if isinstance(index, tuple):
                 lower, upper = index[0], index[1]
                 new_type = TupleType(
-                    types=[t.type for t in self.visit(values.elts[lower:upper], **kwargs)]
+                    types=[t for t in values.type.types[lower:upper]]
                 )
                 new_target = foast.Starred(
                     id=foast.DataSymbol(
@@ -282,11 +283,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
                     location=old_target.location,
                 )
             else:
-                if isinstance(values, foast.Call):
-                    new_type = values.type.types[index]
-                else:
-                    # we reassign normally
-                    new_type = values.elts[index].type
+                new_type = values.type.types[index]
                 new_target = self.visit(
                     old_target, refine_type=new_type, location=old_target.location, **kwargs
                 )
