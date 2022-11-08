@@ -26,4 +26,6 @@ def check(root, *args, **kwargs) -> str:
     )
     if isinstance(transformed, global_tmps.FencilWithTemporaries):
         transformed = transformed.fencil
-    return type_inference.pformat(type_inference.infer(transformed))
+    return type_inference.pformat(
+        type_inference.infer(transformed, offset_provider=kwargs["offset_provider"])
+    )
