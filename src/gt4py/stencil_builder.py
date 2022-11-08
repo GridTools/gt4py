@@ -79,9 +79,7 @@ class StencilBuilder:
 
         self.backend: "BackendType" = backend(self)
         self.frontend: Type["FrontendType"] = frontend
-        self.caching = gt4py.caching.strategy_factory("jit", self, **self.options.cache_settings)
-
-        self._build_data: Dict[str, Any] = {}
+        self.with_caching("jit")
         self._externals: Dict[str, Any] = {}
 
     def build(self) -> Type["StencilObject"]:
@@ -126,7 +124,10 @@ class StencilBuilder:
         Resets all cached build data.
         """
         self._build_data = {}
-        self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
+        self.caching = gt4py.caching.strategy_factory(caching_strategy_name,
+                                                      self, *args,
+                                                      **self.options.cache_settings,
+                                                      **kwargs)
         return self
 
     def with_options(
@@ -229,7 +230,7 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
-        self.with_caching(self.caching.name, **self.options.cache_settings)
+        self.with_caching(self.caching.name)
         return self
 
     @property
