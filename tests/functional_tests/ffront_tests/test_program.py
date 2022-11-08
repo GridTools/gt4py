@@ -287,7 +287,8 @@ def test_input_kwargs(fieldview_backend):
     input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
     out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
-    expected = np.asarray(input_3) * np.asarray(input_2) - np.asarray(input_1)
+    expected_fieldop = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
+    expected_program = np.asarray(input_3) * np.asarray(input_2) - np.asarray(input_1)
 
     @field_operator(backend=fieldview_backend)
     def fieldop_input_kwargs(
@@ -296,6 +297,9 @@ def test_input_kwargs(fieldview_backend):
         c: Field[[IDim, JDim], float64],
     ) -> Field[[IDim, JDim], float64]:
         return c * a - b
+
+    fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    assert np.allclose(expected_fieldop, out)
 
     @program
     def program_input_kwargs(
@@ -306,13 +310,14 @@ def test_input_kwargs(fieldview_backend):
     ):
         fieldop_input_kwargs(c, a, b, out=out)
 
-    fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected, out)
+    assert np.allclose(expected_program, out)
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
 
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected, out)
+    assert np.allclose(expected_program, out)
 
     with pytest.raises(GTTypeError) as exc_info_1:
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})

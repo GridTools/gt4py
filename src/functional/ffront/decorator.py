@@ -94,7 +94,9 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
-def _canonicalize_args(node_params, args, kwargs) -> tuple[tuple, dict]:
+def _canonicalize_args(
+    node_params: list[ct.SymbolType], args: tuple[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+) -> tuple[tuple, dict]:
     new_args = []
 
     for param_i, param in enumerate(node_params):
@@ -302,6 +304,9 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        if kwargs:
+            raise NotImplementedError("Keyword arguments are not supported yet.")
+
         arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
 
