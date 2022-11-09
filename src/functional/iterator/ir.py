@@ -134,6 +134,7 @@ BUILTINS = {
     "not_",
     "and_",
     "or_",
+    "xor_",
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
