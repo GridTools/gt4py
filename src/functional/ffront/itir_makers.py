@@ -173,6 +173,11 @@ def or__(left, right):
     return call_("or_")(left, right)
 
 
+def xor__(left, right):
+    """Create an xor_ FunCall, shorthand for ``call("xor_")(left, right)``."""
+    return call_("xor_")(left, right)
+
+
 def greater_(left, right):
     """Create a greater FunCall, shorthand for ``call("greater")(left, right)``."""
     return call_("greater")(left, right)

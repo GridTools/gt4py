@@ -75,6 +75,11 @@ def or_(*args):
 
 
 @builtin_dispatch
+def xor_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def minus(*args):
     raise BackendNotSelectedError()
 
@@ -339,6 +344,7 @@ BUILTINS = {
     "not_",
     "and_",
     "or_",
+    "xor_",
     "scan",
     "cartesian_domain",
     "unstructured_domain",
