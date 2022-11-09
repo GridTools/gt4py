@@ -117,9 +117,6 @@ def test_arithmetic(fieldview_backend):
 
 
 def test_power(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
-
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
@@ -166,9 +163,6 @@ def test_mod(fieldview_backend):
 
 
 def test_power_arithmetic(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
-
     size = 10
     a = np_as_located_field(IDim)(np.random.randn((size)))
     b = np_as_located_field(IDim)(np.zeros((size)))
@@ -1194,9 +1188,6 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("FloorDiv and Power not fully supported in gtfn.")
-
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     lower_i = 1
