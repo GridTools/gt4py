@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, Optional, TypeVar, Union, no_type_check
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from eve.traits import SymbolTableTrait
@@ -156,6 +156,7 @@ class IfStmt(Stmt):
     true_branch: BlockStmt
     false_branch: BlockStmt
 
+    @no_type_check
     @datamodels.root_validator
     def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
         common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(
