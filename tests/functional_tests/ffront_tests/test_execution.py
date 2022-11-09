@@ -1278,50 +1278,49 @@ def test_undefined_symbols():
 
 def test_tuple_unpacking(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size)))
-    b = np_as_located_field(IDim)(np.ones((size)))
-    c = np_as_located_field(IDim)(np.ones((size)))
-    d = np_as_located_field(IDim)(np.ones((size)))
+    inp = np_as_located_field(IDim)(np.ones((size)))
+    out1 = np_as_located_field(IDim)(np.ones((size)))
+    out2 = np_as_located_field(IDim)(np.ones((size)))
+    out3 = np_as_located_field(IDim)(np.ones((size)))
+    out4 = np_as_located_field(IDim)(np.ones((size)))
 
     @field_operator
     def _unpack(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
+            inp: Field[[IDim], float64],
     ) -> tuple[
         Field[[IDim], float64],
         Field[[IDim], float64],
         Field[[IDim], float64],
         Field[[IDim], float64],
     ]:
-        a, b, c, d = (inp1, inp2, inp3, inp4)
-        return d, c, b, a
+        a, b, c, d = (inp + 2., inp + 3., inp + 5., inp + 7.)
+        return a, b, c, d
 
     @program(backend=fieldview_backend)
     def unpack(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
+            inp: Field[[IDim], float64],
+            out1: Field[[IDim], float64],
+            out2: Field[[IDim], float64],
+            out3: Field[[IDim], float64],
+            out4: Field[[IDim], float64],
+
     ):
-        _unpack(inp1, inp2, inp3, inp4, out=(inp1, inp2, inp3, inp4))
+        _unpack(inp, out=(out1, out2, out3, out4))
 
-    unpack(a, b, c, d, offset_provider={})
+    unpack(inp, out1, out2, out3, out4, offset_provider={})
 
-    assert np.allclose(a, d)
-    assert np.allclose(b, c)
-    assert np.allclose(c, b)
-    assert np.allclose(d, a)
+    arr = inp.array()
+
+    assert np.allclose(out1, arr + 2.)
+    assert np.allclose(out2, arr + 3.)
+    assert np.allclose(out3, arr + 5.)
+    assert np.allclose(out4, arr + 7.)
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
     size = 10
 
-    inp1 = np_as_located_field(IDim)(np.ones((size)))
-    inp2 = np_as_located_field(IDim)(np.ones((size)))
-    inp3 = np_as_located_field(IDim)(np.ones((size)))
-    inp4 = np_as_located_field(IDim)(np.ones((size)))
+    inp = np_as_located_field(IDim)(np.ones((size)))
 
     out1 = np_as_located_field(IDim)(np.ones((size)))
     out2 = np_as_located_field(IDim)(np.ones((size)))
@@ -1329,64 +1328,63 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
     out4 = np_as_located_field(IDim)(np.ones((size)))
     out5 = np_as_located_field(IDim)(np.ones((size)))
     out6 = np_as_located_field(IDim)(np.ones((size)))
+    out7 = np_as_located_field(IDim)(np.ones((size)))
+    out8 = np_as_located_field(IDim)(np.ones((size)))
+    out9 = np_as_located_field(IDim)(np.ones((size)))
 
     @field_operator
-    def _unpack_first(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        *a, _, _ = (inp1, inp2 + 1.0, inp3 + 2.0, inp4 + 3.0)
-        return a
+    def _unpack(
+            inp: Field[[IDim], float64],
+    ) -> tuple[
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64]
+    ]:
+        *a, a2, a3 = (inp, inp + 2., inp + 3., inp + 5.)
+        b1, *b, b3 = (inp + 7., inp + 11., inp + 13., inp + 17.)
+        c1, c2, *c = (inp + 19., inp + 23., inp + 29., inp + 31.)
 
-    @field_operator
-    def _unpack_middle(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        _, *b, _ = (inp1, inp2 + 1.0, inp3 + 2.0, inp4 + 3.0)
-        return b
+        a_sum = a[0] + a[1]
+        b_sum = b[0] + b[1]
+        c_sum = c[0] + c[1]
 
-    @field_operator
-    def _unpack_last(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
-        _, _, *c = (inp1, inp2 + 1.0, inp3 + 2.0, inp4 + 3.0)
-        return c
+        return a_sum, a2, a3, b1, b_sum, b3, c1, c2, c_sum
 
     @program(backend=fieldview_backend)
-    def unpack(
-            inp1: Field[[IDim], float64],
-            inp2: Field[[IDim], float64],
-            inp3: Field[[IDim], float64],
-            inp4: Field[[IDim], float64],
-            out1: Field[[IDim], float64],
-            out2: Field[[IDim], float64],
-            out3: Field[[IDim], float64],
-            out4: Field[[IDim], float64],
-            out5: Field[[IDim], float64],
-            out6: Field[[IDim], float64]
-    ):
-        _unpack_first(inp1, inp2, inp3, inp4, out=(out1, out2))
-        _unpack_middle(inp1, inp2, inp3, inp4, out=(out3, out4))
-        _unpack_last(inp1, inp2, inp3, inp4, out=(out5, out6))
+    def unpack(inp: Field[[IDim], float64],
+               out1: Field[[IDim], float64],
+               out2: Field[[IDim], float64],
+               out3: Field[[IDim], float64],
+               out4: Field[[IDim], float64],
+               out5: Field[[IDim], float64],
+               out6: Field[[IDim], float64],
+               out7: Field[[IDim], float64],
+               out8: Field[[IDim], float64],
+               out9: Field[[IDim], float64],
+               ):
+        _unpack(inp, out=(out1, out2, out3, out4, out5, out6, out7, out8, out9))
 
-    unpack(inp1, inp2, inp3, inp4, out1, out2, out3, out4, out5, out6, offset_provider={})
+    unpack(inp, out1, out2, out3, out4, out5, out6, out7, out8, out9, offset_provider={})
 
-    assert np.allclose(out1, inp1.array())
-    assert np.allclose(out2, inp2.array() + 1)
+    arr = inp.array()
 
-    assert np.allclose(out3, inp2.array() + 1)
-    assert np.allclose(out4, inp3.array() + 2)
+    assert np.allclose(out1, sum([arr, arr, 2]))
+    assert np.allclose(out2, sum([arr, 3]))
+    assert np.allclose(out3, sum([arr, 5]))
 
-    assert np.allclose(out5, inp3.array() + 2)
-    assert np.allclose(out6, inp4.array() + 3)
+    assert np.allclose(out4, sum([arr, 7]))
+    assert np.allclose(out5, sum([arr, 11, arr, 13]))
+    assert np.allclose(out6, sum([arr, 17]))
+
+    assert np.allclose(out7, sum([arr, 19]))
+    assert np.allclose(out8, sum([arr, 23]))
+    assert np.allclose(out9, sum([arr, 29, arr, 31]))
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
