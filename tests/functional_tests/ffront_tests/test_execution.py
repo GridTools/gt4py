@@ -220,9 +220,6 @@ def test_unary_neg(fieldview_backend):
 
 
 def test_unary_invert(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support math builtins")
-
     size = 10
     a = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     b = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
