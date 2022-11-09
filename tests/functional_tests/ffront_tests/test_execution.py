@@ -146,16 +146,13 @@ def test_xor(fieldview_backend):
 
 
 def test_mod(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support `%` operator.")
-
     size = 10
-    a = np_as_located_field(IDim)(np.random.randn((size)))
-    b = np_as_located_field(IDim)(np.zeros((size)))
+    a = np_as_located_field(IDim)(np.ones((size), dtype=int64))
+    b = np_as_located_field(IDim)(np.ones((size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
-    def mod_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 % 2.0
+    def mod_fieldop(inp1: Field[[IDim], int64]) -> Field[[IDim], int64]:
+        return inp1 % 2
 
     mod_fieldop(a, out=b, offset_provider={})
 
