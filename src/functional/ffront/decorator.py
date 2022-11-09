@@ -95,9 +95,9 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
 
 
 def _canonicalize_args(
-    node_params: list[ct.FieldType | ct.ScalarType],
-    args: tuple[ct.SymbolType],
-    kwargs: dict[str, ct.SymbolType],
+    node_params: list[foast.DataSymbol] | list[past.DataSymbol],
+    args: tuple[Any],
+    kwargs: dict[str, Any],
 ) -> tuple[tuple, dict]:
     new_args = []
     new_kwargs = {**kwargs}
