@@ -49,6 +49,7 @@ from functional.iterator.builtins import (
     or_,
     plus,
     tuple_get,
+    xor_,
 )
 
 
@@ -66,6 +67,7 @@ LESS = itir.SymRef(id=less.fun.__name__)
 EQ = itir.SymRef(id=eq.fun.__name__)
 AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
+XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
