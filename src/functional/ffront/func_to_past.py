@@ -94,11 +94,17 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW
 
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MOD
+
     def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_AND
 
     def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_OR
+
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_XOR
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
         return past.BinOp(
