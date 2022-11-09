@@ -507,9 +507,9 @@ def function_signature_incompatibilities_func(
     # check positional arguments
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."
-    # for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
-    #     if a_arg != b_arg and not is_concretizable(a_arg, to_type=b_arg):
-    #         yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
+    for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
+        if a_arg != b_arg and not is_concretizable(a_arg, to_type=b_arg):
+            yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
     # check for missing or extra keyword arguments
     kw_a_m_b = set(func_type.kwargs.keys()) - set(kwargs.keys())
