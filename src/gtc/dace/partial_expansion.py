@@ -102,8 +102,8 @@ def _get_symbolic_origin_and_domain(
                 domain[axis] = (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset) - origins[
                     field
                 ][ax_idx]
-    for axis in dcir.Axis.dims_3d():
-        domain.setdefault(axis, 0)
+    # for axis in dcir.Axis.dims_3d():
+    #     domain.setdefault(axis, 0)
 
     # Collect equations and symbols from arguments and shapes
     equations = []
@@ -327,7 +327,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
             if symbolic_split_domain and not all(
                 (node_ax_size == symbolic_split_domain[ax]) == True
-                for ax, node_ax_size in node_symbolic_domain.items()
+                for ax, node_ax_size in node_symbolic_domain.items() if ax in symbolic_split_domain
             ):
                 return False
 
@@ -537,6 +537,18 @@ class PartialExpansion(transformation.SubgraphTransformation):
 #     return sdfg
 
 
+import dace.codegen.control_flow as cf
+from typing import Set
+
+
+def get_all_child_states(cfg: cf.ControlFlow):
+    """ Returns a set of all states in the given control flow tree. """
+    if isinstance(cfg, cf.SingleState):
+        return {cfg.state}
+    else:
+        return set.union(*[get_all_child_states(e) for e in cfg.children])
+
+
 def _setup_match(sdfg, nodes):
     subgraph = dace.sdfg.graph.SubgraphView(sdfg, nodes)
     partial_expansion = PartialExpansion()
@@ -544,26 +556,45 @@ def _setup_match(sdfg, nodes):
     partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
     return partial_expansion, subgraph
 
+def _test_match(sdfg, states: Set[dace.SDFGState]):
+    expansion, subgraph = _setup_match(sdfg, states)
+    return expansion.can_be_applied(sdfg, subgraph)
 
 def partially_expand(sdfg: dace.SDFG):
-    for sdfg in reversed(list(sdfg.all_sdfgs_recursive())):
-        states = dfs_topological_sort(sdfg)
-        last_applicable_states = []
-
-        partial_expansion, subgraph = _setup_match(sdfg, last_applicable_states)
-        for state in states:
-            candidate_expansion, candidate_subgraph = _setup_match(
-                sdfg, [*last_applicable_states, state]
-            )
-            if not candidate_expansion.can_be_applied(sdfg, candidate_subgraph):
-                partial_expansion.apply(sdfg)
-                last_states = [state]
-                partial_expansion, subgraph = _setup_match(sdfg, last_states)
+    cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
+    def _recurse(cfg: cf.ControlFlow):
+        subgraphs: List[Set[dace.SDFGState]] = list()
+        candidate = set()
+        for child in cfg.children:
+            if isinstance(child, cf.SingleState):
+                if _test_match(sdfg, {child.state} | candidate ):
+                    candidate.add(child.state)
+                else:
+                    if candidate:
+                        subgraphs.append(candidate)
+                    if _test_match(sdfg, {child.state}):
+                        candidate = {child.state}
+                    else:
+                        candidate = set()
             else:
-                partial_expansion = candidate_expansion
-                last_states.append(state)
+                cand_states = get_all_child_states(child)
+                if _test_match(sdfg, cand_states | candidate ):
+                    candidate.add(cand_states)
+                else:
+                    if candidate:
+                        subgraphs.append(candidate)
+                    subsubgraphs = _recurse(child)
+                    if subsubgraphs:
+                        subgraphs.extend(subsubgraphs)
+        if candidate:
+            subgraphs.append(candidate)
+        return subgraphs
+    subgraphs = _recurse(cft)
 
-        if partial_expansion.can_be_applied():
-            partial_expansion.apply(sdfg)
+    assert subgraphs
+    allstates = [s for subgraph in subgraphs for s in subgraph]
+    print(subgraphs)
+    # assert set(allstates) == set(sdfg.nodes())  # every state is here
+    # assert len(allstates) == sdfg.number_of_nodes()  # all states are here once
 
     return sdfg

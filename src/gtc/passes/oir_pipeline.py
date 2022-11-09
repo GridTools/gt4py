@@ -67,9 +67,9 @@ class DefaultPipeline(OirPipeline):
     @staticmethod
     def all_steps() -> Sequence[PassT]:
         return [
-            AdjacentLoopMerging,
-            HorizontalExecutionMerging,
-            OnTheFlyMerging,
+            # AdjacentLoopMerging,
+            # HorizontalExecutionMerging,
+            # OnTheFlyMerging,
             LocalTemporariesToScalars,
             WriteBeforeReadTemporariesToScalars,
             MaskStmtMerging,
