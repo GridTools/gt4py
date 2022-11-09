@@ -193,14 +193,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
-    def visit_Starred(self, node: ast.Starred) -> foast.Starred:
-        return foast.Starred(id=node.value.id, location=self._make_loc(node))
-
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
-        if isinstance(target, ast.Tuple):
 
-            constraint_type = foast.DataType
+        if isinstance(target, ast.Tuple):
             new_targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred] = []
 
             for elt in target.elts:
@@ -210,10 +206,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                             id=foast.DataSymbol(
                                 id=elt.value.id,
                                 location=self._make_loc(elt),
-                                type=ct.DeferredSymbolType(constraint=constraint_type),
+                                type=ct.DeferredSymbolType(constraint=ct.DataType),
                             ),
                             location=self._make_loc(elt),
-                            type=ct.DeferredSymbolType(constraint=constraint_type),
+                            type=ct.DeferredSymbolType(constraint=ct.DataType),
                         )
                     )
                 else:
@@ -221,7 +217,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         foast.DataSymbol(
                             id=elt.id,
                             location=self._make_loc(elt),
-                            type=ct.DeferredSymbolType(constraint=constraint_type),
+                            type=ct.DeferredSymbolType(constraint=ct.DataType),
                         )
                     )
 
