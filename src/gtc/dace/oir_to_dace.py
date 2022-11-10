@@ -22,8 +22,9 @@ import dace.subsets
 import eve
 import gtc.oir as oir
 from gtc import daceir as dcir
+from gtc.dace.helpers import compute_dcir_access_infos, make_dace_subset
 from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import compute_dcir_access_infos, data_type_to_dace_typeclass, make_dace_subset
+from gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gtc.definitions import Extent
 from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
 

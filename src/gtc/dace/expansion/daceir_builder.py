@@ -30,8 +30,7 @@ from eve import NodeTranslator, SymbolRef
 from eve.iterators import iter_tree
 from gtc import daceir as dcir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
-from gtc.dace.nodes import StencilComputation
-from gtc.dace.utils import (
+from gtc.dace.helpers import (
     compute_dcir_access_infos,
     flatten_list,
     get_tasklet_symbol,
@@ -39,6 +38,7 @@ from gtc.dace.utils import (
     union_node_grid_subsets,
     untile_memlets,
 )
+from gtc.dace.nodes import StencilComputation
 from gtc.definitions import Extent
 
 from .utils import remove_horizontal_region

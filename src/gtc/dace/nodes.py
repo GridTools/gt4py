@@ -26,7 +26,7 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.dace.utils import compute_dcir_access_infos
+from gtc.dace.helpers import compute_dcir_access_infos
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
