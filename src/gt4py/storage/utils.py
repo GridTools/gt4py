@@ -79,6 +79,9 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             else list("IJK") + [str(d) for d in range(len(shape) - 3)]
         )
 
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
+
     if not all(
         isinstance(d, (str, Axis)) and (str(d).isdigit() or str(d) in "IJK") for d in dimensions
     ):
