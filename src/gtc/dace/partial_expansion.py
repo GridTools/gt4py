@@ -591,9 +591,9 @@ def partially_expand(sdfg: dace.SDFG):
         return subgraphs
     subgraphs = _recurse(cft)
 
-    assert subgraphs
-    allstates = [s for subgraph in subgraphs for s in subgraph]
-    print(subgraphs)
+    # assert subgraphs
+    # allstates = [s for subgraph in subgraphs for s in subgraph]
+    # print(subgraphs)
     # assert set(allstates) == set(sdfg.nodes())  # every state is here
     # assert len(allstates) == sdfg.number_of_nodes()  # all states are here once
 
