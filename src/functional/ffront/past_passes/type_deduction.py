@@ -143,6 +143,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == ct.BinaryOperator.POW:
             return left_type
 
+        if node.op == ct.BinaryOperator.MOD and (
+            isinstance(right_type, ct.ScalarType) and not type_info.is_integral(right_type)
+        ):
+            raise ProgramTypeError.from_past_node(
+                arg,
+                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept scalar ints",
+            )
+        elif node.op == ct.BinaryOperator.MOD:
+            return left_type
+
         try:
             return type_info.promote(left_type, right_type)
         except GTTypeError as ex:
