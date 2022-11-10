@@ -15,7 +15,7 @@
 import dataclasses
 import itertools
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Union, cast
 
 import dace
 import dace.data
@@ -38,10 +38,13 @@ from gtc.dace.helpers import (
     union_node_grid_subsets,
     untile_memlets,
 )
-from gtc.dace.nodes import StencilComputation
 from gtc.definitions import Extent
 
 from .utils import remove_horizontal_region
+
+
+if TYPE_CHECKING:
+    from gtc.dace.nodes import StencilComputation
 
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
@@ -150,7 +153,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
 class DaCeIRBuilder(NodeTranslator):
     @dataclass
     class GlobalContext:
-        library_node: StencilComputation
+        library_node: "StencilComputation"
         arrays: Dict[str, dace.data.Data]
 
         def get_dcir_decls(
