@@ -26,7 +26,7 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.dace.helpers import compute_dcir_access_infos
+from gtc.dace.expansion.expansion import StencilComputationExpansion
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
@@ -121,6 +121,8 @@ class StencilComputation(library.LibraryNode):
         **kwargs,
     ):
         super().__init__(name=name, *args, **kwargs)
+
+        from gtc.dace.helpers import compute_dcir_access_infos
 
         if oir_node is not None:
             assert extents is not None
@@ -219,3 +221,6 @@ class StencilComputation(library.LibraryNode):
             return {
                 key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
             }
+
+
+dace.library.register_expansion(StencilComputation, "default")(StencilComputationExpansion)
