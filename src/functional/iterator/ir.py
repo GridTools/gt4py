@@ -135,7 +135,6 @@ BUILTINS = {
     "and_",
     "or_",
     "xor_",
-    "mod",
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
