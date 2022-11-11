@@ -13,13 +13,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Collection, Union
+from typing import Any, Collection, Union, List
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional import common
 from functional.program_processors.codegens.gtfn import gtfn_ir
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
+
+from functional.program_processors.codegens.gtfn.to_imp_proto import to_imp
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -153,7 +155,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         struct ${id} {
             constexpr auto operator()() const {
                 return [](${','.join('auto const& ' + p for p in params)}){
-                    return ${expr};
+                    return ${expr_};
                 };
             }
         };
@@ -175,10 +177,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
+    def visit_FunctionDefinition(self, node, **kwargs):
+        expr_ = to_imp(node)
+        return self.generic_visit(node, expr_=expr_)
+
     def visit_FencilDefinition(
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
+        # for fun_def in node.function_definitions:
+        #     to_imp(fun_def)
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
