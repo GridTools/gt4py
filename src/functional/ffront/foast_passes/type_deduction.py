@@ -409,15 +409,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if node.op == ct.BinaryOperator.POW:
             return left_type
 
-        # if node.op == ct.BinaryOperator.MOD and (
-        #     isinstance(right_type, ct.ScalarType) and not type_info.is_integral(right_type)
-        # ):
-        #     raise FieldOperatorTypeDeductionError.from_foast_node(
-        #         arg,
-        #         msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept scalar ints",
-        #     )
-        # elif node.op == ct.BinaryOperator.MOD:
-        #     return left_type
+        if node.op == ct.BinaryOperator.MOD and not type_info.is_integral(right_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                arg,
+                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept scalar ints",
+            )
 
         try:
             return type_info.promote(left_type, right_type)
