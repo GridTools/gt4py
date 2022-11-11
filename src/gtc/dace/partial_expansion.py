@@ -327,7 +327,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
             if symbolic_split_domain and not all(
                 (node_ax_size == symbolic_split_domain[ax]) == True
-                for ax, node_ax_size in node_symbolic_domain.items() if ax in symbolic_split_domain
+                for ax, node_ax_size in node_symbolic_domain.items()
+                if ax in symbolic_split_domain
             ):
                 return False
 
@@ -537,12 +538,13 @@ class PartialExpansion(transformation.SubgraphTransformation):
 #     return sdfg
 
 
-import dace.codegen.control_flow as cf
 from typing import Set
+
+import dace.codegen.control_flow as cf
 
 
 def get_all_child_states(cfg: cf.ControlFlow):
-    """ Returns a set of all states in the given control flow tree. """
+    """Returns a set of all states in the given control flow tree."""
     if isinstance(cfg, cf.SingleState):
         return {cfg.state}
     else:
@@ -556,18 +558,22 @@ def _setup_match(sdfg, nodes):
     partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
     return partial_expansion, subgraph
 
+
 def _test_match(sdfg, states: Set[dace.SDFGState]):
     expansion, subgraph = _setup_match(sdfg, states)
     return expansion.can_be_applied(sdfg, subgraph)
 
+
 def partially_expand(sdfg: dace.SDFG):
     cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
+
     def _recurse(cfg: cf.ControlFlow):
         subgraphs: List[Set[dace.SDFGState]] = list()
         candidate = set()
-        for child in cfg.children:
+        # reversed so that extent analysis tends to include stencil sinks
+        for child in reversed(cfg.children):
             if isinstance(child, cf.SingleState):
-                if _test_match(sdfg, {child.state} | candidate ):
+                if _test_match(sdfg, {child.state} | candidate):
                     candidate.add(child.state)
                 else:
                     if candidate:
@@ -578,7 +584,7 @@ def partially_expand(sdfg: dace.SDFG):
                         candidate = set()
             else:
                 cand_states = get_all_child_states(child)
-                if _test_match(sdfg, cand_states | candidate ):
+                if _test_match(sdfg, cand_states | candidate):
                     candidate.add(cand_states)
                 else:
                     if candidate:
@@ -589,6 +595,7 @@ def partially_expand(sdfg: dace.SDFG):
         if candidate:
             subgraphs.append(candidate)
         return subgraphs
+
     subgraphs = _recurse(cft)
 
     # assert subgraphs

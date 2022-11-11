@@ -43,7 +43,11 @@ from gtc import common, gtir
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.partial_expansion import partially_expand
-from gtc.dace.transformations import NoEmptyEdgeTrivialMapElimination, nest_sequential_map_scopes
+from gtc.dace.transformations import (
+    InlineThreadLocalTransients,
+    NoEmptyEdgeTrivialMapElimination,
+    nest_sequential_map_scopes,
+)
 from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
@@ -190,7 +194,7 @@ def _post_expand_trafos(sdfg: dace.SDFG):
         if node.schedule == dace.ScheduleType.CPU_Multicore and len(node.range) <= 1:
             node.schedule = dace.ScheduleType.Sequential
 
-    # sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
+    sdfg.apply_transformations_repeated(InlineThreadLocalTransients)
     sdfg.simplify()
     nest_sequential_map_scopes(sdfg)
 
