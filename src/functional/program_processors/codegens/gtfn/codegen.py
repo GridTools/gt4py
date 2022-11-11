@@ -155,7 +155,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         struct ${id} {
             constexpr auto operator()() const {
                 return [](${','.join('auto const& ' + p for p in params)}){
-                    return ${expr_};
+                    ${expr_};
                 };
             }
         };
@@ -185,8 +185,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
-        # for fun_def in node.function_definitions:
-        #     to_imp(fun_def)
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],

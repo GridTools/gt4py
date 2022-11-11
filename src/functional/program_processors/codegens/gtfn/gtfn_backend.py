@@ -31,6 +31,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         offset_provider=offset_provider,
         unroll_reduce=True,
     )
+    # Note MR: lowering to gtfn failing if unroll reduce = False?
     gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
