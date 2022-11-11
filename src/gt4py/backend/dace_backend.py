@@ -40,7 +40,6 @@ from gt4py.backend.module_generator import make_args_data_from_gtir
 from gt4py.utils import shash
 from gt4py.utils.layout import layout_checker_factory
 from gtc import common, gtir
-from gtc.dace.helpers import array_dimensions, layout_maker_factory, replace_strides
 from gtc.dace.nodes import StencilComputation
 from gtc.dace.oir_to_dace import OirSDFGBuilder
 from gtc.dace.transformations import (
@@ -48,6 +47,7 @@ from gtc.dace.transformations import (
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
+from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
 from gtc.gtir_to_oir import GTIRToOIR
 from gtc.passes.gtir_k_boundary import compute_k_boundary
 from gtc.passes.gtir_pipeline import GtirPipeline

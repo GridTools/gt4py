@@ -122,7 +122,7 @@ class StencilComputation(library.LibraryNode):
     ):
         super().__init__(name=name, *args, **kwargs)
 
-        from gtc.dace.helpers import compute_dcir_access_infos
+        from gtc.dace.utils import compute_dcir_access_infos
 
         if oir_node is not None:
             assert extents is not None

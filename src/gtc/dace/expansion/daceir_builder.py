@@ -30,7 +30,7 @@ from eve import NodeTranslator, SymbolRef
 from eve.iterators import iter_tree
 from gtc import daceir as dcir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
-from gtc.dace.helpers import (
+from gtc.dace.utils import (
     compute_dcir_access_infos,
     flatten_list,
     get_tasklet_symbol,
