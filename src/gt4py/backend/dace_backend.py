@@ -466,25 +466,47 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        threadlocal_fmt = """dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), omp_max_threads * ({size}))();
-#pragma omp parallel
-{{
-{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({size});
-}}"""
-        res = [
-            (
-                global_fmt if array.storage != dace.StorageType.CPU_ThreadLocal else threadlocal_fmt
-            ).format(
-                name=name,
-                sdfg_id=array_sdfg.sdfg_id,
-                dtype=array.dtype.ctype,
-                size=array.total_size,
-            )
-            for array_sdfg, name, array in sdfg.arrays_recursive()
-            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
-        ]
-        return [line for r in res for line in r.split("\n")]
+
+        allocator_fmt = (
+            "__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        )
+        threadlocal_fmt = (
+            "__{sdfg_id}_{name} = pool__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
+        )
+        res = []
+        for array_sdfg, name, array in sdfg.arrays_recursive():
+            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent:
+                if array.storage != dace.StorageType.CPU_ThreadLocal:
+                    fmt = "dace_handle." + allocator_fmt
+                    res.append(
+                        fmt.format(
+                            name=name,
+                            sdfg_id=array_sdfg.sdfg_id,
+                            dtype=array.dtype.ctype,
+                            size=array.total_size,
+                        )
+                    )
+                else:
+                    fmts = [
+                        "{dtype}* pool" + allocator_fmt,
+                        "#pragma omp parallel",
+                        "{{",
+                        threadlocal_fmt,
+                        "}}",
+                    ]
+                    res.extend(
+                        [
+                            fmt.format(
+                                name=name,
+                                sdfg_id=array_sdfg.sdfg_id,
+                                dtype=array.dtype.ctype,
+                                size=f"omp_max_threads * ({array.total_size})",
+                                local_size=array.total_size,
+                            )
+                            for fmt in fmts
+                        ]
+                    )
+        return res
 
     @staticmethod
     def _postprocess_dace_code(code_objects, is_gpu, builder):
