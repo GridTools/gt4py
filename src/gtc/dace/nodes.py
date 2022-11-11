@@ -76,7 +76,9 @@ class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
 
 @library.node
 class StencilComputation(library.LibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {}
+    implementations: Dict[str, dace.library.ExpandTransformation] = {
+        "default": StencilComputationExpansion
+    }
     default_implementation = "default"
 
     oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
@@ -221,6 +223,3 @@ class StencilComputation(library.LibraryNode):
             return {
                 key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
             }
-
-
-dace.library.register_expansion(StencilComputation, "default")(StencilComputationExpansion)
