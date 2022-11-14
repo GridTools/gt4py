@@ -1,5 +1,5 @@
 from functional.program_processors.codegens.gtfn import gtfn_ir
-from eve import NodeVisitor
+from eve import NodeVisitor, NodeTranslator
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 from typing import List
@@ -79,16 +79,33 @@ class ToImp(NodeVisitor):
         return (
             1 + ToImp._depth(node.args[0])
             if isinstance(node.args[0], gtfn_ir.FunCall) and "step" in node.args[0].fun.id
-            else 1
+            else 0
         )
+
+    def visit_Lambda(self, node: gtfn_ir.Lambda, **kwargs) -> str:
+        idx_to_replace = node.params[1].id  # find _i_X parameter
+
+        class Replace(NodeTranslator):
+            def visit_SymRef(self, node):
+                if node.id == idx_to_replace:
+                    return gtfn_ir.OffsetLiteral(value=self.cur_idx)
+                return self.generic_visit(node)
+
+        for i in range(kwargs["num_iter"]):
+            replacer = Replace()
+            replacer.cur_idx = i
+            new_expr = replacer.visit(node.expr.rhs)
+            rhs = self.visit(new_expr)
+            self.imp_list.append(f"red_{kwargs['lam_idx']} += {rhs};")
 
     def visit_FunCall(self, node: gtfn_ir.FunCall) -> str:
         if (
-            isinstance(node.fun, gtfn_ir.Lambda) and "step" in ???
+            isinstance(node.fun, gtfn_ir.Lambda) and "step" in node.fun.params[0].id
         ):  # TODO: bad hardcoded string
             idx = self.idx
-            self.imp_list.append(f"red_{idx} = 0.")
-            num_iter = 1 + ToImp._depth(node.args[0])
+            self.imp_list.append(f"double red_{idx} = 0.;")  # let's just guess double
+            num_iter = 1 + ToImp._depth(node.fun.expr)
+            self.visit(node.args[0], num_iter=num_iter, lam_idx=idx)
             self.idx += 1
             return f"red_{idx}"
         if isinstance(node.fun, gtfn_ir.Lambda):
