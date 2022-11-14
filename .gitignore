@@ -104,7 +104,7 @@ venv.bak/
 .idea/
 
 # VSCode project settings
-.vscode/
+/.vscode/
 
 # SublimeText project settings
 *.sublime-project
@@ -119,3 +119,5 @@ venv.bak/
 
 ### Others ###
 .obsidian
+
+coverage.json
