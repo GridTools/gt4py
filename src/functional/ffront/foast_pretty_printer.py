@@ -11,7 +11,10 @@ from functional.ffront import common_types
 
 PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
 
-# see https://docs.python.org/3/reference/expressions.html#operator-precedence
+# See https://docs.python.org/3/reference/expressions.html#operator-precedence
+# The following list contains all entries from the above link. Operators that
+# are not modeled in FOAST are kept for ease of comparability and future
+# extension.
 PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     # Binding or parenthesized expression, list display, dictionary display, set display
     foast.TupleExpr: 18,
@@ -20,7 +23,7 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     foast.Call: 17,
     foast.Attribute: 17,
     # Await expression
-    #  not used
+    #  not modeled in FOAST
     # Exponentiation
     (foast.BinOp, "power"): 16,
     # Positive, negative, bitwise NOT
@@ -36,13 +39,13 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     (foast.BinOp, "plus"): 12,
     (foast.BinOp, "minus"): 12,
     # Shifts
-    #  not used
+    #  not modeled in FOAST
     # Bitwise AND
-    #  not used
+    #  not modeled in FOAST
     # Bitwise XOR
-    #  not used
+    #  not modeled in FOAST
     # Bitwise OR
-    #  not used
+    #  not modeled in FOAST
     # Comparisons, including membership tests and identity tests
     (foast.Compare, "less"): 7,
     (foast.Compare, "less_equal"): 7,
@@ -59,9 +62,9 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     # Conditional expression
     foast.TernaryExpr: 3,
     # Lambda expression
-    #  not used
+    #  not modeled in FOAST
     # Assignment expression
-    #  not used
+    #  not modeled in FOAST
 }
 
 RIGHT_GROUPING = {(foast.BinOp, "power"), foast.TernaryExpr}
