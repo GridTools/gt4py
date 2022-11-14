@@ -19,22 +19,25 @@ from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as ct
 
+from functional.utils import RecursionGuard
 
 class LocatedNode(Node):
     location: SourceLocation
 
     def __str__(self):
-        from functional.ffront.foast_pretty_printer import PrettyPrinter
+        from functional.ffront.foast_pretty_printer import pretty_format
 
-        name = type(self).__name__
-        if hasattr(PrettyPrinter, name) or hasattr(PrettyPrinter, f"visit_{name}"):
-            try:
-                return PrettyPrinter().visit(self)
-            except Exception as e:
-                warnings.warn(
-                    f"Pretty printing failed for node `{super().__str__()}` with error message {e.__repr__()}."
-                )
-        return super().__str__()
+        try:
+            with RecursionGuard(self) as guard:
+                return pretty_format(self)
+        except RecursionGuard.RecursionDetected:
+            # If `pretty_format` itself calls `__str__`, i.e. when printing
+            # an error that happend during formatting, just return the regular
+            # string representation, consequently avoiding an infinite recursion.
+            # Note that avoiding circular calls to `__str__` is not possible
+            # as the pretty printer depends on eve utilities that use the string
+            # representation of a node in the error handling.
+            return super().__str__()
 
 
 SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
@@ -92,23 +95,8 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
-class UnaryOperator(StrEnum):
-    UADD = "plus"
-    USUB = "minus"
-    NOT = "not_"
-
-    def __str__(self) -> str:
-        if self is self.UADD:
-            return "+"
-        elif self is self.USUB:
-            return "-"
-        elif self is self.NOT:
-            return "not"
-        return "Unknown UnaryOperator"
-
-
 class UnaryOp(Expr):
-    op: UnaryOperator
+    op: ct.UnaryOperator
     operand: Expr
 
 

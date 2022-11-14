@@ -84,7 +84,15 @@ def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
     return type(node)
 
 
-class PrettyPrinter(codegen.TemplatedGenerator):
+class _PrettyPrinter(codegen.TemplatedGenerator):
+    @classmethod
+    def apply(cls, node: foast.LocatedNode) -> str:
+        node_type_name = type(node).__name__
+        if not hasattr(cls, node_type_name) and not hasattr(cls, f"visit_{node_type_name}"):
+            raise NotImplementedError(f"Pretty printer does not support nodes of type "
+                                      f"`{node_type_name}`.")
+        return cls().visit(node)
+
     Symbol = as_fmt("{id}")
 
     Name = as_fmt("{id}")
@@ -192,4 +200,4 @@ def pretty_format(node: foast.LocatedNode) -> str:
     def field_op(a: Field[..., int64]) -> Field[..., int64]:
       return a + 1
     """
-    return PrettyPrinter().visit(node)
+    return _PrettyPrinter().apply(node)

@@ -56,6 +56,21 @@ class BinaryOperator(StrEnum):
         return "Unknown BinaryOperator"
 
 
+class UnaryOperator(StrEnum):
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
+
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        return "Unknown UnaryOperator"
+
+
 class SymbolType:
     pass
 
