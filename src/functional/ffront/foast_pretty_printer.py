@@ -5,8 +5,7 @@ import textwrap
 from typing import Final, TypeAlias, Union
 
 import functional.ffront.field_operator_ast as foast
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
+from eve.codegen import TemplatedGenerator, FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional.ffront import common_types
 
 
@@ -84,7 +83,7 @@ def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
     return type(node)
 
 
-class _PrettyPrinter(codegen.TemplatedGenerator):
+class _PrettyPrinter(TemplatedGenerator):
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> str:
         node_type_name = type(node).__name__
