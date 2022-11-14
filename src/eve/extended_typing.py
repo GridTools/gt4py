@@ -387,7 +387,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 
 # Any` is now a class since Python 3.11 or typing_extensions >= 4.4
-_ArtefactTypes = _types.GenericAlias
+_ArtefactTypes = (_types.GenericAlias,)
 if isinstance(_typing.Any, type):  # Python >= 3.11
     _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 if _typing_extensions.Any is not _typing.Any and isinstance(
