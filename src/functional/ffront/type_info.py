@@ -188,13 +188,8 @@ def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     if not isinstance(symbol_type, ct.ScalarType):
         return False
-    return symbol_type.kind in [
-        ct.ScalarKind.INT,
-        ct.ScalarKind.INT32,
-        ct.ScalarKind.INT64,
-        ct.ScalarKind.FLOAT32,
-        ct.ScalarKind.FLOAT64,
-    ]
+    # TODO: @nfarabullini re-factor is_arithmetic such it only checks for scalars and the emtpy field pass is in an another function
+    return is_arithmetic(symbol_type)
 
 
 def is_logical(symbol_type: ct.SymbolType) -> bool:
@@ -312,42 +307,40 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def _is_empty_field(field: ct.SymbolType) -> bool:
+def _is_zero_dim_field(field: ct.SymbolType) -> bool:
     return isinstance(field, ct.FieldType) and len(field.dims) == 0
 
 
-def is_not_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
+def is_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
     """
-    Check if first argument is an empty field and whether second is either another emtpy field or a scalar.
+    Check if first argument is an empty field and second is of a compatible type.
 
     In both cases, arguments dtypes have to be the same
     Examples:
     ---------
-    >>> is_not_empty_field_compatible(
+    >>> is_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
     ... )
-    True
-    >>> is_not_empty_field_compatible(
+    False
+    >>> is_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
-    True
-    >>> is_not_empty_field_compatible(
+    False
+    >>> is_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
-    False
-    >>> is_not_empty_field_compatible(
+    True
+    >>> is_empty_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64)
     ... )
-    False
+    True
     """
-    if (
-        not _is_empty_field(a_arg)
-        or not (_is_empty_field(b_arg) or is_number(b_arg))
-        or extract_dtype(a_arg) != extract_dtype(b_arg)
+    if (_is_zero_dim_field(b_arg) or is_number(b_arg)) and extract_dtype(a_arg) == extract_dtype(
+        b_arg
     ):
         return True
     return False
@@ -579,7 +572,7 @@ def function_signature_incompatibilities_func(
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
         if (
             a_arg != b_arg
-            and is_not_empty_field_compatible(a_arg, b_arg)
+            and not _is_zero_dim_field(a_arg)
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
@@ -604,7 +597,7 @@ def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
     for i, (a_arg, b_arg) in enumerate(zip(fieldop_type.definition.args, args)):
-        if is_not_empty_field_compatible(a_arg, b_arg):
+        if _is_zero_dim_field(a_arg) and not is_empty_field_compatible(a_arg, b_arg):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
     yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
