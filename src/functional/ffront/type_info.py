@@ -333,6 +333,16 @@ def is_not_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) ->
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     True
+    >>> is_not_empty_field_compatible(
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
+    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    ... )
+    False
+    >>> is_not_empty_field_compatible(
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
+    ...     ct.ScalarType(kind=ct.ScalarKind.INT64)
+    ... )
+    False
     """
     if (
         not _is_empty_field(a_arg)
