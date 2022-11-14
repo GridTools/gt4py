@@ -18,6 +18,7 @@ import sympy
 from pydantic import validator
 
 import eve
+import gtc.definitions
 from eve import Int, IntEnum, Node, Str, StrEnum, SymbolName, SymbolRef, utils
 from gtc import common, oir
 from gtc.common import LocNode
@@ -27,7 +28,6 @@ from gtc.dace.symbol_utils import (
     get_axis_bound_str,
     get_dace_symbol,
 )
-from gtc.definitions import Extent
 
 
 @utils.noninstantiable
@@ -439,7 +439,7 @@ class GridSubset(Node):
         return GridSubset(intervals=intervals)
 
     @classmethod
-    def from_gt4py_extent(cls, extent: Extent):
+    def from_gt4py_extent(cls, extent: gtc.definitions.Extent):
         i_interval = DomainInterval(
             start=AxisBound(level=common.LevelMarker.START, offset=extent[0][0], axis=Axis.I),
             end=AxisBound(level=common.LevelMarker.END, offset=extent[0][1], axis=Axis.I),
