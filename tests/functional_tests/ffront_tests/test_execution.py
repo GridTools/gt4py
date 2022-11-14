@@ -44,7 +44,7 @@ from functional.iterator.embedded import (
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1363,6 +1363,131 @@ def test_temporary_if(fieldview_backend):
 
     temporary_if(a, b, False, out=out, offset_provider={})
     assert np.allclose(out, b)
+
+
+def test_if_return(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def temporary_if(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            tmp1 = a
+            return tmp1
+        else:
+            tmp2 = b
+            return tmp2
+        return a + b
+
+    temporary_if(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    temporary_if(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_if_stmt_if_branch_returns(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def if_branch_returns(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            tmp1 = a
+            return tmp1
+        return b
+
+    if_branch_returns(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    if_branch_returns(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_if_stmt_else_branch_returns(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def else_branch_returns(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            pass
+        else:
+            tmp1 = b
+            return tmp1
+        return a
+
+    else_branch_returns(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    else_branch_returns(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_if_stmt_both_branches_return(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def both_branches_return(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
+    ):
+        if condition:
+            tmp1 = a
+            return tmp1
+        else:
+            tmp2 = b
+            return tmp2
+
+    both_branches_return(a, b, True, out=out, offset_provider={})
+    assert np.allclose(out, a)
+
+    both_branches_return(a, b, False, out=out, offset_provider={})
+    assert np.allclose(out, b)
+
+
+def test_nested_if_stmt_conditinal(fieldview_backend):
+    size = 10
+    inp = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def both_branches_return(inp: Field[[IDim, JDim], float64], condition1: bool, condition2: bool):
+        if condition1:
+            tmp1 = inp
+            if condition2:
+                return tmp1 + 1.0
+            result = tmp1 + 2.0
+        else:
+            result = inp + 3.0
+        return result
+
+    both_branches_return(inp, True, True, out=out, offset_provider={})
+    assert np.allclose(out, np.asarray(inp) + 1.0)
+
+    both_branches_return(inp, True, False, out=out, offset_provider={})
+    assert np.allclose(out, np.asarray(inp) + 2.0)
+
+    both_branches_return(inp, False, True, out=out, offset_provider={})
+    assert np.allclose(out, np.asarray(inp) + 3.0)
+
+    out[:] = 0
+    both_branches_return(inp, False, False, out=out, offset_provider={})
+    assert np.allclose(out, np.asarray(inp) + 3.0)
 
 
 def test_nested_if(fieldview_backend):

@@ -20,6 +20,7 @@ from typing import Any, Callable
 import numpy as np
 
 from eve import NodeTranslator
+from eve.utils import UIDGenerator
 from functional.common import DimensionKind
 from functional.ffront import (
     common_types as ct,
@@ -99,7 +100,69 @@ def is_expr_with_iterator_type_kind(it_type_kind: ITIRTypeKind) -> Callable[[foa
     return predicate
 
 
-def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+class StmtReturnKind(enum.IntEnum):
+    UNCONDIOTIONAL_RETURN = 0
+    CONDITIONAL_RETURN = 1
+    NO_RETURN = 2
+
+
+def deduce_return_kind(node: foast.Stmt) -> StmtReturnKind:
+    """
+    Deduce if a statement returns and if so, whether it does unconditionally.
+
+    Example with ``StmtReturnKind.UNCONDIOTIONAL_RETURN``
+    -----------------------------------------
+    .. code-block:: python
+
+        if cond:
+          return 1
+        else:
+          return 2
+
+    Example with ``StmtReturnKind.NO_RETURN``
+    -----------------------------------------
+    .. code-block:: python
+
+        if cond:
+          result = 1
+        else:
+          result = 2
+
+    Example with ``StmtReturnKind.CONDITIONAL_RETURN``
+    -----------------------------------------
+    .. code-block:: python
+
+        if cond:
+          return 1
+        else:
+          result = 2
+    """
+    if isinstance(node, foast.IfStmt):
+        return_kinds = (deduce_return_kind(node.true_branch), deduce_return_kind(node.false_branch))
+        if all(return_kind is StmtReturnKind.UNCONDIOTIONAL_RETURN for return_kind in return_kinds):
+            return StmtReturnKind.UNCONDIOTIONAL_RETURN
+        elif any(
+            return_kind in (StmtReturnKind.UNCONDIOTIONAL_RETURN, StmtReturnKind.CONDITIONAL_RETURN)
+            for return_kind in return_kinds
+        ):
+            return StmtReturnKind.CONDITIONAL_RETURN
+        assert all(return_kind is StmtReturnKind.NO_RETURN for return_kind in return_kinds)
+        return StmtReturnKind.NO_RETURN
+    elif isinstance(node, foast.Return):
+        return StmtReturnKind.UNCONDIOTIONAL_RETURN
+    elif isinstance(node, foast.BlockStmt):
+        for stmt in node.stmts:
+            return_kind = deduce_return_kind(stmt)
+            if return_kind != StmtReturnKind.NO_RETURN:
+                return return_kind
+        return StmtReturnKind.NO_RETURN
+    elif isinstance(node, foast.Assign):
+        return StmtReturnKind.NO_RETURN
+    else:
+        raise AssertionError(f"Statements of type `{type(node).__name__} not understood.`")
+
+
+def to_value(node_or_type: foast.LocatedNode | ct.DataType) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
 
@@ -123,16 +186,18 @@ def to_value(node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id=SymbolRef('a'))
     """
-    if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
+    type_ = node_or_type.type if isinstance(node_or_type, foast.LocatedNode) else node_or_type
+    if iterator_type_kind(type_) is ITIRTypeKind.ITERATOR:
         # just to ensure we don't accidentally deref a local field
-        assert not (isinstance(node.type, ct.FieldType) and is_local_kind(node.type))
+        assert not (isinstance(type_, ct.FieldType) and is_local_kind(type_))
         return im.deref_
-    elif iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
+    elif iterator_type_kind(type_) is ITIRTypeKind.VALUE:
         return lambda x: x
 
-    raise AssertionError(f"Type {node.type} can not be turned into a value.")
+    raise AssertionError(f"Type {type_} can not be turned into a value.")
 
 
+@dataclass
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -156,6 +221,8 @@ class FieldOperatorLowering(NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
+    uid_generator: UIDGenerator
+
     class lifted_lambda:
         def __init__(self, *params):
             self.params = params
@@ -165,7 +232,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
+        return cls(uid_generator=UIDGenerator()).visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
@@ -178,6 +245,8 @@ class FieldOperatorLowering(NodeTranslator):
         for i, param in enumerate(func_definition.params):
             if isinstance(node.definition.params[i].type, ct.ScalarType):
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
+
+        new_body = im.deref_(new_body)
 
         return itir.FunctionDefinition(
             id=func_definition.id,
@@ -193,7 +262,7 @@ class FieldOperatorLowering(NodeTranslator):
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
-            expr=self._visit_body(node.body, params=params, symtable=symtable),
+            expr=self.visit_BlockStmt(node.body, None, symtable=symtable),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
@@ -219,18 +288,14 @@ class FieldOperatorLowering(NodeTranslator):
             expr=body,
         )
 
-    def _visit_body(self, body: list[foast.Stmt], **kwargs) -> itir.Expr:
-        *stmts, return_stmt = body
-        assert isinstance(return_stmt, foast.Return)
-        return self.visit_stmts(stmts, inner_expr=self.visit(return_stmt, **kwargs), **kwargs)
-
-    def visit_stmts(self, stmts: list[foast.Stmt], inner_expr: itir.Expr, **kwargs) -> itir.Expr:
-        for stmt in reversed(stmts):
-            inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
-        return inner_expr
+    def visit_Return(self, node: foast.Return, inner_expr: itir.Expr, **kwargs) -> itir.Expr:
+        return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(self, node: foast.BlockStmt, inner_expr: itir.Expr, **kwargs) -> itir.Expr:
-        return self.visit_stmts(node.stmts, inner_expr=inner_expr, **kwargs)
+        for stmt in reversed(node.stmts):
+            inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
+        assert inner_expr
+        return inner_expr
 
     def visit_Assign(self, node: foast.Assign, inner_expr: itir.Expr, **kwargs) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
@@ -240,23 +305,50 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_IfStmt(self, node: foast.IfStmt, inner_expr: itir.Expr, **kwargs) -> itir.Expr:
         cond = self.visit(node.condition, **kwargs)
 
-        common_symbols: dict[str, foast.Symbol] = node.annex._common_symbols
-        # pack the common symbols into a tuple
-        common_symrefs = im.make_tuple_(*(im.ref(sym) for sym in common_symbols.keys()))
+        return_kind = deduce_return_kind(node)
 
-        # apply both branches and extract the common symbols through the prepared tuple
-        true_branch = self.visit(node.true_branch, inner_expr=common_symrefs, **kwargs)
-        false_branch = self.visit(node.false_branch, inner_expr=common_symrefs, **kwargs)
+        if return_kind is StmtReturnKind.NO_RETURN:
+            common_symbols: dict[str, foast.Symbol] = node.annex._common_symbols
 
-        # unpack the common symbols' tuple for `inner_expr`
-        for i, sym in enumerate(common_symbols.keys()):
-            inner_expr = im.let(sym, im.tuple_get_(i, im.ref("__if_stmt_result")))(inner_expr)
+            # pack the common symbols into a tuple
+            common_symrefs = im.make_tuple_(*(im.ref(sym) for sym in common_symbols.keys()))
 
-        # here we assume neither branch returns
-        return im.let("__if_stmt_result", im.if_(cond, true_branch, false_branch))(inner_expr)
+            # apply both branches and extract the common symbols through the prepared tuple
+            true_branch = self.visit(node.true_branch, inner_expr=common_symrefs, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=common_symrefs, **kwargs)
 
-    def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return to_value(node.value)(self.visit(node.value, **kwargs))
+            # unpack the common symbols' tuple for `inner_expr`
+            for i, sym in enumerate(common_symbols.keys()):
+                inner_expr = im.let(sym, im.tuple_get_(i, im.ref("__if_stmt_result")))(inner_expr)
+
+            # here we assume neither branch returns
+            return im.let("__if_stmt_result", im.if_(cond, true_branch, false_branch))(inner_expr)
+        elif return_kind is StmtReturnKind.CONDITIONAL_RETURN:
+            common_symbols: dict[str, foast.Symbol] = node.annex._common_symbols
+            common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
+            common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
+
+            # wrap the inner expression in a lambda function. note that this
+            # increases the operation count if both branches are evaluated.
+            inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
+            inner_expr_evaluator = im.lambda__(*common_syms)(inner_expr)
+            inner_expr = im.call_(inner_expr_name)(*common_symrefs)
+
+            true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+
+            return im.let(inner_expr_name, inner_expr_evaluator)(
+                im.if_(cond, true_branch, false_branch)
+            )
+
+        assert return_kind is StmtReturnKind.UNCONDIOTIONAL_RETURN
+
+        # note that we do not duplicate `inner_expr` here since if both branches
+        #  return, `inner_expr` is ignored.
+        true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+        false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+
+        return im.if_(cond, true_branch, false_branch)
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
@@ -374,7 +466,7 @@ class FieldOperatorLowering(NodeTranslator):
         init_expr: int | itir.Literal,
         **kwargs,
     ):
-        lowering = InsideReductionLowering()
+        lowering = InsideReductionLowering(uid_generator=self.uid_generator)
         expr = lowering.visit(node.args[0], **kwargs)
         params = list(lowering.lambda_params.items())
         return im.lift_(

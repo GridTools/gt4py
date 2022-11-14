@@ -173,7 +173,7 @@ class IfStmt(Stmt):
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
-    body: list[Stmt]
+    body: BlockStmt
     closure_vars: list[Symbol]
     type: Optional[ct.FunctionType] = None  # noqa A003  # shadowing a python builtin
 

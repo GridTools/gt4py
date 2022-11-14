@@ -169,8 +169,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        assert isinstance(new_body[-1], foast.Return)
-        return_type = new_body[-1].value.type
+        return_type = self._deduce_return_type(new_body, **kwargs)
         new_type = ct.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
@@ -182,6 +181,56 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=new_type,
             location=node.location,
         )
+
+    def _deduce_return_type(
+        self, node: foast.BlockStmt, *, requires_unconditional_return=True, **kwargs
+    ):
+        conditional_return_type: ct.DataType | None = None
+
+        for stmt in node.stmts:
+            is_unconditional_return = False
+
+            if isinstance(stmt, foast.Return):
+                is_unconditional_return = True
+                return_type = stmt.value.type
+            elif isinstance(stmt, foast.IfStmt):
+                return_types = (
+                    self._deduce_return_type(stmt.true_branch, requires_unconditional_return=False),
+                    self._deduce_return_type(
+                        stmt.false_branch, requires_unconditional_return=False
+                    ),
+                )
+                # if both branches return
+                if return_types[0] and return_types[1]:
+                    if return_types[0] == return_types[1]:
+                        is_unconditional_return = True
+                    else:
+                        # types must match
+                        raise AssertionError()
+                return_type = return_types[0] or return_types[1]
+            elif isinstance(stmt, foast.BlockStmt):
+                # just forward to nested BlockStmt
+                return_type = self._deduce_return_type(
+                    stmt, requires_unconditional_return=requires_unconditional_return
+                )
+            elif isinstance(stmt, foast.Assign):
+                return_type = None
+            else:
+                raise AssertionError()
+
+            if conditional_return_type and return_type and return_type != conditional_return_type:
+                raise AssertionError()
+
+            if is_unconditional_return:  # found a statement that always returns
+                assert return_type
+                return return_type
+            elif return_type:
+                conditional_return_type = return_type
+
+        if requires_unconditional_return:
+            raise AssertionError()
+
+        return None
 
     # TODO(tehrengruber): make sure all scalar arguments are lifted to 0-dim field args
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
