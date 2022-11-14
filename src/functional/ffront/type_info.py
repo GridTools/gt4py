@@ -308,7 +308,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
 
 
 def _is_zero_dim_field(field: ct.SymbolType) -> bool:
-    return isinstance(field, ct.FieldType) and len(field.dims) == 0
+    return isinstance(field, ct.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
 
 
 def is_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
