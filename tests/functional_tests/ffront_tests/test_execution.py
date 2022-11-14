@@ -1185,6 +1185,9 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("FloorDiv not fully supported in gtfn.")
+
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     lower_i = 1
@@ -1298,16 +1301,6 @@ def test_where_k_offset(fieldview_backend):
     expected = np.where(np.arange(0, size, 1)[np.newaxis, :] > 0.0, a, 2.0)
 
     assert np.allclose(np.asarray(out), expected)
-
-
-def test_undefined_symbols():
-    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
-
-        @field_operator
-        def return_undefined():
-            return undefined_symbol
 
 
 def test_constant_closure_vars():
