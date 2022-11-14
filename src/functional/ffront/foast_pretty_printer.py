@@ -109,6 +109,13 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> str:
+        if node.op is common_types.UnaryOperator.NOT:
+            op = "not "
+        else:
+            op = str(node.op)
+        return f"{op}{node.operand}"
+
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> str:
         left = self._parenthesize(node.left, node, Group.LEFT)
         right = self._parenthesize(node.right, node, Group.RIGHT)

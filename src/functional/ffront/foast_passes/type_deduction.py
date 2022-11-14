@@ -389,7 +389,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs,
     ) -> Optional[ct.SymbolType]:
-        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
+        logical_ops = {
+            ct.BinaryOperator.BIT_AND,
+            ct.BinaryOperator.BIT_OR,
+            ct.BinaryOperator.BIT_XOR,
+        }
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
@@ -427,7 +431,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
-            type_info.is_logical if node.op is ct.UnaryOperator.NOT else type_info.is_arithmetic
+            type_info.is_logical if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT] else type_info.is_arithmetic
         )
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(

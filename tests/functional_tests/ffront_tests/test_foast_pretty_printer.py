@@ -22,6 +22,10 @@ from functional.ffront.func_to_foast import FieldOperatorParser
         "(1, 2)",
         "--1",
         "1 <= 10",
+        "not True",
+        "~True",
+        "True & False",
+        "True | False"
     ],
 )
 def test_one_to_one(test_case: str):

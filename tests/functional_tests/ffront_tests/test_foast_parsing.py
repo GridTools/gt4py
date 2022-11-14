@@ -49,6 +49,7 @@ from functional.iterator.builtins import (
     or_,
     plus,
     tuple_get,
+    xor_,
 )
 
 
@@ -66,6 +67,7 @@ LESS = itir.SymRef(id=less.fun.__name__)
 EQ = itir.SymRef(id=eq.fun.__name__)
 AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
+XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
@@ -172,14 +174,15 @@ def test_binary_pow():
 
 
 def test_binary_mod():
-    def power(inp: Field[..., "int64"]):
+    def modulo(inp: Field[..., "int64"]):
         return inp % 3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`%` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(modulo)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
+    )
 
 
 def test_bool_and():
@@ -202,6 +205,30 @@ def test_bool_or():
         match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+def test_bool_xor():
+    def bool_xor(a: Field[..., "bool"], b: Field[..., "bool"]):
+        return a ^ b
+
+    parsed = FieldOperatorParser.apply_to_function(bool_xor)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL, shape=None),
+    )
+
+
+def test_unary_tilde():
+    def unary_tilde(a: Field[..., "bool"]):
+        return ~a
+
+    parsed = FieldOperatorParser.apply_to_function(unary_tilde)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL, shape=None),
+    )
 
 
 def test_scalar_cast():
