@@ -386,31 +386,21 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
     return _decorator(maybe_cls) if maybe_cls is not None else _decorator
 
 
-if _sys.version_info >= (3, 9):
+# Any` is now a class since Python 3.11 or typing_extensions >= 4.4
+_ArtefactTypes = _types.GenericAlias
+if isinstance(_typing.Any, type):  # Python >= 3.11
+    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
+if isinstance(_typing_extensions.Any, type):  # typing_extensions >= 4.4
+    _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
-    # Any` is now a class since Python 3.11 or typing_extensions >= 4.4
-    _ArtefactTypes = _types.GenericAlias
-    if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
-    if isinstance(_typing_extensions.Any, type):  # typing_extensions >= 4.4
-        _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
+def is_actual_type(obj: Any) -> TypeGuard[Type]:
+    """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
-        This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
-        and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
-        """
-        return isinstance(obj, type) and not isinstance(obj, _ArtefactTypes)
-
-else:
-
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
-
-        This is only needed for Python >= 3.9, where ``isinstance(types.GenericAlias(),  type) is True``.
-        """
-        return isinstance(obj, type) and obj is not Any
+    This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
+    and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
+    """
+    return isinstance(obj, type) and obj not in _ArtefactTypes
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
