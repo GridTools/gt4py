@@ -24,7 +24,8 @@ import gtc.common as common
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from gtc import daceir as dcir
-from gtc.dace.utils import get_axis_bound_str, make_dace_subset
+from gtc.dace.symbol_utils import get_axis_bound_str
+from gtc.dace.utils import make_dace_subset
 
 
 class TaskletCodegen(codegen.TemplatedGenerator):

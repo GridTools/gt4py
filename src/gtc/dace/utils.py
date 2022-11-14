@@ -14,7 +14,6 @@
 
 import re
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import dace
@@ -26,7 +25,7 @@ import gtc.oir as oir
 from eve import NodeVisitor
 from gtc import common
 from gtc import daceir as dcir
-from gtc.common import CartesianOffset, data_type_to_typestr
+from gtc.common import CartesianOffset
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
@@ -81,56 +80,8 @@ def get_tasklet_symbol(name, offset, is_target):
     return acc_name
 
 
-def get_axis_bound_str(axis_bound, var_name):
-    from gtc.common import LevelMarker
-
-    if axis_bound is None:
-        return ""
-    elif axis_bound.level == LevelMarker.END:
-        return f"{var_name}{axis_bound.offset:+d}"
-    else:
-        return f"{axis_bound.offset}"
-
-
-def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
-    from gtc.common import LevelMarker
-
-    if axis_bound is None:
-        return
-
-    elif axis_bound.level == LevelMarker.END:
-        return axis_bound.axis.domain_dace_symbol() + axis_bound.offset
-    else:
-        return axis_bound.offset
-
-
-def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
-
-    if axis_bound1 <= axis_bound2:
-        axis_bound1, axis_bound2 = axis_bound2, axis_bound1
-        sign = "-"
-    else:
-        sign = ""
-
-    if axis_bound1.level != axis_bound2.level:
-        var = var_name
-    else:
-        var = ""
-    return f"{sign}({var}{axis_bound1.offset-axis_bound2.offset:+d})"
-
-
 def axes_list_from_flags(flags):
     return [ax for f, ax in zip(flags, dcir.Axis.dims_3d()) if f]
-
-
-@lru_cache(maxsize=None)
-def get_dace_symbol(name: common.SymbolRef, dtype: common.DataType = common.DataType.INT32):
-    return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
-
-
-def data_type_to_dace_typeclass(data_type):
-    dtype = np.dtype(data_type_to_typestr(data_type))
-    return dace.dtypes.typeclass(dtype.type)
 
 
 class AccessInfoCollector(NodeVisitor):

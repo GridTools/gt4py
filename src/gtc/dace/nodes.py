@@ -26,7 +26,7 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.dace.utils import compute_dcir_access_infos
+from gtc.dace.expansion.expansion import StencilComputationExpansion
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
@@ -76,7 +76,9 @@ class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
 
 @library.node
 class StencilComputation(library.LibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {}
+    implementations: Dict[str, dace.library.ExpandTransformation] = {
+        "default": StencilComputationExpansion
+    }
     default_implementation = "default"
 
     oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
@@ -121,6 +123,8 @@ class StencilComputation(library.LibraryNode):
         **kwargs,
     ):
         super().__init__(name=name, *args, **kwargs)
+
+        from gtc.dace.utils import compute_dcir_access_infos
 
         if oir_node is not None:
             assert extents is not None
