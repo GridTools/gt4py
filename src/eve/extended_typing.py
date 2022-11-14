@@ -391,10 +391,7 @@ if _sys.version_info >= (3, 9):
     # Any` is now a class since Python 3.11 or typing_extensions >= 4.4
     _ArtefactTypes = _types.GenericAlias
     if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (
-            *_ArtefactTypes,
-            _typing.Any,
-        )
+        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
     if isinstance(_typing_extensions.Any, type):  # typing_extensions >= 4.4
         _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
