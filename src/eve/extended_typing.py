@@ -387,15 +387,24 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 
 if _sys.version_info >= (3, 9):
-    # The `obj is Any` check is required since `Any` was converted to a class since
-    # Python 3.11 or typing_extensions >= 4.4
+
+    # Any` is now a class since Python 3.11 or typing_extensions >= 4.4
+    _ArtefactTypes = _types.GenericAlias
+    if isinstance(_typing.Any, type):  # Python >= 3.11
+        _ArtefactTypes = (
+            *_ArtefactTypes,
+            _typing.Any,
+        )
+    if isinstance(_typing_extensions.Any, type):  # typing_extensions >= 4.4
+        _AnyTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
     def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
+        """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
         This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
+        and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
         """
-        return isinstance(obj, type) and not (isinstance(obj, _types.GenericAlias) or obj is Any)
+        return isinstance(obj, type) and not isinstance(obj, _ArtefactTypes)
 
 else:
 
