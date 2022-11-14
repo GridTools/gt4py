@@ -1,7 +1,8 @@
 import copy
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union
 
 import dace
+import dace.codegen.control_flow as cf
 import dace.sdfg.graph
 import dace.symbolic
 import sympy
@@ -11,6 +12,7 @@ from dace.sdfg.utils import dfs_topological_sort
 from dace.transformation import transformation
 from dace.transformation.helpers import nest_sdfg_subgraph
 
+import eve
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
@@ -72,19 +74,22 @@ def _get_symbolic_origin_and_domain(
     # union input and output subsets
     outer_subsets = {}
     for edge in state.in_edges(node):
-        outer_subsets[edge.dst_conn[len("__in_") :]] = edge.data.subset
+        outer_subsets[edge.data.data] = edge.data.subset
     for edge in state.out_edges(node):
-        outer_subsets[edge.src_conn[len("__out_") :]] = dace.subsets.union(
-            edge.data.subset, outer_subsets.get(edge.src_conn[len("__out_") :], edge.data.subset)
+        outer_subsets[edge.data.data] = dace.subsets.union(
+            edge.data.subset, outer_subsets.get(edge.data.data, edge.data.subset)
         )
     # ensure single-use of input and output subset instances
     for edge in state.in_edges(node):
-        edge.data.subset = copy.deepcopy(outer_subsets[edge.dst_conn[len("__in_") :]])
+        edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
     for edge in state.out_edges(node):
-        edge.data.subset = copy.deepcopy(outer_subsets[edge.src_conn[len("__out_") :]])
+        edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
 
     origins = dict()
     domain = dict()
+    access_infos = PartialExpansion._rename_dict_keys(
+        PartialExpansion._get_name_map(state, node), access_infos
+    )
     for field, info in access_infos.items():
         outer_subset: dace.subsets.Range = outer_subsets[field]
         inner_origin = [
@@ -178,7 +183,14 @@ def _get_access_infos(
     in_access_infos = dict()
     out_access_infos = dict()
     for node, state in nodes:
+        to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
         in_node_access_infos, out_node_access_infos = _get_field_access_infos(state, node)
+        in_node_access_infos = PartialExpansion._rename_dict_keys(
+            to_sdfg_name_map, in_node_access_infos
+        )
+        out_node_access_infos = PartialExpansion._rename_dict_keys(
+            to_sdfg_name_map, out_node_access_infos
+        )
         in_access_infos = _union_access_infos(in_access_infos, in_node_access_infos)
         out_access_infos = _union_access_infos(out_access_infos, out_node_access_infos)
     return in_access_infos, out_access_infos
@@ -267,7 +279,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         for state in dfs_topological_sort(subgraph):
             for node in dfs_topological_sort(state):
                 if isinstance(node, dace.nodes.NestedSDFG):
-                    yield from PartialExpansion.subgraph_all_nodes_recursive(node.sdfg)
+                    yield from PartialExpansion.subgraph_all_nodes_recursive_topological(node.sdfg)
                 yield node, state
             yield state, state.parent
 
@@ -304,7 +316,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
             return False
 
         if not PartialExpansion._test_extents_compatible(stencil_computations):
-            assert False
             return False
 
         return True
@@ -353,17 +364,39 @@ class PartialExpansion(transformation.SubgraphTransformation):
             )
         return True
 
+    class _Renamer(eve.NodeTranslator):
+        def __init__(self, name_map):
+            self.name_map = name_map
+
+        def visit_FieldAccess(self, node: oir.FieldAccess):
+            return oir.FieldAccess(
+                name=self.name_map[node.name],
+                offset=node.offset,
+                data_index=node.data_index,
+                dtype=node.dtype,
+            )
+
     @staticmethod
     def _test_extents_compatible(
         nodes: List[Tuple[StencilComputation, dace.SDFGState]],
     ) -> bool:
-        vertical_loops = [n.oir_node for n, _ in nodes]
-        declarations = {
-            name: decl
-            for n, _ in nodes
-            for name, decl in n.declarations.items()
-            if isinstance(decl, oir.FieldDecl)
-        }
+        vertical_loops = []
+        declarations = {}
+        for node, state in nodes:
+            name_map = PartialExpansion._get_name_map(state, node)
+            vl = PartialExpansion._Renamer(name_map).visit(node.oir_node)
+            vertical_loops.append(vl)
+
+            for name, decl in filter(
+                lambda n: isinstance(n[1], oir.FieldDecl), node.declarations.items()
+            ):
+                declarations[name_map[name]] = oir.FieldDecl(
+                    name=name_map[name],
+                    dtype=decl.dtype,
+                    dimensions=decl.dimensions,
+                    data_dims=decl.data_dims,
+                )
+
         params = {
             name: decl
             for n, _ in nodes
@@ -379,10 +412,11 @@ class PartialExpansion(transformation.SubgraphTransformation):
         )
         oir_extents = compute_horizontal_block_extents(oir_stencil)
 
-        for node, _ in nodes:
-            for section in node.oir_node.sections:
-                for he in section.horizontal_executions:
-                    if not oir_extents[id(he)] == node.get_extents(he):
+        for i, (node, _) in enumerate(nodes):
+            for j, section in enumerate(node.oir_node.sections):
+                for k, he in enumerate(section.horizontal_executions):
+                    he_id = id(vertical_loops[i].sections[j].horizontal_executions[k])
+                    if not oir_extents[he_id] == node.get_extents(he):
                         return False
         return True
 
@@ -397,6 +431,23 @@ class PartialExpansion(transformation.SubgraphTransformation):
             node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
             symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
         return symbolic_split
+
+    @staticmethod
+    def _get_name_map(state: dace.SDFGState, node: StencilComputation):
+        res = dict()
+        for edge in filter(lambda e: not e.data.is_empty(), state.in_edges(node)):
+            inner_name = edge.dst_conn[len("__in_") :]
+            outer_name = edge.data.data
+            res[inner_name] = outer_name
+        for edge in filter(lambda e: not e.data.is_empty(), state.out_edges(node)):
+            inner_name = edge.src_conn[len("__out_") :]
+            outer_name = edge.data.data
+            res[inner_name] = outer_name
+        return res
+
+    @staticmethod
+    def _rename_dict_keys(name_map, input_dict):
+        return {name_map[key]: value for key, value in input_dict.items()}
 
     def apply(self, sdfg: dace.SDFG):
         subgraph = self.subgraph_view(sdfg)
@@ -442,8 +493,11 @@ class PartialExpansion(transformation.SubgraphTransformation):
         _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos)
         for state in nsdfg_node.sdfg.states():
             for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
+                to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
                 in_access_infos, out_access_infos = _get_field_access_infos(state, node)
                 node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
+                in_access_infos = self._rename_dict_keys(to_sdfg_name_map, in_access_infos)
+                out_access_infos = self._rename_dict_keys(to_sdfg_name_map, out_access_infos)
                 for memlet in state.in_edges(node):
                     name = memlet.data.data
                     access_info = in_access_infos[name]
@@ -526,23 +580,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
             nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
 
 
-# def partially_expand(sdfg):
-#     partial_expansion = PartialExpansion()
-#     subgraph = dace.sdfg.graph.SubgraphView(sdfg, sdfg.states())
-#     partial_expansion.setup_match(subgraph)
-#     partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
-#
-#     if partial_expansion.can_be_applied(sdfg, subgraph):
-#         partial_expansion.apply(sdfg)
-#
-#     return sdfg
-
-
-from typing import Set
-
-import dace.codegen.control_flow as cf
-
-
 def get_all_child_states(cfg: cf.ControlFlow):
     """Returns a set of all states in the given control flow tree."""
     if isinstance(cfg, cf.SingleState):
@@ -597,6 +634,11 @@ def partially_expand(sdfg: dace.SDFG):
         return subgraphs
 
     subgraphs = _recurse(cft)
+
+    for nodes in subgraphs:
+        parent_sdfg = next(iter(nodes)).parent
+        expansion, subgraph = _setup_match(sdfg, nodes)
+        expansion.apply(parent_sdfg)
 
     # assert subgraphs
     # allstates = [s for subgraph in subgraphs for s in subgraph]
