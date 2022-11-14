@@ -396,7 +396,7 @@ if _sys.version_info >= (3, 9):
             _typing.Any,
         )
     if isinstance(_typing_extensions.Any, type):  # typing_extensions >= 4.4
-        _AnyTypes = (*_ArtefactTypes, _typing_extensions.Any)
+        _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
     def is_actual_type(obj: Any) -> TypeGuard[Type]:
         """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
