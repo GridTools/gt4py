@@ -25,7 +25,8 @@ import eve
 from gtc import daceir as dcir
 from gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gtc.dace.expansion.utils import get_dace_debuginfo
-from gtc.dace.utils import data_type_to_dace_typeclass, make_dace_subset
+from gtc.dace.symbol_utils import data_type_to_dace_typeclass
+from gtc.dace.utils import make_dace_subset
 
 
 class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):

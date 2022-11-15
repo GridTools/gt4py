@@ -12,9 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Union, cast
 
 import dace
 import dace.data
@@ -26,7 +28,6 @@ from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
-from gtc.dace.nodes import StencilComputation
 from gtc.dace.utils import (
     compute_dcir_access_infos,
     flatten_list,
@@ -38,6 +39,10 @@ from gtc.dace.utils import (
 from gtc.definitions import Extent
 
 from .utils import remove_horizontal_region
+
+
+if TYPE_CHECKING:
+    from gtc.dace.nodes import StencilComputation
 
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
@@ -145,7 +150,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
 class DaCeIRBuilder(eve.NodeTranslator):
     @dataclass
     class GlobalContext:
-        library_node: StencilComputation
+        library_node: "StencilComputation"
         arrays: Dict[str, dace.data.Data]
 
         def get_dcir_decls(

@@ -24,9 +24,12 @@ import gtc
 from eve import datamodels
 from gtc import common, oir
 from gtc.common import LocNode
-from gtc.dace.utils import get_dace_symbol
-
-from .dace.utils import get_axis_bound_dace_symbol, get_axis_bound_diff_str, get_axis_bound_str
+from gtc.dace.symbol_utils import (
+    get_axis_bound_dace_symbol,
+    get_axis_bound_diff_str,
+    get_axis_bound_str,
+    get_dace_symbol,
+)
 
 
 @eve.utils.noninstantiable
