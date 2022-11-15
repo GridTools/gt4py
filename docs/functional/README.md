@@ -18,9 +18,13 @@ source .venv/bin/activate
 
 ## Installation Instructions
 ```bash
+# Install jupyter notebook into the .venv
 pip install notebook
 
+#Convert markup file to.ipynb notebook
 jupytext Workshop.md --to .ipynb
+
+#open jupyter notebook application in your browser
 jupyter notebook
 ```
 
