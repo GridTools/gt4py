@@ -75,6 +75,14 @@ where = BuiltInFunction(
     )
 )
 
+cast = BuiltInFunction(
+    ct.FunctionType(
+        args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+    )
+)
+
 _unary_math_builtin = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
