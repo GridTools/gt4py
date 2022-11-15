@@ -30,6 +30,68 @@ DSL -> IR -> Generate source -> [Bindings -> Write to FS -> Python Module] -> Co
                     GT4Py On-The-Fly Compilation
 ```
 
+<!--
+@startuml 0011-on-the-fly-overview
+!include <C4/C4_Component>
+
+hide stereotype
+
+AddRelTag('optional', $lineStyle=DashedLine())
+
+Person(user, 'User')
+
+'Container_Boundary(dsl, "Program") {'
+'  Component(fieldview, 'FieldView', 'decorated python function', 'High level language')'
+'  Component(iteratorview, 'IteratorView', 'decorated python function', 'Low level language')'
+'}'
+'Rel(user, fieldview, 'supplies')'
+'Rel(user, iteratorview, 'supplies')'
+
+Component(iteratorir, 'Iterator IR', 'IR', 'Canonical representation')
+'Rel(fieldview, iteratorir, 'is lowered to', 'ffront.decorator.Program.itir')'
+'Rel(iteratorview, iteratorir, 'is lowered to', 'iterator.runtime.FendefDispatcher.itir()')'
+
+Component_Ext(dslcode, "DSL Code", "FieldView or IteratorView")
+
+Rel_L(user, dslcode, 'supplies (via DSL -> lowering)')
+Rel_D(dslcode, iteratorir, 'is lowered to', 'ffront.decorator.Program.itir, iterator.runtime.FendefDispatcher.itir()')
+
+Component(embedded, "Embedded Execution")
+Rel_L(dslcode, embedded, 'can be directly executed', 'iterator.embedded')
+
+Component_Ext(inputs, 'Program Inputs', 'Fields, Scalars')
+Rel_R(user, inputs, 'supplies')
+Rel(inputs, embedded, 'are passed to')
+
+Container_Boundary(backend, 'Compiled Backend', 'program_processors.runners.gtfn_cpu') {
+
+Container_Boundary(workflow, 'Workflow', 'otf.workflow.Workflow') {
+  Component(program_call, 'Program Call', 'Stage', 'Program + inputs')
+  Rel_R(iteratorir, program_call, 'is added to')
+  Rel(inputs, program_call, 'are added to')
+
+  Component(program_source, 'Program Source', 'Stage', 'Generated source code in any language')
+  Rel_R(program_call, program_source, 'is translated to', 'program_processors.gtfn.gtfn_module')
+
+  Component(bindings_source, 'Bindings Source', 'Stage', 'Bindings for calling Program Source from another language (typically from Python)')
+  Rel_R(program_source, bindings_source, 'is used to generate', 'otf.binding.pybind.bind_source()' , $tags='optional')
+
+  Component(compilable_source, 'Compilable Source', 'Stage', 'Compilable package of Program Source and optionally Bindings Source')
+  Rel(program_source, compilable_source, 'is added to', 'otf.binding.pybind.bind_source()')
+  Rel(bindings_source, compilable_source, 'is added to', 'otf.binding.pybind.bind_source()', $tags='optional')
+
+}
+
+  Component(compiled_program, 'Compiled Program', 'Stage', 'Python callable program')
+  Rel_R(compilable_source, compiled_program, 'is compiled to', 'otf.compilation.compiler.Compiler')
+  Rel(inputs, compiled_program, 'are passed into')
+
+}
+
+@enduml
+-->
+![](_static/0011-on-the-fly-overview.svg)
+
 The main use case is to execute GT4Py GT4Py programs in a performance portable way from Python. Other use cases may include generating performance portable code to be integrated in external applications, generating code for debugging purposes, pre-compiling libraries of GT4Py programs for use from separate Python applications etc.
 
 Much of the goals and the resulting architecture comes from lessons learned in GT4Py Cartesian, where originally all the steps of on-the-fly compilation together with code generation were approached as one monolithic implementation per "backend" (method of generating external source files). This had to be refactored to account for some use cases and lead to tight coupling with small changes rippling though more code than necessary.
