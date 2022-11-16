@@ -306,6 +306,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
         ):
             return False
 
+        if any(
+            isinstance(edge.src, dace.nodes.AccessNode)
+            and isinstance(edge.dst, dace.nodes.AccessNode)
+            for state in subgraph.nodes()
+            for edge in state.edges()
+        ):
+            return False
+
         for node, _ in stencil_computations:
             if not isinstance(node.expansion_specification[0], Map) or not all(
                 it.kind == "tiling" for it in node.expansion_specification[0].iterations
@@ -337,9 +345,9 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 raise ValueError
 
             if symbolic_split_domain and not all(
-                (node_ax_size == symbolic_split_domain[ax]) == True
-                for ax, node_ax_size in node_symbolic_domain.items()
-                if ax in symbolic_split_domain
+                (node_symbolic_domain[ax] == symbolic_split_domain[ax]) == True
+                for ax in dcir.Axis.dims_horizontal()
+                if ax in symbolic_split_domain and ax in node_symbolic_domain
             ):
                 return False
 
@@ -369,6 +377,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
             self.name_map = name_map
 
         def visit_FieldAccess(self, node: oir.FieldAccess):
+            node = self.generic_visit(node)
             return oir.FieldAccess(
                 name=self.name_map[node.name],
                 offset=node.offset,
@@ -477,12 +486,25 @@ class PartialExpansion(transformation.SubgraphTransformation):
             # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
             # nesting.
             new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
+            print("added", new_state.label, "before", subgraph.nodes()[0].label)
             subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
-        nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
-        nsdfg_node: dace.nodes.NestedSDFG = next(
-            iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
-        )
-
+        try:
+            nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
+        except ValueError:
+            sdfg.view()
+            print(subgraph.nodes())
+            raise
+        try:
+            nsdfg_node: dace.nodes.NestedSDFG = next(
+                iter(
+                    node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG)
+                )
+            )
+        except StopIteration:
+            print(subgraph.nodes())
+            print(nsdfg_state.label)
+            nsdfg_state.parent.view()
+            raise
         for node, _ in stencil_computations:
             _set_skips(node)
 
@@ -622,7 +644,7 @@ def partially_expand(sdfg: dace.SDFG):
             else:
                 cand_states = get_all_child_states(child)
                 if _test_match(sdfg, cand_states | candidate):
-                    candidate.add(cand_states)
+                    candidate.update(cand_states)
                 else:
                     if candidate:
                         subgraphs.append(candidate)

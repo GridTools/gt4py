@@ -24,10 +24,7 @@ from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py.gtscript import PARALLEL, computation, interval
 from gt4py.stencil_builder import StencilBuilder
-from gt4py.storage import utils as storage_utils
 from gtc.dace.partial_expansion import partially_expand
-
-from ..storage_test_utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")
