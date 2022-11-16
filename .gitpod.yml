@@ -15,7 +15,8 @@ tasks:
     deactivate
   command: |
     source .venv/bin/activate
-    jupyter lab --notebook-dir=/workspace/gt4py/docs/functional --LabApp.token='' --NotebookApp.allow_origin=*
+    wget https://raw.githubusercontent.com/mwouts/jupytext/main/binder/labconfig/default_setting_overrides.json -P  ~/.jupyter/labconfig/
+    jupyter lab --notebook-dir=/workspace/gt4py/docs/functional --LabApp.token='' --NotebookApp.allow_origin=* --LabApp.default_url='lab/tree/Workshop.md'
   env:
     PIP_SRC: _external_src
     PRE_COMMIT_HOME: /workspace/.caches/pre-commit
