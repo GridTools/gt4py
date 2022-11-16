@@ -1,13 +1,19 @@
+import dataclasses
 from functional.program_processors.codegens.gtfn import gtfn_ir
 from eve import NodeVisitor, NodeTranslator
+from eve.utils import UIDGenerator
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 from typing import List
 
 
+@dataclasses.dataclass(frozen=True)
 class ToImp(NodeVisitor):
     imp_list: List[str]
-    idx: int
+    # idx: int
+    # we use one UID generator per instance such that the generated ids are
+    # stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     _builtins_mapping = {
         "abs": "std::abs",
@@ -76,6 +82,7 @@ class ToImp(NodeVisitor):
 
     @staticmethod
     def _depth(node: gtfn_ir.FunCall) -> int:
+        # TODO bad hardcoded tring
         return (
             1 + ToImp._depth(node.args[0])
             if isinstance(node.args[0], gtfn_ir.FunCall) and "step" in node.args[0].fun.id
@@ -91,81 +98,79 @@ class ToImp(NodeVisitor):
                     return gtfn_ir.OffsetLiteral(value=self.cur_idx)
                 return self.generic_visit(node)
 
-        for i in range(kwargs["num_iter"]):
-            replacer = Replace()
-            replacer.cur_idx = i
-            new_expr = replacer.visit(node.expr.rhs)
+            def __init__(self, cur_idx: int):
+                self.cur_idx = cur_idx
+
+        for lambda_iter in range(kwargs["num_iter"]):
+            new_expr = Replace(cur_idx=lambda_iter).visit(node.expr.rhs)
             rhs = self.visit(new_expr)
-            self.imp_list.append(f"red_{kwargs['lam_idx']} += {rhs};")
+            self.imp_list.append(f"{kwargs['red_idx']} += {rhs};")
 
     def visit_FunCall(self, node: gtfn_ir.FunCall) -> str:
         if (
             isinstance(node.fun, gtfn_ir.Lambda) and "step" in node.fun.params[0].id
         ):  # TODO: bad hardcoded string
-            idx = self.idx
-            self.imp_list.append(f"double red_{idx} = 0.;")  # let's just guess double
+            red_idx = self.uids.sequential_id(prefix="red")
+            # this can be improved by looking at the type of the initial condition
+            # (first argument to innermost lambda)
+            # for now, let's just guess double
+            self.imp_list.append(f"double {red_idx} = 0.;")
             num_iter = 1 + ToImp._depth(node.fun.expr)
-            self.visit(node.args[0], num_iter=num_iter, lam_idx=idx)
-            self.idx += 1
-            return f"red_{idx}"
+            self.visit(node.args[0], num_iter=num_iter, red_idx=red_idx)
+            return red_idx
         if isinstance(node.fun, gtfn_ir.Lambda):
-            idx = self.idx
+            lam_idx = self.uids.sequential_id(prefix="lam")
             params = [self.visit(param) for param in node.fun.params]
             args = [self.visit(arg) for arg in node.args]
             for param, arg in zip(params, args):
                 self.imp_list.append(f"auto {param} = {arg};")
             expr = self.visit(node.fun.expr)
-            self.imp_list.append(f"auto lam{idx} = {expr};")
-            self.idx += 1
-            return f"lam{idx}"
+            self.imp_list.append(f"auto {lam_idx} = {expr};")
+            return lam_idx
         if (
             isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id == "make_tuple"
         ):  # TODO: bad hardcoded string
-            idx = self.idx
+            tupl_idx = self.uids.sequential_id(prefix="tupl")
             for i, arg in enumerate(node.args):
                 expr = self.visit(arg)
-                self.imp_list.append(f"auto tupl_{idx}_{i} = {expr};")
-            tup_args = ",".join([f"tupl_{idx}_{i}" for i in range(len(node.args))])
-            self.imp_list.append(f"auto tupl_{idx} = make_tuple({tup_args});")
-            self.idx += 1
-            return f"tupl_{idx}"
+                self.imp_list.append(f"auto {tupl_idx}_{i} = {expr};")
+            tup_args = ",".join([f"{tupl_idx}_{i}" for i in range(len(node.args))])
+            self.imp_list.append(f"auto {tupl_idx} = make_tuple({tup_args});")
+            return tupl_idx
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
-            qualified_fun_name = f"gtfn::{node.fun.id}"
+            qualified_fun_name = f"{node.fun.id}"
             args = [self.visit(arg) for arg in node.args]
             return f"{qualified_fun_name}({', '.join(args)})"
         if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
             fun_name = self._builtins_mapping[node.fun.id]
             args = [self.visit(arg) for arg in node.args]
             return f"{fun_name}({', '.join(args)})"
-        print("UNHANDLED FunCall")
+        raise NotImplementedError(f"unhandled function call {node}")
 
     def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr) -> str:
         cond = self.visit(node.cond)
         if_ = self.visit(node.true_expr)
         else_ = self.visit(node.false_expr)
-        idx = self.idx
+        cond_idx = self.uids.sequential_id(prefix="cond")
+        # this just guesses double as type of temporary
         self.imp_list.append(
             f"""
-      double cond{idx} = 0;
+      double {cond_idx} = 0;
       if ({cond}) {{
-        cond{idx} = {if_};                
+        {cond_idx} = {if_};                
       }} else {{
-        cond{idx} = {else_};
+        {cond_idx} = {else_};
       }}
       """
         )
-        self.idx += 1
-        return f"cond{idx}"
+        return cond_idx
 
-    def __init___(self):
-        self.idx = 0
-        self.imp_list = []
+    # def __init__(self):
+    #     self.imp_list = []
 
 
 def to_imp(node: gtfn_ir.FunctionDefinition):
-    to_imp = ToImp()
-    to_imp.idx = 0
-    to_imp.imp_list = []
+    to_imp = ToImp(imp_list=[])
     ret = to_imp.visit(node.expr)
     to_imp.imp_list.append(f"return {ret}")
     return "\n".join(to_imp.imp_list)
