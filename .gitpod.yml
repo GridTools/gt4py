@@ -11,10 +11,11 @@ tasks:
     pip install --upgrade pip setuptools wheel
     pip install -e .
     pip install -r requirements-dev.txt
-    pip install -i https://test.pypi.org/simple/ atlas4py
-    pre-commit install --install-hooks
+    pip install jupyterlab
     deactivate
-  command: source .venv/bin/activate
+  command: |
+    source .venv/bin/activate
+    jupyter lab --notebook-dir=/workspace/gt4py/docs/functional --LabApp.token='' --NotebookApp.allow_origin=*
   env:
     PIP_SRC: _external_src
     PRE_COMMIT_HOME: /workspace/.caches/pre-commit
@@ -25,7 +26,9 @@ vscode:
   - ms-toolsai.jupyter-keymap
   - ms-toolsai.jupyter-renderers
   - genuitecllc.codetogether
-
+ports:
+  - port: 8888
+    onOpen: open-browser
 github:
   prebuilds:
     # enable for the master/default branch (defaults to true)
