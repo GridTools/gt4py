@@ -122,13 +122,6 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> Union[npir.VectorCast, npir.ScalarCast]:
         expr = self.visit(node.expr, **kwargs)
         args = {"dtype": node.dtype, "expr": expr}
-        print(
-            (
-                npir.VectorCast(**args)
-                if expr.kind == common.ExprKind.FIELD
-                else npir.ScalarCast(**args)
-            )
-        )
         return (
             npir.VectorCast(**args)
             if expr.kind == common.ExprKind.FIELD
