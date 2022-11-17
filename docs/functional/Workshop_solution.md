@@ -25,8 +25,8 @@ Please follow the instructions in the README.md
 import numpy as np
 
 from functional.ffront.decorator import program, scan_operator, field_operator
-from functional.iterator.embedded import np_as_located_field
-from functional.ffront.fbuiltins import Field, Dimension, FieldOffset, DimensionKind
+from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
+from functional.ffront.fbuiltins import Field, FieldOffset, neighbor_sum
 from functional.common import DimensionKind
 ```
 
@@ -513,9 +513,7 @@ def mo_nh_diffusion_stencil_04_numpy2(
     return z_nabla4_e2
 ```
 
-### Solution
-
-Implement the solution here, some setup is already provided, but feel free to use your own notation.
+### Solution 1
 
 ```{code-cell} ipython3
 # %%script echo Skipping this cell! Remove when working on this example.
@@ -564,7 +562,59 @@ def mo_nh_diffusion_stencil_04_gt4py(
     out: Field[[E,K], float]
 ):
     z_nabla4_e2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
-    
+```
+
+### Solution 2
+
+```{code-cell} ipython3
+# %%script echo Skipping this cell! Remove when working on this example.
+
+V = Dimension("V")
+E = Dimension("E")
+K = Dimension("K", kind=DimensionKind.VERTICAL)
+DCDim = Dimension("DCDim", kind=DimensionKind.LOCAL)
+DFDim = Dimension("DFDim", kind=DimensionKind.LOCAL)
+
+DiamondClose = FieldOffset("DiamondClose", source=V, target=[E, DCDim])
+DiamondFar = FieldOffset("DiamondFar", source=V, target=[E, DFDim])
+
+@field_operator
+def nabv_tang_2(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float]
+):
+    return neighbor_sum(u_vert(DiamondClose) + v_vert(DiamondClose), axis=DCDim)
+              
+@field_operator
+def nabv_norm_2(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float]
+):
+    return neighbor_sum(u_vert(DiamondFar) + v_vert(DiamondFar), axis=DFDim)
+
+@field_operator
+def z_nabla4_e2_2(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float],
+    z_nabla2_e: Field[[E,K], float],
+    inv_vert_vert_length: Field[[E], float],
+    inv_primal_edge_length: Field[[E], float]
+):
+    return 4.0 * (
+        (nabv_norm_2(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
+        + (nabv_tang_2(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
+    )
+
+@program
+def mo_nh_diffusion_stencil_04_gt4py2(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float],
+    z_nabla2_e: Field[[E,K], float],
+    inv_vert_vert_length: Field[[E], float],
+    inv_primal_edge_length: Field[[E], float],
+    out: Field[[E,K], float]
+):
+    z_nabla4_e2_2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
 ```
 
 ### Test setup
@@ -583,6 +633,7 @@ z_nabla4_e2_numpy2 = mo_nh_diffusion_stencil_04_numpy2(e2c2v_table, u_vert, v_ve
 assert np.allclose(z_nabla4_e2_numpy, z_nabla4_e2_numpy2)
 
 z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
+z_nabla4_e2_gt4py2 = np.zeros(shape=(n_edges, n_levels))
 ```
 
 ```{code-cell} ipython3
@@ -613,6 +664,22 @@ mo_nh_diffusion_stencil_04_gt4py(
 )
 
 assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
+
+z_nabla4_e2_gt4py_field2 = as_ek_field(z_nabla4_e2_gt4py2)
+close_conn = NeighborTableOffsetProvider(e2c2v_table[:,:2], E, V, 2)
+far_conn = NeighborTableOffsetProvider(e2c2v_table[:,2:], E, V, 2)
+
+mo_nh_diffusion_stencil_04_gt4py2(
+    u_vert_field,
+    v_vert_field,
+    z_nabla2_e_field,
+    inv_vert_vert_length_field,
+    inv_primal_edge_length_field,
+    z_nabla4_e2_gt4py_field2,
+    offset_provider = {DiamondClose.value: close_conn,DiamondFar.value: far_conn}
+)
+
+assert np.allclose(z_nabla4_e2_gt4py2, z_nabla4_e2_numpy)
 ```
 
 ```{code-cell} ipython3

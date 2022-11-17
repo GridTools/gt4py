@@ -34,6 +34,27 @@ from functional.common import Dimension, DimensionKind
 
 ## Connectivities
 
+For simplicity we use a triangulated donut in the horizontal.
+
+```
+0v---0e-- 1v---3e-- 2v---6e-- 0v
+|  \ 0c   |  \ 1c   |  \2c
+|   \1e   |   \4e   |   \7e
+|2e   \   |5e   \   |8e   \
+|  3c   \ |   4c  \ |    5c\
+3v---9e-- 4v--12e-- 5v--15e-- 3v
+|  \ 6c   |  \ 7c   |  \ 8c
+|   \10e  |   \13e  |   \16e
+|11e  \   |14e  \   |17e  \
+|  9c  \  |  10c \  |  11c \
+6v--18e-- 7v--21e-- 8v--24e-- 6v
+|  \12c   |  \ 13c  |  \ 14c
+|   \19e  |   \22e  |   \25e
+|20e  \   |23e  \   |26e  \
+|  15c  \ | 16c   \ | 17c  \
+0v       1v         2v        0v
+```
+
 ```{code-cell} ipython3
 n_edges = 27
 n_vertices = 9
