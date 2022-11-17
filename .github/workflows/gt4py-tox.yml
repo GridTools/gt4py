@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.9.7]
+        python-version: [3.9, 3.10]
         backends: [internal-cpu, all-cpu]
-        # exclude:
-        # - python-version: 3.8
-        #   backends: internal-cpu
+        exclude:
+        - python-version: 3.9
+          backends: internal-cpu
 
 
     steps:

@@ -1528,7 +1528,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.definition = definition
         self.filename = inspect.getfile(definition)
         self.source, decorators_source = gt_meta.split_def_decorators(self.definition)
-        self.ast_root = ast.parse(self.source)
+        self.ast_root = ast.parse(self.source, feature_version=(3, 9))
         self.options = options
         self.build_info = options.build_info
         self.main_name = options.name
@@ -1689,7 +1689,7 @@ class GTScriptParser(ast.NodeVisitor):
             definition, included_nonlocals=True, include_builtins=False
         )
 
-        gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
+        gtscript_ast = ast.parse(gt_meta.get_ast(definition), feature_version=(3, 9)).body[0]
         local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
 
         nonlocal_symbols = {}
@@ -1883,7 +1883,7 @@ class GTScriptParser(ast.NodeVisitor):
         for value in self.resolved_externals.values():
             if hasattr(value, "_gtscript_"):
                 assert callable(value)
-                func_node = ast.parse(gt_meta.get_ast(value)).body[0]
+                func_node = ast.parse(gt_meta.get_ast(value), feature_version=(3, 9)).body[0]
                 local_context = self.resolve_external_symbols(
                     value._gtscript_["nonlocals"],
                     value._gtscript_["imported"],

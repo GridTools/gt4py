@@ -64,7 +64,9 @@ def get_ast(func_or_source_or_ast):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
-        func_or_source_or_ast = ast.parse(textwrap.dedent(func_or_source_or_ast))
+        func_or_source_or_ast = ast.parse(
+            textwrap.dedent(func_or_source_or_ast), feature_version=(3, 9)
+        )
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:

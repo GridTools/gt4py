@@ -20,7 +20,7 @@ from gt4py.frontend.nodes import BinaryOperator, BinOpExpr
 
 def test_AugAssign():
     ir_maker = IRMaker(None, None, None, domain=None)
-    aug_assign = ast.parse("a += 1").body[0]
+    aug_assign = ast.parse("a += 1", feature_version=(3, 9)).body[0]
 
     _, result = ir_maker.visit_AugAssign(aug_assign)
 

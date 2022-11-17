@@ -20,12 +20,12 @@ import gt4py.utils as gt_util
 class TestGetQualifiedName:
     def test_name_only(self):
         name = "simple_name"
-        expr = ast.parse(name, mode="eval").body
+        expr = ast.parse(name, mode="eval", feature_version=(3, 9)).body
         assert gt_util.meta.get_qualified_name_from_node(expr) == name
 
     def test_nested_attribute(self):
         name = "module.submodule.name"
-        expr = ast.parse(name, mode="eval").body
+        expr = ast.parse(name, mode="eval", feature_version=(3, 9)).body
         assert gt_util.meta.get_qualified_name_from_node(expr) == name
         assert gt_util.meta.get_qualified_name_from_node(expr, as_list=True) == [
             "module",
