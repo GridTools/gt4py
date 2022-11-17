@@ -25,9 +25,9 @@ Please follow the instructions in the README.md
 import numpy as np
 
 from functional.ffront.decorator import program, scan_operator, field_operator
-from functional.iterator.embedded import np_as_located_field
-from functional.ffront.fbuiltins import Field, Dimension, FieldOffset, DimensionKind
-from functional.common import DimensionKind
+from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
+from functional.ffront.fbuiltins import Field, FieldOffset
+from functional.common import Dimension, DimensionKind
 ```
 
 +++ {"tags": []}
@@ -455,6 +455,16 @@ def test_mo_nh_diffusion_stencil_02():
 
 ## 3. Neighbor access without reduction
 
+The following is a slightly simplified loop nest from mo_nh_diffusion.f90. Maybe the experts can easily map it back to the mathematical formulation (it's very close to an expression in the ICON paper).
+
+It is computing a quantity on edges, accessing vertex neighbors from the *diamond* pattern. `e2c2v_table` contains the mapping from edge index to vertex neighbor indices. The first 2 entries are the close neighbors, the 2 second entries are the far neighbors. See picture.
+
+![](diamond.png)
+
+The computation can be expressed as reductions (tricky) or (simpler) by directly accessing the neighbor. Here we propose to implement the version without reductions.
+
+### Numpy implementation
+
 ```{code-cell} ipython3
 def mo_nh_diffusion_stencil_04_numpy(
     e2c2v: np.array,
@@ -478,10 +488,16 @@ def mo_nh_diffusion_stencil_04_numpy(
     return z_nabla4_e2
 ```
 
+### Solution
+
+Implement the solution here, some setup is already provided, but feel free to use your own notation.
+
 ```{code-cell} ipython3
+%%script echo Skipping this cell! Remove when working on this example.
+
 V = Dimension("V")
 E = Dimension("E")
-K = Dimension("K")
+K = Dimension("K", kind=DimensionKind.VERTICAL)
 ECVDim = Dimension("ECVDim", kind=DimensionKind.LOCAL)
 
 E2C2V = FieldOffset("E2C2V", source=V, target=[E, ECVDim])
@@ -536,18 +552,36 @@ inv_primal_edge_length = np.random.rand(n_edges)
 z_nabla4_e2_numpy = mo_nh_diffusion_stencil_04_numpy(e2c2v_table, u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length)
 
 z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
-
-# TODO
-# 1. call GT4Py program
-# 2. enable test
-# assert np.allclose(z_nabla4_e2_numpy, z_nabla4_e2_gt4py)
 ```
 
 ```{code-cell} ipython3
-%%script echo Skipping! Remove when working on this example.
+%%script echo Skipping this cell! Remove when working on this example.
+
+as_vk_field = np_as_located_field(V,K)
+as_ek_field = np_as_located_field(E,K)
+as_e_field = np_as_located_field(E,)
+
+u_vert_field = as_vk_field(u_vert)
+v_vert_field = as_vk_field(v_vert)
+z_nabla2_e_field = as_ek_field(z_nabla2_e)
+inv_vert_vert_length_field = as_e_field(inv_vert_vert_length)
+inv_primal_edge_length_field = as_e_field(inv_primal_edge_length)
+
+z_nabla4_e2_gt4py_field = as_ek_field(z_nabla4_e2_gt4py)
+
+e2c2v_connectivity = NeighborTableOffsetProvider(e2c2v_table, E, V, 4)
 
 mo_nh_diffusion_stencil_04_gt4py(
-    
+    u_vert_field,
+    v_vert_field,
+    z_nabla2_e_field,
+    inv_vert_vert_length_field,
+    inv_primal_edge_length_field,
+    z_nabla4_e2_gt4py_field,
+    offset_provider = {E2C2V.value: e2c2v_connectivity}
+)
+
+assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
 ```
 
 ## 4. Scan Operator
