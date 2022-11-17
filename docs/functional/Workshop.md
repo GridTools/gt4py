@@ -333,16 +333,124 @@ c2e2c_table = np.asarray(
 
 # Excercises
 
-## 1. point-wise (Christoph)
+## 1. point-wise (Christoph - diffusion06)
 
 ```{code-cell} ipython3
+      DO jb = i_startblk,i_endblk
 
+        CALL get_indices_e(p_patch, jb, i_startblk, i_endblk, &
+                           i_startidx, i_endidx, start_bdydiff_e, grf_bdywidth_e)
+        DO jk = 1, nlev
+          DO je = i_startidx, i_endidx
+            p_nh_prog%vn(je,jk,jb) =   &
+              p_nh_prog%vn(je,jk,jb) + &
+              z_nabla2_e(je,jk,jb) * &
+              p_patch%edges%area_edge(je,jb)*fac_bdydiff_v
+          ENDDO
+        ENDDO
+      ENDDO
 ```
 
-## 2. reduction: gradient or laplace (Christoph)
+```{code-cell} ipython3
+def mo_nh_diffusion_stencil_06_numpy(
+    z_nabla2_e: np.array, area_edge: np.array, vn: np.array, fac_bdydiff_v
+) -> np.array:
+    area_edge = np.expand_dims(area_edge, axis=-1)
+    vn = vn + (z_nabla2_e * area_edge * fac_bdydiff_v)
+    return vn
+
+
+def test_mo_nh_diffusion_stencil_06():
+    mesh = SimpleMesh()
+
+    fac_bdydiff_v = 5.0
+    z_nabla2_e = random_field(mesh, EdgeDim, KDim)
+    area_edge = random_field(mesh, EdgeDim)
+    vn = random_field(mesh, EdgeDim, KDim)
+
+    vn_numpy = mo_nh_diffusion_stencil_06_numpy(
+        np.asarray(z_nabla2_e), np.asarray(area_edge), np.asarray(vn), fac_bdydiff_v
+    )
+
+    vn_gt4py = np.zeros(shape=(n_edges, n_levels))
+
+# TODO
+# 1. call GT4Py program
+# 2. enable test
+# assert np.allclose(vn_gt4py, vn_numpy)
+```
+
+## 2. reduction: gradient or laplace (Christoph - diffusion02)
 
 ```{code-cell} ipython3
+      DO jb = i_startblk,i_endblk
 
+        CALL get_indices_c(p_patch, jb, i_startblk, i_endblk, &
+                           i_startidx, i_endidx, rl_start, rl_end)
+        DO jk = 1, nlev
+          DO jc = i_startidx, i_endidx
+
+            kh_c(jc,jk) = (kh_smag_ec(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%e_bln_c_s(jc,1,jb) + &
+                           kh_smag_ec(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%e_bln_c_s(jc,2,jb) + &
+                           kh_smag_ec(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%e_bln_c_s(jc,3,jb))/ &
+                          diff_multfac_smag(jk)
+
+            div(jc,jk) = p_nh_prog%vn(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%geofac_div(jc,1,jb) + &
+                         p_nh_prog%vn(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%geofac_div(jc,2,jb) + &
+                         p_nh_prog%vn(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%geofac_div(jc,3,jb)
+          ENDDO
+        ENDDO
+      ENDDO
+```
+
+```{code-cell} ipython3
+def mo_nh_diffusion_stencil_02_numpy(
+    c2e: np.array,
+    kh_smag_ec: np.array,
+    vn: np.array,
+    e_bln_c_s: np.array,
+    geofac_div: np.array,
+    diff_multfac_smag: np.array,
+) -> tuple[np.array]:
+    geofac_div = np.expand_dims(geofac_div, axis=-1)
+    vn_geofac = vn[c2e] * geofac_div
+    div = np.sum(vn_geofac, axis=1)
+
+    e_bln_c_s = np.expand_dims(e_bln_c_s, axis=-1)
+    diff_multfac_smag = np.expand_dims(diff_multfac_smag, axis=0)
+    mul = kh_smag_ec[c2e] * e_bln_c_s
+    summed = np.sum(mul, axis=1)
+    kh_c = summed / diff_multfac_smag
+
+    return div, kh_c
+
+
+def test_mo_nh_diffusion_stencil_02():
+    mesh = SimpleMesh()
+
+    vn = random_field(mesh, EdgeDim, KDim)
+    geofac_div = random_field(mesh, CellDim, C2EDim)
+    kh_smag_ec = random_field(mesh, EdgeDim, KDim)
+    e_bln_c_s = random_field(mesh, CellDim, C2EDim)
+    diff_multfac_smag = random_field(mesh, KDim)
+
+    div_numpy, kh_c_numpy = mo_nh_diffusion_stencil_02_numpy(
+        mesh.c2e,
+        np.asarray(kh_smag_ec),
+        np.asarray(vn),
+        np.asarray(e_bln_c_s),
+        np.asarray(geofac_div),
+        np.asarray(diff_multfac_smag),
+    )
+
+    div_gt4py = zero_field(mesh, CellDim, KDim)
+    kh_c_gt4py = zero_field(mesh, CellDim, KDim)
+
+# TODO
+# 1. call GT4Py program
+# 2. enable test
+#assert np.allclose(kh_c_gt4py, kh_c_numpy)
+#assert np.allclose(div_gt4py, div_numpy)
 ```
 
 ## 3. neighbor access without reduction (dusk weight) (Hannes - diff 4)
