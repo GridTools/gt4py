@@ -17,7 +17,13 @@ kernelspec:
 # Hands on Session of the GT4Py Workshop
 
 ## Installation
-Please follow the instructions in the README.md
+Please follow the instructions in the README.md or use the Gitpod setup.
+
+## GT4Py mode
+
+We will implement the examples in field view and execute the Iterator IR program in Python.
+
+![](toolchain_details_existing_path.png)
 
 ## Import Modules
 
