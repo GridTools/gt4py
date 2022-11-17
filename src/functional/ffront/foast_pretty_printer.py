@@ -88,7 +88,7 @@ def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
 
 class _PrettyPrinter(TemplatedGenerator):
     @classmethod
-    def apply(cls, node: foast.LocatedNode, **kwargs) -> str:
+    def apply(cls, node: foast.LocatedNode, **kwargs) -> str:  # type: ignore[override]
         node_type_name = type(node).__name__
         if not hasattr(cls, node_type_name) and not hasattr(cls, f"visit_{node_type_name}"):
             raise NotImplementedError(
