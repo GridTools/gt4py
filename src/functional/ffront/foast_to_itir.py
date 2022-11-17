@@ -192,8 +192,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        if node.op is foast.UnaryOperator.NOT:
-            return self._map(node.op.value, node.value)
+        if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]:
+            # TODO: invert only for bool right now
+            return self._map("not_", node.value)
 
         return self._map(node.op.value, im.literal_("0", "int"), node.operand)
 
