@@ -201,7 +201,9 @@ class FieldOperatorLowering(NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
-        op = lambda it1, it2: im.call_("if_")(self.visit(node.condition, **kwargs), it1, it2)
+        def op(it1, it2):
+            return im.call_("if_")(self.visit(node.condition, **kwargs), it1, it2)
+
         return self._map(op, node.true_expr, node.false_expr)
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
@@ -281,7 +283,10 @@ class FieldOperatorLowering(NodeTranslator):
         elif type_info.is_floating_point(node.type):
             min_value = np.finfo(np_type).min
         else:
-            assert False
+            raise AssertionError(
+                "`max_over` is only defined for integral or floating point types."
+                " This error should have been catched in type deduction aready."
+            )
         init_expr = self._make_literal(min_value, node.type.dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
@@ -292,7 +297,10 @@ class FieldOperatorLowering(NodeTranslator):
         elif type_info.is_floating_point(node.type):
             max_value = np.finfo(np_type).max
         else:
-            assert False
+            raise AssertionError(
+                "`min_over` is only defined for integral or floating point types."
+                " This error should have been catched in type deduction aready."
+            )
         init_expr = self._make_literal(max_value, node.type.dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 

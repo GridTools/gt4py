@@ -81,7 +81,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
             return decorated_program
 
-        if not cache_key in self._cache:
+        if cache_key not in self._cache:
             otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
                 gtfn_module.GTFNTranslationStep(self.language_settings)
                 .chain(pybind.bind_source)

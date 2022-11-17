@@ -200,11 +200,12 @@ def _collect_offset_definitions(
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
+                # TODO(tehrengruber): cleanup
                 if dim.kind == common.DimensionKind.LOCAL:
                     offset_definitions[dim.value + "Dim"] = TagDefinition(
                         name=Sym(id=dim.value + "Dim")
                     )
-                elif not dim.kind == common.DimensionKind.VERTICAL:
+                elif dim.kind == common.DimensionKind.HORIZONTAL:
                     # raise ValueError(
                     #    "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     # )

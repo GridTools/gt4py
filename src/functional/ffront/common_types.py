@@ -83,13 +83,6 @@ class VoidType(SymbolType):
 
 
 @dataclass(frozen=True)
-class NoneType(SymbolType):
-    """
-    Type of `None` value.
-    """
-
-
-@dataclass(frozen=True)
 class DimensionType(SymbolType):
     dim: func_common.Dimension
 

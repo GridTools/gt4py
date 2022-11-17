@@ -14,13 +14,17 @@ from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.iterator.embedded import np_as_located_field
-from functional.program_processors.runners import roundtrip
+from functional.program_processors.processor_interface import ProgramExecutor
+from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 
 
-# TODO(tehrengruber): extend to gtfn backend when the builtins are supported
-fieldview_backend = roundtrip.executor
+
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+def fieldview_backend(request):
+    yield request.param
+
 
 IDim = Dimension("IDim")
 
@@ -29,7 +33,7 @@ IDim = Dimension("IDim")
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str):
+def make_builtin_field_operator(builtin_name: str, backend: ProgramExecutor):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -96,13 +100,13 @@ def make_builtin_field_operator(builtin_name: str):
     return FieldOperator(
         foast_node=typed_foast_node,
         closure_vars=closure_vars,
-        backend=fieldview_backend,
+        backend=backend,
         definition=None,
     )
 
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins_execution(builtin_name: str, inputs):
+def test_math_function_builtins_execution(builtin_name: str, inputs, fieldview_backend):
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)
@@ -113,7 +117,7 @@ def test_math_function_builtins_execution(builtin_name: str, inputs):
     expected = ref_impl(*inputs)
     out = np_as_located_field(IDim)(np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name)
+    builtin_field_op = make_builtin_field_operator(builtin_name, fieldview_backend)
 
     builtin_field_op(*inps, out=out, offset_provider={})
 
