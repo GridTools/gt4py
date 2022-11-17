@@ -136,7 +136,7 @@ if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[
         Type,
         _typing._SpecialForm,
-        _types.GenericAlias,
+        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
         _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
     ]
 else:
@@ -153,7 +153,7 @@ StdGenericAliasType: Final[Type] = type(List[int])
 
 if _sys.version_info >= (3, 9):
     if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias
+        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
 _TypingGenericAliasType: Final[Type] = (
@@ -393,7 +393,7 @@ if _sys.version_info >= (3, 9):
 
         This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
         """
-        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)
+        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)  # type: ignore[attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
 
 else:
 
@@ -507,7 +507,7 @@ def get_partial_type_hints(
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(
+        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -516,7 +516,7 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(
+            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
             hints.update(resolved_hints)
@@ -569,7 +569,7 @@ def eval_forward_ref(
     else:
         safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
