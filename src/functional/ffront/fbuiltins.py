@@ -75,6 +75,17 @@ where = BuiltInFunction(
     )
 )
 
+cast = BuiltInFunction(
+    ct.FunctionType(
+        args=[
+            ct.DeferredSymbolType(constraint=ct.ScalarType),
+            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+        ],
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    )
+)
+
 _unary_math_builtin = BuiltInFunction(
     ct.FunctionType(
         args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
@@ -180,6 +191,7 @@ FUN_BUILTIN_NAMES = [
     "min_over",
     "broadcast",
     "where",
+    "cast",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES

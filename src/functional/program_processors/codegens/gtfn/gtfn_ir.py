@@ -53,6 +53,11 @@ class TernaryExpr(Expr):
     false_expr: Expr
 
 
+class TypeExpr(Expr):
+    new_type: Literal
+    field_expr: Expr
+
+
 class Literal(Expr):
     value: str
     type: str  # noqa: A003

@@ -253,6 +253,11 @@ def if_(cond, t, f):
     return t if cond else f
 
 
+@builtins.cast_.register(EMBEDDED)
+def cast_(dtype, field):
+    return dtype(field)
+
+
 @builtins.not_.register(EMBEDDED)
 def not_(a):
     if isinstance(a, Column):

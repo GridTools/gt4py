@@ -417,6 +417,11 @@ class FieldOperatorLowering(NodeTranslator):
             f"Call to object of type {type(node.func.type).__name__} not understood."
         )
 
+    def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        dtype = itir.Literal(value="np." + str(node.args[0].type.returns), type="str")
+        obj = (to_value(node.args[1]))(self.visit(node.args[1], **kwargs))
+        return self._lift_lambda(node)(im.call_("cast_")(dtype, obj))
+
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
         # since the if_ builtin expects a value for the condition we need to

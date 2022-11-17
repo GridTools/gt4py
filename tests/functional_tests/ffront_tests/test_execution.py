@@ -27,6 +27,7 @@ from functional.ffront.fbuiltins import (
     Field,
     FieldOffset,
     broadcast,
+    cast,
     float64,
     int32,
     int64,
@@ -760,6 +761,21 @@ def test_conditional(fieldview_backend):
     conditional(mask, a, b, out=out, offset_provider={})
 
     assert np.allclose(np.where(mask, a, b), out)
+
+
+def test_cast(fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim)(np.ones((size,)))
+    b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
+    out = np_as_located_field(IDim)(np.zeros((size,)))
+
+    @field_operator
+    def cast_fieldop(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
+        return cast(int64, a)
+
+    cast_fieldop(a, out=out, offset_provider={})
+
+    assert np.allclose(b, out)
 
 
 def test_conditional_promotion(fieldview_backend):

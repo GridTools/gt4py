@@ -59,6 +59,13 @@ class UnrollReduce(NodeTranslator):
             args=[cond, true_expr, false_expr],
         )
 
+    @staticmethod
+    def _make_cast(new_type: ir.Literal, field_expr: ir.Expr):
+        return ir.FunCall(
+            fun=ir.SymRef(id="cast_"),
+            args=[new_type, field_expr],
+        )
+
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
         if not self._is_reduce(node):

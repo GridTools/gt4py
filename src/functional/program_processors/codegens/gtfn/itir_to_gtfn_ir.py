@@ -43,6 +43,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     TaggedValues,
     TemporaryAllocation,
     TernaryExpr,
+    TypeExpr,
     UnaryExpr,
     UnstructuredDomain,
 )
@@ -55,6 +56,7 @@ def pytype_to_cpptype(t: str):
             "float32": "float",
             "float64": "double",
             "int": "int",
+            "str": "str",
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",
@@ -337,6 +339,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         return result
 
+    def _check_shift_scan(self, node: itir.FunCall) -> None:
+        if node.fun.id == "shift":
+            raise ValueError("unapplied shift call not supported: {node}")
+        elif node.fun.id == "scan":
+            raise ValueError("scans are only supported at the top level of a stencil closure")
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
@@ -358,13 +366,16 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     true_expr=self.visit(node.args[1], **kwargs),
                     false_expr=self.visit(node.args[2], **kwargs),
                 )
+            elif node.fun.id == "cast_":
+                assert len(node.args) == 2
+                return TypeExpr(
+                    new_type=self.visit(node.args[0], **kwargs),
+                    field_expr=self.visit(node.args[1], **kwargs),
+                )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
-            elif node.fun.id == "shift":
-                raise ValueError("unapplied shift call not supported: {node}")
-            elif node.fun.id == "scan":
-                raise ValueError("scans are only supported at the top level of a stencil closure")
-            elif node.fun.id == "cartesian_domain":
+            self._check_shift_scan(node)
+            if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
             elif node.fun.id == "unstructured_domain":
@@ -384,14 +395,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     tagged_offsets=domain_offsets,
                     connectivities=connectivities,
                 )
-        elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
-            assert len(node.args) == 1
-            return FunCall(
-                fun=self.visit(node.fun.fun, **kwargs),
-                args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
-            )
-        elif isinstance(node.fun, itir.FunCall) and node.fun == itir.SymRef(id="shift"):
-            raise ValueError("unapplied shift call not supported: {node}")
+        if isinstance(node.fun, itir.FunCall):
+            if node.fun.fun == itir.SymRef(id="shift"):
+                assert len(node.args) == 1
+                return FunCall(
+                    fun=self.visit(node.fun.fun, **kwargs),
+                    args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
+                )
+            elif node.fun == itir.SymRef(id="shift"):
+                raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(

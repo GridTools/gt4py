@@ -88,6 +88,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
+    TypeExpr = as_fmt("{new_type}({field_expr})")
 
     def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
         tags = self.visit(node.tags)
