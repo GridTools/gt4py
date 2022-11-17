@@ -764,12 +764,15 @@ def test_conditional(fieldview_backend):
 
 
 def test_cast(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support cast builtin")
+
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def cast_fieldop(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
         return cast(int64, a)
 
@@ -983,7 +986,7 @@ def test_solve_triag(fieldview_backend):
         np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
     )
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-
+    out_1 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     # compute reference
     matrices = np.zeros(shape + shape[-1:])
     i = np.arange(shape[2])
@@ -1008,11 +1011,13 @@ def test_solve_triag(fieldview_backend):
         b: Field[[IDim, JDim, KDim], float],
         c: Field[[IDim, JDim, KDim], float],
         d: Field[[IDim, JDim, KDim], float],
-    ) -> Field[[IDim, JDim, KDim], float]:
+    ) -> tuple[Field[[IDim, JDim, KDim], float], Field[[IDim, JDim, KDim], float]]:
+        # cp, dp = tridiag_forward(a, b, c, d)
+        # return tridiag_backward(cp, dp)
         cp, dp = tridiag_forward(a, b, c, d)
-        return tridiag_backward(cp, dp)
+        return cp, dp
 
-    solve_tridiag(a, b, c, d, out=out, offset_provider={})
+    solve_tridiag(a, b, c, d, out=(out, out_1), offset_provider={})
 
     np.allclose(expected, out)
 
