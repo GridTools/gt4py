@@ -453,6 +453,8 @@ def test_mo_nh_diffusion_stencil_02():
 #assert np.allclose(div_gt4py, div_numpy)
 ```
 
++++ {"tags": []}
+
 ## 3. Neighbor access without reduction
 
 The following is a slightly simplified loop nest from mo_nh_diffusion.f90. Maybe the experts can easily map it back to the mathematical formulation (it's very close to an expression in the ICON paper).
@@ -463,7 +465,7 @@ It is computing a quantity on edges, accessing vertex neighbors from the *diamon
 
 The computation can be expressed as reductions (tricky) or (simpler) by directly accessing the neighbor. Here we propose to implement the version without reductions.
 
-### Numpy implementation
+### NumPy implementation
 
 ```{code-cell} ipython3
 def mo_nh_diffusion_stencil_04_numpy(
@@ -476,7 +478,7 @@ def mo_nh_diffusion_stencil_04_numpy(
 ) -> np.array:
     u_vert_e2c2v = u_vert[e2c2v] # Numpy advanced indexing
     v_vert_e2c2v = v_vert[e2c2v]
-    inv_vert_vert_length = np.expand_dims(inv_vert_vert_length, axis=-1) # add a dimensionL
+    inv_vert_vert_length = np.expand_dims(inv_vert_vert_length, axis=-1) # add k dimension
     inv_primal_edge_length = np.expand_dims(inv_primal_edge_length, axis=-1)
 
     nabv_tang = u_vert_e2c2v[:, 0] + v_vert_e2c2v[:, 0] + u_vert_e2c2v[:, 1] + v_vert_e2c2v[:, 1]
@@ -485,6 +487,29 @@ def mo_nh_diffusion_stencil_04_numpy(
         (nabv_norm - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
         + (nabv_tang - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
     )
+    return z_nabla4_e2
+```
+
+### Alternative (Fortran-like) loop implementation
+
+```{code-cell} ipython3
+def mo_nh_diffusion_stencil_04_numpy2(
+    e2c2v: np.array,
+    u_vert: np.array,
+    v_vert: np.array,
+    z_nabla2_e: np.array,
+    inv_vert_vert_length: np.array,
+    inv_primal_edge_length: np.array,
+) -> np.array:
+    z_nabla4_e2 = np.zeros_like(z_nabla2_e) 
+    for e in range(z_nabla4_e2.shape[0]):
+        for k in range(z_nabla4_e2.shape[1]):
+            nabv_tang = u_vert[e2c2v[e,0],k] + v_vert[e2c2v[e,0],k] + u_vert[e2c2v[e,1],k] + v_vert[e2c2v[e,1],k]
+            nabv_norm = u_vert[e2c2v[e,2],k] + v_vert[e2c2v[e,2],k] + u_vert[e2c2v[e,3],k] + v_vert[e2c2v[e,3],k]
+            z_nabla4_e2[e,k] = 4.0 * (
+                (nabv_norm - 2.0 * z_nabla2_e[e,k]) * inv_vert_vert_length[e]**2
+                + (nabv_tang - 2.0 * z_nabla2_e[e,k]) * inv_primal_edge_length[e]**2
+            )
     return z_nabla4_e2
 ```
 
@@ -502,47 +527,19 @@ ECVDim = Dimension("ECVDim", kind=DimensionKind.LOCAL)
 
 E2C2V = FieldOffset("E2C2V", source=V, target=[E, ECVDim])
 
-@field_operator
-def nabv_tang(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
-):
-    return u_vert(E2C2V[0]) + v_vert(E2C2V[0]) + u_vert(E2C2V[1]) + v_vert(E2C2V[1])
-              
-@field_operator
-def nabv_norm(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
-):
-    return u_vert(E2C2V[2]) + v_vert(E2C2V[2]) + u_vert(E2C2V[3]) + v_vert(E2C2V[3])
-
-@field_operator
-def z_nabla4_e2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float]
-):
-    return 4.0 * (
-        (nabv_norm(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
-        + (nabv_tang(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
-    )
+# Implement your solution here (activate the cell by removing the first line!)
 
 @program
-def mo_nh_diffusion_stencil_04_gt4py(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float],
-    out: Field[[E,K], float]
-):
-    z_nabla4_e2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
+def mo_nh_diffusion_stencil_04_gt4py(...):
+    ...
     
 ```
 
+### Test setup
+
 ```{code-cell} ipython3
+:tags: []
+
 u_vert = np.random.rand(n_vertices, n_levels)
 v_vert = np.random.rand(n_vertices, n_levels)
 z_nabla2_e = np.random.rand(n_edges, n_levels)
@@ -550,6 +547,8 @@ inv_vert_vert_length = np.random.rand(n_edges)
 inv_primal_edge_length = np.random.rand(n_edges)
 
 z_nabla4_e2_numpy = mo_nh_diffusion_stencil_04_numpy(e2c2v_table, u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length)
+z_nabla4_e2_numpy2 = mo_nh_diffusion_stencil_04_numpy2(e2c2v_table, u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length)
+assert np.allclose(z_nabla4_e2_numpy, z_nabla4_e2_numpy2)
 
 z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
 ```
@@ -569,20 +568,14 @@ inv_primal_edge_length_field = as_e_field(inv_primal_edge_length)
 
 z_nabla4_e2_gt4py_field = as_ek_field(z_nabla4_e2_gt4py)
 
-e2c2v_connectivity = NeighborTableOffsetProvider(e2c2v_table, E, V, 4)
+e2c2v_connectivity = NeighborTableOffsetProvider(...) # TODO
 
-mo_nh_diffusion_stencil_04_gt4py(
-    u_vert_field,
-    v_vert_field,
-    z_nabla2_e_field,
-    inv_vert_vert_length_field,
-    inv_primal_edge_length_field,
-    z_nabla4_e2_gt4py_field,
-    offset_provider = {E2C2V.value: e2c2v_connectivity}
-)
+mo_nh_diffusion_stencil_04_gt4py(...) # TODO
 
 assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
 ```
+
++++ {"tags": []}
 
 ## 4. Scan Operator
 
