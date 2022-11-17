@@ -489,7 +489,3 @@ assert np.allclose(np.asarray(qr), qr_numpy)
 
 print("Test successful")
 ```
-
-```{code-cell} ipython3
-
-```
