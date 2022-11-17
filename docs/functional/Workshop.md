@@ -26,7 +26,7 @@ import numpy as np
 
 from functional.ffront.decorator import program, scan_operator, field_operator
 from functional.iterator.embedded import np_as_located_field
-from functional.ffront.fbuiltins import Field, Dimension
+from functional.ffront.fbuiltins import Field, Dimension, FieldOffset, DimensionKind
 from functional.common import DimensionKind
 ```
 
@@ -453,7 +453,7 @@ def test_mo_nh_diffusion_stencil_02():
 #assert np.allclose(div_gt4py, div_numpy)
 ```
 
-## 3. neighbor access without reduction (dusk weight) (Hannes - diff 4)
+## 3. Neighbor access without reduction
 
 ```{code-cell} ipython3
 def mo_nh_diffusion_stencil_04_numpy(
@@ -464,9 +464,9 @@ def mo_nh_diffusion_stencil_04_numpy(
     inv_vert_vert_length: np.array,
     inv_primal_edge_length: np.array,
 ) -> np.array:
-    u_vert_e2c2v = u_vert[e2c2v]
+    u_vert_e2c2v = u_vert[e2c2v] # Numpy advanced indexing
     v_vert_e2c2v = v_vert[e2c2v]
-    inv_vert_vert_length = np.expand_dims(inv_vert_vert_length, axis=-1)
+    inv_vert_vert_length = np.expand_dims(inv_vert_vert_length, axis=-1) # add a dimensionL
     inv_primal_edge_length = np.expand_dims(inv_primal_edge_length, axis=-1)
 
     nabv_tang = u_vert_e2c2v[:, 0] + v_vert_e2c2v[:, 0] + u_vert_e2c2v[:, 1] + v_vert_e2c2v[:, 1]
@@ -476,6 +476,54 @@ def mo_nh_diffusion_stencil_04_numpy(
         + (nabv_tang - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
     )
     return z_nabla4_e2
+```
+
+```{code-cell} ipython3
+V = Dimension("V")
+E = Dimension("E")
+K = Dimension("K")
+ECVDim = Dimension("ECVDim", kind=DimensionKind.LOCAL)
+
+E2C2V = FieldOffset("E2C2V", source=V, target=[E, ECVDim])
+
+@field_operator
+def nabv_tang(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float]
+):
+    return u_vert(E2C2V[0]) + v_vert(E2C2V[0]) + u_vert(E2C2V[1]) + v_vert(E2C2V[1])
+              
+@field_operator
+def nabv_norm(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float]
+):
+    return u_vert(E2C2V[2]) + v_vert(E2C2V[2]) + u_vert(E2C2V[3]) + v_vert(E2C2V[3])
+
+@field_operator
+def z_nabla4_e2(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float],
+    z_nabla2_e: Field[[E,K], float],
+    inv_vert_vert_length: Field[[E], float],
+    inv_primal_edge_length: Field[[E], float]
+):
+    return 4.0 * (
+        (nabv_norm(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
+        + (nabv_tang(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
+    )
+
+@program
+def mo_nh_diffusion_stencil_04_gt4py(
+    u_vert: Field[[V,K], float],
+    v_vert: Field[[V,K], float],
+    z_nabla2_e: Field[[E,K], float],
+    inv_vert_vert_length: Field[[E], float],
+    inv_primal_edge_length: Field[[E], float],
+    out: Field[[E,K], float]
+):
+    z_nabla4_e2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
+    
 ```
 
 ```{code-cell} ipython3
@@ -493,6 +541,13 @@ z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
 # 1. call GT4Py program
 # 2. enable test
 # assert np.allclose(z_nabla4_e2_numpy, z_nabla4_e2_gt4py)
+```
+
+```{code-cell} ipython3
+%%script echo Skipping! Remove when working on this example.
+
+mo_nh_diffusion_stencil_04_gt4py(
+    
 ```
 
 ## 4. Scan Operator
