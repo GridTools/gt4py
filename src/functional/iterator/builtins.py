@@ -85,6 +85,11 @@ def or_(*args):
 
 
 @builtin_dispatch
+def xor_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def minus(*args):
     raise BackendNotSelectedError()
 
@@ -285,6 +290,11 @@ def fmod(*args):
 
 
 @builtin_dispatch
+def mod(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def power(*args):
     raise BackendNotSelectedError()
 
@@ -332,6 +342,8 @@ BUILTINS = {
     "minus",
     "multiplies",
     "divides",
+    "floordiv",
+    "mod",
     "make_tuple",
     "tuple_get",
     "if_",
@@ -344,6 +356,7 @@ BUILTINS = {
     "not_",
     "and_",
     "or_",
+    "xor_",
     "scan",
     "cartesian_domain",
     "unstructured_domain",

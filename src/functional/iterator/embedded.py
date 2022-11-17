@@ -276,6 +276,13 @@ def or_(a, b):
     return a or b
 
 
+@builtins.xor_.register(EMBEDDED)
+def xor_(a, b):
+    if isinstance(a, Column):
+        return np.logical_xor(a, b)
+    return a ^ b
+
+
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     if isinstance(tup, Column):
@@ -437,6 +444,11 @@ def divides(first, second):
 @builtins.floordiv.register(EMBEDDED)
 def floordiv(first, second):
     return first // second
+
+
+@builtins.mod.register(EMBEDDED)
+def mod(first, second):
+    return first % second
 
 
 @builtins.eq.register(EMBEDDED)
@@ -697,7 +709,7 @@ def _make_tuple(
     as_column: bool = False,
 ) -> tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
-        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+        return tuple(_make_tuple(f, indices, as_column=as_column) for f in field_or_tuple)
     else:
         data = field_or_tuple[indices]
         if as_column:
@@ -1030,7 +1042,8 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        return self.wrapped_iter.deref()[self.k_pos]
+        # TODO(tehrengruber): _make_tuple is for fields
+        return _make_tuple(self.wrapped_iter.deref(), self.k_pos)
 
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()

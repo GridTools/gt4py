@@ -240,6 +240,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "greater_equal": ">=",
         "and_": "&&",
         "or_": "||",
+        "xor_": "^",
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 

@@ -312,6 +312,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
         return foast.UnaryOperator.NOT
 
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> foast.UnaryOperator:
+        return foast.UnaryOperator.NOT
+
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(
             op=self.visit(node.op),
@@ -338,14 +341,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MOD
 
     def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_AND
 
     def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_OR
+
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")

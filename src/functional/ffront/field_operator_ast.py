@@ -84,6 +84,7 @@ class UnaryOperator(StrEnum):
     UADD = "plus"
     USUB = "minus"
     NOT = "not_"
+    INVERT = "invert"
 
     def __str__(self) -> str:
         if self is self.UADD:
@@ -92,6 +93,8 @@ class UnaryOperator(StrEnum):
             return "-"
         elif self is self.NOT:
             return "not"
+        elif self is self.INVERT:
+            return "~"
         return "Unknown UnaryOperator"
 
 
