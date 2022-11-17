@@ -333,9 +333,11 @@ c2e2c_table = np.asarray(
 
 # Excercises
 
-## 1. point-wise (Christoph - diffusion06)
+## 1. point-wise
 
-```{code-cell} ipython3
++++
+
+```fortran
       DO jb = i_startblk,i_endblk
 
         CALL get_indices_e(p_patch, jb, i_startblk, i_endblk, &
@@ -352,6 +354,24 @@ c2e2c_table = np.asarray(
 ```
 
 ```{code-cell} ipython3
+C = Dimension("C")
+V = Dimension("V")
+E = Dimension("E")
+K = Dimension("K")
+```
+
+```{code-cell} ipython3
+@field_operator
+def _mo_nh_diffusion_stencil_06_gt4py(
+    z_nabla2_e: Field[[E, K], float],
+    area_edge: Field[[E], float],
+    vn: Field[[E, K], float],
+    fac_bdydiff_v: float,
+) -> Field[[E, K], float]:
+    vn = vn + (z_nabla2_e * area_edge * fac_bdydiff_v)
+    return vn
+
+
 def mo_nh_diffusion_stencil_06_numpy(
     z_nabla2_e: np.array, area_edge: np.array, vn: np.array, fac_bdydiff_v
 ) -> np.array:
@@ -364,25 +384,26 @@ def test_mo_nh_diffusion_stencil_06():
     mesh = SimpleMesh()
 
     fac_bdydiff_v = 5.0
-    z_nabla2_e = random_field(mesh, EdgeDim, KDim)
-    area_edge = random_field(mesh, EdgeDim)
-    vn = random_field(mesh, EdgeDim, KDim)
+    z_nabla2_e = np.random.rand(n_edges, n_levels)
+    area_edge = np.random.rand(n_edges)
+    vn = np.random.rand(n_edges, n_levels)
 
     vn_numpy = mo_nh_diffusion_stencil_06_numpy(
         np.asarray(z_nabla2_e), np.asarray(area_edge), np.asarray(vn), fac_bdydiff_v
     )
 
-    vn_gt4py = np.zeros(shape=(n_edges, n_levels))
-
-# TODO
-# 1. call GT4Py program
-# 2. enable test
-# assert np.allclose(vn_gt4py, vn_numpy)
+    vn_gt4py = mo_nh_diffusion_stencil_06_gt4py(
+        z_nabla2_e, area_edge, vn, fac_bdydiff_v
+    )
+    
+    assert np.allclose(vn_gt4py, vn_numpy)
 ```
 
-## 2. reduction: gradient or laplace (Christoph - diffusion02)
+## 2. reduction: gradient or laplace
 
-```{code-cell} ipython3
++++
+
+```fortran
       DO jb = i_startblk,i_endblk
 
         CALL get_indices_c(p_patch, jb, i_startblk, i_endblk, &
