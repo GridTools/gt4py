@@ -389,9 +389,14 @@ z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
 
 ## 4. Scan Operator
 
-Configuration: Single column
+The scan operator is a scalar function that cycles over the domain along a specified `axis`, e.g., `axis=KDim`. The function arguments need to be specified as scalars in the function definition, but it actually accepts and returns fields.
+
+The unique feature of this operator is that it provides the return state of the previous iteration (i.e., the previous grid point) as its first argument. In other words, all the arguments of the current `return` will be available (as a tuple) in the next iteration from the first argument of the defined function. The initial value of said argument (named `carry` in the example below) is set to those specified with the `init` argument. As result, the `scan_operator` restricts the data access pattern to the previous neighbour of the specified `axis`.
+
+**Task**: Port a toy cloud microphysics scheme from python/numpy using the tempate of a `scan_operator` blelow. In the scheme, the individual levels are connected by the sedimentation of rain (`qr`).
 
 ```{code-cell} ipython3
+# Configuration: Single column
 CellDim = Dimension("Cell")
 KDim = Dimension("K", kind=DimensionKind.VERTICAL)
 
@@ -400,10 +405,8 @@ num_layers = 6
 grid_shape = (num_cells, num_layers)
 ```
 
-Task: Port the following numpy scheme to a `scan_operator` below:
-
 ```{code-cell} ipython3
-def graupel_toy_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.05):
+def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.05):
     """A toy model of a microphysics scheme contaning autoconversion and scavenging"""
 
     #Init
@@ -412,58 +415,51 @@ def graupel_toy_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.0
     for cell, k in np.ndindex(qc.shape):
         
         # Autoconversion: Cloud Drops -> Rain Drops
+        autoconversion_tendency = qc[cell, k] * autoconversion_rate
         
-        ## Obtain autoconversion tendency
-        autoconv_t = qc[cell, k] * autoconversion_rate
-        
-        ## Apply tendency in place
-        qc[cell, k] -= autoconv_t
-        qr[cell, k] += autoconv_t
+        qc[cell, k] -= autoconversion_tendency
+        qr[cell, k] += autoconversion_tendency
 
         # Sedimentaion
         
         ## Apply sedimentation flux from level above
         qr[cell, k] += sedimentation_flux
 
-        ## Scavenging due to strong precipitation flux
+        ## If the qr amount of the previous level exceeds a treshold, a part of it precipitates to the current cell.
         if qr[cell, k - 1] >= 0.1:
             sedimentation_flux = sedimentaion_constant * qr[cell, k]
         else:
             sedimentation_flux = 0.0
 
-        # Remove mass due to sedimentation flux
+        ## Remove mass due to sedimentation flux from the current cell
         qr[cell, k] -= sedimentation_flux
 ```
 
-### Template
+### Template (work in the next cell)
 
-Caveats of the `scan_operator`:
-- Optional arguents are not supported
-- `If statments` are currently not supported, use `ternary operator` instead
+When implementing the scheme, keep the following caveats in mind:
+- Optional arguments are not yet supported
+- `If statements` are currently not supported, use ternary operator instead
 
 ```{code-cell} ipython3
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
-def _graupel_toy_scan(
-    carry: tuple[float, float, float],
-    qc_in: float,
-    qr_in: float,
-) -> tuple[float, float, float]:
+def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: float):
 
     ### Implement here ###
 
     return qc, qr, sedimentation_flux
 ```
 
-Embed the `scan_operator` in a `field_operator`, such that the sedimentation flux is treated as a temporary:
+The `scan_operator` in embedded a `field_operator`. For now we do this, such that sedimentation flux is treated as a temporary, and deleted upon exit of the `field_operator`:
 
 ```{code-cell} ipython3
 @field_operator
 def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim], float],
-    ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
+    ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
     
-    qc, qr, _ = _graupel_toy_scan(qc, qr)
+    # qc, qr, _ = _graupel_toy_scan(qc, qr) # DL: Hmmmm. This doesnt work yet (BUG)
 
-    return qc, qr
+    return _graupel_toy_scan(qc, qr)
 ```
 
 ### Test
@@ -474,6 +470,7 @@ You can test your implementaion by executing the following test:
 # Initialize GT4Py fields to zero
 qc = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=1.0, dtype=np.float64))
 qr = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
+s = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64)) # Needed for workaround of the workaround
 
 #Initialize Numpy fields from GT4Py fields
 qc_numpy = np.asarray(qc).copy()
@@ -483,7 +480,7 @@ qr_numpy = np.asarray(qr).copy()
 graupel_toy_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
-graupel_toy_scan(qc, qr, out=(qc, qr), offset_provider={})
+graupel_toy_scan(qc, qr, out=(qc, qr, s), offset_provider={})
 
 # Compare results
 assert np.allclose(np.asarray(qc), qc_numpy)
