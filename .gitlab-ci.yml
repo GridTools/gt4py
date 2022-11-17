@@ -1,15 +1,15 @@
 include:
 - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml'
 
-.py39: &py39
-  PYVERSION_PREFIX: py39
-  PYVERSION: 3.9.1
+.py310: &py310
+  PYVERSION_PREFIX: py310
+  PYVERSION: 3.10.8
   CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
   IMAGE_NAME: contbuild/cscs-ci/gridtools/gt4py
 
-.py38: &py38
-  PYVERSION_PREFIX: py38
-  PYVERSION: 3.8.5
+.py39: &py39
+  PYVERSION_PREFIX: py39
+  PYVERSION: 3.9.15
   CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
   IMAGE_NAME: contbuild/cscs-ci/gridtools/gt4py
 
@@ -31,12 +31,12 @@ notify_github_pending:
   variables:
     <<: *status
 
-build py38:
+build py39:
   extends: .dind
   stage: image
   variables:
     BUILD_IMAGE: $CSCS_REGISTRY_NEW/$IMAGE_NAME/gt4py-ci:$PYVERSION
-    <<: *py38
+    <<: *py39
   script:
   - docker login -u $CSCS_REGISTRY_USER -p $CSCS_REGISTRY_PASSWORD $CSCS_REGISTRY_NEW
   - docker pull $BUILD_IMAGE || echo "has not been built yet"
@@ -47,19 +47,19 @@ build py38:
   - staging
   - trying
 
-build py39:
+build py310:
   allow_failure: true
-  extends: build py38
+  extends: build py39
   variables:
-    <<: *py39
+    <<: *py310
 
-test py38:
+test py39:
   extends: .daint
   only:
   - master
   - staging
   - trying
-  needs: ["build py38"]
+  needs: ["build py39"]
   stage: test
   image: $CSCS_REGISTRY_NEW/$IMAGE_NAME/gt4py-ci:$PYVERSION
   script:
@@ -72,14 +72,14 @@ test py38:
     SLURM_CONSTRAINT: gpu
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
-    <<: *py38
-
-test py39:
-  allow_failure: true
-  extends: test py38
-  needs: ["build py39"]
-  variables:
     <<: *py39
+
+test py310:
+  allow_failure: true
+  extends: test py39
+  needs: ["build py310"]
+  variables:
+    <<: *py310
 
 notify_github_success:
   stage: cleanup
