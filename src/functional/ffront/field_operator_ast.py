@@ -11,15 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import warnings
 from typing import Any, Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as ct
-
 from functional.utils import RecursionGuard
+
 
 class LocatedNode(Node):
     location: SourceLocation
@@ -28,7 +27,7 @@ class LocatedNode(Node):
         from functional.ffront.foast_pretty_printer import pretty_format
 
         try:
-            with RecursionGuard(self) as guard:
+            with RecursionGuard(self):
                 return pretty_format(self)
         except RecursionGuard.RecursionDetected:
             # If `pretty_format` itself calls `__str__`, i.e. when printing

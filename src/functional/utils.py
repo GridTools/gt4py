@@ -11,7 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import ClassVar, Any
+from typing import Any, ClassVar
+
 
 class RecursionGuard:
     """
@@ -24,11 +25,12 @@ class RecursionGuard:
     ...    return i
     >>> foo(3)
     3
-    >>> foo(2)
+    >>> foo(2)  # doctest:+ELLIPSIS
     Traceback (most recent call last):
         ...
-    utils.RecursionGuard.RecursionDetected
+    functional.utils.RecursionGuard.RecursionDetected
     """
+
     guarded_objects: ClassVar[set[int]] = set()
 
     obj: Any

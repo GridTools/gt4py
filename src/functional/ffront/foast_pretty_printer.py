@@ -5,7 +5,7 @@ import textwrap
 from typing import Final, TypeAlias, Union
 
 import functional.ffront.field_operator_ast as foast
-from eve.codegen import TemplatedGenerator, FormatTemplate as as_fmt, MakoTemplate as as_mako
+from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
 from functional.ffront import common_types
 
 
@@ -88,12 +88,13 @@ def _property_identifier(node: foast.LocatedNode) -> PropertyIdentifier:
 
 class _PrettyPrinter(TemplatedGenerator):
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> str:
+    def apply(cls, node: foast.LocatedNode, **kwargs) -> str:
         node_type_name = type(node).__name__
         if not hasattr(cls, node_type_name) and not hasattr(cls, f"visit_{node_type_name}"):
-            raise NotImplementedError(f"Pretty printer does not support nodes of type "
-                                      f"`{node_type_name}`.")
-        return cls().visit(node)
+            raise NotImplementedError(
+                f"Pretty printer does not support nodes of type " f"`{node_type_name}`."
+            )
+        return cls().visit(node, **kwargs)
 
     Symbol = as_fmt("{id}")
 
@@ -199,6 +200,7 @@ class _PrettyPrinter(TemplatedGenerator):
 def pretty_format(node: foast.LocatedNode) -> str:
     """
     Pretty print (to string) an `foast.LocatedNode`.
+
     >>> from functional.common import Field
     >>> from functional.ffront.decorator import field_operator
     >>> @field_operator

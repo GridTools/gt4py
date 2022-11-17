@@ -4,10 +4,11 @@ import textwrap
 import pytest
 
 from functional.common import Dimension, DimensionKind, Field
-from functional.ffront.fbuiltins import int64
 from functional.ffront.decorator import field_operator, scan_operator
+from functional.ffront.fbuiltins import int64
 from functional.ffront.foast_pretty_printer import pretty_format
 from functional.ffront.func_to_foast import FieldOperatorParser
+
 
 @pytest.mark.parametrize(
     "test_case",
@@ -25,7 +26,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
         "not True",
         "~True",
         "True & False",
-        "True | False"
+        "True | False",
     ],
 )
 def test_one_to_one(test_case: str):
