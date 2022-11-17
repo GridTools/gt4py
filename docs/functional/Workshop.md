@@ -389,9 +389,12 @@ z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
 
 ## 4. Scan Operator
 
-Configuration: Single column
+The scan operator restricts the data access pattern to the last neighbour.
+
+**Task**: Port the following numpy scheme using the `scan_operator` template below:
 
 ```{code-cell} ipython3
+# Configuration: Single column
 CellDim = Dimension("Cell")
 KDim = Dimension("K", kind=DimensionKind.VERTICAL)
 
@@ -399,8 +402,6 @@ num_cells = 1
 num_layers = 6
 grid_shape = (num_cells, num_layers)
 ```
-
-Task: Port the following numpy scheme to a `scan_operator` below:
 
 ```{code-cell} ipython3
 def graupel_toy_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.05):
@@ -425,45 +426,41 @@ def graupel_toy_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.0
         ## Apply sedimentation flux from level above
         qr[cell, k] += sedimentation_flux
 
-        ## Scavenging due to strong precipitation flux
+        ## Precipitaate if qr amount is substantial
         if qr[cell, k - 1] >= 0.1:
             sedimentation_flux = sedimentaion_constant * qr[cell, k]
         else:
             sedimentation_flux = 0.0
 
-        # Remove mass due to sedimentation flux
+        ## Remove mass due to sedimentation flux
         qr[cell, k] -= sedimentation_flux
 ```
 
 ### Template
 
-Caveats of the `scan_operator`:
-- Optional arguents are not supported
-- `If statments` are currently not supported, use `ternary operator` instead
+When implementing the scheme, keep the following caveats in mind:
+- Optional arguments are not yet supported
+- `If statements` are currently not supported, use `ternary operator` instead
 
 ```{code-cell} ipython3
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
-def _graupel_toy_scan(
-    carry: tuple[float, float, float],
-    qc_in: float,
-    qr_in: float,
-) -> tuple[float, float, float]:
+def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: float):
 
     ### Implement here ###
 
     return qc, qr, sedimentation_flux
 ```
 
-Embed the `scan_operator` in a `field_operator`, such that the sedimentation flux is treated as a temporary:
+Embed the `scan_operator` in a `field_operator`. The sedimentation flux would be treated as a temporary, and deleted upon exit:
 
 ```{code-cell} ipython3
 @field_operator
 def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim], float],
-    ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
+    ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
     
-    qc, qr, _ = _graupel_toy_scan(qc, qr)
+    # qc, qr, _ = _graupel_toy_scan(qc, qr) # DL: Hmmmm. This doesnt work yet (BUG)
 
-    return qc, qr
+    return _graupel_toy_scan(qc, qr)
 ```
 
 ### Test
@@ -474,6 +471,7 @@ You can test your implementaion by executing the following test:
 # Initialize GT4Py fields to zero
 qc = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=1.0, dtype=np.float64))
 qr = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
+s = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64)) # Needed for workaround
 
 #Initialize Numpy fields from GT4Py fields
 qc_numpy = np.asarray(qc).copy()
@@ -483,11 +481,15 @@ qr_numpy = np.asarray(qr).copy()
 graupel_toy_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
-graupel_toy_scan(qc, qr, out=(qc, qr), offset_provider={})
+graupel_toy_scan(qc, qr, out=(qc, qr, s), offset_provider={})
 
 # Compare results
 assert np.allclose(np.asarray(qc), qc_numpy)
 assert np.allclose(np.asarray(qr), qr_numpy)
 
 print("Test successful")
+```
+
+```{code-cell} ipython3
+
 ```
