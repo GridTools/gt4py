@@ -87,8 +87,8 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 return textwrap.dedent(
                     """\
                     FetchContent_Declare(GridTools
-                        GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-                        GIT_TAG        master
+                        GIT_REPOSITORY https://github.com/petiaccja/gridtools.git
+                        GIT_TAG        fix-shift-overloads
                     )
                     FetchContent_MakeAvailable(GridTools)\
                     """
