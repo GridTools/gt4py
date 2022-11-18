@@ -314,9 +314,9 @@ class Program:
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
 
         try:
-            if (
-                not isinstance(list(self.closure_vars.values())[0], FieldOperator)
-                or "cast" not in list(self.closure_vars.values())[0].closure_vars
+            if not (
+                isinstance(list(self.closure_vars.values())[0], FieldOperator)
+                and "cast" in list(self.closure_vars.values())[0].closure_vars
             ):
                 type_info.accepts_args(
                     self.past_node.type,
