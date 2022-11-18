@@ -54,8 +54,8 @@ class TernaryExpr(Expr):
 
 
 class TypeExpr(Expr):
-    new_type: Literal
-    field_expr: Expr
+    new_dtype: Literal
+    obj_expr: Expr
 
 
 class Literal(Expr):

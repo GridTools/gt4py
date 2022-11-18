@@ -369,8 +369,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             elif node.fun.id == "cast_":
                 assert len(node.args) == 2
                 return TypeExpr(
-                    new_type=self.visit(node.args[0], **kwargs),
-                    field_expr=self.visit(node.args[1], **kwargs),
+                    new_dtype=self.visit(node.args[0], **kwargs),
+                    obj_expr=self.visit(node.args[1], **kwargs),
                 )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)

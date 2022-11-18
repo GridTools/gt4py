@@ -254,8 +254,8 @@ def if_(cond, t, f):
 
 
 @builtins.cast_.register(EMBEDDED)
-def cast_(dtype, field):
-    return dtype(field)
+def cast_(new_dtype, obj):
+    return new_dtype(obj)
 
 
 @builtins.not_.register(EMBEDDED)
