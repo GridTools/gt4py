@@ -611,13 +611,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument in call to `{node.func.id}`. Expected a dtype, but got `{node.args[0].type}`.",
+                msg=f"Incompatible argument in call to `{node.func.id}`. "
+                f"Expected an arithmetic dtype, but got {node.args[0]}.",
             )
-        if not isinstance(node.args[1].type, (ct.ScalarType, ct.FieldType)):
+        if not isinstance(
+            node.args[1].type, (ct.ScalarType, ct.FieldType)
+        ) or not type_info.is_arithmetic(node.args[1].type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected either arithmetic ScalarType or FieldType, but got `{node.args[0].type}`.",
+                f"Expected either arithmetic ScalarType or FieldType, but got {node.args[1]}.",
             )
         new_dtype = node.args[0].type.returns
         if isinstance(node.args[1].type, ct.ScalarType):

@@ -28,7 +28,7 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types, field_operator_ast as foast
-from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, cast, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -264,6 +264,25 @@ def test_conditional_wrong_arg_type():
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_cast_wring_args_type():
+    def cast_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
+        return cast(str, a)
+
+    def cast_wrong_type_2(a: Field[..., bool]):
+        return cast(int64, a)
+
+    msg_1 = r"Expected an arithmetic dtype"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_1:
+        _ = FieldOperatorParser.apply_to_function(cast_wrong_type_1)
+
+    msg_2 = r"Expected either arithmetic ScalarType or FieldType"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_2:
+        _ = FieldOperatorParser.apply_to_function(cast_wrong_type_2)
+
+    assert re.search(msg_1, exc_info_1.value.args[0]) is not None
+    assert re.search(msg_2, exc_info_2.value.args[0]) is not None
 
 
 # --- External symbols ---
