@@ -1002,7 +1002,7 @@ qc_numpy = np.asarray(qc).copy()
 qr_numpy = np.asarray(qr).copy()
 
 #Execute the Numpy version of scheme
-graupel_toy_numpy(qc_numpy, qr_numpy)
+toy_microphyiscs_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
 graupel_toy_scan(qc, qr, out=(qc, qr, s), offset_provider={})

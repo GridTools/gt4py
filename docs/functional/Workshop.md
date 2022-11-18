@@ -555,6 +555,7 @@ def test_mo_nh_diffusion_stencil_02():
 ```
 
 ```{code-cell} ipython3
+%%script echo Skipping this cell! Remove when working on this example.
 test_mo_nh_diffusion_stencil_02()
 ```
 
@@ -737,6 +738,8 @@ When implementing the scheme, keep the following caveats in mind:
 - `If statements` are currently not supported, use ternary operator instead
 
 ```{code-cell} ipython3
+%%script echo Skipping this cell! Remove when working on this example.
+
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
 def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: float):
 
@@ -748,6 +751,8 @@ def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: fl
 The `scan_operator` in embedded a `field_operator`. For now we do this, such that sedimentation flux is treated as a temporary, and deleted upon exit of the `field_operator`:
 
 ```{code-cell} ipython3
+%%script echo Skipping this cell! Remove when working on this example.
+
 @field_operator
 def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim], float],
     ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
@@ -762,6 +767,8 @@ def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim
 You can test your implementaion by executing the following test:
 
 ```{code-cell} ipython3
+%%script echo Skipping this cell! Remove when working on this example.
+
 # Initialize GT4Py fields to zero
 qc = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=1.0, dtype=np.float64))
 qr = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
@@ -772,7 +779,7 @@ qc_numpy = np.asarray(qc).copy()
 qr_numpy = np.asarray(qr).copy()
 
 #Execute the Numpy version of scheme
-graupel_toy_numpy(qc_numpy, qr_numpy)
+toy_microphyiscs_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
 graupel_toy_scan(qc, qr, out=(qc, qr, s), offset_provider={})
