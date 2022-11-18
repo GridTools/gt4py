@@ -315,8 +315,8 @@ class Program:
 
         try:
             if (
-                isinstance(list(self.closure_vars.values())[0], FieldOperator)
-                and "cast" not in list(self.closure_vars.values())[0].closure_vars
+                not isinstance(list(self.closure_vars.values())[0], FieldOperator)
+                or "cast" not in list(self.closure_vars.values())[0].closure_vars
             ):
                 type_info.accepts_args(
                     self.past_node.type,
