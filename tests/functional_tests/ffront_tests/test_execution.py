@@ -954,10 +954,7 @@ def test_tuple_arg(fieldview_backend):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_simple_scan(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass.")
-
+def test_fieldop_from_scan(fieldview_backend, forward):
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 1.0
@@ -966,9 +963,13 @@ def test_simple_scan(fieldview_backend, forward):
     if not forward:
         expected = np.flip(expected)
 
+    @field_operator
+    def add(carry: float, foo: float) -> float:
+        return carry + foo
+
     @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float) -> float:
-        return carry + 1.0
+        return add(carry, 1.0)
 
     simple_scan_operator(out=out, offset_provider={})
 
