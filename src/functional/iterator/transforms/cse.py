@@ -81,7 +81,7 @@ class CommonSubexpressionElimination(NodeTranslator):
         ]:
             return node
 
-        node = self.generic_visit(node)
+        #node = self.generic_visit(node)
 
         # collect expressions
         subexprs = CollectSubexpressions.apply(node)
@@ -103,7 +103,7 @@ class CommonSubexpressionElimination(NodeTranslator):
                     expr_map[i] = expr_ref
 
         if not expr_map:
-            return node
+            return self.generic_visit(node)
 
         # apply remapping
         class Replace(NodeTranslator):
@@ -112,7 +112,7 @@ class CommonSubexpressionElimination(NodeTranslator):
                     return expr_map[id(node)]
                 return self.generic_visit(node)
 
-        return ir.FunCall(
+        return self.generic_visit(ir.FunCall(
             fun=ir.Lambda(params=params, expr=Replace().visit(node)),
             args=args,
-        )
+        ))
