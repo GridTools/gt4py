@@ -648,7 +648,7 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
         qr[cell, k] += sedimentation_flux
 
         ## If the qr amount of the previous level exceeds a treshold, a part of it precipitates to the current cell.
-        if qr[cell, k - 1] >= 0.1:
+        if qr[cell, k] >= 0.1:
             sedimentation_flux = sedimentaion_constant * qr[cell, k]
         else:
             sedimentation_flux = 0.0
@@ -657,14 +657,14 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
         qr[cell, k] -= sedimentation_flux
 ```
 
-### Template (work in the next cell)
+### Solution
 
 When implementing the scheme, keep the following caveats in mind:
 - Optional arguments are not yet supported
 - `If statements` are currently not supported, use ternary operator instead
 
 ```{code-cell} ipython3
-%%script echo Skipping this cell! Remove when working on this example.
+%%script echo Skipping this cell! Remove this line when working on this example.
 
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
 def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: float):
@@ -677,15 +677,15 @@ def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: fl
 The `scan_operator` in embedded a `field_operator`. For now we do this, such that sedimentation flux is treated as a temporary, and deleted upon exit of the `field_operator`:
 
 ```{code-cell} ipython3
-%%script echo Skipping this cell! Remove when working on this example.
+%%script echo Skipping this cell! Remove this line when working on this example.
 
 @field_operator
 def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim], float],
     ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
     
-    # qc, qr, _ = _graupel_toy_scan(qc, qr) # DL: Hmmmm. This doesnt work yet (BUG)
+    qc, qr, _ = _graupel_toy_scan(qc, qr)
 
-    return _graupel_toy_scan(qc, qr)
+    return qc, qr
 ```
 
 ### Test
@@ -698,7 +698,6 @@ You can test your implementaion by executing the following test:
 # Initialize GT4Py fields to zero
 qc = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=1.0, dtype=np.float64))
 qr = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
-s = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64)) # Needed for workaround of the workaround
 
 #Initialize Numpy fields from GT4Py fields
 qc_numpy = np.asarray(qc).copy()
@@ -708,7 +707,7 @@ qr_numpy = np.asarray(qr).copy()
 toy_microphyiscs_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
-graupel_toy_scan(qc, qr, out=(qc, qr, s), offset_provider={})
+graupel_toy_scan(qc, qr, out=(qc, qr), offset_provider={})
 
 # Compare results
 assert np.allclose(np.asarray(qc), qc_numpy)
