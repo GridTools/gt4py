@@ -314,12 +314,16 @@ class Program:
         kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
 
         try:
-            type_info.accepts_args(
-                self.past_node.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
+            if (
+                isinstance(list(self.closure_vars.values())[0], FieldOperator)
+                and "cast" not in list(self.closure_vars.values())[0].closure_vars
+            ):
+                type_info.accepts_args(
+                    self.past_node.type,
+                    with_args=arg_types,
+                    with_kwargs=kwarg_types,
+                    raise_exception=True,
+                )
         except GTTypeError as err:
             raise ProgramTypeError.from_past_node(
                 self.past_node, msg=f"Invalid argument types in call to `{self.past_node.id}`!"

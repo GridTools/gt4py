@@ -14,7 +14,7 @@
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, NodeVisitor, traits
+from eve import NodeTranslator, NodeVisitor, SymbolRef, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
 from functional.ffront.symbol_makers import make_symbol_type_from_value
@@ -458,12 +458,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # ensure signature is valid
         try:
-            type_info.accepts_args(
-                func_type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
+            if new_func.id != SymbolRef("cast"):
+                type_info.accepts_args(
+                    func_type,
+                    with_args=arg_types,
+                    with_kwargs=kwarg_types,
+                    raise_exception=True,
+                )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg=f"Invalid argument types in call to `{node.func.id}`!"
@@ -605,6 +606,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call | foast.Constant:
+        if not isinstance(node.args[0].type, ct.FunctionType) or not type_info.is_arithmetic(
+            node.args[0].type.returns
+        ):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. Expected a dtype, but got `{node.args[0].type}`.",
+            )
+        if not isinstance(node.args[1].type, (ct.ScalarType, ct.FieldType)):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. "
+                f"Expected either arithmetic ScalarType or FieldType, but got `{node.args[0].type}`.",
+            )
         new_dtype = node.args[0].type.returns
         if isinstance(node.args[1].type, ct.ScalarType):
             return foast.Constant(value=node.args[1].value, location=node.location, type=new_dtype)
