@@ -17,7 +17,13 @@ kernelspec:
 # Hands on Session of the GT4Py Workshop
 
 ## Installation
-Please follow the instructions in the README.md
+Please follow the instructions in the README.md or use the Gitpod setup.
+
+## GT4Py mode
+
+We will implement the examples in field view and execute the Iterator IR program in Python.
+
+![](toolchain_details_existing_path.png)
 
 ## Import Modules
 
@@ -25,9 +31,48 @@ Please follow the instructions in the README.md
 import numpy as np
 
 from functional.ffront.decorator import program, scan_operator, field_operator
-from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
+from functional.iterator.embedded import MutableLocatedField, np_as_located_field, NeighborTableOffsetProvider
 from functional.ffront.fbuiltins import Field, FieldOffset, neighbor_sum
-from functional.common import DimensionKind
+from functional.common import Dimension, DimensionKind
+```
+
+```{code-cell} ipython3
+def random_field(
+    sizes, *dims, low: float = -1.0, high: float = 1.0
+) -> MutableLocatedField:
+    return np_as_located_field(*dims)(
+        np.random.default_rng().uniform(
+            low=low, high=high, size=sizes
+        )
+    )
+
+def zero_field(
+    sizes, *dims: Dimension, dtype=float
+) -> MutableLocatedField:
+    return np_as_located_field(*dims)(
+        np.zeros(shape=sizes, dtype=dtype)
+    )
+```
+
+For simplicity we use a triangulated donut in the horizontal.
+
+```
+0v---0e-- 1v---3e-- 2v---6e-- 0v
+|  \ 0c   |  \ 1c   |  \2c
+|   \1e   |   \4e   |   \7e
+|2e   \   |5e   \   |8e   \
+|  3c   \ |   4c  \ |    5c\
+3v---9e-- 4v--12e-- 5v--15e-- 3v
+|  \ 6c   |  \ 7c   |  \ 8c
+|   \10e  |   \13e  |   \16e
+|11e  \   |14e  \   |17e  \
+|  9c  \  |  10c \  |  11c \
+6v--18e-- 7v--21e-- 8v--24e-- 6v
+|  \12c   |  \ 13c  |  \ 14c
+|   \19e  |   \22e  |   \25e
+|20e  \   |23e  \   |26e  \
+|  15c  \ | 16c   \ | 17c  \
+0v       1v         2v        0v
 ```
 
 +++ {"tags": []}
@@ -333,7 +378,9 @@ c2e2c_table = np.asarray(
 
 # Excercises
 
-## 1. point-wise
+## 1. point wise stencil
+
+We start off with a simple point wise stencil, where we want to write the following piece of Fortran code in gt4py:
 
 +++
 
@@ -353,6 +400,14 @@ c2e2c_table = np.asarray(
       ENDDO
 ```
 
++++
+
+The loops over `jk` and `je` are the horizontal and vertical loops. The additional loop over `jb` is used in ICON in order to partition the horizontal `je` loop into multiple pieces for cache optimization reasons, so the `jb` loop has no physical meaning. The `get_indices_e` function is used to fetch the exact horizontal start and end indices `i_startidx` and `i_endidx` for this specific stencil.
+
+Further we see that `p_nh_prog%vn`, `z_nabla2_e` are fields with horizontal and vertical extends, while `p_patch%edges%area_edge` is a purely horizontal field and `fac_bdydiff_v` is a scalar.
+
+On the gt4py side, we want to define some dimensions for Vertices, Cells, Edges and the vertical K direction first:
+
 ```{code-cell} ipython3
 C = Dimension("C")
 V = Dimension("V")
@@ -360,9 +415,11 @@ E = Dimension("E")
 K = Dimension("K")
 ```
 
+Next we implement the stencil and a numpy reference version, in order to verify them against each other.
+
 ```{code-cell} ipython3
 @field_operator
-def _mo_nh_diffusion_stencil_06_gt4py(
+def mo_nh_diffusion_stencil_06_gt4py(
     z_nabla2_e: Field[[E, K], float],
     area_edge: Field[[E], float],
     vn: Field[[E, K], float],
@@ -370,38 +427,51 @@ def _mo_nh_diffusion_stencil_06_gt4py(
 ) -> Field[[E, K], float]:
     vn = vn + (z_nabla2_e * area_edge * fac_bdydiff_v)
     return vn
+```
 
-
+```{code-cell} ipython3
 def mo_nh_diffusion_stencil_06_numpy(
     z_nabla2_e: np.array, area_edge: np.array, vn: np.array, fac_bdydiff_v
 ) -> np.array:
     area_edge = np.expand_dims(area_edge, axis=-1)
     vn = vn + (z_nabla2_e * area_edge * fac_bdydiff_v)
     return vn
+```
 
-
+```{code-cell} ipython3
 def test_mo_nh_diffusion_stencil_06():
-    mesh = SimpleMesh()
-
+    
     fac_bdydiff_v = 5.0
-    z_nabla2_e = np.random.rand(n_edges, n_levels)
-    area_edge = np.random.rand(n_edges)
-    vn = np.random.rand(n_edges, n_levels)
-
+    z_nabla2_e = random_field((n_edges, n_levels), E, K)
+    area_edge = random_field((n_edges), E)
+    vn = random_field((n_edges, n_levels), E, K)
+    
     vn_numpy = mo_nh_diffusion_stencil_06_numpy(
         np.asarray(z_nabla2_e), np.asarray(area_edge), np.asarray(vn), fac_bdydiff_v
     )
 
-    vn_gt4py = mo_nh_diffusion_stencil_06_gt4py(
-        z_nabla2_e, area_edge, vn, fac_bdydiff_v
+    vn_gt4py = zero_field((n_edges, n_levels), E, K)
+
+    mo_nh_diffusion_stencil_06_gt4py(
+        z_nabla2_e, area_edge, vn, fac_bdydiff_v, out=vn_gt4py, offset_provider={}
     )
     
     assert np.allclose(vn_gt4py, vn_numpy)
 ```
 
-## 2. reduction: gradient or laplace
+```{code-cell} ipython3
+test_mo_nh_diffusion_stencil_06()
+```
+
+## 2. reduction: divergence
 
 +++
+
+Next we will translate a divergence stencil. The normal velocity of each edge is multipled with the edge length, the contributions from all three edges of a cell are summed up and then divided by the area of the cell. In the next pictures we can see a graphical representation of all of the quantities involved:
+![](divergence.png "Divergence")
+The orientation of the edge plays a role for this operation in ICON, as we need to be aware if the normal vector of an edge points inwards or outwards of the cell we are currently looking at.
+![](edge_orientation.png "Edge Orientation")
+One such divergence stencil is stencil 02 in diffusion:
 
 ```fortran
       DO jb = i_startblk,i_endblk
@@ -411,11 +481,6 @@ def test_mo_nh_diffusion_stencil_06():
         DO jk = 1, nlev
           DO jc = i_startidx, i_endidx
 
-            kh_c(jc,jk) = (kh_smag_ec(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%e_bln_c_s(jc,1,jb) + &
-                           kh_smag_ec(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%e_bln_c_s(jc,2,jb) + &
-                           kh_smag_ec(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%e_bln_c_s(jc,3,jb))/ &
-                          diff_multfac_smag(jk)
-
             div(jc,jk) = p_nh_prog%vn(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%geofac_div(jc,1,jb) + &
                          p_nh_prog%vn(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%geofac_div(jc,2,jb) + &
                          p_nh_prog%vn(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%geofac_div(jc,3,jb)
@@ -423,55 +488,83 @@ def test_mo_nh_diffusion_stencil_06():
         ENDDO
       ENDDO
 ```
+where `p_int%geofac_div` is set up as a constant field at ICON startup time and contains the geometrical factors for the divergence operator:
+```fortran
+    DO jb = i_startblk, i_endblk
+
+      CALL get_indices_c(ptr_patch, jb, i_startblk, i_endblk, &
+        & i_startidx, i_endidx, rl_start, rl_end)
+
+      DO je = 1, ptr_patch%geometry_info%cell_type
+        DO jc = i_startidx, i_endidx
+
+          ile = ptr_patch%cells%edge_idx(jc,jb,je)
+          ibe = ptr_patch%cells%edge_blk(jc,jb,je)
+
+          ptr_int%geofac_div(jc,je,jb) = &
+            & ptr_patch%edges%primal_edge_length(ile,ibe) * &
+            & ptr_patch%cells%edge_orientation(jc,jb,je)  / &
+            & ptr_patch%cells%area(jc,jb)
+
+        ENDDO !cell loop
+      ENDDO
+
+    END DO !block loop
+
+```
+
+```{code-cell} ipython3
+C2EDim = Dimension("C2EDim", kind=DimensionKind.LOCAL)
+C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
+```
+
+```{code-cell} ipython3
+@field_operator
+def mo_nh_diffusion_stencil_02_gt4py(
+    vn: Field[[E, K], float],
+    geofac_div: Field[[C, C2EDim], float],
+) -> Field[[C, K], float]:
+    div = neighbor_sum(vn(C2E) * geofac_div, axis=C2EDim)
+    return div
+```
 
 ```{code-cell} ipython3
 def mo_nh_diffusion_stencil_02_numpy(
     c2e: np.array,
-    kh_smag_ec: np.array,
     vn: np.array,
-    e_bln_c_s: np.array,
     geofac_div: np.array,
-    diff_multfac_smag: np.array,
 ) -> tuple[np.array]:
     geofac_div = np.expand_dims(geofac_div, axis=-1)
     vn_geofac = vn[c2e] * geofac_div
     div = np.sum(vn_geofac, axis=1)
 
-    e_bln_c_s = np.expand_dims(e_bln_c_s, axis=-1)
-    diff_multfac_smag = np.expand_dims(diff_multfac_smag, axis=0)
-    mul = kh_smag_ec[c2e] * e_bln_c_s
-    summed = np.sum(mul, axis=1)
-    kh_c = summed / diff_multfac_smag
+    return div
+```
 
-    return div, kh_c
-
-
+```{code-cell} ipython3
 def test_mo_nh_diffusion_stencil_02():
-    mesh = SimpleMesh()
+    vn = random_field((n_edges, n_levels), E, K)
+    geofac_div = random_field((n_cells, 3), C, C2EDim)
 
-    vn = random_field(mesh, EdgeDim, KDim)
-    geofac_div = random_field(mesh, CellDim, C2EDim)
-    kh_smag_ec = random_field(mesh, EdgeDim, KDim)
-    e_bln_c_s = random_field(mesh, CellDim, C2EDim)
-    diff_multfac_smag = random_field(mesh, KDim)
-
-    div_numpy, kh_c_numpy = mo_nh_diffusion_stencil_02_numpy(
-        mesh.c2e,
-        np.asarray(kh_smag_ec),
+    div_numpy = mo_nh_diffusion_stencil_02_numpy(
+        c2e_table,
         np.asarray(vn),
-        np.asarray(e_bln_c_s),
         np.asarray(geofac_div),
-        np.asarray(diff_multfac_smag),
     )
 
-    div_gt4py = zero_field(mesh, CellDim, KDim)
-    kh_c_gt4py = zero_field(mesh, CellDim, KDim)
+    c2e_connectivity = NeighborTableOffsetProvider(c2e_table, C, E, 3)
 
-# TODO
-# 1. call GT4Py program
-# 2. enable test
-#assert np.allclose(kh_c_gt4py, kh_c_numpy)
-#assert np.allclose(div_gt4py, div_numpy)
+    div_gt4py = zero_field((n_cells, n_levels), C, K)
+
+    mo_nh_diffusion_stencil_02_gt4py(
+        vn, geofac_div, out = div_gt4py, offset_provider = {C2E.value: c2e_connectivity}
+    )
+    
+    assert np.allclose(div_gt4py, div_numpy)
+```
+
+```{code-cell} ipython3
+test_mo_nh_diffusion_stencil_02()
 ```
 
 +++ {"tags": []}
