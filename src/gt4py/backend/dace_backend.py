@@ -174,7 +174,6 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
     _specialize_transient_strides(sdfg, layout_map=layout_map)
-    partially_expand(sdfg)
     return sdfg
 
 
@@ -388,7 +387,10 @@ class SDFGManager:
 
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
+
+        partially_expand(sdfg)
         sdfg.expand_library_nodes()
+
         _post_expand_trafos(sdfg)
         return sdfg
 

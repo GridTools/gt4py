@@ -5,6 +5,7 @@ import dace
 import dace.codegen.control_flow as cf
 import dace.sdfg.graph
 import dace.symbolic
+import pydantic
 import sympy
 from dace.properties import DictProperty, make_properties
 from dace.sdfg.propagation import propagate_memlets_sdfg
@@ -86,29 +87,9 @@ def _get_symbolic_origin_and_domain(
         edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
 
     origins = dict()
-    domain = dict()
     access_infos = PartialExpansion._rename_dict_keys(
         PartialExpansion._get_name_map(state, node), access_infos
     )
-    for field, info in access_infos.items():
-        outer_subset: dace.subsets.Range = outer_subsets[field]
-        inner_origin = [
-            info.grid_subset.intervals[axis].to_dace_symbolic()[0]
-            for axis in dcir.Axis.dims_3d()
-            if axis in info.grid_subset.intervals
-        ]
-        origins[field] = tuple(
-            dace.symbolic.pystr_to_symbolic(r[0] - o)
-            for r, o in zip(outer_subset.ranges, inner_origin)
-        )
-        for ax_idx, axis in enumerate(info.axes()):
-            interval_end = info.grid_subset.intervals[axis].end
-            if interval_end.level == common.LevelMarker.END:
-                domain[axis] = (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset) - origins[
-                    field
-                ][ax_idx]
-    # for axis in dcir.Axis.dims_3d():
-    #     domain.setdefault(axis, 0)
 
     # Collect equations and symbols from arguments and shapes
     equations = []
@@ -142,12 +123,38 @@ def _get_symbolic_origin_and_domain(
         raise ValueError("Symbolic split inconsistent.")
     result = results[0]
     result = {str(k)[len("__SOLVE_") :]: v for k, v in result.items()}
-    solved_domain = {
+    domain = {
         axis: result[axis.domain_symbol()]
         for axis in dcir.Axis.dims_3d()
         if axis.domain_symbol() in result
     }
-    domain.update(**solved_domain)
+    # domain.update(**solved_domain)
+
+    for field, info in access_infos.items():
+        outer_subset: dace.subsets.Range = outer_subsets[field]
+        inner_origin = [
+            info.grid_subset.intervals[axis].to_dace_symbolic()[0]
+            for axis in dcir.Axis.dims_3d()
+            if axis in info.grid_subset.intervals
+        ]
+        origin = list(
+            dace.symbolic.pystr_to_symbolic(r[0] - o)
+            for r, o in zip(outer_subset.ranges, inner_origin)
+        )
+        for i, orig in enumerate(origin):
+            origin[i] = orig.subs(
+                {ax.domain_dace_symbol(): value for ax, value in domain.items()}, simultaneous=True
+            )
+        origins[field] = tuple(origin)
+        for ax_idx, axis in enumerate(info.axes()):
+            interval_end = info.grid_subset.intervals[axis].end
+            if interval_end.level == common.LevelMarker.END:
+                domain.setdefault(
+                    axis,
+                    (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset)
+                    - origins[field][ax_idx],
+                )
+
     return origins, domain
 
 
@@ -232,7 +239,9 @@ def _make_dace_subset_symbolic_context(
     return dace.subsets.Range(res_ranges)
 
 
-def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo]):
+def _update_shapes(
+    sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo], domain_dict
+):
     for name, access_info in access_infos.items():
         for axis in access_info.axes():
             if axis in access_info.variable_offset_axes:
@@ -243,6 +252,11 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
             ndim = len(shape)
             shape += list(array.shape[ndim:])
             shape = [dace.symbolic.pystr_to_symbolic(s) for s in shape]
+            for i, s in enumerate(shape):
+                shape[i] = s.subs(
+                    {ax.domain_dace_symbol(): value for ax, value in domain_dict.items()},
+                    simultaneous=True,
+                )
             strides = [1]
             total_size = shape[0]
             for s in reversed(shape[1:]):
@@ -257,6 +271,11 @@ def _update_shapes(sdfg: dace.SDFG, access_infos: Dict[dcir.SymbolName, dcir.Fie
         else:
             shape = access_info.shape
             shape = [dace.symbolic.pystr_to_symbolic(s) for s in shape]
+            for i, s in enumerate(shape):
+                shape[i] = s.subs(
+                    {ax.domain_dace_symbol(): value for ax, value in domain_dict.items()},
+                    simultaneous=True,
+                )
             ndim = len(shape)
             shape += list(array.shape[ndim:])
             array.shape = shape
@@ -376,12 +395,18 @@ class PartialExpansion(transformation.SubgraphTransformation):
         def __init__(self, name_map):
             self.name_map = name_map
 
+        def visit_VerticalLoop(self, node: oir.VerticalLoop):
+            return oir.VerticalLoop(
+                loop_order=node.loop_order, sections=self.visit(node.sections), caches=[]
+            )
+
         def visit_FieldAccess(self, node: oir.FieldAccess):
-            node = self.generic_visit(node)
+            offset = self.visit(node.offset)
+            data_index = self.visit(node.data_index)
             return oir.FieldAccess(
                 name=self.name_map[node.name],
-                offset=node.offset,
-                data_index=node.data_index,
+                offset=offset,
+                data_index=data_index,
                 dtype=node.dtype,
             )
 
@@ -413,12 +438,17 @@ class PartialExpansion(transformation.SubgraphTransformation):
             if isinstance(decl, oir.ScalarDecl)
         }
 
-        oir_stencil = oir.Stencil(
-            name="__adhoc",
-            vertical_loops=vertical_loops,
-            params=list(params.values()),
-            declarations=list(declarations.values()),
-        )
+        try:
+            oir_stencil = oir.Stencil(
+                name="__adhoc",
+                vertical_loops=vertical_loops,
+                params=list(params.values()),
+                declarations=list(declarations.values()),
+            )
+        except pydantic.ValidationError:
+            state.parent.view()
+            print(state.label, [vl.json() for vl in vertical_loops], params, declarations)
+            raise
         oir_extents = compute_horizontal_block_extents(oir_stencil)
 
         for i, (node, _) in enumerate(nodes):
@@ -472,15 +502,15 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
         original_item = first_expansion_specification[0]
 
+        parent_symbolic_split = PartialExpansion._get_symbolic_split(stencil_computations)
+        domain_dict = parent_symbolic_split[1]
         tiling_schedule = original_item.schedule
         tiling_ranges = {
             it.axis.tile_symbol(): str(
-                dace.subsets.Range([(0, it.axis.domain_dace_symbol() - 1, it.stride)])
+                dace.subsets.Range([(0, domain_dict[it.axis] - 1, it.stride)])
             )
             for it in original_item.iterations
         }
-
-        parent_symbolic_split = PartialExpansion._get_symbolic_split(stencil_computations)
 
         if len(subgraph.nodes()) == 1:
             # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
@@ -512,7 +542,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
 
         # update shapes and subsets of new nested SDFG
-        _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos)
+        _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos, domain_dict)
         for state in nsdfg_node.sdfg.states():
             for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
                 to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
@@ -525,17 +555,21 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     access_info = in_access_infos[name]
                     naxes = len(access_info.grid_subset.intervals)
                     data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-                    memlet.data.subset = make_dace_subset(
+                    subset = make_dace_subset(
                         nsdfg_access_infos[name], access_info, data_dims=data_dims
                     )
+                    subset.replace({ax.domain_dace_symbol(): v for ax, v in domain_dict.items()})
+                    memlet.data.subset = subset
                 for memlet in state.out_edges(node):
                     name = memlet.data.data
                     access_info = out_access_infos[name]
                     naxes = len(access_info.grid_subset.intervals)
                     data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
-                    memlet.data.subset = make_dace_subset(
+                    subset = memlet.data.subset = make_dace_subset(
                         nsdfg_access_infos[name], access_info, data_dims=data_dims
                     )
+                    subset.replace({ax.domain_dace_symbol(): v for ax, v in domain_dict.items()})
+                    memlet.data.subset = subset
         propagate_memlets_sdfg(nsdfg_node.sdfg)
 
         map_entry, map_exit = nsdfg_state.add_map(
@@ -624,43 +658,46 @@ def _test_match(sdfg, states: Set[dace.SDFGState]):
 
 
 def partially_expand(sdfg: dace.SDFG):
-    cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
+    matches: List[Tuple[sdfg, List[Set[dace.SDFGState]]]] = []
+    for sd in sdfg.all_sdfgs_recursive():
+        cft = cf.structured_control_flow_tree(sd, lambda _: "")
 
-    def _recurse(cfg: cf.ControlFlow):
-        subgraphs: List[Set[dace.SDFGState]] = list()
-        candidate = set()
-        # reversed so that extent analysis tends to include stencil sinks
-        for child in reversed(cfg.children):
-            if isinstance(child, cf.SingleState):
-                if _test_match(sdfg, {child.state} | candidate):
-                    candidate.add(child.state)
-                else:
-                    if candidate:
-                        subgraphs.append(candidate)
-                    if _test_match(sdfg, {child.state}):
-                        candidate = {child.state}
+        def _recurse(cfg: cf.ControlFlow):
+            subgraphs: List[Set[dace.SDFGState]] = list()
+            candidate = set()
+            # reversed so that extent analysis tends to include stencil sinks
+            for child in reversed(cfg.children):
+                if isinstance(child, cf.SingleState):
+                    if _test_match(sd, {child.state} | candidate):
+                        candidate.add(child.state)
                     else:
-                        candidate = set()
-            else:
-                cand_states = get_all_child_states(child)
-                if _test_match(sdfg, cand_states | candidate):
-                    candidate.update(cand_states)
+                        if candidate:
+                            subgraphs.append(candidate)
+                        if _test_match(sd, {child.state}):
+                            candidate = {child.state}
+                        else:
+                            candidate = set()
                 else:
-                    if candidate:
-                        subgraphs.append(candidate)
-                    subsubgraphs = _recurse(child)
-                    if subsubgraphs:
-                        subgraphs.extend(subsubgraphs)
-        if candidate:
-            subgraphs.append(candidate)
-        return subgraphs
+                    cand_states = get_all_child_states(child)
+                    if _test_match(sd, cand_states | candidate):
+                        candidate.update(cand_states)
+                    else:
+                        if candidate:
+                            subgraphs.append(candidate)
+                        subsubgraphs = _recurse(child)
+                        if subsubgraphs:
+                            subgraphs.extend(subsubgraphs)
+            if candidate:
+                subgraphs.append(candidate)
+            return subgraphs
 
-    subgraphs = _recurse(cft)
+        matches.append((sd, _recurse(cft)))
 
-    for nodes in subgraphs:
-        parent_sdfg = next(iter(nodes)).parent
-        expansion, subgraph = _setup_match(sdfg, nodes)
-        expansion.apply(parent_sdfg)
+    for sd, subgraphs in matches:
+        for nodes in subgraphs:
+            parent_sdfg = next(iter(nodes)).parent
+            expansion, subgraph = _setup_match(sd, nodes)
+            expansion.apply(parent_sdfg)
 
     # assert subgraphs
     # allstates = [s for subgraph in subgraphs for s in subgraph]
