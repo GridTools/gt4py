@@ -604,22 +604,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call:
-        new_dtype = getattr(ct.ScalarKind, str(node.args[0].id).upper())
+    def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call | foast.Constant:
+        new_dtype = node.args[0].type.returns
         if isinstance(node.args[1].type, ct.ScalarType):
-            return_type = ct.ScalarType(kind=new_dtype)
+            return foast.Constant(value=node.args[1].value, location=node.location, type=new_dtype)
         else:
             return_type = ct.FieldType(
                 dims=node.args[1].type.dims,
-                dtype=ct.ScalarType(kind=new_dtype),
+                dtype=new_dtype,
             )
-        return foast.Call(
-            func=node.func,
-            args=node.args,
-            kwargs=node.kwargs,
-            type=return_type,
-            location=node.location,
-        )
+            return foast.Call(
+                func=node.func,
+                args=node.args,
+                kwargs=node.kwargs,
+                type=return_type,
+                location=node.location,
+            )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)

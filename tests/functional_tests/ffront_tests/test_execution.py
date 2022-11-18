@@ -774,7 +774,8 @@ def test_cast(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def cast_fieldop(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
-        return cast(int64, a)
+        d = cast(int64, 1.0) * cast(int64, a)
+        return d
 
     cast_fieldop(a, out=out, offset_provider={})
 
