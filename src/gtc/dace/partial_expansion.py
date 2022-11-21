@@ -128,7 +128,14 @@ def _get_symbolic_origin_and_domain(
         for axis in dcir.Axis.dims_3d()
         if axis.domain_symbol() in result
     }
-    # domain.update(**solved_domain)
+    domain.update(
+        {
+            ax: node.symbol_mapping[ax.domain_symbol()]
+            for ax in dcir.Axis.dims_3d()
+            if ax.domain_symbol() in node.symbol_mapping
+        }
+    )
+    print("a", node.label, origins, domain)
 
     for field, info in access_infos.items():
         outer_subset: dace.subsets.Range = outer_subsets[field]
@@ -154,6 +161,7 @@ def _get_symbolic_origin_and_domain(
                     (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset)
                     - origins[field][ax_idx],
                 )
+    print("b", node.label, origins, domain)
 
     return origins, domain
 
@@ -317,7 +325,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
         if not stencil_computations:
             return False
-
+        if any(edge.data.assignments for edge in subgraph.edges()):
+            return False
         # NestedSDFGs are not supported.
         if not all(
             isinstance(n, (dace.nodes.AccessNode, dace.SDFGState, StencilComputation))
@@ -511,7 +520,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
             )
             for it in original_item.iterations
         }
-
+        print("next one")
         if len(subgraph.nodes()) == 1:
             # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
             # nesting.
@@ -678,15 +687,18 @@ def partially_expand(sdfg: dace.SDFG):
                         else:
                             candidate = set()
                 else:
-                    cand_states = get_all_child_states(child)
-                    if _test_match(sd, cand_states | candidate):
-                        candidate.update(cand_states)
-                    else:
-                        if candidate:
-                            subgraphs.append(candidate)
-                        subsubgraphs = _recurse(child)
-                        if subsubgraphs:
-                            subgraphs.extend(subsubgraphs)
+                    if candidate:
+                        subgraphs.append(candidate)
+                    candidate = set()
+                    subsubgraphs = []
+                    if isinstance(child, cf.IfScope):
+                        subsubgraphs += _recurse(child.body)
+                        if child.orelse is not None:
+                            subsubgraphs += _recurse(child.orelse)
+                    elif isinstance(child, cf.ForScope):
+                        subsubgraphs += _recurse(child.body)
+                    if subsubgraphs:
+                        subgraphs.extend(subsubgraphs)
             if candidate:
                 subgraphs.append(candidate)
             return subgraphs
