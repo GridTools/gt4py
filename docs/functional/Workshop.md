@@ -628,7 +628,7 @@ grid_shape = (num_cells, num_layers)
 ```
 
 ```{code-cell} ipython3
-def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constant=0.05):
+def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentation_constant=0.05):
     """A toy model of a microphysics scheme contaning autoconversion and scavenging"""
 
     #Init
@@ -649,7 +649,7 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
 
         ## If the qr amount of the previous level exceeds a treshold, a part of it precipitates to the current cell.
         if qr[cell, k] >= 0.1:
-            sedimentation_flux = sedimentaion_constant * qr[cell, k]
+            sedimentation_flux = sedimentation_constant * qr[cell, k]
         else:
             sedimentation_flux = 0.0
 
