@@ -311,7 +311,7 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
     return isinstance(field, ct.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
 
 
-def is_empty_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
+def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
     """
     Check if first argument is an empty field and second is of a compatible type.
 
