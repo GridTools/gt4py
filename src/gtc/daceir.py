@@ -21,6 +21,7 @@ import sympy
 
 import eve
 import gtc
+import gtc.definitions
 from eve import datamodels
 from gtc import common, oir
 from gtc.common import LocNode
@@ -156,7 +157,7 @@ class IndexWithExtent(eve.Node):
     extent: Tuple[int, int]
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         if isinstance(self.value, AxisBound) and self.value.level == common.LevelMarker.END:
             return {self.axis.domain_symbol()}
         elif isinstance(self.value, str):
@@ -228,7 +229,7 @@ class DomainInterval(eve.Node):
     end: AxisBound
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         res = set()
         if self.start.level == common.LevelMarker.END:
             res.add(self.start.axis.domain_symbol())
@@ -303,7 +304,7 @@ class TileInterval(eve.Node):
     domain_limit: AxisBound
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         res = {
             self.axis.tile_symbol(),
         }
@@ -379,7 +380,7 @@ class Range(eve.Node):
         )
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         return {self.var, *self.interval.free_symbols}
 
 
@@ -397,7 +398,7 @@ class GridSubset(eve.Node):
                 yield axis, self.intervals[axis]
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         return set().union(*(interval.free_symbols for interval in self.intervals.values()))
 
     @classmethod
