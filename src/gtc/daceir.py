@@ -160,7 +160,7 @@ class IndexWithExtent(eve.Node):
         if isinstance(self.value, AxisBound) and self.value.level == common.LevelMarker.END:
             return {self.axis.domain_symbol()}
         elif isinstance(self.value, str):
-            return self.axis.iteration_symbol()
+            return {self.axis.iteration_symbol()}
         return set()
 
     @classmethod
@@ -304,7 +304,9 @@ class TileInterval(eve.Node):
 
     @property
     def free_symbols(self):
-        res = {self.axis.tile_symbol()}
+        res = {
+            self.axis.tile_symbol(),
+        }
         if self.domain_limit.level == common.LevelMarker.END:
             res.add(self.axis.domain_symbol())
         return res
