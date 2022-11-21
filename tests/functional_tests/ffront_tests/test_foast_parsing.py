@@ -268,7 +268,7 @@ def test_conditional_wrong_arg_type():
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
-def test_cast_wring_args_type():
+def test_cast_wrong_args_type():
     def cast_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
         return cast(str, a)
 
@@ -285,6 +285,18 @@ def test_cast_wring_args_type():
 
     assert re.search(msg_1, exc_info_1.value.args[0]) is not None
     assert re.search(msg_2, exc_info_2.value.args[0]) is not None
+
+
+def test_cast():
+    def cast_fieldop(a: Field[..., "int64"]):
+        return cast(float64, a)
+
+    parsed = FieldOperatorParser.apply_to_function(cast_fieldop)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 # --- External symbols ---

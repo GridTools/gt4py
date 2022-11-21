@@ -781,14 +781,6 @@ def test_cast(fieldview_backend):
     assert np.allclose(b, out_int)
 
     @field_operator(backend=fieldview_backend)
-    def cast_fieldop_float(b: Field[[IDim], int64]) -> Field[[IDim], float64]:
-        d = cast(float64, 1) * cast(float64, b)
-        return d
-
-    cast_fieldop_float(b, out=out_float, offset_provider={})
-    assert np.allclose(a, out_float)
-
-    @field_operator(backend=fieldview_backend)
     def cast_fieldop_bool(b: Field[[IDim], int64]) -> Field[[IDim], bool]:
         d = cast(bool, b)
         return d
