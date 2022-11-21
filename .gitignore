@@ -92,7 +92,7 @@ venv.bak/
 .idea/
 
 # VSCode project settings
-.vscode/
+/.vscode
 
 # SublimeText project settings
 *.sublime-project

@@ -1,7 +1,8 @@
 FROM gitpod/workspace-python
-ENV PYTHONUSERBASE=/workspace/.pip-modules
-ENV PATH=$PYTHONUSERBASE/bin:$PATH
-ENV PIP_USER=yes
-
-COPY .gitpod/aliases.txt .
-RUN cat aliases.txt >> $HOME/.bashrc
+USER root
+RUN apt-get update \
+    && apt-get install -y libboost-dev \
+    && apt-get clean && rm -rf /var/cache/apt/* && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+USER gitpod
+RUN pyenv install 3.9.10
+RUN pyenv global 3.9.10
