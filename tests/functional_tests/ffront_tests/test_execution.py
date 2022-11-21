@@ -767,8 +767,10 @@ def test_cast(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
+    c = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_int = np_as_located_field(IDim)(np.zeros((size,)))
     out_float = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def cast_fieldop_int(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
@@ -785,6 +787,14 @@ def test_cast(fieldview_backend):
 
     cast_fieldop_float(b, out=out_float, offset_provider={})
     assert np.allclose(a, out_float)
+
+    @field_operator(backend=fieldview_backend)
+    def cast_fieldop_bool(b: Field[[IDim], int64]) -> Field[[IDim], bool]:
+        d = cast(bool, b)
+        return d
+
+    cast_fieldop_bool(b, out=out_bool, offset_provider={})
+    assert np.allclose(c, out_bool)
 
 
 def test_conditional_promotion(fieldview_backend):
@@ -992,6 +1002,7 @@ def test_solve_triag(fieldview_backend):
         np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
     )
     out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+
     # compute reference
     matrices = np.zeros(shape + shape[-1:])
     i = np.arange(shape[2])

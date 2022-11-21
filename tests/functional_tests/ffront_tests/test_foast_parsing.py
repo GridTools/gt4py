@@ -273,7 +273,7 @@ def test_cast_wring_args_type():
     def cast_wrong_type_2(a: Field[..., bool]):
         return cast(int64, a)
 
-    msg_1 = r"Expected an arithmetic dtype"
+    msg_1 = r"Expected an arithmetic or boolean dtype"
     with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_1:
         _ = FieldOperatorParser.apply_to_function(cast_wrong_type_1)
 

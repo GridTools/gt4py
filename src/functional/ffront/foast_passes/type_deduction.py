@@ -606,28 +606,32 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call | foast.Constant:
-        if not isinstance(node.args[0].type, ct.FunctionType) or not type_info.is_arithmetic(
-            node.args[0].type.returns
+        dtype_obj = node.args[0]
+        casted_obj = node.args[1]
+        if not isinstance(dtype_obj.type, ct.FunctionType) or not (
+            type_info.is_arithmetic(dtype_obj.type.returns)
+            or type_info.extract_dtype(dtype_obj.type.returns)
+            == ct.ScalarType(kind=ct.ScalarKind.BOOL)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected an arithmetic dtype, but got {node.args[0]}.",
+                f"Expected an arithmetic or boolean dtype, but got {dtype_obj}.",
             )
         if not isinstance(
-            node.args[1].type, (ct.ScalarType, ct.FieldType)
-        ) or not type_info.is_arithmetic(node.args[1].type):
+            casted_obj.type, (ct.ScalarType, ct.FieldType)
+        ) or not type_info.is_arithmetic(casted_obj.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected either arithmetic ScalarType or FieldType, but got {node.args[1]}.",
+                f"Expected either arithmetic ScalarType or FieldType, but got {casted_obj}.",
             )
-        new_dtype = node.args[0].type.returns
-        if isinstance(node.args[1].type, ct.ScalarType):
-            return foast.Constant(value=node.args[1].value, location=node.location, type=new_dtype)
+        new_dtype = dtype_obj.type.returns
+        if isinstance(casted_obj.type, ct.ScalarType):
+            return foast.Constant(value=casted_obj.value, location=node.location, type=new_dtype)
         else:
             return_type = ct.FieldType(
-                dims=node.args[1].type.dims,
+                dims=casted_obj.type.dims,
                 dtype=new_dtype,
             )
             return foast.Call(
