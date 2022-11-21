@@ -28,3 +28,6 @@ sphinx~=4.4
 sphinx_rtd_theme~=1.0
 tox>=3.14
 devtools~=0.6
+# temporarily until we have a pypi package
+cmake
+gridtools @ git+https://github.com/DropD/gridtools.git@make-pip-installable#egg=gridtools&subdirectory=.python_package

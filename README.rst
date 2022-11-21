@@ -74,16 +74,8 @@ For testing GT4Py with the ``numpy`` backend, all dependencies are included in t
 installed.
 The performance backends require
 
-1. `GridTools <https://github.com/GridTools/gridtools>`__ which is automatically downloaded on first use,
-2. `Boost <https://www.boost.org/>`__ a dependency of GridTools,
+1. `Boost <https://www.boost.org/>`__ a dependency of GridTools,
    which needs to be installed by the user.
-
-GridTools will automatically be downloaded when needed by the ``gt_src_manager.py`` module.
-To manually install or uninstall, run:
-
-::
-
-    $ python -m gt4py.gt_src_manager {un}install
 
 Options
 ~~~~~~~

@@ -17,6 +17,8 @@ import multiprocessing
 import os
 from typing import Any, Dict, Optional
 
+import gridtools
+
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,9 +35,7 @@ CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
 
 
 GT_REPO_DIRNAME: str = "gridtools"
-GT_INCLUDE_PATH: str = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "_external_src", GT_REPO_DIRNAME, "include")
-)
+GT_INCLUDE_PATH: str = os.path.abspath(gridtools.get_include_dir())
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 

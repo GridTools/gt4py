@@ -17,10 +17,7 @@ from pathlib import Path
 import pytest
 import setuptools
 
-from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
-    config,
-    gt_src_manager,
-)
+from gt4py import config  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
 from gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
 from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
@@ -37,10 +34,6 @@ from .gtcpp_utils import (
     ProgramFactory,
 )
 from .utils import match
-
-
-if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-    raise RuntimeError("Missing GridTools sources.")
 
 
 def build_gridtools_test(tmp_path: Path, code: str):

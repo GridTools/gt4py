@@ -20,6 +20,9 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
+
+pytest.skip(allow_module_level=True)  # TODO decide on the future of this test
+
 import gt4py.backend
 import gt4py.storage as gt_store
 from gt4py.storage.utils import cpu_copy
