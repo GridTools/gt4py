@@ -617,7 +617,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
                 f"Expected an arithmetic or boolean dtype, but got {dtype_obj}.",
             )
-        if not type_info.is_arithmetic(casted_obj.type):
+        if not (type_info.is_arithmetic(casted_obj.type) or type_info.is_logical(casted_obj.type)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "

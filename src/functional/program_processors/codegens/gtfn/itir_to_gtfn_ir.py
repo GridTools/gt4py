@@ -24,6 +24,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     CartesianDomain,
+    CastExpr,
     Expr,
     FencilDefinition,
     FunCall,
@@ -43,7 +44,6 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     TaggedValues,
     TemporaryAllocation,
     TernaryExpr,
-    TypeExpr,
     UnaryExpr,
     UnstructuredDomain,
 )
@@ -368,7 +368,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif node.fun.id == "cast_":
                 assert len(node.args) == 2
-                return TypeExpr(
+                return CastExpr(
                     new_dtype=self.visit(node.args[0], **kwargs),
                     obj_expr=self.visit(node.args[1], **kwargs),
                 )
