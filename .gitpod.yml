@@ -16,7 +16,6 @@ tasks:
     deactivate
   command: source .venv/bin/activate
   env:
-    PIP_SRC: _external_src
     PRE_COMMIT_HOME: /workspace/.caches/pre-commit
 vscode:
   extensions:
