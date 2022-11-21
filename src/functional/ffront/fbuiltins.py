@@ -82,7 +82,7 @@ cast = BuiltInFunction(
             ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+        returns=ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
     )
 )
 
