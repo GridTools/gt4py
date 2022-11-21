@@ -22,6 +22,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import inspect
 import types
 import typing
 import warnings
@@ -31,6 +32,7 @@ from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, Ty
 import numpy as np
 from devtools import debug
 
+import eve
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
@@ -711,3 +713,62 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
+
+
+@dataclasses.dataclass(frozen=True)
+class ScalarOperator(GTCallable):
+    node: foast.ScalarOperator
+
+    def __gt_itir__(self) -> itir.FunctionDefinition:
+        if hasattr(self, "__cached_itir"):
+            return getattr(self, "__cached_itir")  # noqa: B009
+
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.node)
+
+        object.__setattr__(self, "__cached_itir", itir_node)
+
+        return itir_node
+
+    def __gt_type__(self) -> ct.CallableType:
+        assert isinstance(self.node.type, ct.ScalarOperatorType)
+        return self.node.type
+
+
+def scalar_operator(
+    definition: types.FunctionType
+) -> ScalarOperator:
+    file = inspect.getsourcefile(definition)
+    lines = inspect.getsourcelines(definition)
+    loc = eve.SourceLocation(lines[1], 1, file)
+
+    signature = inspect.signature(definition)
+
+    param_types = []
+    for name, param in signature.parameters.items():
+        if param.kind not in [inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD]:
+            raise ValueError("Only positional arguments are supported.")
+        if param.annotation == inspect.Parameter.empty:
+            raise ValueError(f"Parameter '{name}' must have type annotations.")
+        if param.default != inspect.Parameter.empty:
+            raise ValueError("Default arguments are not supported.")
+        param_type = symbol_makers.make_symbol_type_from_typing(param.annotation)
+        param_types.append(param_type)
+
+    if signature.return_annotation == inspect.Parameter.empty:
+        raise ValueError("Return type must be annotated.")
+    return_type = symbol_makers.make_symbol_type_from_typing(signature.return_annotation)
+
+    function_type = ct.FunctionType(args=param_types, kwargs={}, returns=return_type)
+
+    params = [
+        foast.DataSymbol(id=name, type=type_, location=loc)
+        for name, type_ in zip(signature.parameters.keys(), param_types)
+    ]
+    node = foast.ScalarOperator(
+        id=definition.__name__,
+        params=params,
+        definition=definition,
+        location=loc,
+        type=ct.ScalarOperatorType(definition=function_type)
+    )
+    return ScalarOperator(node)

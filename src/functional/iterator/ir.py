@@ -1,3 +1,4 @@
+import types
 from typing import ClassVar, List, Union
 
 import eve
@@ -60,6 +61,14 @@ class Lambda(Expr, SymbolTableTrait):
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
     args: List[Expr]
+
+
+class FunCallScalar(Expr):
+    fun: types.FunctionType
+    args: List[Expr]
+
+    def __hash__(self):
+        return hash(self.fun) ^ hash(tuple(self.args))
 
 
 class FunctionDefinition(Node, SymbolTableTrait):

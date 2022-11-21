@@ -217,6 +217,11 @@ class PrettyPrinter(NodeTranslator):
         vfun = self._vmerge(self._hmerge(fun, ["("]), self._indent(args), [")"])
         return self._prec_parens(self._optimum(hfun, vfun), prec, PRECEDENCE["__call__"])
 
+    def visit_FunCallScalar(self, node: ir.FunCallScalar, **kwargs):
+        symref = ir.SymRef(id=f"__pyfun_{node.fun.__name__}")
+        proxy_call = ir.FunCall(fun=symref, args=node.args)
+        return self.visit(proxy_call, **kwargs)
+
     def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
         assert prec == 0
         params = self.visit(node.params, prec=0)

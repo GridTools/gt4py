@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import inspect
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast

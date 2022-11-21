@@ -168,5 +168,10 @@ class FieldOperatorType(SymbolType, CallableType):
 
 
 @dataclass(frozen=True)
+class ScalarOperatorType(SymbolType, CallableType):
+    definition: FunctionType
+
+
+@dataclass(frozen=True)
 class ProgramType(SymbolType, CallableType):
     definition: FunctionType

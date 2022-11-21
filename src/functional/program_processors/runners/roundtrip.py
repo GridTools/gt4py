@@ -55,6 +55,10 @@ def ${id}(${','.join(params)}):
     return ${expr}
     """
     )
+    def visit_FunCallScalar(self, node, **kwargs):
+        name = f"__pyfun_{node.fun.__name__}"
+        args = [self.visit(arg, **kwargs) for arg in node.args]
+        return f"{name}({', '.join(args)}"
 
     # extension required by global_tmps
     def visit_FencilWithTemporaries(self, node, **kwargs):

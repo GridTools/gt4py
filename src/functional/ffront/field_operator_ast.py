@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
+import types
 from typing import Any, Generic, Optional, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
@@ -170,3 +169,10 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     init: Constant
     definition: FunctionDefinition  # scan pass
     type: Optional[ct.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
+
+
+class ScalarOperator(LocatedNode, SymbolTableTrait):
+    id: Coerced[SymbolName]
+    params: list[DataSymbol]
+    definition: types.FunctionType
+    type: Optional[ct.ScalarOperatorType]

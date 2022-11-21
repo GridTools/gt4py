@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.ffront.decorator import field_operator, program, scan_operator
+from functional.ffront.decorator import field_operator, program, scan_operator, scalar_operator
 from functional.ffront.fbuiltins import (
     Dimension,
     Field,
@@ -1338,3 +1338,32 @@ def test_constant_closure_vars():
     output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
     consume_constants(input, out=output, offset_provider={})
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
+
+
+def test_scalar_operator():
+    @scalar_operator
+    def bisect_single(p: float, y: float) -> float:
+        a = 0.0
+        b = 1.0
+        c = (a + b) / 2
+        while c > b > a:
+            y_a = a**p - y
+            y_c = c**p - y
+            if y_a > 0 and y_c > 0:
+                a = c
+            else:
+                b = c
+            c = (a + b) / 2
+        return c
+
+    @field_operator
+    def bisect(p: Field[[IDim], float]):
+        return bisect_single(p, 0.5)
+
+    powers = np_as_located_field(IDim)(np.arange(start=1, stop=10)*0.3)
+    out = np_as_located_field(IDim)(np.zeros_like(np.asarray(powers)))
+    expected = 0.5**(1.0/np.asarray(powers))
+
+    bisect(powers, out=out, offset_provider={})
+
+    assert np.allclose(np.asarray(out), expected)

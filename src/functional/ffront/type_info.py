@@ -462,6 +462,22 @@ def return_type_scanop(
 
 
 @return_type.register
+def return_type_scalarop(
+    callable_type: ct.ScalarOperatorType,
+    *,
+    with_args: list[ct.SymbolType],
+    with_kwargs: dict[str, ct.SymbolType],
+):
+    carry_dtype = callable_type.definition.returns
+    promoted_dims = promote_dims(
+        *(extract_dims(el) for arg in with_args for el in primitive_constituents(arg)),
+    )
+    return apply_to_primitive_constituents(
+        carry_dtype, lambda arg: ct.FieldType(dims=promoted_dims, dtype=cast(ct.ScalarType, arg))
+    )
+
+
+@return_type.register
 def return_type_field(
     field_type: ct.FieldType,
     *,
@@ -581,6 +597,53 @@ def function_signature_incompatibilities_scanop(
 
     yield from function_signature_incompatibilities(function_type, args, kwargs)
 
+
+
+@function_signature_incompatibilities.register
+def function_signature_incompatibilities_scalarop(
+    scalarop_type: ct.ScalarOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+) -> Iterator[str]:
+    arg_dims = [extract_dims(el) for arg in args for el in primitive_constituents(arg)]
+    try:
+        promote_dims(*arg_dims)
+    except GTTypeError as e:
+        yield e.args[0]
+
+    if len(args) != len(scalarop_type.definition.args):
+        yield f"Scalar operator takes {len(scalarop_type.definition.args)-1} arguments, but {len(args)} were given."
+        return
+
+    promoted_args = []
+    for i, scan_pass_arg in enumerate(scalarop_type.definition.args):
+        # Helper function that given a scalar type in the signature of the scan
+        # pass return a field type with that dtype and the dimensions of the
+        # corresponding field type in the requested `args` type. Defined here
+        # as we capture `i`.
+        def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]) -> ct.FieldType:
+            try:
+                if isinstance(args[i], ct.ScalarType):
+                    return args[i]
+                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
+                return ct.FieldType(dims=extract_dims(el_type), dtype=dtype)
+            except (IndexError, AttributeError):
+                # The structure of the scan passes argument and the requested
+                # argument type differ. As such we can not extract the dimensions
+                # and just return a generic field shown in the error later on.
+                return dtype
+
+        promoted_args.append(
+            apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
+        )
+
+    # build a function type to leverage the already existing signature checking
+    #  capabilities
+    function_type = ct.FunctionType(
+        args=args,
+        kwargs={},
+        returns=ct.DeferredSymbolType(constraint=None),
+    )
+
+    yield from function_signature_incompatibilities(function_type, args, kwargs)
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(

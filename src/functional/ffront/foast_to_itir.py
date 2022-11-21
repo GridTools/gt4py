@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+import inspect
 import itertools
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, cast
@@ -219,6 +220,16 @@ class FieldOperatorLowering(NodeTranslator):
             expr=body,
         )
 
+    def visit_ScalarOperator(self, node: foast.ScalarOperator) -> itir.FunctionDefinition:
+        symtable = node.annex.symtable
+        params = self.visit(node.params, symtable=symtable)
+        param_refs = [im.ref(param.id) for param in params]
+        return itir.FunctionDefinition(
+            id=node.id,
+            params=params,
+            expr=itir.FunCallScalar(fun=node.definition, args=param_refs),
+        )
+
     def _visit_body(
         self, body: list[foast.Stmt], params: Optional[list[itir.Sym]] = None, **kwargs
     ) -> itir.FunCall:
@@ -398,7 +409,7 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType, ct.ScalarOperatorType)):
             # operators are lowered into stencils and only accept iterator
             #  arguments. As such transform all value arguments, e.g. scalars
             #  and tuples thereof, into iterators. See ADR-0002 for more
