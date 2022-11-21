@@ -404,7 +404,16 @@ class CallInliner(ast.NodeTransformer):
             and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
         ):
             assert len(node.targets) == 1
-            self.visit(node.value, target_node=node.targets[0])
+            target_node = node.targets[0]
+            if isinstance(target_node, ast.Subscript):
+                # write to offset should already be caught earlier in the frontend, so index can be ignored
+                target_node = ast.Name(
+                    ctx=ast.Store(),
+                    lineno=target_node.value.lineno,
+                    col_offset=target_node.value.col_offset,
+                    id=target_node.value.id,
+                )
+            self.visit(node.value, target_node=target_node)
             # This node can be now removed since the trivial assignment has been already done
             # in the Call visitor
             return None
