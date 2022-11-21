@@ -318,22 +318,22 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
     In both cases, arguments dtypes have to be the same
     Examples:
     ---------
-    >>> is_empty_field_compatible(
+    >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
     ... )
     False
-    >>> is_empty_field_compatible(
+    >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     False
-    >>> is_empty_field_compatible(
+    >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     True
-    >>> is_empty_field_compatible(
+    >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64)
     ... )
@@ -570,11 +570,7 @@ def function_signature_incompatibilities_func(
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."
     for i, (a_arg, b_arg) in enumerate(zip(func_type.args, args)):
-        if (
-            a_arg != b_arg
-            and not _is_zero_dim_field(a_arg)
-            and not is_concretizable(a_arg, to_type=b_arg)
-        ):
+        if a_arg != b_arg and not is_concretizable(a_arg, to_type=b_arg):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
     # check for missing or extra keyword arguments
@@ -597,9 +593,10 @@ def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
     for i, (a_arg, b_arg) in enumerate(zip(fieldop_type.definition.args, args)):
-        if _is_zero_dim_field(a_arg) and not is_empty_field_compatible(a_arg, b_arg):
+        if _is_zero_dim_field(a_arg) and not is_zero_dim_field_compatible(a_arg, b_arg):
             yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
-    yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
+    if not _is_zero_dim_field(fieldop_type.definition.args[0]):
+        yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
@@ -655,7 +652,9 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
+    # case when out is not a zero-dimensional field
+    if not _is_zero_dim_field(program_type.definition.args[-1]):
+        yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
