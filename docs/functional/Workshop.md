@@ -611,11 +611,21 @@ assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
 
 ## 4. Scan Operator
 
-The scan operator is a scalar function that cycles over the domain along a specified `axis`, e.g., `axis=KDim`. The function arguments need to be specified as scalars in the function definition, but it actually accepts and returns fields.
+The unique feature of this operator is that it provides the return state of the previous iteration (i.e., the previous grid point) as its first argument. In other words, all the arguments of the current `return` will be available (as a tuple) in the next iteration from the first argument of the defined function.  
 
-The unique feature of this operator is that it provides the return state of the previous iteration (i.e., the previous grid point) as its first argument. In other words, all the arguments of the current `return` will be available (as a tuple) in the next iteration from the first argument of the defined function. The initial value of said argument (named `carry` in the example below) is set to those specified with the `init` argument. As result, the `scan_operator` restricts the data access pattern to the previous neighbour of the specified `axis`.
+Example: In an atmospheric model,  column integral of could be implemented as follows: 
 
-**Task**: Port a toy cloud microphysics scheme from python/numpy using the tempate of a `scan_operator` blelow. In the scheme, the individual levels are connected by the sedimentation of rain (`qr`).
+```python
+@scan_operator(axis=KDim, forward=True, init=0.0)
+def column_sum(float: state_kminus1, float: var, float: rho, float: dz)
+    """Return the column integral of a variable."""
+    return var * rho * dp + state_kminus1
+```
+Where `var` is the variable to sum up, `rho` the air density and `dz`the thickness of the vertical layers.  The first argument `state_kminus1` denotes the return from the previous level (from k minus 1). It is intialized to `init=0.0` in the function decorator.
+
++++
+
+### **Task**: Port a toy cloud microphysics scheme from python/numpy using the tempate of a `scan_operator` blelow. In the scheme, the individual levels are connected by the sedimentation of rain (`qr`).
 
 ```{code-cell} ipython3
 # Configuration: Single column
@@ -667,7 +677,10 @@ When implementing the scheme, keep the following caveats in mind:
 %%script echo Skipping this cell! Remove this line when working on this example.
 
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
-def _graupel_toy_scan(carry: tuple[float, float, float], qc_in: float, qr_in: float):
+def _graupel_toy_scan(state_kMinus1: tuple[float, float, float], qc_in: float, qr_in: float):
+    
+    # unpack state of previous iteration
+    _, _, sedimentation_flux_kMinus1 = state_kMinus1
 
     ### Implement here ###
 
