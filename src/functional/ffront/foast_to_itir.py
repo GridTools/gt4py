@@ -418,7 +418,10 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        dtype = itir.Literal(value="np." + str(node.args[0].type.returns), type="str")
+        if type_info.is_floating_point(node.args[0].type.returns):
+            dtype = itir.Literal(value="float", type="str")
+        else:
+            dtype = itir.Literal(value="int", type="str")
         obj = (to_value(node.args[1]))(self.visit(node.args[1], **kwargs))
         return self._lift_lambda(node)(im.call_("cast_")(dtype, obj))
 

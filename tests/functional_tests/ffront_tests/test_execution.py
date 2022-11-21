@@ -764,22 +764,27 @@ def test_conditional(fieldview_backend):
 
 
 def test_cast(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support cast builtin")
-
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
-    out = np_as_located_field(IDim)(np.zeros((size,)))
+    out_int = np_as_located_field(IDim)(np.zeros((size,)))
+    out_float = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
-    def cast_fieldop(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
+    def cast_fieldop_int(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
         d = cast(int64, 1.0) * cast(int64, a)
         return d
 
-    cast_fieldop(a, out=out, offset_provider={})
+    cast_fieldop_int(a, out=out_int, offset_provider={})
+    assert np.allclose(b, out_int)
 
-    assert np.allclose(b, out)
+    @field_operator(backend=fieldview_backend)
+    def cast_fieldop_float(b: Field[[IDim], int64]) -> Field[[IDim], float64]:
+        d = cast(float64, 1) * cast(float64, b)
+        return d
+
+    cast_fieldop_float(b, out=out_float, offset_provider={})
+    assert np.allclose(a, out_float)
 
 
 def test_conditional_promotion(fieldview_backend):
