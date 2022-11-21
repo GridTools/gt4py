@@ -53,7 +53,7 @@ class TernaryExpr(Expr):
     false_expr: Expr
 
 
-class TypeExpr(Expr):
+class CastExpr(Expr):
     new_dtype: Literal
     obj_expr: Expr
 
