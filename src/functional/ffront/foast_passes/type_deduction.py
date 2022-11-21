@@ -610,17 +610,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         casted_obj = node.args[1]
         if not isinstance(dtype_obj.type, ct.FunctionType) or not (
             type_info.is_arithmetic(dtype_obj.type.returns)
-            or type_info.extract_dtype(dtype_obj.type.returns)
-            == ct.ScalarType(kind=ct.ScalarKind.BOOL)
+            or type_info.is_logical(dtype_obj.type.returns)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
                 f"Expected an arithmetic or boolean dtype, but got {dtype_obj}.",
             )
-        if not isinstance(
-            casted_obj.type, (ct.ScalarType, ct.FieldType)
-        ) or not type_info.is_arithmetic(casted_obj.type):
+        if not type_info.is_arithmetic(casted_obj.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
@@ -629,18 +626,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_dtype = dtype_obj.type.returns
         if isinstance(casted_obj.type, ct.ScalarType):
             return foast.Constant(value=casted_obj.value, location=node.location, type=new_dtype)
-        else:
-            return_type = ct.FieldType(
-                dims=casted_obj.type.dims,
-                dtype=new_dtype,
-            )
-            return foast.Call(
-                func=node.func,
-                args=node.args,
-                kwargs=node.kwargs,
-                type=return_type,
-                location=node.location,
-            )
+        return_type = ct.FieldType(
+            dims=casted_obj.type.dims,
+            dtype=new_dtype,
+        )
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
