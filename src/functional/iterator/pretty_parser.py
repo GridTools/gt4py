@@ -152,6 +152,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
+    def cast(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])
+
     def shift(self, *offsets: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="shift"), args=list(offsets))
 
