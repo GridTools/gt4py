@@ -135,7 +135,6 @@ def _get_symbolic_origin_and_domain(
             if ax.domain_symbol() in node.symbol_mapping
         }
     )
-    print("a", node.label, origins, domain)
 
     for field, info in access_infos.items():
         outer_subset: dace.subsets.Range = outer_subsets[field]
@@ -161,7 +160,6 @@ def _get_symbolic_origin_and_domain(
                     (outer_subset.ranges[ax_idx][1] + 1 - interval_end.offset)
                     - origins[field][ax_idx],
                 )
-    print("b", node.label, origins, domain)
 
     return origins, domain
 
@@ -439,7 +437,12 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     dimensions=decl.dimensions,
                     data_dims=decl.data_dims,
                 )
-
+        for node, _ in nodes:
+            if (
+                len(node.oir_node.iter_tree().if_isinstance(oir.HorizontalRestriction).to_list())
+                > 0
+            ):
+                return False
         params = {
             name: decl
             for n, _ in nodes
@@ -447,17 +450,12 @@ class PartialExpansion(transformation.SubgraphTransformation):
             if isinstance(decl, oir.ScalarDecl)
         }
 
-        try:
-            oir_stencil = oir.Stencil(
-                name="__adhoc",
-                vertical_loops=vertical_loops,
-                params=list(params.values()),
-                declarations=list(declarations.values()),
-            )
-        except pydantic.ValidationError:
-            state.parent.view()
-            print(state.label, [vl.json() for vl in vertical_loops], params, declarations)
-            raise
+        oir_stencil = oir.Stencil(
+            name="__adhoc",
+            vertical_loops=vertical_loops,
+            params=list(params.values()),
+            declarations=list(declarations.values()),
+        )
         oir_extents = compute_horizontal_block_extents(oir_stencil)
 
         for i, (node, _) in enumerate(nodes):
@@ -520,30 +518,16 @@ class PartialExpansion(transformation.SubgraphTransformation):
             )
             for it in original_item.iterations
         }
-        print("next one")
         if len(subgraph.nodes()) == 1:
             # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
             # nesting.
             new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
-            print("added", new_state.label, "before", subgraph.nodes()[0].label)
             subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
-        try:
-            nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
-        except ValueError:
-            sdfg.view()
-            print(subgraph.nodes())
-            raise
-        try:
-            nsdfg_node: dace.nodes.NestedSDFG = next(
-                iter(
-                    node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG)
-                )
-            )
-        except StopIteration:
-            print(subgraph.nodes())
-            print(nsdfg_state.label)
-            nsdfg_state.parent.view()
-            raise
+
+        nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
+        nsdfg_node: dace.nodes.NestedSDFG = next(
+            iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
+        )
         for node, _ in stencil_computations:
             _set_skips(node)
 
