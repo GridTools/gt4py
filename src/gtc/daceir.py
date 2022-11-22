@@ -899,6 +899,6 @@ class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     states: List[Union[DomainLoop, ComputationState]]
 
 
-# There are circular type references with string placeholders. These statements let pydantic resolve those.
+# There are circular type references with string placeholders. These statements let datamodels resolve those.
 DomainMap.update_forward_refs()  # type: ignore[attr-defined]
 DomainLoop.update_forward_refs()  # type: ignore[attr-defined]
