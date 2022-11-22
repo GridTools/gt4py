@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import enum
 import functools
 import typing
@@ -273,7 +275,7 @@ def verify_and_get_common_dtype(
         return None
 
 
-def compute_kind(*values) -> ExprKind:
+def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
     else:
@@ -411,17 +413,17 @@ class UnaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def dtype_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def dtype_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
         instance.dtype = instance.expr.dtype  # type: ignore[attr-defined]
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def kind_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
         instance.kind = instance.expr.kind  # type: ignore[attr-defined]
 
     @datamodels.root_validator
     @classmethod
-    def op_to_dtype_check(cls: Type["UnaryOp"], instance: "UnaryOp") -> None:
+    def op_to_dtype_check(cls: Type[UnaryOp], instance: UnaryOp) -> None:
         if instance.expr.dtype:
             if instance.op == UnaryOperator.NOT:
                 if not instance.expr.dtype == DataType.BOOL:
@@ -448,7 +450,7 @@ class BinaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type["BinaryOp"], instance: "BinaryOp") -> None:
+    def kind_propagation(cls: Type[BinaryOp], instance: BinaryOp) -> None:
         instance.kind = compute_kind(instance.left, instance.right)  # type: ignore[attr-defined]
 
 
@@ -496,7 +498,7 @@ class TernaryOp(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type["TernaryOp"], instance: "TernaryOp") -> None:
+    def kind_propagation(cls: Type[TernaryOp], instance: TernaryOp) -> None:
         instance.kind = compute_kind(instance.true_expr, instance.false_expr)  # type: ignore[attr-defined]
 
 
@@ -517,7 +519,7 @@ class Cast(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type["Cast"], instance: "Cast") -> None:
+    def kind_propagation(cls: Type[Cast], instance: Cast) -> None:
         instance.kind = compute_kind(instance.expr)  # type: ignore[attr-defined]
 
 
@@ -527,7 +529,7 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def arity_check(cls: Type["NativeFuncCall"], instance: "NativeFuncCall") -> None:
+    def arity_check(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         if instance.func.arity != len(instance.args):
             raise ValueError(
                 f"{instance.func} accepts {instance.func.arity} arguments, {len(instance.args)} where passed."
@@ -535,7 +537,7 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
     @datamodels.root_validator
     @classmethod
-    def kind_propagation(cls: Type["NativeFuncCall"], instance: "NativeFuncCall") -> None:
+    def kind_propagation(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
         instance.kind = compute_kind(*instance.args)  # type: ignore[attr-defined]
 
 
@@ -658,19 +660,19 @@ class AxisBound(eve.Node):
     offset: int = 0
 
     @classmethod
-    def from_start(cls, offset: int) -> "AxisBound":
+    def from_start(cls, offset: int) -> AxisBound:
         return cls(level=LevelMarker.START, offset=offset)
 
     @classmethod
-    def from_end(cls, offset: int) -> "AxisBound":
+    def from_end(cls, offset: int) -> AxisBound:
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls, offset: int = 0) -> "AxisBound":
+    def start(cls, offset: int = 0) -> AxisBound:
         return cls.from_start(offset)
 
     @classmethod
-    def end(cls, offset: int = 0) -> "AxisBound":
+    def end(cls, offset: int = 0) -> AxisBound:
         return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
@@ -678,24 +680,24 @@ class AxisBound(eve.Node):
             return False
         return self.level == other.level and self.offset == other.offset
 
-    def __lt__(self, other: "AxisBound") -> bool:
+    def __lt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
             self.level == other.level and self.offset < other.offset
         )
 
-    def __le__(self, other: "AxisBound") -> bool:
+    def __le__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return self < other or self == other
 
-    def __gt__(self, other: "AxisBound") -> bool:
+    def __gt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other and not self == other
 
-    def __ge__(self, other: "AxisBound") -> bool:
+    def __ge__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other
@@ -717,7 +719,7 @@ class HorizontalInterval(eve.Node):
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
-    def full(cls) -> "HorizontalInterval":
+    def full(cls) -> HorizontalInterval:
         return cls(start=None, end=None)
 
     @classmethod
@@ -733,9 +735,7 @@ class HorizontalInterval(eve.Node):
 
     @datamodels.root_validator
     @classmethod
-    def check_start_before_end(
-        cls: Type["HorizontalInterval"], instance: "HorizontalInterval"
-    ) -> None:
+    def check_start_before_end(cls: Type[HorizontalInterval], instance: HorizontalInterval) -> None:
         if instance.start and instance.end and not (instance.start <= instance.end):
             raise ValueError(
                 f"End ({instance.end}) is not after or equal to start ({instance.start})"
@@ -747,7 +747,7 @@ class HorizontalInterval(eve.Node):
 
         return abs(self.end.offset - self.start.offset) == 1
 
-    def overlaps(self, other: "HorizontalInterval") -> bool:
+    def overlaps(self, other: HorizontalInterval) -> bool:
         if self.start is None and other.start is None:
             return True
 
