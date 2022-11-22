@@ -834,27 +834,20 @@ class Temporary(FieldDecl):
     pass
 
 
-def _unique_connectors(*, field: str) -> datamodels.FieldValidator:
-    def _validator(
-        self: "ComputationNode", attribute: datamodels.Attribute, node: List[Memlet]
-    ) -> None:
-        conns: Dict[eve.SymbolRef, Set[eve.SymbolRef]] = {}
-        for memlet in node:
-            conns.setdefault(memlet.field, set())
-            if memlet.connector in conns[memlet.field]:
-                raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
-            conns[memlet.field].add(memlet.connector)
-
-    return datamodels.validator(field)(_validator)
-
-
 class ComputationNode(LocNode):
     # mapping connector names to tuple of field name and access info
     read_memlets: List[Memlet]
     write_memlets: List[Memlet]
 
-    unique_write_connectors = _unique_connectors(field="write_memlets")
-    unique_read_connectors = _unique_connectors(field="write_memlets")
+    @datamodels.validator("read_memlets")
+    @datamodels.validator("write_memlets")
+    def _validator(self, attribute: datamodels.Attribute, value: List[Memlet]) -> None:
+        conns: Dict[eve.SymbolRef, Set[eve.SymbolRef]] = {}
+        for memlet in value:
+            conns.setdefault(memlet.field, set())
+            if memlet.connector in conns[memlet.field]:
+                raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
+            conns[memlet.field].add(memlet.connector)
 
     @property
     def read_fields(self):
