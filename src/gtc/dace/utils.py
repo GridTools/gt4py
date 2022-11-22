@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -25,7 +24,7 @@ import eve
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.common import CartesianOffset, data_type_to_typestr
+from gtc.common import CartesianOffset
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
