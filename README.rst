@@ -15,8 +15,8 @@ domain-specific language (DSL).
 ⚡️ Quick Start
 --------------
 
-GT4Py uses the standard Python packaging method, and can be installed
-using `pip`.
+GT4Py requires Python 3.9+ and uses the standard Python packaging method,
+so can be installed using `pip`.
 It is not yet released on PyPI, so users have to point to the
 git repository to install it.
 
@@ -41,7 +41,7 @@ IPython notebooks on Jupyter.
 
 There are two options to run the unit and integration tests in ``tests/``:
 
-1. Use tox: ``pip install tox && tox -r -e py38-all-cpu``.
+1. Use tox: ``pip install tox && tox -r -e py39-all-cpu``.
 2. Install the development requirements: ``pip install -r requirements-dev.txt``,
    then ``pytest`` can execute the tests directly.
 
