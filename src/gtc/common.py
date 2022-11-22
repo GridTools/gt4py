@@ -590,7 +590,7 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self, node: eve.Node, *, loop_order: Optional[LoopOrder] = None, **kwargs: Any
     ) -> None:
         if isinstance(node, self.vertical_loop_type):
-            loop_order = getattr(node, "loop_order")  # noqa: B009
+            loop_order = node.loop_order  # type: ignore[attr-defined]  # cannot narrow based on `vertical_loop_type`
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
@@ -603,7 +603,7 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
             return None
 
         allowed_flags = self._allowed_flags(loop_order)
-        flags = getattr(decl, "dimensions")  # noqa: B009
+        flags = decl.dimensions  # type: ignore[attr-defined]  # Decls are defined on derived IRs, not common, so `dimensions` is unknown.
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
