@@ -79,6 +79,9 @@ class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.ScalarDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
 
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> cuir.LocalScalar:
+        return cuir.LocalScalar(name=node.name, dtype=node.dtype)
+
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
         return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs), dtype=node.dtype)
 

@@ -85,7 +85,10 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
     ) -> str:
-        extent = symtable[node.name].extent
+        decl = symtable[node.name]
+        assert isinstance(decl, cuir.IJCacheDecl)
+        extent = decl.extent
+        assert extent is not None
         offsets = node.offset.to_dict()
         if extent.i == extent.j == (0, 0):
             # cache is scalar
@@ -300,7 +303,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         fields = {
             name: data_dims
-            for name, data_dims in node.walk_values()
+            for name, data_dims in node.walk_items()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))

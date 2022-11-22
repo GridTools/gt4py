@@ -148,7 +148,7 @@ class Temporary(Decl):
 
 class Positional(Decl):
     axis_name: str
-    dtype = DataType.INT32
+    dtype: DataType = DataType.INT32
 
 
 class IJExtent(LocNode):
@@ -197,17 +197,17 @@ class KExtent(LocNode):
 
 
 class IJCacheDecl(Decl):
-    extent: Optional[IJExtent]
+    extent: Optional[IJExtent] = None
 
 
 class KCacheDecl(Decl):
-    extent: Optional[KExtent]
+    extent: Optional[KExtent] = None
 
 
 class HorizontalExecution(LocNode, eve.SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
-    extent: Optional[IJExtent]
+    extent: Optional[IJExtent] = None
 
 
 class VerticalLoopSection(LocNode):
@@ -243,7 +243,7 @@ def axis_size_decls() -> List[ScalarDecl]:
     ]
 
 
-class Program(LocNode, eve.SymbolTableTrait):
+class Program(LocNode, eve.ValidatedSymbolTableTrait):
     name: str
     params: List[Decl]
     positionals: List[Positional]

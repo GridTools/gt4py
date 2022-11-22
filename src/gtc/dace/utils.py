@@ -84,16 +84,6 @@ def axes_list_from_flags(flags):
     return [ax for f, ax in zip(flags, dcir.Axis.dims_3d()) if f]
 
 
-@functools.lru_cache(maxsize=None)
-def get_dace_symbol(name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32):
-    return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))
-
-
-def data_type_to_dace_typeclass(data_type):
-    dtype = np.dtype(data_type_to_typestr(data_type))
-    return dace.dtypes.typeclass(dtype.type)
-
-
 class AccessInfoCollector(eve.NodeVisitor):
     def __init__(self, collect_read: bool, collect_write: bool, include_full_domain: bool = False):
         self.collect_read: bool = collect_read
