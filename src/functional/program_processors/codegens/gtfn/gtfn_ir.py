@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional, Union
+from typing import ClassVar, Optional, Union, Any
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -149,6 +149,7 @@ GTFN_BUILTINS = [
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "reduce",
 ]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
@@ -172,7 +173,8 @@ class TagDefinition(Node):
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
-    function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
+    # function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
+    function_definitions: list[Any]  # TODO
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType

@@ -18,11 +18,13 @@ from typing import Any
 import functional.iterator.ir as itir
 from eve import codegen
 from functional.iterator.transforms.pass_manager import apply_common_transforms
-from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen
+from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
+from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
 
 
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
+    do_unroll_reduce = not "imperative" in kwargs
     transformed = program
     offset_provider = kwargs.get("offset_provider")
     transformed = apply_common_transforms(
@@ -31,11 +33,14 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         offset_provider=offset_provider,
         unroll_reduce=True,
     )
-    # Note MR: lowering to gtfn failing if unroll reduce = False?
     gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
     )
-    generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
+    if "imperative" in kwargs:
+        gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir, **kwargs)
+        generated_code = GTFNIMCodegen.apply(gtfn_im_ir, **kwargs)
+    else:
+        generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")

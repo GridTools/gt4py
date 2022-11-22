@@ -19,6 +19,7 @@ from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional import common
 from functional.program_processors.codegens.gtfn import gtfn_ir
+from functional.program_processors.codegens.gtfn import gtfn_im_ir
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 from functional.program_processors.codegens.gtfn.to_imp_proto import to_imp
@@ -180,7 +181,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
-        if kwargs["imperative"]:
+        if False:
             expr_ = to_imp(node)
         else:
             expr_ = "return " + self.visit(node.expr)
@@ -225,6 +226,48 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     }
     """
     )
+
+    @classmethod
+    def apply(cls, root: Any, **kwargs: Any) -> str:
+        generated_code = super().apply(root, **kwargs)
+        return generated_code
+
+
+class GTFNIMCodegen(GTFNCodegen):
+
+    Stmt = as_fmt("{lhs} {op} {rhs};")
+
+    InitStmt = as_fmt("{type} {lhs} {op} {rhs};")
+
+    Conditional = as_mako(
+        """
+  if ${cond} {
+  ${';\\n'.join(if_stmts)}
+  } else {
+  ${';\\n'.join(else_stmts)}
+  }}
+  """
+    )
+
+    ImperativeFunctionDefinition = as_mako(
+        """
+        struct ${id} {
+            constexpr auto operator()() const {
+                return [](${','.join('auto const& ' + p for p in params)}){
+                    ${expr_};
+                };
+            }
+        };
+    """
+    )
+
+    ReturnStmt = as_fmt("return {ret};")
+
+    def visit_ImperativeFunctionDefinition(
+        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs
+    ):
+        expr_ = "".join(self.visit(stmt) for stmt in node.fun)
+        return self.generic_visit(node, expr_=expr_)
 
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:
