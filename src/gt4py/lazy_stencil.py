@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -41,6 +39,7 @@ class LazyStencil:
 
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
+        self.builder.caching.capture_externals()
 
     @cached_property
     def implementation(self) -> "StencilObject":
@@ -69,7 +68,7 @@ class LazyStencil:
 
     def check_syntax(self) -> None:
         """Create the gtscript IR for the stencil, failing on syntax errors."""
-        if not self.builder.definition_ir:
+        if not self.builder.gtir:
             raise RuntimeError("Frontend did not raise a syntax error but did not generate IR.")
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
@@ -79,3 +78,18 @@ class LazyStencil:
     def run(self, *args: Any, **kwargs: Any) -> None:
         """Pass through to the implementation.run."""
         self.implementation.run(*args, **kwargs)
+
+    def __sdfg__(self, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )
+
+    def __sdfg_signature__(self):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )
+
+    def __sdfg_closure__(self, *args, **kwargs):
+        raise TypeError(
+            f'Only dace backends are supported in DaCe-orchestrated programs. (found "{self.backend.name}")'
+        )

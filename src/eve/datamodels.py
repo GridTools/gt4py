@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
@@ -544,7 +542,7 @@ def _make_dataclass_field_from_attr(field_attrib: Attribute) -> dataclasses.Fiel
         default=default,
         default_factory=default_factory,
         init=field_attrib.init,
-        repr=field_attrib.repr if not callable(field_attrib.repr) else None,
+        repr=field_attrib.repr if not callable(field_attrib.repr) else False,
         hash=field_attrib.hash,
         compare=field_attrib.eq,
         metadata=field_attrib.metadata,

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -20,18 +18,14 @@ import hashlib
 import os
 import pathlib
 import time
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple, Type, Union
+import warnings
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
 
 from gt4py import definitions as gt_definitions
 from gt4py import utils as gt_utils
 
 from . import pyext_builder
-from .module_generator import (
-    BaseModuleGenerator,
-    ModuleData,
-    make_args_data_from_gtir,
-    make_args_data_from_iir,
-)
+from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
 
 
 if TYPE_CHECKING:
@@ -41,7 +35,7 @@ if TYPE_CHECKING:
 REGISTRY = gt_utils.Registry()
 
 
-def from_name(name: str) -> Type["Backend"]:
+def from_name(name: str) -> Optional[Type["Backend"]]:
     return REGISTRY.get(name, None)
 
 
@@ -77,8 +71,7 @@ class Backend(abc.ABC):
     #:  - "alignment": in bytes
     #:  - "device": "cpu" | "gpu"
     #:  - "layout_map": callback converting a mask to a layout
-    #:  - "is_compatible_layout": callback checking if a storage has compatible layout
-    #:  - "is_compatible_type": callback checking if storage has compatible type
+    #:  - "is_optimal_layout": callback checking if a storage has compatible layout
     storage_info: ClassVar[Dict[str, Any]]
 
     #: Language support:
@@ -96,13 +89,6 @@ class Backend(abc.ABC):
     #   "disable-cache-validation": bool
 
     builder: "StencilBuilder"
-
-    #: Toolchain choice between GTIR and ImplementationIR, True for ImplementationIR
-    #:
-    #: If True the ImplementationIR should be used for all code generation, analysis
-    #: and optimization. Instantiation of GTIR should be avoided.
-    #: Likewise if False, ImplementationIR should never be instanciated during builds.
-    USE_LEGACY_TOOLCHAIN: ClassVar[bool] = False
 
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
@@ -285,7 +271,9 @@ class BaseBackend(Backend):
         assert self.options is not None
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
-            raise ValueError("Unknown backend options: '{}'".format(unknown_options))
+            warnings.warn(
+                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+            )
 
     def make_module(
         self,
@@ -312,12 +300,14 @@ class BaseBackend(Backend):
 
     def make_module_source(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
         """Generate the module source code with or without stencil id."""
-        if self.USE_LEGACY_TOOLCHAIN:
-            args_data = args_data or make_args_data_from_iir(self.builder.implementation_ir)
-        else:
-            args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
+        args_data = args_data or make_args_data_from_gtir(self.builder.gtir_pipeline)
         source = self.MODULE_GENERATOR_CLASS()(args_data, self.builder, **kwargs)
         return source
+
+
+class MakeModuleSourceCallable(Protocol):
+    def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
+        ...
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):
@@ -329,11 +319,11 @@ class PurePythonBackendCLIMixin(CLIBackendMixin):
     #:  In order to use this mixin, the backend class must implement
     #:  a :py:meth:`make_module_source` method or derive from
     #:  :py:meth:`BaseBackend`.
-    make_module_source: Callable
+    make_module_source: MakeModuleSourceCallable
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         file_name = self.builder.module_path.name
-        source = self.make_module_source(implementation_ir=self.builder.implementation_ir)
+        source = self.make_module_source(ir=self.builder.gtir)
         return {str(file_name): source}
 
     def generate_bindings(self, language_name: str) -> Dict[str, Union[str, Dict]]:

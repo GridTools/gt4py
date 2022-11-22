@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -17,8 +15,8 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
-import gt4py
-from gt4py.backend.gtc_backend.defir_to_gtir import DefIRToGTIR
+import gt4py.caching
+import gt4py.frontend
 from gt4py.definitions import BuildOptions, StencilID
 from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
 from gtc import gtir
@@ -29,7 +27,6 @@ if TYPE_CHECKING:
     from gt4py.backend.base import Backend as BackendType
     from gt4py.backend.base import CLIBackendMixin
     from gt4py.frontend.base import Frontend as FrontendType
-    from gt4py.ir import StencilDefinition, StencilImplementation
     from gt4py.stencil_object import StencilObject
 
 
@@ -64,19 +61,25 @@ class StencilBuilder:
         *,
         backend: Optional[Union[str, Type["BackendType"]]] = None,
         options: Optional[BuildOptions] = None,
-        frontend: Optional["FrontendType"] = None,
+        frontend: Optional[Type["FrontendType"]] = None,
     ):
         self._definition = definition_func
         # type ignore explanation: Attribclass generated init not recognized by mypy
         self.options = options or BuildOptions(  # type: ignore
             **self.default_options_dict(definition_func)
         )
-        backend = backend or "debug"
+        backend = backend or "numpy"
         backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
+        if backend is None:
+            raise RuntimeError(f"Unknown backend: {backend}")
+
+        frontend = frontend or gt4py.frontend.from_name("gtscript")
+        if frontend is None:
+            raise RuntimeError(f"Unknown frontend: {frontend}")
+
         self.backend: "BackendType" = backend(self)
-        self.frontend: "FrontendType" = frontend or gt4py.frontend.from_name("gtscript")
-        self.caching = gt4py.caching.strategy_factory("jit", self)
-        self._build_data: Dict[str, Any] = {}
+        self.frontend: Type["FrontendType"] = frontend
+        self.with_caching("jit")
         self._externals: Dict[str, Any] = {}
 
     def build(self) -> Type["StencilObject"]:
@@ -84,6 +87,10 @@ class StencilBuilder:
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
+            if self.options.raise_if_not_cached:
+                raise ValueError(
+                    f"The stencil {self._definition.__name__} is not up to date in the cache"
+                )
             stencil_class = self.backend.generate()
         return stencil_class
 
@@ -116,7 +123,8 @@ class StencilBuilder:
         -----
         Resets all cached build data.
         """
-        self._build_data = {}
+        self._build_data: Dict[str, Any] = {}
+        kwargs = {**self.options.cache_settings, **kwargs}
         self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
 
@@ -166,7 +174,9 @@ class StencilBuilder:
 
         """
         self._build_data = {}
-        self.backend = gt4py.backend.from_name(backend_name)(self)
+        backend = gt4py.backend.from_name(backend_name)
+        assert backend is not None
+        self.backend = backend(self)
         return self
 
     @classmethod
@@ -218,6 +228,7 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
+        self.with_caching(self.caching.name)
         return self
 
     @property
@@ -255,21 +266,13 @@ class StencilBuilder:
         return self.caching.backend_root_path.joinpath(*self.options.qualified_name.split("."))
 
     @property
-    def definition_ir(self) -> "StencilDefinition":
-        return self._build_data.get("ir") or self._build_data.setdefault(
-            "ir", self.frontend.generate(self.definition, self.externals, self.options)
-        )
-
-    @property
-    def implementation_ir(self) -> "StencilImplementation":
-        return self._build_data.get("iir") or self._build_data.setdefault(
-            "iir", gt4py.analysis.transform(self.definition_ir, self.options)
-        )
-
-    @property
     def gtir_pipeline(self) -> GtirPipeline:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
-            "gtir_pipeline", GtirPipeline(DefIRToGTIR.apply(self.definition_ir))
+            "gtir_pipeline",
+            GtirPipeline(
+                self.frontend.generate(self.definition, self.externals, self.options),
+                self.stencil_id,
+            ),
         )
 
     @property

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,20 +17,19 @@ from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
 from eve.visitors import NodeVisitor
 from gtc import oir
-from gtc.passes.oir_dace_optimizations.horizontal_execution_merging import (
-    graph_merge_horizontal_executions,
-)
 from gtc.passes.oir_optimizations.caches import (
-    FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import OnTheFlyMerging
+from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+    HorizontalExecutionMerging,
+    OnTheFlyMerging,
+)
 from gtc.passes.oir_optimizations.inlining import MaskInlining
 from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
 from gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
@@ -64,36 +61,42 @@ class DefaultPipeline(OirPipeline):
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    def __init__(self, *, skip: Optional[Sequence[PassT]] = None):
-        self.skip = skip or []
+    def __init__(
+        self, *, skip: Optional[Sequence[PassT]] = None, add_steps: Optional[Sequence[PassT]] = None
+    ):
+        self.skip = list(skip or [])
+        self.add_steps = list(add_steps or [])
 
     @staticmethod
     def all_steps() -> Sequence[PassT]:
         return [
-            graph_merge_horizontal_executions,
             AdjacentLoopMerging,
+            HorizontalExecutionMerging,
+            OnTheFlyMerging,
             LocalTemporariesToScalars,
             WriteBeforeReadTemporariesToScalars,
-            OnTheFlyMerging,
             MaskStmtMerging,
             MaskInlining,
+            UnreachableStmtPruning,
             NoFieldAccessPruning,
             IJCacheDetection,
             KCacheDetection,
             PruneKCacheFills,
             PruneKCacheFlushes,
-            FillFlushToLocalKCaches,
         ]
 
     @property
     def steps(self) -> Sequence[PassT]:
-        return [step for step in self.all_steps() if step not in self.skip]
+        return [step for step in self.all_steps() if step not in self.skip] + self.add_steps
 
     def __hash__(self) -> int:
         return hash(repr(self))
 
     def __repr__(self) -> str:
         return str([step.__name__ for step in self.steps])
+
+    def __eq__(self, other):
+        return isinstance(other, DefaultPipeline) and self.skip == other.skip
 
     def run(self, oir: oir.Stencil) -> oir.Stencil:
         for step in self.steps:

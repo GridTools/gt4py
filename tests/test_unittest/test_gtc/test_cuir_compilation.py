@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +29,7 @@ from .cuir_utils import KernelFactory, ProgramFactory
 from .utils import match
 
 
-if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")
 
 
@@ -41,7 +39,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
 
     opts = pyext_builder.get_gt_pyext_build_opts(uses_cuda=True)
     assert isinstance(opts["include_dirs"], list)
-    opts["include_dirs"].append(config.GT2_INCLUDE_PATH)
+    opts["include_dirs"].append(config.GT_INCLUDE_PATH)
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],

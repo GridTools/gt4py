@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -50,7 +48,10 @@ class FuseKernels(NodeTranslator):
                 kernel.iter_tree()
                 .if_isinstance(cuir.FieldAccess)
                 .filter(
-                    lambda x: x.offset.i != 0 or x.offset.j != 0 or (x.offset.k != 0 and parallel)
+                    lambda x, parallel=parallel: any(
+                        off != 0 for off in x.offset.to_dict().values()
+                    )
+                    or (x.offset.to_dict()["k"] != 0 and parallel)
                 )
                 .getattr("name")
                 .to_set()
@@ -73,5 +74,9 @@ class FuseKernels(NodeTranslator):
             previous_parallel = parallel
 
         return cuir.Program(
-            name=node.name, params=node.params, temporaries=node.temporaries, kernels=kernels
+            name=node.name,
+            params=node.params,
+            positionals=node.positionals,
+            temporaries=node.temporaries,
+            kernels=kernels,
         )

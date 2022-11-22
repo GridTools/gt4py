@@ -1,0 +1,46 @@
+# Only /workspace folder is preserved on restarts, therefore both the Python
+# virtual environment and pre-commit caches have to be installed there
+image:
+  file: .gitpod.Dockerfile
+tasks:
+- name: Setup venv and dev tools
+  init: |
+    ln -s /workspace/gt4py/.gitpod/.vscode /workspace/gt4py/.vscode
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install --upgrade pip setuptools wheel
+    pip install -e .
+    pip install -r requirements-dev.txt
+    pip install -i https://test.pypi.org/simple/ atlas4py
+    pre-commit install --install-hooks
+    deactivate
+  command: source .venv/bin/activate
+  env:
+    PIP_SRC: _external_src
+    PRE_COMMIT_HOME: /workspace/.caches/pre-commit
+vscode:
+  extensions:
+  - ms-python.python
+  - ms-toolsai.jupyter
+  - ms-toolsai.jupyter-keymap
+  - ms-toolsai.jupyter-renderers
+  - genuitecllc.codetogether
+
+github:
+  prebuilds:
+    # enable for the master/default branch (defaults to true)
+    master: true
+    # enable for all branches in this repo (defaults to false)
+    branches: false
+      # enable for pull requests coming from this repo (defaults to true)
+    pullRequests: true
+      # enable for pull requests coming from forks (defaults to false)
+    pullRequestsFromForks: true
+      # add a check to pull requests (defaults to true)
+    addCheck: true
+      # add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
+    addComment: false
+      # add a "Review in Gitpod" button to the pull request's description (defaults to false)
+    addBadge: false
+      # add a label once the prebuild is ready to pull requests (defaults to false)
+    addLabel: false

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,31 +15,22 @@
 import pytest
 from pydantic.error_wrappers import ValidationError
 
-from eve import SourceLocation
-from gtc.common import ArithmeticOperator, DataType, LevelMarker, LoopOrder
-from gtc.gtir import (
-    AxisBound,
-    Decl,
-    Expr,
-    FieldAccess,
-    FieldDecl,
-    Interval,
-    ParAssignStmt,
-    Stencil,
-    Stmt,
-    VerticalLoop,
-)
+from gtc.common import ArithmeticOperator, ComparisonOperator, DataType
+from gtc.gtir import Decl, Expr, Stmt
 
 from .gtir_utils import (
     BinaryOpFactory,
     FieldAccessFactory,
     FieldDeclFactory,
     FieldIfStmtFactory,
+    HorizontalMaskFactory,
     ParAssignStmtFactory,
     ScalarAccessFactory,
+    ScalarIfStmtFactory,
     StencilFactory,
     VariableKOffsetFactory,
     VerticalLoopFactory,
+    WhileFactory,
 )
 
 
@@ -50,69 +39,18 @@ ANOTHER_ARITHMETIC_TYPE = DataType.INT32
 A_ARITHMETIC_OPERATOR = ArithmeticOperator.ADD
 
 
-@pytest.fixture
-def copy_assign():
-    yield ParAssignStmt(
-        loc=SourceLocation(line=3, column=2, source="copy_gtir"),
-        left=FieldAccess.centered(
-            name="foo", loc=SourceLocation(line=3, column=1, source="copy_gtir")
-        ),
-        right=FieldAccess.centered(
-            name="bar", loc=SourceLocation(line=3, column=3, source="copy_gtir")
-        ),
-    )
-
-
-@pytest.fixture
-def interval(copy_assign):
-    yield Interval(
-        loc=SourceLocation(line=2, column=11, source="copy_gtir"),
-        start=AxisBound(level=LevelMarker.START, offset=0),
-        end=AxisBound(level=LevelMarker.END, offset=0),
-    )
-
-
-@pytest.fixture
-def copy_v_loop(copy_assign, interval):
-    yield VerticalLoop(
-        loc=SourceLocation(line=2, column=1, source="copy_gtir"),
-        loop_order=LoopOrder.FORWARD,
-        interval=interval,
-        body=[copy_assign],
-        temporaries=[],
-    )
-
-
-@pytest.fixture
-def copy_computation(copy_v_loop):
-    yield Stencil(
+def test_copy():
+    copy_computation = StencilFactory(
         name="copy_gtir",
-        loc=SourceLocation(line=1, column=1, source="copy_gtir"),
-        params=[
-            FieldDecl(
-                name="foo",
-                dtype=DataType.FLOAT32,
-                dimensions=(True, True, True),
-            ),
-            FieldDecl(
-                name="bar",
-                dtype=DataType.FLOAT32,
-                dimensions=(True, True, True),
-            ),
-        ],
-        vertical_loops=[copy_v_loop],
+        vertical_loops__0=VerticalLoopFactory(
+            body__0__left__name="foo", body__0__right__name="bar"
+        ),
     )
-
-
-def test_copy(copy_computation):
     assert copy_computation
-    assert copy_computation.param_names == ["foo", "bar"]
+    assert set(copy_computation.param_names) == {"foo", "bar"}
 
 
-@pytest.mark.parametrize(
-    "invalid_node",
-    [Decl, Expr, Stmt],
-)
+@pytest.mark.parametrize("invalid_node", [Decl, Expr, Stmt])
 def test_abstract_classes_not_instantiatable(invalid_node):
     with pytest.raises(TypeError):
         invalid_node()
@@ -135,7 +73,7 @@ def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
 
 
 def test_symbolref_without_decl():
-    with pytest.raises(ValidationError, match=r"Symbols.*not found"):
+    with pytest.raises(ValidationError, match=r"Symbol.*not found"):
         StencilFactory(
             params=[],
             vertical_loops__0__body__0=ParAssignStmtFactory(
@@ -207,6 +145,35 @@ def test_indirect_address_data_dims():
         FieldAccessFactory(data_index=[ScalarAccessFactory(dtype=DataType.FLOAT32)])
 
 
+def test_while_without_boolean_condition():
+    with pytest.raises(ValueError, match=r"Condition in.*must be boolean."):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="foo",
+                right__name="bar",
+            ),
+            dtype=DataType.FLOAT32,
+        )
+
+
+def test_while_with_accumulated_extents():
+    with pytest.raises(
+        ValueError, match=r"Illegal write and read with horizontal offset detected for.*"
+    ):
+        WhileFactory(
+            cond=BinaryOpFactory(
+                left__name="a",
+                right__name="b",
+                op=ComparisonOperator.LT,
+                dtype=DataType.BOOL,
+            ),
+            body=[
+                ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),
+                ParAssignStmtFactory(left__name="b", right__name="a"),
+            ],
+        )
+
+
 def test_variable_k_offset_in_access():
     # Integer expressions are OK
     FieldAccessFactory(offset=VariableKOffsetFactory())
@@ -216,3 +183,8 @@ def test_variable_k_offset_in_access():
         FieldAccessFactory(
             offset=VariableKOffsetFactory(k=FieldAccessFactory(dtype=DataType.FLOAT32))
         )
+
+
+def test_visit_ScalarIf_HorizontalMask_fail():
+    with pytest.raises(Exception):
+        ScalarIfStmtFactory(cond=HorizontalMaskFactory())

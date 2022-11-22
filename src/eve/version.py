@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,17 +14,10 @@
 
 """Version specification."""
 
-from typing import Optional, Union
+import typing
 
-from packaging.version import LegacyVersion, Version, parse
-from pkg_resources import DistributionNotFound, get_distribution
+from packaging import version as pkg_version
 
 
-try:
-    __version__: str = get_distribution("gt4py").version
-except DistributionNotFound:
-    __version__ = "X.X.X.unknown"
-
-__versioninfo__: Optional[Union[LegacyVersion, Version]] = parse(__version__)
-
-del DistributionNotFound, LegacyVersion, Version, get_distribution, parse
+__version__: typing.Final = "0.1.1"
+__version_info__: typing.Final = pkg_version.parse(__version__)

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,170 +12,214 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+import base64
+import pickle
+from typing import Dict, List, Set, Union
 
 import dace.data
+import dace.dtypes
 import dace.properties
 import dace.subsets
-import networkx as nx
+import numpy as np
 from dace import library
 
-from gtc.common import DataType, LoopOrder, typestr_to_data_type
-from gtc.dace.utils import (
-    CartesianIterationSpace,
-    OIRFieldRenamer,
-    assert_sdfg_equal,
-    dace_dtype_to_typestr,
-    get_node_name_mapping,
-)
-from gtc.oir import CacheDesc, HorizontalExecution, Interval, VerticalLoop, VerticalLoopSection
+from gtc import common
+from gtc import daceir as dcir
+from gtc import oir
+from gtc.dace.expansion.expansion import StencilComputationExpansion
+from gtc.definitions import Extent
+from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
+
+from .expansion.utils import HorizontalExecutionSplitter, get_dace_debuginfo
+from .expansion_specification import ExpansionItem, make_expansion_order
 
 
-class OIRLibraryNode(ABC, dace.nodes.LibraryNode):
-    @abstractmethod
-    def as_oir(self):
-        raise NotImplementedError("Implement in child class.")
+def _set_expansion_order(
+    node: "StencilComputation", expansion_order: Union[List[ExpansionItem], List[str]]
+):
+    res = make_expansion_order(node, expansion_order)
+    node._expansion_specification = res
 
-    @abstractmethod
-    def __eq__(self, other):
-        raise NotImplementedError("Implement in child class.")
+
+def _set_tile_sizes_interpretation(node: "StencilComputation", tile_sizes_interpretation: str):
+    valid_values = {"shape", "strides"}
+    if tile_sizes_interpretation not in valid_values:
+        raise ValueError(f"tile_sizes_interpretation must be one in {valid_values}.")
+    node._tile_sizes_interpretation = tile_sizes_interpretation
+
+
+class PickledProperty:
+    def to_json(self, obj):
+        protocol = pickle.DEFAULT_PROTOCOL
+        pbytes = pickle.dumps(obj, protocol=protocol)
+        jsonobj = dict(pickle=base64.b64encode(pbytes).decode("utf-8"))
+        return jsonobj
+
+    @classmethod
+    def from_json(cls, d, sdfg=None):
+        b64string = d["pickle"]
+        byte_repr = base64.b64decode(b64string)
+        return pickle.loads(byte_repr)
+
+
+class PickledDataclassProperty(PickledProperty, dace.properties.DataclassProperty):
+    pass
+
+
+class PickledListProperty(PickledProperty, dace.properties.ListProperty):
+    pass
+
+
+class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
+    pass
 
 
 @library.node
-class VerticalLoopLibraryNode(OIRLibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {}
-    default_implementation = "naive"
+class StencilComputation(library.LibraryNode):
+    implementations: Dict[str, dace.library.ExpandTransformation] = {
+        "default": StencilComputationExpansion
+    }
+    default_implementation = "default"
 
-    loop_order = dace.properties.Property(dtype=LoopOrder, default=None, allow_none=True)
-    sections = dace.properties.ListProperty(
-        element_type=Tuple[Interval, dace.SDFG], default=[], allow_none=False
-    )
-    caches = dace.properties.ListProperty(
-        element_type=List[CacheDesc], default=[], allow_none=False
+    oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
+
+    declarations = PickledDictProperty(key_type=str, value_type=Decl, allow_none=True)
+    extents = PickledDictProperty(key_type=int, value_type=Extent, allow_none=False)
+    access_infos = PickledDictProperty(
+        key_type=str, value_type=dcir.FieldAccessInfo, allow_none=True
     )
 
-    _dace_library_name = "oir.VerticalLoop"
+    device = dace.properties.EnumProperty(
+        dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
+    )
+    expansion_specification = PickledListProperty(
+        element_type=ExpansionItem,
+        allow_none=True,
+        setter=_set_expansion_order,
+    )
+    tile_sizes = PickledDictProperty(
+        key_type=dcir.Axis,
+        value_type=int,
+        default={dcir.Axis.I: 8, dcir.Axis.J: 8, dcir.Axis.K: 8},
+    )
+
+    tile_sizes_interpretation = dace.properties.Property(
+        setter=_set_tile_sizes_interpretation, dtype=str, default="strides"
+    )
+
+    symbol_mapping = dace.properties.DictProperty(
+        key_type=str, value_type=dace.symbolic.pystr_to_symbolic, default=None, allow_none=True
+    )
+    _dace_library_name = "StencilComputation"
 
     def __init__(
         self,
         name="unnamed_vloop",
-        loop_order: LoopOrder = None,
-        sections: List[Tuple[Interval, dace.SDFG]] = None,
-        caches: List[CacheDesc] = None,
+        oir_node: VerticalLoop = None,
+        extents: Dict[int, Extent] = None,
+        declarations: Dict[str, Decl] = None,
+        expansion_order=None,
         *args,
         **kwargs,
     ):
-
-        if loop_order is not None:
-            self.loop_order = loop_order
-            self.sections = sections
-            self.caches = caches
-
         super().__init__(name=name, *args, **kwargs)
 
-    def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
+        from gtc.dace.utils import compute_dcir_access_infos
 
-        get_node_name_mapping(parent_state, self)
+        if oir_node is not None:
+            assert extents is not None
+            assert declarations is not None
+            extents_dict = dict()
+            for i, section in enumerate(oir_node.sections):
+                for j, he in enumerate(section.horizontal_executions):
+                    extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
-        for _, sdfg in self.sections:
-            sdfg.validate()
-            is_correct_node_types = all(
-                isinstance(
-                    n, (dace.SDFGState, dace.nodes.AccessNode, HorizontalExecutionLibraryNode)
+            self.oir_node = oir_node
+            self.extents = extents_dict  # type: ignore
+            self.declarations = declarations  # type: ignore
+            self.symbol_mapping = {
+                decl.name: dace.symbol(
+                    decl.name,
+                    dtype=dace.typeclass(np.dtype(common.data_type_to_typestr(decl.dtype)).type),
                 )
-                for n, _ in sdfg.all_nodes_recursive()
+                for decl in declarations.values()
+                if isinstance(decl, oir.ScalarDecl)
+            }
+            self.symbol_mapping.update(
+                {
+                    axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
+                    for axis in dcir.Axis.dims_horizontal()
+                }
             )
-            is_correct_data_and_dtype = all(
-                isinstance(array, dace.data.Array)
-                and typestr_to_data_type(dace_dtype_to_typestr(array.dtype)) != DataType.INVALID
-                for array in sdfg.arrays.values()
+            self.access_infos = compute_dcir_access_infos(
+                oir_node,
+                oir_decls=declarations,
+                block_extents=self.get_extents,
+                collect_read=True,
+                collect_write=True,
             )
-            if not is_correct_node_types or not is_correct_data_and_dtype:
-                raise ValueError("Tried to convert incompatible SDFG to OIR.")
+            if any(
+                interval.start.level == common.LevelMarker.END
+                or interval.end.level == common.LevelMarker.END
+                for interval in oir_node.iter_tree()
+                .if_isinstance(VerticalLoopSection)
+                .getattr("interval")
+            ) or any(
+                decl.dimensions[dcir.Axis.K.to_idx()]
+                for decl in self.declarations.values()
+                if isinstance(decl, oir.FieldDecl)
+            ):
+                self.symbol_mapping[dcir.Axis.K.domain_symbol()] = dace.symbol(
+                    dcir.Axis.K.domain_symbol(), dtype=dace.int32
+                )
 
-        super().validate(parent_sdfg, parent_state, *args, **kwargs)
+            self.debuginfo = get_dace_debuginfo(oir_node)
 
-    def as_oir(self):
+        if expansion_order is None:
+            expansion_order = [
+                "TileI",
+                "TileJ",
+                "Sections",
+                "K",  # Expands to either Loop or Map
+                "Stages",
+                "I",
+                "J",
+            ]
+        _set_expansion_order(self, expansion_order)
 
-        sections = []
-        for interval, sdfg in self.sections:
-            horizontal_executions = []
-            for state in sdfg.topological_sort(sdfg.start_state):
+    def get_extents(self, he):
+        for i, section in enumerate(self.oir_node.sections):
+            for j, cand_he in enumerate(section.horizontal_executions):
+                if he is cand_he:
+                    return self.extents[j * len(self.oir_node.sections) + i]
 
-                for node in (
-                    n
-                    for n in nx.topological_sort(state.nx)
-                    if isinstance(n, HorizontalExecutionLibraryNode)
-                ):
-                    horizontal_executions.append(
-                        OIRFieldRenamer(get_node_name_mapping(state, node)).visit(node.as_oir())
-                    )
-            sections.append(
-                VerticalLoopSection(interval=interval, horizontal_executions=horizontal_executions)
-            )
+    @property
+    def field_decls(self) -> Dict[str, FieldDecl]:
+        return {
+            name: decl for name, decl in self.declarations.items() if isinstance(decl, FieldDecl)
+        }
 
-        return VerticalLoop(
-            sections=sections,
-            loop_order=self.loop_order,
-            caches=self.caches,
-        )
+    @property
+    def free_symbols(self) -> Set[str]:
+        result: Set[str] = set()
+        for v in self.symbol_mapping.values():
+            result.update(map(str, v.free_symbols))
+        return result
 
-    def __eq__(self, other):
-        try:
-            assert isinstance(other, VerticalLoopLibraryNode)
-            assert self.loop_order == other.loop_order
-            assert self.caches == other.caches
-            assert len(self.sections) == len(other.sections)
-            for (interval1, he_sdfg1), (interval2, he_sdfg2) in zip(self.sections, other.sections):
-                assert interval1 == interval2
-                assert_sdfg_equal(he_sdfg1, he_sdfg2)
-        except AssertionError:
-            return False
+    def has_splittable_regions(self):
+        for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
+            if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
+                return False
         return True
 
-    def __hash__(self):
-        return super(OIRLibraryNode, self).__hash__()
-
-
-@library.node
-class HorizontalExecutionLibraryNode(OIRLibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {}
-    default_implementation = "naive"
-
-    oir_node = dace.properties.DataclassProperty(
-        dtype=HorizontalExecution, default=None, allow_none=True
-    )
-    iteration_space = dace.properties.Property(
-        dtype=CartesianIterationSpace, default=None, allow_none=True
-    )
-    _dace_library_name = "oir.HorizontalExecution"
-
-    def __init__(
-        self,
-        name="unnamed_vloop",
-        oir_node: HorizontalExecution = None,
-        iteration_space: CartesianIterationSpace = None,
-        *args,
-        **kwargs,
-    ):
-        if oir_node is not None:
-            name = "HorizontalExecution_" + str(id(oir_node))
-            self.oir_node = oir_node
-            self.iteration_space = iteration_space
-
-        super().__init__(name=name, *args, **kwargs)
-
-    def as_oir(self):
-        return self.oir_node
-
-    def validate(self, parent_sdfg: dace.SDFG, parent_state: dace.SDFGState, *args, **kwargs):
-        get_node_name_mapping(parent_state, self)
-
-    def __eq__(self, other):
-        if not isinstance(other, HorizontalExecutionLibraryNode):
-            return False
-        return self.as_oir() == other.as_oir()
-
-    def __hash__(self):
-        return super(OIRLibraryNode, self).__hash__()
+    @property
+    def tile_strides(self):
+        if self.tile_sizes_interpretation == "strides":
+            return self.tile_sizes
+        else:
+            overall_extent: Extent = next(iter(self.extents.values()))
+            for extent in self.extents.values():
+                overall_extent |= extent
+            return {
+                key: value + overall_extent[key.to_idx()] for key, value in self.tile_sizes.items()
+            }

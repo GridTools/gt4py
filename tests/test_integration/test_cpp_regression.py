@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -22,10 +20,11 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.backend as gt_backend
+import gt4py.backend
 import gt4py.storage as gt_store
+from gt4py.storage.utils import cpu_copy
 
-from ..definitions import INTERNAL_BACKENDS
+from ..definitions import ALL_BACKENDS
 from ..reference_cpp_regression import reference_module
 from .utils import id_version  # import fixture used by pytest
 from .utils import generate_test_module
@@ -52,16 +51,14 @@ def get_reference(test_name, backend, domain, origins, shapes, masks=None):
                 field = gt_store.from_array(
                     data,
                     dtype=np.float_,
-                    default_origin=origins[k],
-                    shape=shapes[k],
+                    aligned_index=origins[k],
                     backend=backend.name,
                 )
             except KeyError:
                 field = gt_store.from_array(
                     data,
                     dtype=np.float_,
-                    default_origin=origins[k[: -len("_reference")]],
-                    shape=shapes[k[: -len("_reference")]],
+                    aligned_index=origins[k[: -len("_reference")]],
                     backend=backend.name,
                 )
 
@@ -88,9 +85,6 @@ def run_horizontal_diffusion(backend, id_version, domain):
     testmodule = generate_test_module(
         "horizontal_diffusion", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -99,10 +93,8 @@ def run_horizontal_diffusion(backend, id_version, domain):
     )
 
     for k in validate_field_names:
-        if hasattr(arg_fields[k], "synchronize"):
-            arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -138,9 +130,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
     testmodule = generate_test_module(
         "tridiagonal_solver", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
+
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -152,7 +142,7 @@ def run_tridiagonal_solver(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -192,9 +182,7 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     testmodule = generate_test_module(
         "vertical_advection_dycore", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
+
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -206,10 +194,8 @@ def run_vertical_advection_dycore(backend, id_version, domain):
     )
 
     for k in validate_field_names:
-        if hasattr(arg_fields[k], "synchronize"):
-            arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
@@ -239,9 +225,6 @@ def run_large_k_interval(backend, id_version, domain):
     testmodule = generate_test_module(
         "large_k_interval", backend, id_version=id_version, rebuild=False
     )
-    for k in arg_fields:
-        if hasattr(arg_fields[k], "host_to_device"):
-            arg_fields[k].host_to_device()
     testmodule.run(
         **arg_fields,
         _domain_=domain,
@@ -253,11 +236,11 @@ def run_large_k_interval(backend, id_version, domain):
         if hasattr(arg_fields[k], "synchronize"):
             arg_fields[k].device_to_host(force=True)
         np.testing.assert_allclose(
-            arg_fields[k].view(np.ndarray), validate_fields[k + "_reference"].view(np.ndarray)
+            cpu_copy(arg_fields[k]), cpu_copy(validate_fields[k + "_reference"])
         )
 
 
-@pytest.mark.parametrize("backend", INTERNAL_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 @pytest.mark.parametrize("function", REGISTRY)
 def test_cpp_regression(backend, id_version, function):
-    function(gt_backend.from_name(backend), id_version)
+    function(gt4py.backend.from_name(backend), id_version)

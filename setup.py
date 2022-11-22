@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -15,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from setuptools import Command, setup
+import setuptools
 
 
 if __name__ == "__main__":
-    setup(use_scm_version=False)  # Disable setuptools_scm as a temporary workaround
+    setuptools.setup()

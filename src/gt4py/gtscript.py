@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -30,8 +28,12 @@ import numpy as np
 
 from gt4py import definitions as gt_definitions
 from gt4py.lazy_stencil import LazyStencil
-from gt4py.stencil_builder import StencilBuilder
 
+
+try:
+    from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
+except ImportError:
+    DaCeLazyStencil = LazyStencil  # type: ignore
 
 # GTScript builtins
 MATH_BUILTINS = {
@@ -112,29 +114,38 @@ _VALID_DATA_TYPES = (
 
 
 def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
+    def _parse_annotation(arg, annotation):
+        # This function evaluates the type hint 'annotation' for the stencil argument 'arg'.
+        # Note that 'typing.get_type_hints()' cannot be used here since field
+        # arguments are annotated using instances (and not subclasses) of 'Field',
+        # which is explicitly forbidden by 'get_type_hints()'.
+        #
+        if isinstance(annotation, _FieldDescriptor) and isinstance(annotation.dtype, str):
+            if annotation.dtype in dtypes:
+                return _FieldDescriptor(
+                    dtypes[annotation.dtype], annotation.axes, annotation.data_dims
+                )
+            else:
+                raise ValueError(f"Missing '{annotation.dtype}' dtype definition for arg '{arg}'")
+        elif isinstance(annotation, str):
+            if annotation in dtypes:
+                return dtypes[annotation]
+            else:
+                def_globals = getattr(definition, "__globals__", {})
+                return _parse_annotation(arg, eval(annotation, def_globals))
+        else:
+            return annotation
+
     assert isinstance(definition, types.FunctionType)
     annotations = getattr(definition, "__annotations__", {})
     original_annotations = {**annotations}
-    for arg, value in annotations.items():
-        if isinstance(value, _FieldDescriptor) and isinstance(value.dtype, str):
-            if value.dtype in dtypes:
-                annotations[arg] = _FieldDescriptor(
-                    dtypes[value.dtype], value.axes, value.data_dims
-                )
-            else:
-                raise ValueError(f"Missing '{value.dtype}' dtype definition for arg '{arg}'")
-        elif isinstance(value, str):
-            if value in dtypes:
-                annotations[arg] = dtypes[value]
-            else:
-                raise ValueError(f"Missing '{value}' dtype definition for arg '{arg}'")
-
+    for key, value in annotations.items():
+        annotations[key] = _parse_annotation(key, value)
     return original_annotations
 
 
 def function(func):
-    """GTScript function."""
-
+    """Mark a GTScript function."""
     from gt4py.frontend import gtscript_frontend as gt_frontend
 
     gt_frontend.GTScriptParser.annotate_definition(func)
@@ -152,6 +163,8 @@ def stencil(
     format_source=True,
     name=None,
     rebuild=False,
+    cache_settings=None,
+    raise_if_not_cached=False,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -169,8 +182,6 @@ def stencil(
         build_info : `dict`, optional
             Dictionary used to store information about the stencil generation.
             (`None` by default). Possible key-value pairs include:
-            - 'def_ir': (StencilDefinition) Definition IR object
-            - 'iir': (StencilImplementation) Implementation IR object
             - 'symbol_info': (Dict[str, SymbolInfo]) Dictionary of SymbolInfo objects
             - 'parse_time': (float) Frontend run time, e.g., parsing GTScript in seconds
             - 'module_time': (float) Python module generation time in seconds
@@ -195,6 +206,17 @@ def stencil(
         rebuild : `bool`, optional
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
+
+        raise_if_not_cached: `bool`, optional
+            If this is True, the call will raise an exception if the stencil does not
+            exist in the cache, or if the cache is inconsistent. (`False` by default).
+
+        cache_settings: `dict`, optional
+            Dictionary to configure cache (directory) settings (see
+            ``gt4py.config.cache_settings``).
+            Possible key-value pairs:
+            - `root_path`: (str)
+            - `dir_name`: (str)
 
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
@@ -231,6 +253,10 @@ def stencil(
         raise ValueError(f"Invalid 'name' string ('{name}')")
     if not isinstance(rebuild, bool):
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if not isinstance(raise_if_not_cached, bool):
+        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
+    if cache_settings is not None and not isinstance(cache_settings, dict):
+        raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
 
     module = None
     if name:
@@ -261,8 +287,10 @@ def stencil(
         module=module,
         format_source=format_source,
         rebuild=rebuild,
+        raise_if_not_cached=raise_if_not_cached,
         backend_opts=kwargs,
         build_info=build_info,
+        cache_settings=cache_settings or {},
         impl_opts=_impl_opts,
     )
 
@@ -280,7 +308,7 @@ def stencil(
             build_options=build_options,
             externals=externals or {},
         )
-        setattr(definition_func, "__annotations__", original_annotations)
+        definition_func.__annotations__ = original_annotations
         return out
 
     if definition is None:
@@ -296,8 +324,10 @@ def lazy_stencil(
     build_info=None,
     dtypes=None,
     externals=None,
+    format_source=True,
     name=None,
     rebuild=False,
+    raise_if_not_cached=False,
     eager=False,
     check_syntax=True,
     **kwargs,
@@ -323,6 +353,9 @@ def lazy_stencil(
         externals: `dict`, optional
             Specify values for otherwise unbound symbols.
 
+        format_source : `bool`, optional
+            Format generated sources when possible (`True` by default).
+
         name : `str`, optional
             The fully qualified name of the generated :class:`StencilObject`.
             If `None`, it will be set to the qualified name of the definition function.
@@ -331,6 +364,10 @@ def lazy_stencil(
         rebuild : `bool`, optional
             Force rebuild of the :class:`gt4py.StencilObject` even if it is
             found in the cache. (`False` by default).
+
+        raise_if_not_cached: `bool`, optional
+            If this is True, the call will raise an exception if the stencil does not
+            exist in the cache, or if the cache is inconsistent. (`False` by default).
 
         eager : `bool`, optional
             If true do not defer stencil building and instead return the fully built raw implementation object.
@@ -349,22 +386,80 @@ def lazy_stencil(
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
-    from gt4py import frontend
+    from gt4py.stencil_builder import StencilBuilder
 
-    def _decorator(func):
-        _set_arg_dtypes(func, dtypes or {})
-        options = gt_definitions.BuildOptions(
-            **{
-                **StencilBuilder.default_options_dict(func),
-                **StencilBuilder.name_to_options_args(name),
-                "rebuild": rebuild,
-                "build_info": build_info,
-                **StencilBuilder.nest_impl_options(kwargs),
-            }
-        )
-        stencil = LazyStencil(
-            StencilBuilder(func, backend=backend, options=options).with_externals(externals or {})
-        )
+    if build_info is not None and not isinstance(build_info, dict):
+        raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
+    if dtypes is not None and not isinstance(dtypes, dict):
+        raise ValueError(f"Invalid 'dtypes' dictionary ('{dtypes}')")
+    if externals is not None and not isinstance(externals, dict):
+        raise ValueError(f"Invalid 'externals' dictionary ('{externals}')")
+    if not isinstance(format_source, bool):
+        raise ValueError(f"Invalid 'format_source' bool value ('{name}')")
+    if name is not None and not isinstance(name, str):
+        raise ValueError(f"Invalid 'name' string ('{name}')")
+    if not isinstance(rebuild, bool):
+        raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
+    if not isinstance(raise_if_not_cached, bool):
+        raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
+
+    module = None
+    if name:
+        name_components = name.split(".")
+        name = name_components[-1]
+        module = ".".join(name_components[:-1])
+
+    name = name or ""
+    module = (
+        module or inspect.currentframe().f_back.f_globals["__name__"]
+    )  # definition_func.__globals__["__name__"] ??,
+
+    # Move hidden "_option" keys to _impl_opts
+    _impl_opts = {}
+    for key, value in kwargs.items():
+        if key.startswith("_"):
+            _impl_opts[key] = value
+    for key in _impl_opts:
+        kwargs.pop(key)
+
+    # Setup build_info timings
+    if build_info is not None:
+        time_keys = ("parse_time", "module_time", "codegen_time", "build_time", "load_time")
+        build_info.update({time_key: 0.0 for time_key in time_keys})
+
+    build_options = gt_definitions.BuildOptions(
+        name=name,
+        module=module,
+        format_source=format_source,
+        rebuild=rebuild,
+        raise_if_not_cached=raise_if_not_cached,
+        backend_opts=kwargs,
+        build_info=build_info,
+        impl_opts=_impl_opts,
+    )
+
+    def _decorator(definition_func):
+        if not isinstance(definition_func, types.FunctionType):
+            if hasattr(definition_func, "definition_func"):  # StencilObject
+                definition_func = definition_func.definition_func
+            elif callable(definition_func):  # General callable
+                definition_func = definition_func.__call__
+
+        if not build_options.name:
+            build_options.name = f"{definition_func.__name__}"
+        if backend and "dace" in backend:
+            stencil = DaCeLazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
+
+        else:
+            stencil = LazyStencil(
+                StencilBuilder(
+                    definition_func, backend=backend, options=build_options
+                ).with_externals(externals or {})
+            )
         if eager:
             stencil = stencil.implementation
         elif check_syntax:
@@ -494,8 +589,11 @@ class _FieldDescriptor:
         else:
             try:
                 dtype = np.dtype(dtype)
-                actual_dtype = dtype.subdtype[0] if dtype.subdtype else dtype
-                if actual_dtype not in _VALID_DATA_TYPES:
+                if dtype.shape:
+                    assert not data_dims
+                    dtype = dtype.base
+                    data_dims = dtype.shape
+                if dtype not in _VALID_DATA_TYPES:
                     raise ValueError("Invalid data type descriptor")
             except:
                 raise ValueError("Invalid data type descriptor")
@@ -508,6 +606,10 @@ class _FieldDescriptor:
                 self.data_dims = tuple(data_dims)
         else:
             self.data_dims = data_dims
+
+    def __descriptor__(self):
+        # Ignore, use JIT
+        return None
 
     def __repr__(self):
         args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"

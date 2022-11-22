@@ -14,8 +14,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "gridtools/regression/horizontal_diffusion_repository.hpp"
-#include "gridtools/regression/vertical_advection_repository.hpp"
+#include "regression/horizontal_diffusion_repository.hpp"
+#include "regression/vertical_advection_repository.hpp"
 #include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -43,7 +43,7 @@ py::array_t<DType> apply_function(gt::uint_t d1,
     size_t j_stride = result.strides()[1]/8;
     size_t k_stride = result.strides()[2]/8;
     DType* ptr = static_cast<DType*>(result.request().ptr);
-    
+
     for (gt::uint_t i = 0; i < d1_loc; i++) {
         for (gt::uint_t j = 0; j < d2_loc; j++) {
             for (gt::uint_t k = 0; k < d3_loc; k++) {

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -23,7 +21,10 @@ import sys
 import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-import gt4py
+from cached_property import cached_property
+
+from gt4py import config as gt_config
+from gt4py import utils as gt_utils
 from gt4py.definitions import StencilID
 
 
@@ -155,6 +156,10 @@ class CachingStrategy(abc.ABC):
         """Calculate the name for the stencil class, default is to read from build options."""
         return self.builder.options.name
 
+    def capture_externals(self) -> Dict[str, Any]:
+        """Extract externals from the annotated stencil definition for fingerprinting. Freezes the references."""
+        return {}
+
 
 class JITCachingStrategy(CachingStrategy):
     """
@@ -172,13 +177,26 @@ class JITCachingStrategy(CachingStrategy):
 
     name = "jit"
 
+    _root_path: str
+    _dir_name: str
+
+    def __init__(
+        self,
+        builder: "StencilBuilder",
+        *,
+        root_path: Optional[str] = None,
+        dir_name: Optional[str] = None,
+    ):
+        super().__init__(builder)
+        self._root_path = root_path or gt_config.cache_settings["root_path"]
+        self._dir_name = dir_name or gt_config.cache_settings["dir_name"]
+
     @property
     def root_path(self) -> pathlib.Path:
-        settings = gt4py.config.cache_settings
-        cache_root = pathlib.Path(settings["root_path"]) / settings["dir_name"]
+        cache_root = pathlib.Path(self._root_path) / self._dir_name
 
         if not cache_root.exists():
-            gt4py.utils.make_dir(str(cache_root), is_cache=True)
+            gt_utils.make_dir(str(cache_root), is_cache=True)
 
         return cache_root
 
@@ -187,11 +205,11 @@ class JITCachingStrategy(CachingStrategy):
         cpython_id = "py{version.major}{version.minor}_{api_version}".format(
             version=sys.version_info, api_version=sys.api_version
         )
-        backend_root = self.root_path / cpython_id / gt4py.utils.slugify(self.builder.backend.name)
+        backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
-                backend_root.parent.mkdir(parents=False)
-            backend_root.mkdir(parents=False)
+                backend_root.parent.mkdir(parents=False, exist_ok=True)
+            backend_root.mkdir(parents=False, exist_ok=True)
         return backend_root
 
     @property
@@ -204,7 +222,7 @@ class JITCachingStrategy(CachingStrategy):
             "backend": self.builder.backend.name,
             "stencil_name": self.builder.stencil_id.qualified_name,
             "stencil_version": self.builder.stencil_id.version,
-            "module_shash": gt4py.utils.shash(self.builder.stencil_source),
+            "module_shash": gt_utils.shash(self.builder.stencil_source),
             **self.builder.backend.extra_cache_info,
         }
 
@@ -231,7 +249,7 @@ class JITCachingStrategy(CachingStrategy):
                 if k in self.builder.backend.extra_cache_validation_keys
             }
             source = self.builder.module_path.read_text()
-            module_shash = gt4py.utils.shash(source)
+            module_shash = gt_utils.shash(source)
 
             if validate_hash:
                 result = (
@@ -270,7 +288,12 @@ class JITCachingStrategy(CachingStrategy):
             return self.builder.backend.filter_options_for_id(self.builder.options).shashed_id
         return self.builder.options.shashed_id
 
-    def _extract_externals(self) -> Dict[str, Any]:
+    def capture_externals(self) -> Dict[str, Any]:
+        """Extract externals from the annotated stencil definition for fingerprinting."""
+        return self._externals
+
+    @cached_property
+    def _externals(self) -> Dict[str, Any]:
         """Extract externals from the annotated stencil definition for fingerprinting."""
         return {
             name: value._gtscript_["canonical_ast"] if hasattr(value, "_gtscript_") else value
@@ -287,13 +310,13 @@ class JITCachingStrategy(CachingStrategy):
             "__main__": self.builder.definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(self.builder.definition),
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
-            **self._extract_externals(),
+            **self._externals,
         }
 
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt4py.utils.shashed_id(gt4py.utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
         )
 
     @property
@@ -302,7 +325,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def module_postfix(self) -> str:
-        backend_name = gt4py.utils.slugify(self.builder.backend.name)
+        backend_name = gt_utils.slugify(self.builder.backend.name)
         id_version = self.stencil_id.version
         return f"__{backend_name}_{id_version}"
 

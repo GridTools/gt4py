@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -30,7 +28,7 @@ on some of the previous ones):
 
 from __future__ import annotations  # isort:skip
 
-from .version import __version__, __versioninfo__  # isort:skip
+from .version import __version__, __version_info__  # isort:skip
 
 from .concepts import (
     FieldKind,
@@ -68,7 +66,7 @@ from .visitors import NodeMutator, NodeTranslator, NodeVisitor
 
 __all__ = [
     "__version__",
-    "__versioninfo__",
+    "__version_info__",
     "Bool",
     "Enum",
     "Float",

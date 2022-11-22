@@ -1,6 +1,8 @@
 name: Tox (CPU only)
 
 on:
+  schedule:
+  - cron: '30 5 * * *'
   push:
     branches:
     - master
@@ -8,12 +10,21 @@ on:
     branches:
     - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: [3.8, 3.9.7]
+        backends: [internal-cpu, all-cpu]
+        exclude:
+        - python-version: 3.8
+          backends: internal-cpu
+
 
     steps:
     - uses: actions/checkout@v2
@@ -39,5 +50,5 @@ jobs:
         pyversion_no_dot=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion_no_dot//./}
         pyversion_no_dot=${pyversion_no_dot:0:2}
-        pip install tox clang-format
-        tox -r -e py${pyversion_no_dot}-internal-cpu
+        pip install tox
+        tox -r -e py${pyversion_no_dot}-${{ matrix.backends }}

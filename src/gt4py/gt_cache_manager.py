@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -22,7 +20,7 @@ import pathlib
 import shutil
 from typing import List, Optional, Sequence
 
-import gt4py.config as gt_config
+from gt4py import config as gt_config
 
 
 def _get_root() -> str:

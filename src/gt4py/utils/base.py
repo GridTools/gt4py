@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -14,10 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""
-Basic utilities for Python programming.
-
-"""
+"""Basic utilities for Python programming."""
 
 import collections.abc
 import functools
@@ -28,8 +23,10 @@ import json
 import os
 import string
 import sys
+import time
 import types
-from typing import Any, Sequence, Tuple
+
+from gt4py import config as gt_config
 
 
 NOTHING = object()
@@ -41,10 +38,6 @@ def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_m
     if replace_spaces:
         slug = slug.replace(" ", "_")
     return slug
-
-
-def listify(value):
-    return value if isinstance(value, collections.abc.Sequence) else [value]
 
 
 # def stringify(value):
@@ -93,7 +86,7 @@ def get_member(instance, item_name):
 
 
 def compose(*functions_or_iterable):
-    """Function composition.
+    """Return a function that chains the input functions.
 
     Derived from: https://mathieularose.com/function-composition-in-python/
 
@@ -141,7 +134,7 @@ def is_iterable_of(
         ):
             return accept_mapping or not isinstance(value, collections.abc.Mapping)
 
-    except Exception as e:
+    except Exception:
         pass
 
     return False
@@ -161,7 +154,7 @@ def is_mapping_of(
         ):
             return True
 
-    except Exception as e:
+    except Exception:
         pass
 
     return False
@@ -202,35 +195,6 @@ def shash(*args, hash_algorithm=None):
 
 def shashed_id(*args, length=10, hash_algorithm=None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
-
-
-def interpolate_mask(seq: Sequence[Any], mask: Sequence[bool], default) -> Tuple[Any, ...]:
-    """
-    Return a tuple with the same shape as mask, with True values replaced by
-    the sequence, and False values replaced by default.
-
-    Example:
-    >>> default = 0
-    >>> a = (1, 2)
-    >>> mask = (False, True, False, True)
-    >>> interpolate_mask(a, mask, 0)
-    (0, 1, 0, 2)
-    """
-    it = iter(seq)
-    return tuple(next(it) if m else default for m in mask)
-
-
-def filter_mask(seq: Sequence[Any], mask: Sequence[bool]) -> Tuple[Any, ...]:
-    """
-    Return a reduced-size tuple, with indices where mask[i]=False removed.
-
-    Example:
-    >>> a = (1, 2, 3)
-    >>> mask = (False, True, False)
-    >>> filter_mask(a, mask)
-    (2,)
-    """
-    return tuple(s for m, s in zip(mask, seq) if m)
 
 
 def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):
@@ -287,8 +251,11 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
       https://stackoverflow.com/a/43602645
 
     """
-    try:
+
+    def load():
         spec = importlib.util.spec_from_file_location(qualified_name, file_path)
+        if not spec:
+            raise ModuleNotFoundError(f"No module named '{qualified_name}'")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         if public_import:
@@ -296,29 +263,31 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
             package_name = getattr(module, "__package__", "")
             if not package_name:
                 package_name = ".".join(qualified_name.split(".")[:-1])
-                setattr(module, "__package__", package_name)
+                module.__package__ = package_name
             components = package_name.split(".")
             module_name = qualified_name.split(".")[-1]
 
             if components[0] in sys.modules:
                 parent = sys.modules[components[0]]
-                for i, current in enumerate(components[1:]):
+                for current in components[1:]:
                     parent = getattr(parent, current, None)
                     if not parent:
                         break
                 else:
                     setattr(parent, module_name, module)
+        return module
 
-    except Exception as e:
-        print(e)
-        module = None
+    for _i in range(max(gt_config.cache_settings["load_retries"], 0)):
+        try:
+            return load()
+        except ModuleNotFoundError:
+            time.sleep(max(gt_config.cache_settings["load_retry_delay"], 0) / 1000)
 
-    return module
+    return load()
 
 
 def patch_module(module, member, new_value, *, recursive=True):
     """Monkey patch a module replacing a member with a new value."""
-
     if not isinstance(module, types.ModuleType):
         raise ValueError("Invalid 'module' argument")
 
@@ -354,18 +323,13 @@ def patch_module(module, member, new_value, *, recursive=True):
 
 def restore_module(patch, *, verify=True):
     """Restore a module patched with the `patch_module()` function."""
-
-    if (
-        not isinstance(patch, dict)
-        or not {
-            "module",
-            "original_value",
-            "patched_value",
-            "recursive",
-            "originals",
-        }
-        <= set(patch.keys())
-    ):
+    if not isinstance(patch, dict) or not {
+        "module",
+        "original_value",
+        "patched_value",
+        "recursive",
+        "originals",
+    } <= set(patch.keys()):
         raise ValueError("Invalid 'patch' definition")
 
     patched_value = patch["patched_value"]
@@ -396,8 +360,7 @@ class Registry(dict):
 
 
 class ClassProperty:
-    """Much like a :class:`property`, but the wrapped get function is a
-    class method."""
+    """Like a :class:`property`, but the wrapped function is a class method."""
 
     def __init__(self, fget=None, fset=None, fdel=None, doc=None):
         self.fget = fget

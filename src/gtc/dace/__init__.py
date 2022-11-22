@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,10 +11,3 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-# need to import expansion so that implementation of expansion is registered
-from .expansion import NaiveHorizontalExecutionExpansion, NaiveVerticalLoopExpansion  # noqa: F401
-from .nodes import VerticalLoopLibraryNode
-
-
-__all__ = ["VerticalLoopLibraryNode"]

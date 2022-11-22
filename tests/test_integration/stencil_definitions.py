@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -116,7 +114,7 @@ def data_types(
 def native_functions(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
         abs_res = abs(field_a)
-        max_res = max(abs_res, field_b)
+        max_res = max(abs_res, 1.0)
         min_res = min(max_res, 42)
         mod_res = mod(min_res, 37.5)
         sin_res = sin(mod_res)
@@ -139,7 +137,7 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
         trunc_res = trunc(ceil_res)
-        field_a = (
+        field_b = (
             trunc_res
             if isfinite(trunc_res)
             else field_a

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -293,7 +291,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
 def noninstantiable(cls: Type) -> Type:
     original_init = cls.__init__
 
-    def _noninstantiable_init(self, *args, **kwargs) -> None:
+    def _noninstantiable_init(self, *args: Any, **kwargs: Any) -> None:  # type: ignore  # mypy somehow thinks there are missing type annotations here
         if self.__class__ is cls:
             raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
         else:

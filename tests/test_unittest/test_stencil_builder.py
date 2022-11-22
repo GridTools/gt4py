@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -15,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy
+import pytest
 
 from gt4py.gtscript import PARALLEL, Field, computation, interval
 from gt4py.stencil_builder import StencilBuilder
@@ -103,15 +102,13 @@ def test_usage_numpy_nocaching(tmp_path):
     )
 
     computation_src = builder.generate_computation()
-    assert "simple_stencil.py" in computation_src
+    assert "computation.py" in computation_src
 
     builder.build()
-    assert tmp_path.joinpath("simple_stencil", "simple_stencil.py").exists(), list(
-        tmp_path.iterdir()
-    )
+    assert tmp_path.joinpath("simple_stencil", "computation.py").exists(), list(tmp_path.iterdir())
 
 
-def test_regression_run_analysis_twice(tmp_path):
+def test_regression_run_gtir_pipeline_twice(tmp_path):
     builder = (
         StencilBuilder(assign_bool_float)
         .with_backend("numpy")
@@ -121,6 +118,20 @@ def test_regression_run_analysis_twice(tmp_path):
     )
 
     # property caching should not reevaluate the analysis pipeline as a side effect.
-    ir = builder.implementation_ir
-    # this raises an error if the analysis pipeline is reevaluated:
-    assert ir is builder.implementation_ir
+    ir = builder.gtir_pipeline.full()
+    assert ir is builder.gtir_pipeline.full()
+
+
+def test_raise_if_not_cached():
+    builder = (
+        StencilBuilder(assign_bool_float)
+        .with_backend("numpy")
+        .with_externals({"a": 1.0})
+        .with_options(name="simple_stencil", module="", rebuild=True, raise_if_not_cached=True)
+    )
+
+    with pytest.raises(ValueError, match="not up to date"):
+        builder.build()
+
+    builder.options.raise_if_not_cached = False
+    builder.build()

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,36 +12,70 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Tuple
+from typing import List, Optional, Tuple, Union, cast
 
 import factory
 
 from gtc import common
+from gtc.definitions import Extent
 from gtc.numpy import npir
 
-
-class FieldSliceFactory(factory.Factory):
-    class Meta:
-        model = npir.FieldSlice
-
-    class Params:
-        offsets: Tuple[int, int, int] = (0, 0, 0)
-        parallel_k: bool = False
-
-    name = factory.Sequence(lambda n: "field_%d" % n)
-    i_offset = factory.LazyAttribute(lambda obj: npir.AxisOffset.i(obj.offsets[0]))
-    j_offset = factory.LazyAttribute(lambda obj: npir.AxisOffset.j(obj.offsets[1]))
-    k_offset = factory.LazyAttribute(
-        lambda obj: npir.AxisOffset.k(obj.offsets[2], parallel=obj.parallel_k)
-    )
+from .common_utils import identifier, undefined_symbol_list
 
 
 class FieldDeclFactory(factory.Factory):
     class Meta:
         model = npir.FieldDecl
 
-    name = factory.Sequence(lambda n: "field_%d" % n)
+    name = identifier(npir.FieldDecl)
     dimensions = (True, True, True)
+    data_dims: Tuple[int] = cast(Tuple[int], tuple())
+    extent: Extent = Extent.zeros(ndims=2)
+    dtype = common.DataType.FLOAT32
+
+
+class TemporaryDeclFactory(factory.Factory):
+    class Meta:
+        model = npir.TemporaryDecl
+
+    name = identifier(npir.TemporaryDecl)
+    dtype = common.DataType.FLOAT32
+    offset = (0, 0)
+    padding = (0, 0)
+
+
+class ScalarDeclFactory(factory.Factory):
+    class Meta:
+        model = npir.ScalarDecl
+
+    name = identifier(npir.ScalarDecl)
+    dtype = common.DataType.FLOAT32
+
+
+class FieldSliceFactory(factory.Factory):
+    class Meta:
+        model = npir.FieldSlice
+
+    name = identifier(npir.FieldSlice)
+    i_offset: int = 0
+    j_offset: int = 0
+    k_offset: Union[int, npir.VarKOffset] = 0
+    data_index: List[npir.Expr] = []
+    dtype = common.DataType.FLOAT32
+
+
+class ParamAccessFactory(factory.Factory):
+    class Meta:
+        model = npir.ParamAccess
+
+    name = identifier(npir.ParamAccess)
+
+
+class LocalScalarAccessFactory(factory.Factory):
+    class Meta:
+        model = npir.LocalScalarAccess
+
+    name = identifier(npir.LocalScalarAccess)
     dtype = common.DataType.FLOAT32
 
 
@@ -59,24 +91,49 @@ class VectorAssignFactory(factory.Factory):
     class Meta:
         model = npir.VectorAssign
 
-    class Params:
-        temp_name = factory.Sequence(lambda n: "field_%d" % n)
-        temp_dtype = common.DataType.INT64
-        temp_init = factory.Trait(
-            left=factory.LazyAttribute(lambda obj: npir.VectorTemp(name=obj.temp_name)),
-            right=factory.LazyAttribute(lambda obj: npir.EmptyTemp(dtype=obj.temp_dtype)),
-        )
-
     left = factory.SubFactory(FieldSliceFactory)
     right = factory.SubFactory(FieldSliceFactory)
+    horizontal_mask: Optional[common.HorizontalMask] = None
+
+
+class VectorArithmeticFactory(factory.Factory):
+    class Meta:
+        model = npir.VectorArithmetic
+
+    op = common.ArithmeticOperator.ADD
+    left = factory.SubFactory(FieldSliceFactory)
+    right = factory.SubFactory(FieldSliceFactory)
+
+
+class HorizontalBlockFactory(factory.Factory):
+    class Meta:
+        model = npir.HorizontalBlock
+
+    body = factory.List([factory.SubFactory(VectorAssignFactory)])
+    extent: Extent = Extent.zeros(ndims=2)
+    declarations: List[npir.LocalScalarDecl] = []
 
 
 class VerticalPassFactory(factory.Factory):
     class Meta:
         model = npir.VerticalPass
 
-    temp_defs = factory.List([factory.SubFactory(VectorAssignFactory, temp_init=True)])
-    body = factory.List([factory.SubFactory(VectorAssignFactory)])
+    body = factory.List([factory.SubFactory(HorizontalBlockFactory)])
     lower = common.AxisBound.start()
     upper = common.AxisBound.end()
     direction = common.LoopOrder.PARALLEL
+
+
+class ComputationFactory(factory.Factory):
+    class Meta:
+        model = npir.Computation
+
+    arguments = factory.lazy_attribute(
+        lambda node: [d.name for d in node.api_field_decls] + [d.name for d in node.param_decls]
+    )
+    param_decls: List[npir.ScalarDecl] = []
+    temp_decls: List[npir.TemporaryDecl] = []
+    vertical_passes = factory.List([factory.SubFactory(VerticalPassFactory)])
+    api_field_decls = undefined_symbol_list(
+        lambda name: FieldDeclFactory(name=name), "vertical_passes", "param_decls", "temp_decls"
+    )

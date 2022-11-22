@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set, cast
 
 from eve import NodeTranslator, NodeVisitor
 from eve.concepts import NOTHING
@@ -56,7 +54,7 @@ class MaskCollector(NodeVisitor):
                 masks_to_inline.pop(node.mask.name)
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> Dict[str, oir.Expr]:
-        masks_to_inline: Dict[str, oir.Expr] = {
+        masks_to_inline: Dict[str, Optional[oir.Expr]] = {
             mask_stmt.mask.name: None
             for mask_stmt in node.iter_tree()
             .if_isinstance(oir.MaskStmt)
@@ -64,7 +62,7 @@ class MaskCollector(NodeVisitor):
         }
         self.visit(node.vertical_loops, masks_to_inline=masks_to_inline, **kwargs)
         assert all(value is not None for value in masks_to_inline.values())
-        return masks_to_inline
+        return cast(Dict[str, oir.Expr], masks_to_inline)
 
 
 class MaskInlining(NodeTranslator):

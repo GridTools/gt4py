@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,14 +23,16 @@ import numpy as np
 import pytest
 
 import gt4py as gt
-from gt4py import backend as gt_backend
+import gt4py.backend
+import gtc.utils as gtc_utils
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import Boundary, CartesianSpace, FieldInfo, Shape
-from gt4py.ir.nodes import Index
+from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
+from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
-from gt4py.utils import filter_mask, interpolate_mask
+from gt4py.storage import utils as storage_utils
+from gtc.definitions import Shape
 
 from .input_strategies import (
     SymbolKind,
@@ -164,10 +164,9 @@ class SuiteMeta(type):
                 return combinations
 
         cls_dict["tests"] = []
-        for d in get_dtype_combinations(dtypes):
-            for g in get_globals_combinations(d):
-                for b in backends:
-
+        for b in backends:
+            for d in get_dtype_combinations(dtypes):
+                for g in get_globals_combinations(d):
                     cls_dict["tests"].append(
                         dict(
                             backend=b if isinstance(b, str) else b.values[0],
@@ -211,7 +210,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -240,7 +239,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -329,6 +328,14 @@ class SuiteMeta(type):
             dtypes = {tuple(cls_dict["symbols"].keys()): dtypes}
         cls_dict["dtypes"] = standardize_dtype_dict(dtypes)
         cls_dict["ndims"] = len(cls_dict["domain_range"])
+
+        # Filter out unsupported backends
+        cls_dict["backends"] = [
+            backend
+            for backend in cls_dict["backends"]
+            if gt4py.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            is not None
+        ]
 
         cls._validate_new_args(cls_name, cls_dict)
 
@@ -458,23 +465,15 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert isinstance(implementation, StencilObject)
         assert implementation.backend == test["backend"]
 
-        # Assert strict equality for Dawn backends
         for name, field_info in implementation.field_info.items():
-            if field_info is None:
+            if field_info.access == AccessKind.NONE:
                 continue
             for i, ax in enumerate("IJK"):
-                if implementation.backend.startswith("dawn"):
-                    assert (
-                        ax not in field_info.axes
-                        or ax == "K"
-                        or field_info.boundary[i] == cls.global_boundaries[name][i]
-                    )
-                else:
-                    assert (
-                        ax not in field_info.axes
-                        or ax == "K"
-                        or field_info.boundary[i] >= cls.global_boundaries[name][i]
-                    )
+                assert (
+                    ax not in field_info.axes
+                    or ax == "K"
+                    or field_info.boundary[i] >= cls.global_boundaries[name][i]
+                )
         test["implementations"].append(implementation)
 
     @classmethod
@@ -484,18 +483,22 @@ class StencilTestSuite(metaclass=SuiteMeta):
         origin = cls.origin
         max_boundary = Boundary(cls.max_boundary)
         field_params = cls.field_params
+        field_dimensions = {}
         field_masks = {}
         for name, value in input_data.items():
             if isinstance(value, np.ndarray):
                 field_masks[name] = tuple(
                     ax in field_params[name][0] for ax in CartesianSpace.names
                 )
+                field_dimensions[name] = tuple(
+                    ax for ax in CartesianSpace.names if ax in field_params[name][0]
+                )
 
         data_shape = Shape((sys.maxsize,) * 3)
         for name, data in input_data.items():
             if isinstance(data, np.ndarray):
                 data_shape &= Shape(
-                    interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
+                    gtc_utils.interpolate_mask(data.shape, field_masks[name], default=sys.maxsize)
                 )
 
         domain = data_shape - (
@@ -524,16 +527,13 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     data_dims = field_params[name][1]
                     if data_dims:
                         dtype = (data.dtype, data_dims)
-                        shape = data.shape[: -len(data_dims)]
                     else:
                         dtype = data.dtype
-                        shape = data.shape
                     test_values[name] = gt_storage.from_array(
-                        data,
+                        data=data,
                         dtype=dtype,
-                        shape=shape,
-                        mask=field_masks[name],
-                        default_origin=origin,
+                        dimensions=field_dimensions[name],
+                        aligned_index=gtc_utils.filter_mask(origin, field_masks[name]),
                         backend=implementation.backend,
                     )
                     validation_values[name] = np.array(data)
@@ -558,7 +558,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
                 offset_low = tuple(b[0] - e for b, e in zip(max_boundary, field_extent_low))
                 field_extent_high = tuple(b[1] for b in sym.boundary)
                 offset_high = tuple(b[1] - e for b, e in zip(max_boundary, field_extent_high))
-                validation_slice = filter_mask(
+                validation_slice = gtc_utils.filter_mask(
                     tuple(slice(o, s - h) for o, s, h in zip(offset_low, data_shape, offset_high)),
                     field_masks[name],
                 )
@@ -583,12 +583,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         for name, value in test_values.items():
             if isinstance(value, np.ndarray):
                 expected_value = validation_values[name]
-
-                if gt_backend.from_name(value.backend).storage_info["device"] == "gpu":
-                    value.synchronize()
-                    value = value.data.get()
-                else:
-                    value = value.data
+                value = storage_utils.cpu_copy(value)
 
                 np.testing.assert_allclose(
                     value,

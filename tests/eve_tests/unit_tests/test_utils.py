@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
@@ -74,7 +72,7 @@ def test_register_subclasses():
         pass
 
     @eve.utils.register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
-    class MyBaseClass(abc.ABC):
+    class MyBaseClass(abc.ABC):  # noqa: B024
         pass
 
     assert issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(

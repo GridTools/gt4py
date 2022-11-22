@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -41,7 +39,7 @@ from .gtcpp_utils import (
 from .utils import match
 
 
-if not gt_src_manager.has_gt_sources(2) and not gt_src_manager.install_gt_sources(2):
+if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
     raise RuntimeError("Missing GridTools sources.")
 
 
@@ -49,11 +47,13 @@ def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
     tmp_src.write_text(code)
 
+    extra_compile_args = ["-std=c++17"]
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[config.GT2_INCLUDE_PATH, config.build_settings["boost_include_path"]],
+        include_dirs=[config.GT_INCLUDE_PATH, config.build_settings["boost_include_path"]],
         language="c++",
+        extra_compile_args=extra_compile_args,
     )
     args = [
         "build_ext",
@@ -132,7 +132,7 @@ def test_program_compilation_succeeds(tmp_path, gtcpp_program, expected_regex):
 
 
 def _embed_apply_method_in_program(apply_method: GTApplyMethod):
-    accessors = _extract_accessors(apply_method)
+    accessors = _extract_accessors(apply_method, set())
     return ProgramFactory(
         functors__0__applies__0=apply_method,
         functors__0__param_list=GTParamListFactory(accessors=accessors),

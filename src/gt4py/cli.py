@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -25,7 +23,7 @@ from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Ty
 import click
 import tabulate
 
-import gt4py
+import gt4py.backend
 from gt4py import gtscript_imports
 from gt4py.backend.base import CLIBackendMixin
 from gt4py.lazy_stencil import LazyStencil
@@ -41,9 +39,9 @@ class BackendChoice(click.Choice):
     -------
     .. code-block: bash
 
-        $ cmd --backend="debug"
+        $ cmd --backend="numpy"
 
-    gets converted to :py:class:`gt4py.backend.debug_backend.DebugBackend`.
+    gets converted to :py:class:`gt4py.backend.GTCNumpyBackend`.
     """
 
     name = "backend"
@@ -57,8 +55,9 @@ class BackendChoice(click.Choice):
         """Convert a CLI option argument to a backend."""
         name = super().convert(value, param, ctx)
         backend_cls = self.enabled_backend_cls_from_name(name)
-        if not backend_cls:
+        if backend_cls is None:
             self.fail("Backend is not CLI-enabled.")
+        assert backend_cls is not None
         return backend_cls
 
     @staticmethod
@@ -69,7 +68,7 @@ class BackendChoice(click.Choice):
     def enabled_backend_cls_from_name(backend_name: str) -> Optional[Type[CLIBackendMixin]]:
         """Check if a given backend is enabled for CLI."""
         backend_cls = gt4py.backend.from_name(backend_name)
-        if not issubclass(backend_cls, CLIBackendMixin):
+        if backend_cls is None or not issubclass(backend_cls, CLIBackendMixin):
             return None
         return backend_cls
 
@@ -129,6 +128,7 @@ class BackendOption(click.ParamType):
             return name, value
         except ValueError:
             self.fail('Invalid backend option format: must be "<name>=<value>"')
+            return ("", "")
 
     def convert(
         self, value: str, param: Optional[click.Parameter], ctx: Optional[click.Context]

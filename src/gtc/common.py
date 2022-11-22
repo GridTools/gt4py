@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,10 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union, cast
+import functools
+import typing
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import pydantic
+import scipy.special
 from pydantic import validator
 from pydantic.class_validators import root_validator
 
@@ -80,6 +81,7 @@ class ArithmeticOperator(StrEnum):
     SUB = "-"
     MUL = "*"
     DIV = "/"
+    MATMULT = "@"
 
 
 @enum.unique
@@ -231,8 +233,8 @@ class LevelMarker(StrEnum):
 
 @enum.unique
 class ExprKind(IntEnum):
-    SCALAR = 0
-    FIELD = 1
+    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(Node):
@@ -249,8 +251,8 @@ class Expr(LocNode):
     - an expression `kind` (scalar or field)
     """
 
-    dtype: Optional[DataType]
     kind: ExprKind
+    dtype: DataType = DataType.AUTO
 
 
 @utils.noninstantiable
@@ -268,7 +270,7 @@ def verify_and_get_common_dtype(
     node_cls: Type[Node], values: List[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
     assert len(values) > 0
-    if all(v.dtype is not None for v in values):
+    if all(v.dtype is not DataType.AUTO for v in values):
         dtypes: List[DataType] = [v.dtype for v in values]  # type: ignore # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
@@ -288,9 +290,9 @@ def verify_and_get_common_dtype(
 
 def compute_kind(values: List[Expr]) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
-        return cast(ExprKind, ExprKind.FIELD)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.FIELD
     else:
-        return cast(ExprKind, ExprKind.SCALAR)  # see https://github.com/GridTools/gtc/issues/100
+        return ExprKind.SCALAR
 
 
 class Literal(Node):
@@ -298,9 +300,7 @@ class Literal(Node):
     # maybe it should be Union[float,int,str] etc?
     value: Union[BuiltInLiteral, Str]
     dtype: DataType
-    kind: ExprKind = cast(
-        ExprKind, ExprKind.SCALAR
-    )  # cast shouldn't be required, see https://github.com/GridTools/gtc/issues/100
+    kind: ExprKind = ExprKind.SCALAR
 
 
 StmtT = TypeVar("StmtT", bound=Stmt)
@@ -330,7 +330,7 @@ class VariableKOffset(GenericNode, Generic[ExprT]):
 
     @validator("k")
     def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
-        if k.dtype is not None and not k.dtype.isinteger():
+        if k.dtype is not DataType.AUTO and not k.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
         return k
 
@@ -353,7 +353,7 @@ class FieldAccess(GenericNode, Generic[ExprT, VariableKOffsetT]):
     @validator("data_index")
     def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
         if data_index and any(
-            index.dtype is not None and not index.dtype.isinteger() for index in data_index
+            index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in data_index
         ):
             raise ValueError("Data indices must be integer expressions")
         return data_index
@@ -373,6 +373,21 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
     cond: ExprT
     true_branch: StmtT
     false_branch: Optional[StmtT]
+
+    @validator("cond")
+    def condition_is_boolean(cls, cond: Expr) -> Expr:
+        return verify_condition_is_boolean(cls, cond)
+
+
+class While(GenericNode, Generic[StmtT, ExprT]):
+    """
+    Generic while loop.
+
+    Verifies that `cond` is a boolean expr (if `dtype` is set).
+    """
+
+    cond: ExprT
+    body: List[StmtT]
 
     @validator("cond")
     def condition_is_boolean(cls, cond: Expr) -> Expr:
@@ -628,8 +643,11 @@ class _LvalueDimsValidator(NodeVisitor):
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
-        if not decl_type.__annotations__.get("dimensions") is Tuple[bool, bool, bool]:
-            raise ValueError(f"Field decl type {decl_type} has no `dimensions` attribute")
+        if not decl_type.__annotations__.get("dimensions") == Tuple[bool, bool, bool]:
+            raise ValueError(
+                f"Field decl type {decl_type} must have a `dimensions` "
+                "attribute of type `Tuple[bool, bool, bool]`."
+            )
         self.vertical_loop_type = vertical_loop_type
         self.decl_type = decl_type
 
@@ -655,10 +673,14 @@ class _LvalueDimsValidator(NodeVisitor):
         symtable: Dict[str, Any],
         **kwargs: Any,
     ) -> None:
-        if not isinstance(symtable[node.left.name], self.decl_type):
+        decl = symtable.get(node.left.name, None)
+        if decl is None:
+            raise ValueError("Symbol {} not found.".format(node.left.name))
+        if not isinstance(decl, self.decl_type):
             return None
+
         allowed_flags = self._allowed_flags(loop_order)
-        flags = symtable[node.left.name].dimensions
+        flags = decl.dimensions
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
@@ -729,12 +751,12 @@ class AxisBound(Node):
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls) -> "AxisBound":
-        return cls.from_start(0)
+    def start(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_start(offset)
 
     @classmethod
-    def end(cls) -> "AxisBound":
-        return cls.from_end(0)
+    def end(cls, offset: int = 0) -> "AxisBound":
+        return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AxisBound):
@@ -764,6 +786,91 @@ class AxisBound(Node):
         return not self < other
 
 
+class HorizontalInterval(Node):
+    """Represents an interval of the index space in the horizontal.
+
+    This is separate from `gtir.Interval` because the endpoints may
+    be outside the compute domain.
+
+    """
+
+    start: Optional[AxisBound]
+    end: Optional[AxisBound]
+
+    @classmethod
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+        return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
+
+    @classmethod
+    def full(cls) -> "HorizontalInterval":
+        return cls(start=None, end=None)
+
+    @classmethod
+    def at_endpt(
+        cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
+    ) -> "HorizontalInterval":
+        if end_offset is None:
+            end_offset = start_offset + 1
+        return cls(
+            start=AxisBound(level=level, offset=start_offset),
+            end=AxisBound(level=level, offset=end_offset),
+        )
+
+    @root_validator
+    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
+        if values["start"] and values["end"] and not (values["start"] <= values["end"]):
+            raise ValueError(
+                f"End ({values['end']}) is not after or equal to start ({values['start']})"
+            )
+
+        return values
+
+    def is_single_index(self) -> bool:
+        if self.start is None or self.end is None or self.start.level != self.end.level:
+            return False
+
+        return abs(self.end.offset - self.start.offset) == 1
+
+    def overlaps(self, other: "HorizontalInterval") -> bool:
+        if self.start is None and other.start is None:
+            return True
+        elif self.start is None and other.start is not None:
+            left_interval = self
+            right_interval = other
+        elif other.start is None or other.start < self.start:
+            left_interval = other
+            right_interval = self
+        elif self.start < other.start:
+            left_interval = self
+            right_interval = other
+        else:
+            assert self.start == other.start
+            return True
+
+        if left_interval.end is None or right_interval.start < left_interval.end:
+            return True
+
+        return False
+
+
+class HorizontalMask(LocNode):
+    """Expr to represent a convex portion of the horizontal iteration space."""
+
+    i: HorizontalInterval
+    j: HorizontalInterval
+
+    @property
+    def intervals(self) -> Tuple[HorizontalInterval, HorizontalInterval]:
+        return (self.i, self.j)
+
+
+class HorizontalRestriction(GenericNode, Generic[StmtT]):
+    """A specialization of the horizontal space."""
+
+    mask: HorizontalMask
+    body: List[StmtT]
+
+
 def data_type_to_typestr(dtype: DataType) -> str:
 
     table = {
@@ -783,6 +890,85 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
+@functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
+def op_to_ufunc(
+    op: Union[
+        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+    ]
+) -> np.ufunc:
+    table: Dict[
+        Union[
+            UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        ],
+        np.ufunc,
+    ]
+    # Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
+    if isinstance(op, UnaryOperator):
+        table = {
+            UnaryOperator.POS: np.positive,
+            UnaryOperator.NEG: np.negative,
+            UnaryOperator.NOT: np.logical_not,
+        }
+    elif isinstance(op, ArithmeticOperator):
+        table = {
+            ArithmeticOperator.ADD: np.add,
+            ArithmeticOperator.SUB: np.subtract,
+            ArithmeticOperator.MUL: np.multiply,
+            ArithmeticOperator.DIV: np.true_divide,
+        }
+    elif isinstance(op, ComparisonOperator):
+        table = {
+            ComparisonOperator.GT: np.greater,
+            ComparisonOperator.LT: np.less,
+            ComparisonOperator.GE: np.greater_equal,
+            ComparisonOperator.LE: np.less_equal,
+            ComparisonOperator.EQ: np.equal,
+            ComparisonOperator.NE: np.not_equal,
+        }
+    elif isinstance(op, LogicalOperator):
+        table = {
+            LogicalOperator.AND: np.logical_and,
+            LogicalOperator.OR: np.logical_or,
+        }
+    elif isinstance(op, NativeFunction):
+        table = {
+            NativeFunction.ABS: np.abs,
+            NativeFunction.MIN: np.minimum,
+            NativeFunction.MAX: np.maximum,
+            NativeFunction.MOD: np.remainder,
+            NativeFunction.SIN: np.sin,
+            NativeFunction.COS: np.cos,
+            NativeFunction.TAN: np.tan,
+            NativeFunction.ARCSIN: np.arcsin,
+            NativeFunction.ARCCOS: np.arccos,
+            NativeFunction.ARCTAN: np.arctan,
+            NativeFunction.SINH: np.sinh,
+            NativeFunction.COSH: np.cosh,
+            NativeFunction.TANH: np.tanh,
+            NativeFunction.ARCSINH: np.arcsinh,
+            NativeFunction.ARCCOSH: np.arccosh,
+            NativeFunction.ARCTANH: np.arctanh,
+            NativeFunction.SQRT: np.sqrt,
+            NativeFunction.POW: np.power,
+            NativeFunction.EXP: np.exp,
+            NativeFunction.LOG: np.log,
+            NativeFunction.GAMMA: scipy.special.gamma,
+            NativeFunction.CBRT: np.cbrt,
+            NativeFunction.ISFINITE: np.isfinite,
+            NativeFunction.ISINF: np.isinf,
+            NativeFunction.ISNAN: np.isnan,
+            NativeFunction.FLOOR: np.floor,
+            NativeFunction.CEIL: np.ceil,
+            NativeFunction.TRUNC: np.trunc,
+        }
+    else:
+        raise TypeError(
+            "Can only convert instances of GTC operators and supported native functions to typestr."
+        )
+    return table[op]
+
+
+@functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
         return DataType.INVALID  # type: ignore

@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -17,7 +15,7 @@
 
 import multiprocessing
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
@@ -31,15 +29,12 @@ CUDA_ROOT: str = os.environ.get(
     "CUDA_HOME", os.environ.get("CUDA_PATH", os.path.abspath("/usr/local/cuda"))
 )
 
+CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
+
 
 GT_REPO_DIRNAME: str = "gridtools"
 GT_INCLUDE_PATH: str = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "_external_src", GT_REPO_DIRNAME, "include")
-)
-
-GT2_REPO_DIRNAME: str = "gridtools2"
-GT2_INCLUDE_PATH: str = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "_external_src", GT2_REPO_DIRNAME, "include")
 )
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
@@ -52,25 +47,25 @@ build_settings: Dict[str, Any] = {
     "cuda_library_path": os.path.join(CUDA_ROOT, "lib64"),
     "cuda_arch": os.environ.get("CUDA_ARCH", None),
     "gt_include_path": os.environ.get("GT_INCLUDE_PATH", GT_INCLUDE_PATH),
-    "gt2_include_path": os.environ.get("GT2_INCLUDE_PATH", GT2_INCLUDE_PATH),
     "openmp_cppflags": os.environ.get("OPENMP_CPPFLAGS", "-fopenmp").split(),
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {
         "cxx": [],
-        "nvcc": [
-            # disable warnings in nvcc as a workaround for
-            # 'catastrophic failure' error in nvcc < 11
-            "--disable-warnings",
-        ],
+        "nvcc": [],
     },
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
 
+if CUDA_HOST_CXX is not None:
+    build_settings["extra_compile_args"]["nvcc"].append(f"-ccbin={CUDA_HOST_CXX}")
+
 cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
+    "load_retries": int(os.environ.get("GT_CACHE_LOAD_RETRIES", 3)),
+    "load_retry_delay": int(os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)),  # unit miliseconds
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}

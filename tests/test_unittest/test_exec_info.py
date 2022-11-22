@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GT4Py - GridTools4Py - GridTools for Python
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part the GT4Py project and the GridTools framework.
@@ -22,14 +20,11 @@ from hypothesis import given
 from hypothesis import strategies as hyp_st
 from hypothesis.extra.numpy import arrays as st_arrays
 
-from gt4py import backend as gt_backend
+import gt4py.backend
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 
-from ..definitions import INTERNAL_BACKENDS
-
-
-backend_list = [backend for backend in INTERNAL_BACKENDS if backend.values[0] != "debug"]
+from ..definitions import ALL_BACKENDS
 
 
 class TestExecInfo:
@@ -87,31 +82,31 @@ class TestExecInfo:
         self.in_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.in_u = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.in_v = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(0, 0, 0),
+            aligned_index=(0, 0, 0),
             dtype=float,
         )
         self.tmp_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(1, 1, 0),
+            aligned_index=(1, 1, 0),
             dtype=float,
         )
         self.out_phi = gt_storage.from_array(
             data.draw(st_arrays(dtype=float, shape=shape)),
             backend=backend,
-            default_origin=(3, 3, 0),
+            aligned_index=(3, 3, 0),
             dtype=float,
         )
         self.alpha = 1 / 32
@@ -127,7 +122,7 @@ class TestExecInfo:
         assert exec_info["run_end_time"] > exec_info["run_start_time"]
         assert exec_info["call_end_time"] > exec_info["run_end_time"]
 
-        if gt_backend.from_name(self.backend).languages["computation"] == "c++":
+        if gt4py.backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_start_time" in exec_info
             assert "run_cpp_end_time" in exec_info
             # note: do not compare the outputs of python and c++ stopwatches
@@ -177,7 +172,7 @@ class TestExecInfo:
         else:
             assert stencil_info["total_run_time"] > stencil_info["run_time"]
 
-        if gt_backend.from_name(self.backend).languages["computation"] == "c++":
+        if gt4py.backend.from_name(self.backend).languages["computation"] == "c++":
             assert "run_cpp_time" in stencil_info
             if last_called_stencil:
                 assert np.isclose(
@@ -192,7 +187,7 @@ class TestExecInfo:
                 assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", backend_list)
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_backcompatibility(self, data, backend):
         # set backend as instance attribute
         self.backend = backend
@@ -235,7 +230,7 @@ class TestExecInfo:
         assert type(self.diffusion).__name__ not in exec_info
 
     @given(data=hyp_st.data())
-    @pytest.mark.parametrize("backend", backend_list)
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_aggregate(self, data, backend):
         # set backend as instance attribute
         self.backend = backend

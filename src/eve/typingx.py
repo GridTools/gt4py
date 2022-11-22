@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,7 +22,6 @@ from __future__ import annotations
 import sys
 import typing
 from typing import *
-from typing import IO, BinaryIO, TextIO
 
 
 AnyCallable = Callable[..., Any]

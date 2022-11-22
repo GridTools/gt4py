@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-#
 # GTC Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,7 +22,7 @@ from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
 class TemporariesToScalarsBase(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)
+    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
@@ -62,6 +60,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 )
                 for tmp in local_tmps_to_replace
             ],
+            loc=node.loc,
         )
 
     def visit_VerticalLoop(
@@ -74,6 +73,7 @@ class TemporariesToScalarsBase(NodeTranslator):
             loop_order=node.loop_order,
             sections=self.visit(node.sections, tmps_to_replace=tmps_to_replace, **kwargs),
             caches=[c for c in node.caches if c.name not in tmps_to_replace],
+            loc=node.loc,
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -88,6 +88,7 @@ class TemporariesToScalarsBase(NodeTranslator):
                 **kwargs,
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
+            loc=node.loc,
         )
 
 
@@ -98,35 +99,49 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     2. Replaces corresponding FieldAccess nodes by ScalarAccess nodes.
     3. Removes matching temporaries from VerticalLoop declarations.
     4. Add matching temporaries to HorizontalExecution declarations.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        temps_without_data_dims = set(
+            [decl.name for decl in node.declarations if not decl.data_dims]
+        )
         counts: collections.Counter = sum(
             (
                 collections.Counter(
                     horizontal_execution.iter_tree()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
-                    .if_in({tmp.name for tmp in node.declarations})
+                    .if_in(temps_without_data_dims)
                     .to_set()
                 )
                 for horizontal_execution in horizontal_executions
             ),
             collections.Counter(),
         )
+
         local_tmps = {tmp for tmp, count in counts.items() if count == 1}
         return super().visit_Stencil(node, tmps_to_replace=local_tmps, **kwargs)
 
 
 class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
-    """Replaces temporay fields that are always written before read by scalars."""
+    """Replaces temporay fields that are always written before read by scalars.
+
+    Note that temporaries used in horizontal regions in a single horizontal execution
+    may not be scalarized.
+
+    """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
+        # Does not (yet) support scalarizing temporaries with data_dims
         write_before_read_tmps = {
             symbol
             for symbol, value in kwargs["symtable"].items()
-            if isinstance(value, oir.Temporary)
+            if isinstance(value, oir.Temporary) and not value.data_dims
         }
         horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
 
@@ -135,12 +150,18 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             offsets = accesses.offsets()
             ordered_accesses = accesses.ordered_accesses()
 
-            def write_before_read(tmp: str) -> bool:
+            def write_before_read(
+                tmp: str, offsets=offsets, ordered_accesses=ordered_accesses
+            ) -> bool:
                 if tmp not in offsets:
                     return True
                 if offsets[tmp] != {(0, 0, 0)}:
                     return False
-                return next(o.is_write for o in ordered_accesses if o.field == tmp)
+                return next(
+                    o.is_write and o.horizontal_mask is None
+                    for o in ordered_accesses
+                    if o.field == tmp
+                )
 
             write_before_read_tmps = {
                 tmp for tmp in write_before_read_tmps if write_before_read(tmp)
