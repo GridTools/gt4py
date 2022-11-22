@@ -135,7 +135,6 @@ class StencilComputation(library.LibraryNode):
                 for j, he in enumerate(section.horizontal_executions):
                     extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
-            # TODO: Why is this conversion required?
             self.oir_node = typing.cast(PickledDataclassProperty, oir_node)
             self.extents = extents_dict  # type: ignore
             self.declarations = declarations  # type: ignore
