@@ -11,9 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
+import inspect
 from typing import Any, Collection, Union
+import pythran
+import textwrap
+import re
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
@@ -23,6 +25,8 @@ from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_t
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
+    _scalar_functions: dict[str, str] = {}
+
     _grid_type_str = {
         common.GridType.CARTESIAN: "cartesian",
         common.GridType.UNSTRUCTURED: "unstructured",
@@ -117,6 +121,20 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
 
+    def visit_FunCallScalar(self, node: gtfn_ir.FunCallScalar, **kwargs):
+        name = node.fun.__name__
+        args = self.visit(node.args)
+        if name not in self._scalar_functions:
+            source_lines = inspect.getsourcelines(node.fun)[0]
+            for i in range(len(source_lines)):
+                if re.match(r"\s*def\s+.*", source_lines[i]):
+                    break
+            py_code = textwrap.dedent("".join(source_lines[i:]))
+            cpp_code = str(pythran.generate_cxx("generated", py_code)[0])
+            self._scalar_functions[name] = cpp_code
+        return f"__pythran_generated::{name}{{}}({', '.join(args)})"
+
+
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
     Lambda = as_mako(
@@ -179,11 +197,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
-        return self.generic_visit(
+        body = self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
+        scalar_functions = "\n\n".join(self._scalar_functions.values())
+        return scalar_functions + body
 
     TemporaryAllocation = as_fmt(
         "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"

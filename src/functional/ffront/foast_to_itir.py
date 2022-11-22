@@ -223,7 +223,8 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_ScalarOperator(self, node: foast.ScalarOperator) -> itir.FunctionDefinition:
         symtable = node.annex.symtable
         params = self.visit(node.params, symtable=symtable)
-        param_refs = [im.ref(param.id) for param in params]
+        param_refs = [im.deref_(im.ref(param.id)) for param in node.params]
+
         return itir.FunctionDefinition(
             id=node.id,
             params=params,

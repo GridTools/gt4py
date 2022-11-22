@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from typing import ClassVar, Optional, Union
+import types
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -73,6 +74,11 @@ class Lambda(Expr, SymbolTableTrait):
 
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
+    args: list[Expr]
+
+
+class FunCallScalar(Expr):
+    fun: types.FunctionType
     args: list[Expr]
 
 

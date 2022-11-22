@@ -14,6 +14,7 @@
 
 import textwrap
 from typing import Sequence
+import pythran
 
 import eve
 from eve.codegen import JinjaTemplate as as_jinja
@@ -93,6 +94,9 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                     FetchContent_MakeAvailable(GridTools)\
                     """
                 )
+            case "pythran":
+                include_path = pythran.get_include()
+                return f"set(PYTHRAN_DIR \"{include_path}\")"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
@@ -102,11 +106,11 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 lib_name = "pybind11::module"
             case "gridtools":
                 lib_name = "GridTools::fn_naive"
+            case "pythran":
+                return f"target_include_directories({dep.target} PUBLIC ${{PYTHRAN_DIR}})"
             case _:
-                raise ValueError("Library {name} is not supported".format(name=dep.name))
-        return "target_link_libraries({target} PUBLIC {lib})".format(
-            target=dep.target, lib=lib_name
-        )
+                raise ValueError(f"Library {dep.name} is not supported")
+        return f"target_link_libraries({dep.target} PUBLIC {lib_name})"
 
 
 def generate_cmakelists_source(

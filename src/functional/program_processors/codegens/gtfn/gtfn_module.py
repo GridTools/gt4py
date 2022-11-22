@@ -71,7 +71,10 @@ class GTFNTranslationStep(
 
         module = stages.ProgramSource(
             entry_point=function,
-            library_deps=(interface.LibraryDependency("gridtools", "master"),),
+            library_deps=(
+                interface.LibraryDependency("gridtools", "master"),
+                interface.LibraryDependency("pythran", "0.12.0")
+            ),
             source_code=source_code,
             language=languages.Cpp,
             language_settings=self.language_settings,

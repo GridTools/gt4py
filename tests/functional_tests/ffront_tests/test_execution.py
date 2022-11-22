@@ -1340,23 +1340,23 @@ def test_constant_closure_vars():
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
 
 
-def test_scalar_operator():
+def test_scalar_operator(fieldview_backend):
     @scalar_operator
     def bisect_single(p: float, y: float) -> float:
         a = 0.0
         b = 1.0
         c = (a + b) / 2
-        while c > b > a:
+        while b > c > a:
             y_a = a**p - y
             y_c = c**p - y
-            if y_a > 0 and y_c > 0:
+            if y_a * y_c > 0:
                 a = c
             else:
                 b = c
             c = (a + b) / 2
         return c
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def bisect(p: Field[[IDim], float]):
         return bisect_single(p, 0.5)
 

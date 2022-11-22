@@ -64,7 +64,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
-                    cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
+                    cache_strategy=cache.Strategy.PERSISTENT, builder_factory=self.builder_factory
                 )
             )
             .chain(convert_args)

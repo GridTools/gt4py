@@ -27,6 +27,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     Expr,
     FencilDefinition,
     FunCall,
+    FunCallScalar,
     FunctionDefinition,
     Lambda,
     Literal,
@@ -393,6 +394,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         elif isinstance(node.fun, itir.FunCall) and node.fun == itir.SymRef(id="shift"):
             raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
+
+    def visit_FunCallScalar(self, node: itir.FunCallScalar, **kwargs):
+        return FunCallScalar(
+            fun=node.fun,
+            args=self.visit(node.args, **kwargs)
+        )
 
     def visit_FunctionDefinition(
         self, node: itir.FunctionDefinition, **kwargs: Any
