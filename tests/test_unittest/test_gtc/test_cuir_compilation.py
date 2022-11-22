@@ -14,10 +14,10 @@
 
 from pathlib import Path
 
+import gridtools
 import pytest
 import setuptools
 
-from gt4py import config  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
 from gt4py.backend import pyext_builder
 from gtc.cuir import cuir
 from gtc.cuir.cuir_codegen import CUIRCodegen
@@ -32,7 +32,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
 
     opts = pyext_builder.get_gt_pyext_build_opts(uses_cuda=True)
     assert isinstance(opts["include_dirs"], list)
-    opts["include_dirs"].append(config.GT_INCLUDE_PATH)
+    opts["include_dirs"].append(gridtools.get_include_dir())
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],

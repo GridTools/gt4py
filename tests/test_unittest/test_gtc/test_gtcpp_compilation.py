@@ -14,10 +14,11 @@
 
 from pathlib import Path
 
+import gridtools
 import pytest
 import setuptools
 
-from gt4py import config  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
+from gt4py import config  # TODO required for getting boost path
 from gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
 from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
@@ -44,7 +45,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[config.GT_INCLUDE_PATH, config.build_settings["boost_include_path"]],
+        include_dirs=[gridtools.get_include_dir(), config.build_settings["boost_include_path"]],
         language="c++",
         extra_compile_args=extra_compile_args,
     )
