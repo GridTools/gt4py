@@ -232,7 +232,6 @@ def collect_symbol_names(node: eve.RootNode) -> Set[str]:
 class StencilExtentComputer(eve.NodeVisitor):
     @dataclass
     class Context:
-        # TODO: Remove dependency on gt4py.definitions here
         fields: Dict[str, Extent] = dataclasses.field(default_factory=dict)
         blocks: Dict[int, Extent] = dataclasses.field(default_factory=dict)
 
