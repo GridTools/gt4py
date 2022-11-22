@@ -303,7 +303,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
         fields = {
             name: data_dims
-            for name, data_dims in node.walk_items()
+            for name, data_dims in node.walk_values()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
