@@ -769,7 +769,6 @@ def test_cast(fieldview_backend):
     b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
     c = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_int = np_as_located_field(IDim)(np.zeros((size,)))
-    out_float = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
