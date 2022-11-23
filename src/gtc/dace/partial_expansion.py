@@ -62,6 +62,7 @@ def _get_field_access_infos(
 
 
 def _get_symbolic_origin_and_domain(
+    sdfg: dace.SDFG,
     state: dace.SDFGState,
     node: StencilComputation,
     access_infos: Dict[dcir.SymbolName, dcir.FieldAccessInfo],
@@ -161,6 +162,35 @@ def _get_symbolic_origin_and_domain(
                     - origins[field][ax_idx],
                 )
 
+    while state.parent is not None and state.parent.sdfg_id != sdfg.sdfg_id:
+        tmp_origins = dict()
+        nsdfg_node: dace.nodes.NestedSDFG = state.parent.parent_nsdfg_node
+
+        for state in state.parent.parent_sdfg.states():
+            if nsdfg_node in state.nodes():
+                parent_state = state
+                break
+        else:
+            raise AssertionError("NestedSDFG not found in parent SDFG.")
+        for name, origin in origins.items():
+            if name in nsdfg_node.in_connectors:
+                outer_edge = next(
+                    filter(lambda edge: edge.dst_conn == name, parent_state.in_edges(nsdfg_node))
+                )
+            elif name in nsdfg_node.out_connectors:
+                outer_edge = next(
+                    filter(lambda edge: edge.src_conn == name, parent_state.out_edges(nsdfg_node))
+                )
+            else:
+                continue
+            outer_name = outer_edge.data.data
+            outer_origin = [r[0] for r in outer_edge.data.subset.ranges]
+            inner_origin = [io.subs(nsdfg_node.symbol_mapping) for io in origins[name]]
+            tmp_origins[outer_name] = [io + oo for io, oo in zip(inner_origin, outer_origin)]
+        for ax, value in domain.items():
+            domain[ax] = domain[ax].subs(nsdfg_node.symbol_mapping)
+        state = parent_state
+        origins = tmp_origins
     return origins, domain
 
 
@@ -308,6 +338,15 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 yield node, state
             yield state, state.parent
 
+    @staticmethod
+    def _nsdfg_checks(sdfg: dace.SDFG):
+        if any(edge.data.assignments for edge in sdfg.edges()):
+            return False
+        cfg = cf.structured_control_flow_tree(sdfg, lambda _: "")
+        if not all(isinstance(c, cf.SingleState) for c in cfg.children):
+            return False
+        return True
+
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
 
         stencil_computations = list(
@@ -323,11 +362,23 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
         if not stencil_computations:
             return False
+
         if any(edge.data.assignments for edge in subgraph.edges()):
             return False
-        # NestedSDFGs are not supported.
+
+        for nsdfg, _ in filter(
+            lambda n: isinstance(n[0], dace.nodes.NestedSDFG),
+            PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
+        ):
+            if not PartialExpansion._nsdfg_checks(nsdfg.sdfg):
+                return False
+
+        # E.g. Maps can't exist in subgraph
         if not all(
-            isinstance(n, (dace.nodes.AccessNode, dace.SDFGState, StencilComputation))
+            isinstance(
+                n,
+                (dace.nodes.AccessNode, dace.SDFGState, StencilComputation, dace.nodes.NestedSDFG),
+            )
             for n, _ in PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph)
         ):
             return False
@@ -346,7 +397,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
             ):
                 return False
 
-        if not PartialExpansion._test_symbolic_split(stencil_computations):
+        if not PartialExpansion._test_symbolic_split(sdfg, stencil_computations):
             return False
 
         if not PartialExpansion._test_extents_compatible(stencil_computations):
@@ -356,6 +407,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _test_symbolic_split(
+        sdfg: dace.SDFG,
         nodes: List[Tuple[StencilComputation, dace.SDFGState]],
     ) -> bool:
 
@@ -363,12 +415,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
         for node, state in nodes:
             access_infos = _union_access_infos(*_get_field_access_infos(state, node))
             node_symbolic_origin, node_symbolic_domain = _get_symbolic_origin_and_domain(
-                state, node, access_infos
+                sdfg, state, node, access_infos
             )
-
-            # test domain consistency
-            if not set(symbolic_split_domain.keys()) == set(symbolic_split_domain.keys()):
-                raise ValueError
 
             if symbolic_split_domain and not all(
                 (node_symbolic_domain[ax] == symbolic_split_domain[ax]) == True
@@ -468,13 +516,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _get_symbolic_split(
+        sdfg: dace.SDFG,
         nodes: List[Tuple[StencilComputation, dace.SDFGState]],
     ) -> Tuple[Dict[dcir.SymbolName, SymbolicOriginType], Dict[dcir.Axis, SymbolicDomainType]]:
 
         symbolic_split = dict(), dict()
         for node, state in nodes:
             access_infos = _union_access_infos(*_get_field_access_infos(state, node))
-            node_symbolic_split = _get_symbolic_origin_and_domain(state, node, access_infos)
+            node_symbolic_split = _get_symbolic_origin_and_domain(sdfg, state, node, access_infos)
             symbolic_split = _union_symbolic_origin_and_domain(symbolic_split, node_symbolic_split)
         return symbolic_split
 
@@ -495,54 +544,73 @@ class PartialExpansion(transformation.SubgraphTransformation):
     def _rename_dict_keys(name_map, input_dict):
         return {name_map[key]: value for key, value in input_dict.items()}
 
-    def apply(self, sdfg: dace.SDFG):
-        subgraph = self.subgraph_view(sdfg)
-
-        stencil_computations: List[StencilComputation, dace.SDFGState] = list(
-            filter(
-                lambda n: isinstance(n[0], StencilComputation),
-                PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
-            )
-        )
-
-        first_expansion_specification = stencil_computations[0][0].expansion_specification
-
-        original_item = first_expansion_specification[0]
-
-        parent_symbolic_split = PartialExpansion._get_symbolic_split(stencil_computations)
-        domain_dict = parent_symbolic_split[1]
-        tiling_schedule = original_item.schedule
-        tiling_ranges = {
-            it.axis.tile_symbol(): str(
-                dace.subsets.Range([(0, domain_dict[it.axis] - 1, it.stride)])
-            )
-            for it in original_item.iterations
-        }
-        if len(subgraph.nodes()) == 1:
-            # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
-            # nesting.
-            new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
-            subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
-
-        nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
-        nsdfg_node: dace.nodes.NestedSDFG = next(
-            iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
-        )
-        for node, _ in stencil_computations:
-            _set_skips(node)
-
-        in_nsdfg_access_infos, out_nsdfg_access_infos = _get_access_infos(stencil_computations)
-        nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
-
-        # update shapes and subsets of new nested SDFG
-        _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos, domain_dict)
+    @staticmethod
+    def _update_nested_and_gather_access_info(nsdfg_node, domain_dict, axes):
+        all_access_infos = dict()
+        nsdfg_access_infos = dict()
         for state in nsdfg_node.sdfg.states():
-            for node in filter(lambda n: isinstance(n, StencilComputation), state.nodes()):
-                to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
-                in_access_infos, out_access_infos = _get_field_access_infos(state, node)
-                node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
-                in_access_infos = self._rename_dict_keys(to_sdfg_name_map, in_access_infos)
-                out_access_infos = self._rename_dict_keys(to_sdfg_name_map, out_access_infos)
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.NestedSDFG):
+                    node_access_infos = PartialExpansion._update_nested_and_gather_access_info(
+                        node, domain_dict, axes
+                    )
+                    name_map = dict()
+                    for edge in state.in_edges(node):
+                        name_map[edge.dst_conn] = edge.data.data
+                    for edge in state.out_edges(node):
+                        name_map[edge.src_conn] = edge.data.data
+                    node_access_infos = {
+                        k: v for k, v in node_access_infos.items() if k in name_map
+                    }
+                    node_access_infos = PartialExpansion._rename_dict_keys(
+                        name_map, node_access_infos
+                    )
+                    all_access_infos[node] = node_access_infos, node_access_infos, node_access_infos
+                elif isinstance(node, StencilComputation):
+
+                    to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
+                    in_node_access_infos, out_node_access_infos = _get_field_access_infos(
+                        state, node
+                    )
+                    in_node_access_infos = PartialExpansion._rename_dict_keys(
+                        to_sdfg_name_map, in_node_access_infos
+                    )
+                    out_node_access_infos = PartialExpansion._rename_dict_keys(
+                        to_sdfg_name_map, out_node_access_infos
+                    )
+                    node_access_infos = _union_access_infos(
+                        in_node_access_infos, out_node_access_infos
+                    )
+                    all_access_infos[node] = (
+                        node_access_infos,
+                        in_node_access_infos,
+                        out_node_access_infos,
+                    )
+                else:
+                    continue
+                nsdfg_access_infos = _union_access_infos(nsdfg_access_infos, node_access_infos)
+        #
+        # # in_nsdfg_access_infos, out_nsdfg_access_infos = _get_access_infos(stencil_computations)
+        # # nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
+        #
+        # # update shapes and subsets of new nested SDFG
+        # # _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos, domain_dict)
+        #
+        for state in nsdfg_node.sdfg.states():
+            for node in filter(
+                lambda n: isinstance(n, (dace.nodes.NestedSDFG, StencilComputation)), state.nodes()
+            ):
+                # to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
+                # in_access_infos, out_access_infos = _get_field_access_infos(state, node)
+                # node.access_infos = _union_access_infos(in_access_infos, out_access_infos)
+                # in_access_infos = PartialExpansion._rename_dict_keys(to_sdfg_name_map, in_access_infos)
+                # out_access_infos = PartialExpansion._rename_dict_keys(to_sdfg_name_map, out_access_infos)
+                node_access_infos, in_access_infos, out_access_infos = all_access_infos[node]
+                if isinstance(node, StencilComputation):
+                    node.access_infos = PartialExpansion._rename_dict_keys(
+                        {v: k for v, k in PartialExpansion._get_name_map(state, node).items()},
+                        node_access_infos,
+                    )
                 for memlet in state.in_edges(node):
                     name = memlet.data.data
                     access_info = in_access_infos[name]
@@ -565,18 +633,66 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     memlet.data.subset = subset
         propagate_memlets_sdfg(nsdfg_node.sdfg)
 
+        nsdfg_node.symbol_mapping.update({ax.tile_symbol(): ax.tile_dace_symbol() for ax in axes})
+        for ax in axes:
+            if ax.tile_symbol() not in nsdfg_node.sdfg.symbols:
+                nsdfg_node.sdfg.add_symbol(ax.tile_symbol(), stype=dace.int32)
+
+        return nsdfg_access_infos
+
+    def apply(self, sdfg: dace.SDFG):
+        subgraph = self.subgraph_view(sdfg)
+
+        stencil_computations: List[StencilComputation, dace.SDFGState] = list(
+            filter(
+                lambda n: isinstance(n[0], StencilComputation),
+                PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
+            )
+        )
+
+        first_expansion_specification = stencil_computations[0][0].expansion_specification
+
+        original_item = first_expansion_specification[0]
+
+        parent_symbolic_split = PartialExpansion._get_symbolic_split(sdfg, stencil_computations)
+        domain_dict = parent_symbolic_split[1]
+        tiling_schedule = original_item.schedule
+        tiling_ranges = {
+            it.axis.tile_symbol(): str(
+                dace.subsets.Range([(0, domain_dict[it.axis] - 1, it.stride)])
+            )
+            for it in original_item.iterations
+        }
+        if len(subgraph.nodes()) == 1:
+            # nest_sdfg_subgraph does not apply on single-state subgraphs, so we add an empty state before to trigger
+            # nesting.
+            new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
+            subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
+
+        nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
+        nsdfg_node: dace.nodes.NestedSDFG = next(
+            iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
+        )
+        for node, _ in stencil_computations:
+            _set_skips(node)
+
+        axes = {it.axis for it in original_item.iterations}
+        nsdfg_access_infos = PartialExpansion._update_nested_and_gather_access_info(
+            nsdfg_node, domain_dict, axes
+        )
+
         map_entry, map_exit = nsdfg_state.add_map(
             stencil_computations[0][0].label + "_tiling_map",
             ndrange=tiling_ranges,
             schedule=tiling_schedule,
             debuginfo=nsdfg_node.debuginfo,
         )
-        nsdfg_node.symbol_mapping.update(
-            {it.axis.tile_symbol(): it.axis.tile_dace_symbol() for it in original_item.iterations}
-        )
-        for it in original_item.iterations:
-            if it.axis.tile_symbol() not in nsdfg_node.sdfg.symbols:
-                nsdfg_node.sdfg.add_symbol(it.axis.tile_symbol(), stype=dace.int32)
+        # nsdfg_node.symbol_mapping.update(
+        #     {it.axis.tile_symbol(): it.axis.tile_dace_symbol() for it in original_item.iterations}
+        # )
+        # for it in original_item.iterations:
+        #     if it.axis.tile_symbol() not in nsdfg_node.sdfg.symbols:
+        #         nsdfg_node.sdfg.add_symbol(it.axis.tile_symbol(), stype=dace.int32)
         for edge in nsdfg_state.in_edges(nsdfg_node):
             memlet = edge.data
             name = memlet.data
@@ -629,12 +745,12 @@ class PartialExpansion(transformation.SubgraphTransformation):
             nsdfg_state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
 
 
-def get_all_child_states(cfg: cf.ControlFlow):
+def get_all_child_states(cft: cf.ControlFlow):
     """Returns a set of all states in the given control flow tree."""
-    if isinstance(cfg, cf.SingleState):
-        return {cfg.state}
+    if isinstance(cft, cf.SingleState):
+        return {cft.state}
     else:
-        return set.union(*[get_all_child_states(e) for e in cfg.children])
+        return set.union(*[get_all_child_states(e) for e in cft.children])
 
 
 def _setup_match(sdfg, nodes):
@@ -652,42 +768,43 @@ def _test_match(sdfg, states: Set[dace.SDFGState]):
 
 def partially_expand(sdfg: dace.SDFG):
     matches: List[Tuple[sdfg, List[Set[dace.SDFGState]]]] = []
-    for sd in sdfg.all_sdfgs_recursive():
-        cft = cf.structured_control_flow_tree(sd, lambda _: "")
+    # for sd in sdfg.all_sdfgs_recursive():
+    sd = sdfg
+    cft = cf.structured_control_flow_tree(sd, lambda _: "")
 
-        def _recurse(cfg: cf.ControlFlow):
-            subgraphs: List[Set[dace.SDFGState]] = list()
-            candidate = set()
-            # reversed so that extent analysis tends to include stencil sinks
-            for child in reversed(cfg.children):
-                if isinstance(child, cf.SingleState):
-                    if _test_match(sd, {child.state} | candidate):
-                        candidate.add(child.state)
-                    else:
-                        if candidate:
-                            subgraphs.append(candidate)
-                        if _test_match(sd, {child.state}):
-                            candidate = {child.state}
-                        else:
-                            candidate = set()
+    def _recurse(cfg: cf.ControlFlow):
+        subgraphs: List[Set[dace.SDFGState]] = list()
+        candidate = set()
+        # reversed so that extent analysis tends to include stencil sinks
+        for child in reversed(cfg.children):
+            if isinstance(child, cf.SingleState):
+                if _test_match(sd, {child.state} | candidate):
+                    candidate.add(child.state)
                 else:
                     if candidate:
                         subgraphs.append(candidate)
-                    candidate = set()
-                    subsubgraphs = []
-                    if isinstance(child, cf.IfScope):
-                        subsubgraphs += _recurse(child.body)
-                        if child.orelse is not None:
-                            subsubgraphs += _recurse(child.orelse)
-                    elif isinstance(child, cf.ForScope):
-                        subsubgraphs += _recurse(child.body)
-                    if subsubgraphs:
-                        subgraphs.extend(subsubgraphs)
-            if candidate:
-                subgraphs.append(candidate)
-            return subgraphs
+                    if _test_match(sd, {child.state}):
+                        candidate = {child.state}
+                    else:
+                        candidate = set()
+            else:
+                if candidate:
+                    subgraphs.append(candidate)
+                candidate = set()
+                subsubgraphs = []
+                if isinstance(child, cf.IfScope):
+                    subsubgraphs += _recurse(child.body)
+                    if child.orelse is not None:
+                        subsubgraphs += _recurse(child.orelse)
+                elif isinstance(child, cf.ForScope):
+                    subsubgraphs += _recurse(child.body)
+                if subsubgraphs:
+                    subgraphs.extend(subsubgraphs)
+        if candidate:
+            subgraphs.append(candidate)
+        return subgraphs
 
-        matches.append((sd, _recurse(cft)))
+    matches.append((sd, _recurse(cft)))
 
     for sd, subgraphs in matches:
         for nodes in subgraphs:
