@@ -105,6 +105,9 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
+# create a new list with all type builtins, e-g- float64
+
+TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 
 BUILTINS = {
     "cartesian_domain",
@@ -140,6 +143,7 @@ BUILTINS = {
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
     *BINARY_MATH_NUMBER_BUILTINS,
+    *TYPEBUILTINS,
 }
 
 

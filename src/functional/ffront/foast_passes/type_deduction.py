@@ -625,6 +625,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_dtype = dtype_obj.type.returns
         if isinstance(casted_obj.type, ct.ScalarType):
+            # return_type = new_dtype
             return foast.Constant(value=casted_obj.value, location=node.location, type=new_dtype)
         return_type = ct.FieldType(
             dims=casted_obj.type.dims,

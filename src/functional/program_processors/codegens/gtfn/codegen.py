@@ -64,6 +64,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
+        if node.id in ["int64", "int32"]:
+            return node.id + "_t"
+
         return node.id
 
     @staticmethod

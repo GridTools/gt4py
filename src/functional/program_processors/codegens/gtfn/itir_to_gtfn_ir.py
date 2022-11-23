@@ -56,7 +56,6 @@ def pytype_to_cpptype(t: str):
             "float32": "float",
             "float64": "double",
             "int": "int",
-            "str": "str",
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",

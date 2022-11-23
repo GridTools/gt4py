@@ -294,6 +294,41 @@ def power(*args):
     raise BackendNotSelectedError()
 
 
+@builtin_dispatch
+def int(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def bool(*args):
+    raise BackendNotSelectedError()
+
+
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
@@ -319,11 +354,13 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
+TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
     | UNARY_MATH_FP_PREDICATE_BUILTINS
     | BINARY_MATH_NUMBER_BUILTINS
+    | TYPEBUILTINS
 )
 BUILTINS = {
     "deref",

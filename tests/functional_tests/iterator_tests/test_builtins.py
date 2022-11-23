@@ -8,9 +8,11 @@ from functional.iterator.builtins import (
     and_,
     can_deref,
     cartesian_domain,
+    cast_,
     deref,
     divides,
     eq,
+    float64,
     greater,
     if_,
     less,
@@ -120,6 +122,11 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [[True, True, False, False], [True, False, True, False]],
             [False, True, True, False],
         ),
+        (
+            cast_,
+            [[float64], [2]],
+            [2.0],
+        ),
     ],
 )
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
@@ -128,7 +135,10 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
+    if builtin.__name__ == "cast_":
+        out = builtin(float64, inps[1].__array__())
+    else:
+        fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
