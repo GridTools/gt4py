@@ -404,8 +404,10 @@ if _typing_extensions.Any is not _typing.Any and isinstance(
 def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
-    This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
-    and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
+    This is needed because since Python 3.9: 
+        ``isinstance(types.GenericAlias(),  type) is True``
+    and since Python 3.11:
+        ``isinstance(typing.Any,  type) is True``
     """
     return isinstance(obj, type) and type(obj) not in _ArtefactTypes
 
