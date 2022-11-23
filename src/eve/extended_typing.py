@@ -386,7 +386,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
     return _decorator(maybe_cls) if maybe_cls is not None else _decorator
 
 
-_ArtefactTypes = tuple()
+_ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
     _ArtefactTypes = (_types.GenericAlias,)
 
@@ -401,22 +401,13 @@ if _typing_extensions.Any is not _typing.Any and isinstance(
     _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
 
-if _ArtefactTypes:
+def is_actual_type(obj: Any) -> TypeGuard[Type]:
+    """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        return isinstance(obj, type) and type(obj) not in _ArtefactTypes
-
-else:
-
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        return isinstance(obj, type)
-
-
-is_actual_type.__doc__ = """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
-
-This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
-and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
-"""
+    This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
+    and since Python 3.11: ``isinstance(typing.Any,  type) is True``.
+    """
+    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
