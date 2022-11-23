@@ -395,8 +395,8 @@ if _sys.version_info >= (3, 9):
         _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4
-if _typing_extensions.Any is not _typing.Any and isinstance(
-    _typing_extensions.Any, type  # typing_extensions >= 4.4
+if (type_ext_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
+    type_ext_any, type
 ):
     _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
 
@@ -404,7 +404,7 @@ if _typing_extensions.Any is not _typing.Any and isinstance(
 def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
-    This is needed because since Python 3.9: 
+    This is needed because since Python 3.9:
         ``isinstance(types.GenericAlias(),  type) is True``
     and since Python 3.11:
         ``isinstance(typing.Any,  type) is True``
