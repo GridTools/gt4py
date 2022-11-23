@@ -395,10 +395,10 @@ if _sys.version_info >= (3, 9):
         _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4
-if (type_ext_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
-    type_ext_any, type
+if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
+    typing_exts_any, type
 ):
-    _ArtefactTypes = (*_ArtefactTypes, _typing_extensions.Any)
+    _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
 
 
 def is_actual_type(obj: Any) -> TypeGuard[Type]:
