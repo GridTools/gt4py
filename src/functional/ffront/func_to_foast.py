@@ -295,6 +295,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return [self.visit(node, **kwargs) for node in nodes]
 
+    def visit_Expr(self, node: ast.Expr) -> foast.Expr:
+        return self.visit(node.value)
+
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 
@@ -303,17 +306,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.NOT
 
-    def visit_Invert(self, node: ast.Invert, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(

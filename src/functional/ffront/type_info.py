@@ -89,7 +89,7 @@ def apply_to_primitive_constituents(
     >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
     >>> tuple_type = ct.TupleType(types=[int_type, int_type])
     >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type)))
-    tuple[Field[[], dtype=int64], Field[[], dtype=int64]]
+    tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ct.TupleType):
         return ct.TupleType(
@@ -437,8 +437,6 @@ def return_type_fieldop(
     with_kwargs: dict[str, ct.SymbolType],
 ):
     ret_type = return_type(fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs)
-    if isinstance(ret_type, ct.ScalarType):
-        return ct.FieldType(dims=[], dtype=ret_type)
     return ret_type
 
 
