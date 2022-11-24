@@ -173,8 +173,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
-                r"Expected 1-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
+                r"Expected 0-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
+                r"Expected 1-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
             ],
             ct.FieldType(dims=[KDim], dtype=float_type),
         ),
@@ -236,8 +236,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], dtype=int64\], "
-                r"Field\[..., dtype=int64\]\], but got tuple\[Field\[\[I, J, K\], dtype=int64\]\]."
+                r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], int64\], "
+                r"Field\[..., int64\]\], but got tuple\[Field\[\[I, J, K\], int64\]\]."
             ],
             ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
@@ -379,7 +379,7 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator `\+`!"),
+        match=(r"Type Field\[\.\.\., bool\] can not be used in operator `\+`!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -395,7 +395,7 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(
-            r"Could not promote `Field\[\[X], dtype=float64\]` and `Field\[\[Y\], dtype=float64\]` to common type in call to +."
+            r"Could not promote `Field\[\[X], float64\]` and `Field\[\[Y\], float64\]` to common type in call to +."
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -407,7 +407,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator `\&`! "),
+        match=(r"Type Field\[\.\.\., float64\] can not be used in operator `\&`! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -418,7 +418,7 @@ def test_signing_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator `\-`: `Field\[\.\.\., dtype=bool\]`!",
+        match=r"Incompatible type for unary operator `\-`: `Field\[\.\.\., bool\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
 
@@ -429,7 +429,7 @@ def test_notting_int():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator `not`: `Field\[\.\.\., dtype=int64\]`!",
+        match=r"Incompatible type for unary operator `not`: `Field\[\.\.\., int64\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
 

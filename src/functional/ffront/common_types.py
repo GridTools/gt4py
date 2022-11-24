@@ -62,6 +62,24 @@ class BinaryOperator(StrEnum):
         return "Unknown BinaryOperator"
 
 
+class UnaryOperator(StrEnum):
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
+    INVERT = "invert"
+
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        elif self is self.INVERT:
+            return "~"
+        return "Unknown UnaryOperator"
+
+
 class SymbolType:
     pass
 
@@ -140,7 +158,7 @@ class FieldType(DataType, CallableType):
 
     def __str__(self):
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
-        return f"Field[{dims}, dtype={self.dtype}]"
+        return f"Field[{dims}, {self.dtype}]"
 
 
 @dataclass(frozen=True)

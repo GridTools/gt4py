@@ -301,9 +301,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]:
             return self._lift_if_field(node)(
-                im.call_(node.op.value)(to_value(node.operand)(self.visit(node.operand, **kwargs)))
+                im.call_("not_")(to_value(node.operand)(self.visit(node.operand, **kwargs)))
             )
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
@@ -515,7 +515,7 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op is ct.UnaryOperator.NOT:
             return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
 
         return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))

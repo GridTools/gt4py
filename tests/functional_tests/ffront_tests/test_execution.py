@@ -38,8 +38,6 @@ def test_multicopy(fieldview_backend):
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
-    multicopy(a_float, b_float, out=(out_float, out_float_1), offset_provider={})
-
     assert np.allclose(a_float, out_float)
     assert np.allclose(b_float, out_float_1)
 
@@ -269,19 +267,22 @@ def test_tuple_arg(fieldview_backend):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_simple_scan(fieldview_backend, forward):
+def test_fieldop_from_scan(fieldview_backend, forward):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.xfail("gtfn does not yet support scan pass.")
-
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
     if not forward:
         expected = np.flip(expected)
 
+    @field_operator
+    def add(carry: float, foo: float) -> float:
+        return carry + foo
+
     @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float) -> float:
-        return carry + 1.0
+        return add(carry, 1.0)
 
     simple_scan_operator(out=out, offset_provider={})
 
