@@ -1347,15 +1347,15 @@ def test_scalar_scan():
     scalar = 1.0
 
     @scan_operator(axis=KDim, forward=True, init=(0.0))
-    def _graupel_scan_scalar(carry: float, qc_in: float, scalar: float):
+    def _scan_scalar(carry: float, qc_in: float, scalar: float):
         qc = qc_in + carry + scalar
         return qc
 
     @program
-    def graupel_scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
-        _graupel_scan_scalar(qc, scalar, out=(qc))
+    def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
+        _scan_scalar(qc, scalar, out=(qc))
 
-    graupel_scan_scalar(qc, scalar, offset_provider={})
+    scan_scalar(qc, scalar, offset_provider={})
 
 
 def test_scalar_scan_2d():

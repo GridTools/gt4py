@@ -282,7 +282,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     ):
         return True
     elif is_concrete(symbol_type):
-        return symbol_type == to_type
+        return extract_dtype(symbol_type) == extract_dtype(to_type)
     return False
 
 
