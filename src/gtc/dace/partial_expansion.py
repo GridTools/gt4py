@@ -340,8 +340,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _nsdfg_checks(sdfg: dace.SDFG):
-        if any(edge.data.assignments for edge in sdfg.edges()):
-            return False
+        # if any(edge.data.assignments for edge in sdfg.edges()):
+        #     return False
         cfg = cf.structured_control_flow_tree(sdfg, lambda _: "")
         if not all(isinstance(c, cf.SingleState) for c in cfg.children):
             return False
@@ -365,7 +365,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
         if any(edge.data.assignments for edge in subgraph.edges()):
             return False
-
         for nsdfg, _ in filter(
             lambda n: isinstance(n[0], dace.nodes.NestedSDFG),
             PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
@@ -542,7 +541,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _rename_dict_keys(name_map, input_dict):
-        return {name_map[key]: value for key, value in input_dict.items()}
+        return {name_map.get(key, key): value for key, value in input_dict.items()}
 
     @staticmethod
     def _update_nested_and_gather_access_info(nsdfg_node, domain_dict, axes):
@@ -592,10 +591,11 @@ class PartialExpansion(transformation.SubgraphTransformation):
         #
         # # in_nsdfg_access_infos, out_nsdfg_access_infos = _get_access_infos(stencil_computations)
         # # nsdfg_access_infos = _union_access_infos(in_nsdfg_access_infos, out_nsdfg_access_infos)
-        #
-        # # update shapes and subsets of new nested SDFG
-        # # _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos, domain_dict)
-        #
+
+        # update shapes and subsets of new nested SDFG
+
+        _update_shapes(nsdfg_node.sdfg, nsdfg_access_infos, domain_dict)
+
         for state in nsdfg_node.sdfg.states():
             for node in filter(
                 lambda n: isinstance(n, (dace.nodes.NestedSDFG, StencilComputation)), state.nodes()
@@ -608,7 +608,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 node_access_infos, in_access_infos, out_access_infos = all_access_infos[node]
                 if isinstance(node, StencilComputation):
                     node.access_infos = PartialExpansion._rename_dict_keys(
-                        {v: k for v, k in PartialExpansion._get_name_map(state, node).items()},
+                        {v: k for k, v in PartialExpansion._get_name_map(state, node).items()},
                         node_access_infos,
                     )
                 for memlet in state.in_edges(node):
@@ -631,7 +631,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     )
                     subset.replace({ax.domain_dace_symbol(): v for ax, v in domain_dict.items()})
                     memlet.data.subset = subset
-        propagate_memlets_sdfg(nsdfg_node.sdfg)
 
         nsdfg_node.symbol_mapping.update({ax.tile_symbol(): ax.tile_dace_symbol() for ax in axes})
         for ax in axes:
@@ -680,6 +679,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
         nsdfg_access_infos = PartialExpansion._update_nested_and_gather_access_info(
             nsdfg_node, domain_dict, axes
         )
+
+        propagate_memlets_sdfg(nsdfg_node.sdfg)
 
         map_entry, map_exit = nsdfg_state.add_map(
             stencil_computations[0][0].label + "_tiling_map",
