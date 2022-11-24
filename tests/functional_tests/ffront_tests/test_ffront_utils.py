@@ -50,14 +50,14 @@ DType = TypeVar("DType")
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
-K = Dimension("K", kind=DimensionKind.VERTICAL)
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
+Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+
 Vertex = Dimension("Vertex")
 Edge = Dimension("Edge")
 EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
-Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
-Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 size = 10
 mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))

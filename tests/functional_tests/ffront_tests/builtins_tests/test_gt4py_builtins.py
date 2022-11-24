@@ -299,16 +299,15 @@ def test_conditional_shifted(fieldview_backend):
 
 
 def test_promotion(fieldview_backend):
-
     ksize = 5
-    a = np_as_located_field(Edge, K)(np.ones((size, ksize)))
-    b = np_as_located_field(K)(np.ones((ksize)) * 2)
-    c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
+    a = np_as_located_field(Edge, KDim)(np.ones((size, ksize)))
+    b = np_as_located_field(KDim)(np.ones((ksize)) * 2)
+    c = np_as_located_field(Edge, KDim)(np.zeros((size, ksize)))
 
     @field_operator(backend=fieldview_backend)
     def promotion(
-        inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
-    ) -> Field[[Edge, K], float64]:
+        inp1: Field[[Edge, KDim], float64], inp2: Field[[KDim], float64]
+    ) -> Field[[Edge, KDim], float64]:
         return inp1 / inp2
 
     promotion(a, b, out=c, offset_provider={})

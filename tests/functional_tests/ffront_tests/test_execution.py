@@ -600,7 +600,6 @@ def test_domain_tuple(fieldview_backend):
 def test_where_k_offset(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("IndexFields are not supported yet.")
-    Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
