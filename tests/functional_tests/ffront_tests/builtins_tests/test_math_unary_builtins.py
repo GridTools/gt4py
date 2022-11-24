@@ -13,47 +13,28 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import TypeVar
-
-import numpy as np
-import pytest
 
 from functional.ffront.decorator import field_operator
-from functional.ffront.fbuiltins import Dimension, Field, float64, int64
-from functional.iterator.embedded import np_as_located_field
-from functional.program_processors.runners import gtfn_cpu, roundtrip
-
-
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
-    yield request.param
-
-
-def debug_itir(tree):
-    """Compare tree snippets while debugging."""
-    from devtools import debug
-
-    from eve.codegen import format_python_source
-    from functional.program_processors import EmbeddedDSL
-
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
-
-
-DimsType = TypeVar("DimsType")
-DType = TypeVar("DType")
-
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-
-size = 10
-a_bool = np_as_located_field(IDim)(np.random.randn(size).astype("bool"))
-b_bool = np_as_located_field(IDim)(np.random.randn(size).astype("bool"))
-out_bool = np_as_located_field(IDim)(np.zeros((size), dtype=bool))
-a_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-out_int = np_as_located_field(IDim)(np.zeros((size), dtype=int64))
-a_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-b_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-out_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+from functional.ffront.fbuiltins import (
+    Field,
+    cbrt,
+    ceil,
+    cos,
+    cosh,
+    exp,
+    floor,
+    isfinite,
+    isinf,
+    isnan,
+    log,
+    sin,
+    sinh,
+    sqrt,
+    tan,
+    tanh,
+    trunc,
+)
+from tests.functional_tests.ffront_tests.test_ffront_utils import *
 
 
 # Math builtins
@@ -161,4 +142,91 @@ def test_unary_not(fieldview_backend):
     assert np.allclose(~a_bool.array(), out_bool)
 
 
-# Trig functions
+# Trig builtins
+
+
+def test_basic_trig(fieldview_backend):
+    @field_operator(backend=fieldview_backend)
+    def basic_trig_fieldop(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return sin(cos(inp1)) - sinh(cosh(inp2)) + tan(inp1) - tanh(inp2)
+
+    basic_trig_fieldop(a_float, b_float, out=out_float, offset_provider={})
+
+    expected = (
+        np.sin(np.cos(a_float)) - np.sinh(np.cosh(b_float)) + np.tan(a_float) - np.tanh(b_float)
+    )
+    assert np.allclose(expected, out_float)
+
+
+def test_exp_log(fieldview_backend):
+    a_float = np_as_located_field(IDim)(np.ones((size)))
+
+    @field_operator(backend=fieldview_backend)
+    def exp_log_fieldop(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return log(inp1) - exp(inp2)
+
+    exp_log_fieldop(a_float, b_float, out=out_float, offset_provider={})
+
+    expected = np.log(a_float) - np.exp(b_float)
+    assert np.allclose(expected, out_float)
+
+
+def test_roots(fieldview_backend):
+    a_float = np_as_located_field(IDim)(np.ones((size)))
+
+    @field_operator(backend=fieldview_backend)
+    def roots_fieldop(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return sqrt(inp1) - cbrt(inp2)
+
+    roots_fieldop(a_float, b_float, out=out_float, offset_provider={})
+
+    expected = np.sqrt(a_float) - np.cbrt(b_float)
+    assert np.allclose(expected, out_float)
+
+
+def test_is_values(fieldview_backend):
+    out_bool_1 = out_bool
+    out_bool_2 = out_bool
+
+    @field_operator(backend=fieldview_backend)
+    def is_isinf_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
+        return isinf(inp1)
+
+    is_isinf_fieldop(a_float, out=out_bool, offset_provider={})
+    expected = np.isinf(a_float)
+    assert np.allclose(expected, out_bool)
+
+    @field_operator(backend=fieldview_backend)
+    def is_isnan_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
+        return isnan(inp1)
+
+    is_isnan_fieldop(a_float, out=out_bool_1, offset_provider={})
+    expected = np.isnan(a_float)
+    assert np.allclose(expected, out_bool_1)
+
+    @field_operator(backend=fieldview_backend)
+    def is_isfinite_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
+        return isfinite(inp1)
+
+    is_isfinite_fieldop(a_float, out=out_bool_2, offset_provider={})
+    expected = np.isfinite(a_float)
+    assert np.allclose(expected, out_bool_2)
+
+
+def test_rounding_funs(fieldview_backend):
+    @field_operator(backend=fieldview_backend)
+    def rounding_funs_fieldop(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+    ) -> Field[[IDim], float64]:
+        return floor(inp1) - ceil(inp2) + trunc(inp1)
+
+    rounding_funs_fieldop(a_float, b_float, out=out_float, offset_provider={})
+
+    expected = np.floor(a_float) - np.ceil(b_float) + np.trunc(a_float)
+    assert np.allclose(expected, out_float)

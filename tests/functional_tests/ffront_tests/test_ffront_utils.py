@@ -64,6 +64,7 @@ mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 mask.array()[size // 2] = True
 a_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
 b_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
+out_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 out2d_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 a_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 b_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -71,6 +72,9 @@ a2d_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64)
 out_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 out_float_1 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 out2d_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+a_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
+b_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
+out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
 
 @pytest.fixture
