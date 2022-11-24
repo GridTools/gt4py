@@ -340,8 +340,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _nsdfg_checks(sdfg: dace.SDFG):
-        # if any(edge.data.assignments for edge in sdfg.edges()):
-        #     return False
         cfg = cf.structured_control_flow_tree(sdfg, lambda _: "")
         if not all(isinstance(c, cf.SingleState) for c in cfg.children):
             return False
@@ -363,8 +361,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
         if not stencil_computations:
             return False
 
-        if any(edge.data.assignments for edge in subgraph.edges()):
-            return False
+        # if any(edge.data.assignments for edge in subgraph.edges()):
+        #     return False
         for nsdfg, _ in filter(
             lambda n: isinstance(n[0], dace.nodes.NestedSDFG),
             PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
@@ -667,8 +665,11 @@ class PartialExpansion(transformation.SubgraphTransformation):
             # nesting.
             new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
             subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
-
+        sdfg.save("failing_to_nest.sdfgz", compress=True)
         nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
+        if nsdfg_state.label == "symbolic_output":
+            nsdfg_state = next(iter(nsdfg_state.parent.predecessor_states(nsdfg_state)))
+
         nsdfg_node: dace.nodes.NestedSDFG = next(
             iter(node for node in nsdfg_state.nodes() if isinstance(node, dace.nodes.NestedSDFG))
         )
@@ -768,29 +769,35 @@ def _test_match(sdfg, states: Set[dace.SDFGState]):
 
 
 def partially_expand(sdfg: dace.SDFG):
-    matches: List[Tuple[sdfg, List[Set[dace.SDFGState]]]] = []
+    matches: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = []
     # for sd in sdfg.all_sdfgs_recursive():
-    sd = sdfg
-    cft = cf.structured_control_flow_tree(sd, lambda _: "")
+    cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
 
-    def _recurse(cfg: cf.ControlFlow):
-        subgraphs: List[Set[dace.SDFGState]] = list()
+    def _recurse(sd, cft: cf.ControlFlow):
+        subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
         candidate = set()
         # reversed so that extent analysis tends to include stencil sinks
-        for child in reversed(cfg.children):
+        for child in reversed(cft.children):
             if isinstance(child, cf.SingleState):
                 if _test_match(sd, {child.state} | candidate):
                     candidate.add(child.state)
                 else:
                     if candidate:
-                        subgraphs.append(candidate)
+                        subgraphs.append((sd, candidate))
                     if _test_match(sd, {child.state}):
                         candidate = {child.state}
                     else:
                         candidate = set()
+                        subsubgraphs = []
+                        for nsdfg_node in child.state.nodes():
+                            if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
+                                nsdfg_cft = cf.structured_control_flow_tree(
+                                    nsdfg_node.sdfg, lambda _: ""
+                                )
+                                subsubgraphs += _recurse(nsdfg_node.sdfg, nsdfg_cft)
             else:
                 if candidate:
-                    subgraphs.append(candidate)
+                    subgraphs.append((sd, candidate))
                 candidate = set()
                 subsubgraphs = []
                 if isinstance(child, cf.IfScope):
@@ -802,16 +809,15 @@ def partially_expand(sdfg: dace.SDFG):
                 if subsubgraphs:
                     subgraphs.extend(subsubgraphs)
         if candidate:
-            subgraphs.append(candidate)
+            subgraphs.append((sd, candidate))
         return subgraphs
 
-    matches.append((sd, _recurse(cft)))
+    matches = _recurse(sdfg, cft)
 
-    for sd, subgraphs in matches:
-        for nodes in subgraphs:
-            parent_sdfg = next(iter(nodes)).parent
-            expansion, subgraph = _setup_match(sd, nodes)
-            expansion.apply(parent_sdfg)
+    for sd, nodes in matches:
+        parent_sdfg = next(iter(nodes)).parent
+        expansion, subgraph = _setup_match(sd, nodes)
+        expansion.apply(parent_sdfg)
 
     # assert subgraphs
     # allstates = [s for subgraph in subgraphs for s in subgraph]
