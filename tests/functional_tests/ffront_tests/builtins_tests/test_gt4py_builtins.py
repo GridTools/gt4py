@@ -13,132 +13,10 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from collections import namedtuple
-from typing import TypeVar
 
-import numpy as np
-import pytest
-
-from functional.common import DimensionKind
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import (
-    Dimension,
-    Field,
-    FieldOffset,
-    broadcast,
-    float64,
-    int64,
-    max_over,
-    min_over,
-    neighbor_sum,
-    where,
-)
-from functional.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    index_field,
-    np_as_located_field,
-)
-from functional.program_processors.runners import gtfn_cpu, roundtrip
-
-
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
-    yield request.param
-
-
-def debug_itir(tree):
-    """Compare tree snippets while debugging."""
-    from devtools import debug
-
-    from eve.codegen import format_python_source
-    from functional.program_processors import EmbeddedDSL
-
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
-
-
-DimsType = TypeVar("DimsType")
-DType = TypeVar("DType")
-
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-
-size = 10
-mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-mask.array()[size // 2] = True
-a_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-b_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
-out_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
-a_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-b_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-out_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-
-
-@pytest.fixture
-def reduction_setup():
-    num_vertices = 9
-    edge = Dimension("Edge")
-    vertex = Dimension("Vertex")
-    v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
-    e2vdim = Dimension("E2V", kind=DimensionKind.LOCAL)
-
-    v2e_arr = np.array(
-        [
-            [0, 15, 2, 9],  # 0
-            [1, 16, 0, 10],
-            [2, 17, 1, 11],
-            [3, 9, 5, 12],  # 3
-            [4, 10, 3, 13],
-            [5, 11, 4, 14],
-            [6, 12, 8, 15],  # 6
-            [7, 13, 6, 16],
-            [8, 14, 7, 17],
-        ]
-    )
-
-    # create e2v connectivity by inverting v2e
-    num_edges = np.max(v2e_arr) + 1
-    e2v_arr = [[] for _ in range(0, num_edges)]
-    for v in range(0, v2e_arr.shape[0]):
-        for e in v2e_arr[v]:
-            e2v_arr[e].append(v)
-    assert all(len(row) == 2 for row in e2v_arr)
-    e2v_arr = np.asarray(e2v_arr)
-
-    yield namedtuple(
-        "ReductionSetup",
-        [
-            "num_vertices",
-            "num_edges",
-            "Edge",
-            "Vertex",
-            "V2EDim",
-            "E2VDim",
-            "V2E",
-            "E2V",
-            "inp",
-            "out",
-            "offset_provider",
-            "v2e_table",
-            "e2v_table",
-        ],
-    )(
-        num_vertices=num_vertices,
-        num_edges=num_edges,
-        Edge=edge,
-        Vertex=vertex,
-        V2EDim=v2edim,
-        E2VDim=e2vdim,
-        V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
-        E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
-        inp=index_field(edge, dtype=np.int64),
-        out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
-        offset_provider={
-            "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
-            "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
-        },
-        v2e_table=v2e_arr,
-        e2v_table=e2v_arr,
-    )  # type: ignore
+from functional.ffront.fbuiltins import Field, broadcast, max_over, min_over, neighbor_sum, where
+from tests.functional_tests.ffront_tests.test_ffront_utils import *
 
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
@@ -291,9 +169,6 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple():
-    b = np_as_located_field(IDim)(np.ones((size)))
-    out_float_2 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-
     @field_operator
     def conditional_nested_tuple(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
@@ -306,18 +181,18 @@ def test_conditional_nested_tuple():
     conditional_nested_tuple(
         mask,
         a_float,
-        b,
-        out=((out_float, out_float_2), (out_float_2, out_float)),
+        b_float,
+        out=((out_float, out_float_1), (out_float_1, out_float)),
         offset_provider={},
     )
 
     expected = np.where(
         mask,
-        ((a_float, b), (b, a_float)),
+        ((a_float, b_float), (b_float, a_float)),
         ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
     )
 
-    assert np.allclose(expected, ((out_float, out_float_2), (out_float_2, out_float)))
+    assert np.allclose(expected, ((out_float, out_float_1), (out_float_1, out_float)))
 
 
 def test_broadcast_simple(fieldview_backend):
@@ -325,9 +200,9 @@ def test_broadcast_simple(fieldview_backend):
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         return broadcast(inp, (IDim, JDim))
 
-    simple_broadcast(a_int, out=out_int, offset_provider={})
+    simple_broadcast(a_int, out=out2d_int, offset_provider={})
 
-    assert np.allclose(a_int.array()[:, np.newaxis], out_int)
+    assert np.allclose(a_int.array()[:, np.newaxis], out2d_int)
 
 
 def test_broadcast_scalar(fieldview_backend):
@@ -349,24 +224,22 @@ def test_broadcast_two_fields(fieldview_backend):
         b = broadcast(inp2, (IDim, JDim))
         return a + b
 
-    broadcast_two_fields(a_int, b_int, out=out_int, offset_provider={})
+    broadcast_two_fields(a_int, b_int, out=out2d_int, offset_provider={})
 
     expected = a_int.array()[:, np.newaxis] + b_int.array()[np.newaxis, :]
 
-    assert np.allclose(expected, out_int)
+    assert np.allclose(expected, out2d_int)
 
 
 def test_broadcast_shifted(fieldview_backend):
-    Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
-
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         bcasted = broadcast(inp, (IDim, JDim))
         return bcasted(Joff[1])
 
-    simple_broadcast(a_int, out=out_int, offset_provider={"Joff": JDim})
+    simple_broadcast(a_int, out=out2d_int, offset_provider={"Joff": JDim})
 
-    assert np.allclose(a_int.array()[:, np.newaxis], out_int)
+    assert np.allclose(a_int.array()[:, np.newaxis], out2d_int)
 
 
 def test_conditional(fieldview_backend):
@@ -404,8 +277,6 @@ def test_conditional_compareop(fieldview_backend):
 
 
 def test_conditional_shifted(fieldview_backend):
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-
     @field_operator()
     def conditional_shifted(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
@@ -425,3 +296,21 @@ def test_conditional_shifted(fieldview_backend):
     conditional_program(mask, a_float, b_float, out_float, offset_provider={"Ioff": IDim})
 
     assert np.allclose(np.where(mask, a_float, b_float)[1:], out_float.array()[:-1])
+
+
+def test_promotion(fieldview_backend):
+
+    ksize = 5
+    a = np_as_located_field(Edge, K)(np.ones((size, ksize)))
+    b = np_as_located_field(K)(np.ones((ksize)) * 2)
+    c = np_as_located_field(Edge, K)(np.zeros((size, ksize)))
+
+    @field_operator(backend=fieldview_backend)
+    def promotion(
+        inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
+    ) -> Field[[Edge, K], float64]:
+        return inp1 / inp2
+
+    promotion(a, b, out=c, offset_provider={})
+
+    assert np.allclose((a.array() / b.array()), c)
