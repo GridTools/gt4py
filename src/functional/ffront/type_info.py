@@ -324,15 +324,15 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
     ... )
     False
     >>> is_zero_dim_field_compatible(
+    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64),
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
+    ... )
+    True
+    >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
     ... )
     False
-    >>> is_zero_dim_field_compatible(
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
-    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-    ... )
-    True
     >>> is_zero_dim_field_compatible(
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
     ...     ct.ScalarType(kind=ct.ScalarKind.INT64)
