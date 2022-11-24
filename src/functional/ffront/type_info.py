@@ -592,7 +592,7 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    if not _is_zero_dim_field(fieldop_type.definition.args[0]):
+    if not _is_zero_dim_field(fieldop_type.definition.returns):
         yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
     else:
         for i, (a_arg, b_arg) in enumerate(zip(fieldop_type.definition.args, args)):
