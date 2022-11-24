@@ -742,6 +742,22 @@ class TestFunctionReturn:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
 
+    def test_return_to_subscript(self):
+        @gtscript.function
+        def func(a):
+            return a
+
+        def definition_func(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field[0, 0, 0] = func(input_field)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
 
 class TestCompileTimeAssertions:
     def test_nomsg(self):
