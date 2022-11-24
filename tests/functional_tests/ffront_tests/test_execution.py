@@ -17,7 +17,8 @@ from functools import reduce
 
 from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import Field, broadcast, neighbor_sum, where
-from tests.functional_tests.ffront_tests.test_ffront_utils import *
+
+from .test_ffront_utils import *
 
 
 def test_copy(fieldview_backend):

@@ -34,7 +34,8 @@ from functional.ffront.fbuiltins import (
     tanh,
     trunc,
 )
-from tests.functional_tests.ffront_tests.test_ffront_utils import *
+
+from .test_ffront_utils import *
 
 
 # Math builtins
