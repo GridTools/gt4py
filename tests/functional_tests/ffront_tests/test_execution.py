@@ -1298,21 +1298,23 @@ def test_implicit_broadcast():
     inp_val = 1.0
 
     @field_operator
-    def fieldop_implicit_broadcast(scalar: Field[[], float]) -> Field[[], float]:
-        return scalar
+    def fieldop_implicit_broadcast(scalar_1: float, scalar: Field[[], float]) -> Field[[], float]:
+        return scalar_1 * scalar
 
-    fieldop_implicit_broadcast(inp_val, out=out, offset_provider={})
+    fieldop_implicit_broadcast(inp_val, inp_val, out=out, offset_provider={})
     assert out == np.asarray(inp_val)
 
     inp_val = 2.0
 
     @program
-    def program_implicit_broadcast(scalar: Field[[], float], out: Field[[], float]):
-        fieldop_implicit_broadcast(scalar, out=out)
+    def program_implicit_broadcast(
+        scalar_1: float, scalar: Field[[], float], out: Field[[], float]
+    ):
+        fieldop_implicit_broadcast(scalar_1, scalar, out=out)
 
-    program_implicit_broadcast(inp_val, out, offset_provider={})
+    program_implicit_broadcast(inp_val, inp_val, out, offset_provider={})
 
-    assert out == np.asarray(inp_val)
+    assert out == np.asarray(inp_val * inp_val)
 
 
 def test_constant_closure_vars():

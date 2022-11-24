@@ -339,9 +339,10 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
     ... )
     True
     """
-    if (_is_zero_dim_field(b_arg) or is_number(b_arg)) and extract_dtype(a_arg) == extract_dtype(
-        b_arg
-    ):
+    if (
+        (_is_zero_dim_field(b_arg) or is_number(b_arg))
+        and (_is_zero_dim_field(b_arg) or is_number(b_arg))
+    ) and extract_dtype(a_arg) == extract_dtype(b_arg):
         return True
     return False
 
@@ -596,7 +597,7 @@ def function_signature_incompatibilities_fieldop(
         yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
     else:
         for i, (a_arg, b_arg) in enumerate(zip(fieldop_type.definition.args, args)):
-            if _is_zero_dim_field(a_arg) and not is_zero_dim_field_compatible(a_arg, b_arg):
+            if not is_zero_dim_field_compatible(a_arg, b_arg):
                 yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
 
 
