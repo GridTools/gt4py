@@ -15,7 +15,6 @@
 import ast
 
 import gt4py.utils as gt_util
-
 from gt4py.frontend.gtscript_frontend import PYTHON_AST_VERSION
 
 

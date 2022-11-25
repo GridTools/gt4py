@@ -14,7 +14,7 @@
 
 import ast
 
-from gt4py.frontend.gtscript_frontend import IRMaker, PYTHON_AST_VERSION
+from gt4py.frontend.gtscript_frontend import PYTHON_AST_VERSION, IRMaker
 from gt4py.frontend.nodes import BinaryOperator, BinOpExpr
 
 
