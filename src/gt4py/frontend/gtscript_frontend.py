@@ -404,16 +404,7 @@ class CallInliner(ast.NodeTransformer):
             and gt_meta.get_qualified_name_from_node(node.value.func) not in gtscript.MATH_BUILTINS
         ):
             assert len(node.targets) == 1
-            target_node = node.targets[0]
-            if isinstance(target_node, ast.Subscript):
-                # write to offset should already be caught earlier in the frontend, so index can be ignored
-                target_node = ast.Name(
-                    ctx=ast.Store(),
-                    lineno=target_node.value.lineno,
-                    col_offset=target_node.value.col_offset,
-                    id=target_node.value.id,
-                )
-            self.visit(node.value, target_node=target_node)
+            self.visit(node.value, target_node=node.targets[0])
             # This node can be now removed since the trivial assignment has been already done
             # in the Call visitor
             return None
@@ -507,7 +498,7 @@ class CallInliner(ast.NodeTransformer):
                 id=template_fmt.format(name="RETURN_VALUE"),
             )
 
-        assert isinstance(target_node, (ast.Name, ast.Tuple)) and isinstance(
+        assert isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript)) and isinstance(
             target_node.ctx, ast.Store
         )
 
@@ -543,12 +534,20 @@ class CallInliner(ast.NodeTransformer):
                 col_offset=target_node.col_offset,
                 id=target_node.id,
             )
-        else:
+        elif isinstance(target_node, ast.Tuple):
             result_node = ast.Tuple(
                 ctx=ast.Load(),
                 lineno=target_node.lineno,
                 col_offset=target_node.col_offset,
                 elts=target_node.elts,
+            )
+        else:
+            result_node = ast.Subscript(
+                ctx=ast.Load(),
+                lineno=target_node.lineno,
+                col_offset=target_node.col_offset,
+                value=target_node.value,
+                slice=target_node.slice,
             )
 
         # Add the temp_annotations and temp_init_values to the parent

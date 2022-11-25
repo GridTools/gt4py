@@ -742,22 +742,6 @@ class TestFunctionReturn:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
 
-    def test_return_to_subscript(self):
-        @gtscript.function
-        def func(a):
-            return a
-
-        def definition_func(
-            input_field: gtscript.Field[gtscript.IJK, np.int32],
-            output_field: gtscript.Field[gtscript.IJK, np.int32],
-        ):
-            with computation(PARALLEL), interval(...):
-                output_field[0, 0, 0] = func(input_field)
-
-        parse_definition(
-            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
-        )
-
 
 class TestCompileTimeAssertions:
     def test_nomsg(self):
@@ -1148,19 +1132,52 @@ class TestAssignmentSyntax:
             module=self.__class__.__name__,
         )
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                from gt4py.__externals__ import offset
-
-                with computation(PARALLEL), interval(...):
-                    out_field[0, 0, offset] = in_field
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Assignment to non-zero offsets is not supported.",
+        ):
 
             parse_definition(
                 func,
                 externals={"offset": 1},
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
+            )
+
+    def test_return_to_subscript(self):
+        @gtscript.function
+        def func(a):
+            return a
+
+        def definition_func(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field[0, 0, 0] = func(input_field)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_return_to_nonzero_subscript(self):
+        @gtscript.function
+        def func(a):
+            return a
+
+        def definition_func(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field[0, 0, 1] = func(input_field)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Assignment to non-zero offsets is not supported.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
 
     def test_slice(self):
