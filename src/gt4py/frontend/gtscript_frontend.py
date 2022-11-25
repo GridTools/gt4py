@@ -498,7 +498,7 @@ class CallInliner(ast.NodeTransformer):
                 id=template_fmt.format(name="RETURN_VALUE"),
             )
 
-        assert isinstance(target_node, (ast.Name, ast.Tuple)) and isinstance(
+        assert isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript)) and isinstance(
             target_node.ctx, ast.Store
         )
 
@@ -534,12 +534,20 @@ class CallInliner(ast.NodeTransformer):
                 col_offset=target_node.col_offset,
                 id=target_node.id,
             )
-        else:
+        elif isinstance(target_node, ast.Tuple):
             result_node = ast.Tuple(
                 ctx=ast.Load(),
                 lineno=target_node.lineno,
                 col_offset=target_node.col_offset,
                 elts=target_node.elts,
+            )
+        else:
+            result_node = ast.Subscript(
+                ctx=ast.Load(),
+                lineno=target_node.lineno,
+                col_offset=target_node.col_offset,
+                value=target_node.value,
+                slice=target_node.slice,
             )
 
         # Add the temp_annotations and temp_init_values to the parent
