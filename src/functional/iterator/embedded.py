@@ -6,7 +6,6 @@ import copy
 import itertools
 import math
 import numbers
-import typing
 from abc import abstractmethod
 from dataclasses import dataclass
 from types import NoneType
@@ -255,9 +254,7 @@ def if_(cond, t, f):
 
 
 @builtins.cast_.register(EMBEDDED)
-def cast_(new_dtype, obj):
-    if isinstance(obj, Column):
-        return typing.cast(new_dtype, obj)
+def cast_(obj, new_dtype):
     return new_dtype(obj)
 
 

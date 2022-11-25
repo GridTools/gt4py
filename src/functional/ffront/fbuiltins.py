@@ -78,11 +78,11 @@ where = BuiltInFunction(
 cast = BuiltInFunction(
     ct.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=ct.ScalarType),
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+            ct.DeferredSymbolType(constraint=ct.FieldType),
+            ct.DeferredSymbolType(constraint=ct.FunctionType),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
+        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
     )
 )
 

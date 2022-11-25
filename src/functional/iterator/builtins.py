@@ -295,7 +295,7 @@ def power(*args):
 
 
 @builtin_dispatch
-def int(*args):
+def int(*args):  # noqa: A001
     raise BackendNotSelectedError()
 
 
@@ -310,7 +310,7 @@ def int64(*args):
 
 
 @builtin_dispatch
-def float(*args):
+def float(*args):  # noqa: A001
     raise BackendNotSelectedError()
 
 
@@ -325,7 +325,7 @@ def float64(*args):
 
 
 @builtin_dispatch
-def bool(*args):
+def bool(*args):  # noqa: A001
     raise BackendNotSelectedError()
 
 

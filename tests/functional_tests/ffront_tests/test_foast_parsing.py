@@ -270,9 +270,9 @@ def test_conditional_wrong_arg_type():
 
 def test_cast_wrong_args_type():
     def cast_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
-        return cast(str, a)
+        return cast(a, str)
 
-    msg_1 = r"Expected an arithmetic or boolean dtype"
+    msg_1 = r"Invalid argument types"
     with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_1:
         _ = FieldOperatorParser.apply_to_function(cast_wrong_type_1)
 
@@ -281,7 +281,7 @@ def test_cast_wrong_args_type():
 
 def test_cast():
     def cast_fieldop(a: Field[..., "int64"]):
-        return cast(float64, a)
+        return cast(a, float64)
 
     parsed = FieldOperatorParser.apply_to_function(cast_fieldop)
 

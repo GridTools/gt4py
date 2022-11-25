@@ -418,9 +418,9 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        obj = (to_value(node.args[1]))(self.visit(node.args[1], **kwargs))
-        dtype = node.args[0].id
-        return self._lift_lambda(node)(im.call_("cast_")(dtype, obj))
+        obj = (to_value(node.args[0]))(self.visit(node.args[0], **kwargs))
+        dtype = node.args[1].id
+        return self._lift_lambda(node)(im.call_("cast_")(obj, dtype))
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
@@ -532,7 +532,7 @@ class InsideReductionLowering(FieldOperatorLowering):
 
     def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:  # type: ignore[override]
         return self._lift_lambda(node)(
-            im.call_("cast_")(node.args[0].id, self.visit(node.args[1], **kwargs))
+            im.call_("cast_")(self.visit(node.args[1], **kwargs), node.args[1].id)
         )
 
     def _sequential_id(self):

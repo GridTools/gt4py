@@ -14,7 +14,7 @@
 from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
-from eve import NodeTranslator, NodeVisitor, SymbolRef, traits
+from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
 from functional.ffront.symbol_makers import make_symbol_type_from_value
@@ -458,13 +458,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         # ensure signature is valid
         try:
-            if new_func.id != SymbolRef("cast"):
-                type_info.accepts_args(
-                    func_type,
-                    with_args=arg_types,
-                    with_kwargs=kwarg_types,
-                    raise_exception=True,
-                )
+            type_info.accepts_args(
+                func_type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
+                raise_exception=True,
+            )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg=f"Invalid argument types in call to `{node.func.id}`!"
@@ -605,9 +604,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call | foast.Constant:
-        dtype_obj = node.args[0]
-        casted_obj = node.args[1]
+    def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call:
+        casted_obj = node.args[0]
+        dtype_obj = node.args[1]
         if not isinstance(dtype_obj.type, ct.FunctionType) or not (
             type_info.is_arithmetic(dtype_obj.type.returns)
             or type_info.is_logical(dtype_obj.type.returns)
@@ -621,15 +620,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected either arithmetic ScalarType or FieldType, but got {casted_obj}.",
+                f"Expected either arithmetic FieldType, but got {casted_obj}.",
             )
-        new_dtype = dtype_obj.type.returns
-        if isinstance(casted_obj.type, ct.ScalarType):
-            # return_type = new_dtype
-            return foast.Constant(value=casted_obj.value, location=node.location, type=new_dtype)
         return_type = ct.FieldType(
             dims=casted_obj.type.dims,
-            dtype=new_dtype,
+            dtype=dtype_obj.type.returns,
         )
         return foast.Call(
             func=node.func,

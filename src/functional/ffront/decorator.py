@@ -327,11 +327,8 @@ class Program:
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
-        if not (
-            isinstance(list(self.closure_vars.values())[0], FieldOperator)
-            and "cast" in list(self.closure_vars.values())[0].closure_vars
-        ):
-            self._validate_args(*args, **kwargs)
+
+        self._validate_args(*args, **kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs

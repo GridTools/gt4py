@@ -54,8 +54,8 @@ class TernaryExpr(Expr):
 
 
 class CastExpr(Expr):
-    new_dtype: SymRef
     obj_expr: Expr
+    new_dtype: SymRef
 
 
 class Literal(Expr):

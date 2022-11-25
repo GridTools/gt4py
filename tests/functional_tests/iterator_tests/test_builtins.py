@@ -124,8 +124,8 @@ def fencil(builtin, out, *inps, processor, as_column=False):
         ),
         (
             cast_,
-            [[float64], [2]],
-            [2.0],
+            [[2, 7], [float64, float64]],
+            [2.0, 7.0],
         ),
     ],
 )
@@ -136,7 +136,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
     if builtin.__name__ == "cast_":
-        out = builtin(float64, inps[1].__array__())
+        out = builtin(inps[0].__array__(), float64)
     else:
         fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 

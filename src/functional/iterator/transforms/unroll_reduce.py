@@ -63,7 +63,7 @@ class UnrollReduce(NodeTranslator):
     def _make_cast(new_dtype: ir.Literal, obj_expr: ir.Expr):
         return ir.FunCall(
             fun=ir.SymRef(id="cast_"),
-            args=[new_dtype, obj_expr],
+            args=[obj_expr, new_dtype],
         )
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
