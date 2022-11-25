@@ -241,11 +241,11 @@ class GTFNIMCodegen(GTFNCodegen):
 
     Conditional = as_mako(
         """
-  if ${cond} {
+  if (${cond}) {
   ${';\\n'.join(if_stmts)}
   } else {
   ${';\\n'.join(else_stmts)}
-  }}
+  }
   """
     )
 

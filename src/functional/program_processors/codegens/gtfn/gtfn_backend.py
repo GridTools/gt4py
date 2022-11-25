@@ -24,7 +24,6 @@ from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GT
 
 
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
-    do_unroll_reduce = not "imperative" in kwargs
     transformed = program
     offset_provider = kwargs.get("offset_provider")
     transformed = apply_common_transforms(
@@ -38,7 +37,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
     )
-    if "imperative" in kwargs:
+    if kwargs["imperative"]:
         gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir, **kwargs)
         generated_code = GTFNIMCodegen.apply(gtfn_im_ir, **kwargs)
     else:

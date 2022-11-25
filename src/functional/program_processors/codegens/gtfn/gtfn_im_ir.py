@@ -22,12 +22,16 @@ from eve.traits import SymbolTableTrait
 
 
 class Stmt(Node):
+    ...
+
+
+class AssignStmt(Stmt):
     op: str = "="
     lhs: Union[Sym, SymRef]  # TODO not sure what to use
-    rhs: Expr
+    rhs: Union[Sym, Expr]
 
 
-class InitStmt(Stmt):
+class InitStmt(AssignStmt):
     type: str = "auto"
 
 
@@ -37,7 +41,7 @@ class Conditional(Stmt):
     else_stmts: List[Stmt]
 
 
-class ReturnStmt(Node):
+class ReturnStmt(Stmt):
     ret: Expr
 
 

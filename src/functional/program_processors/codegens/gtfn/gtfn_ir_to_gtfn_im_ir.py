@@ -4,8 +4,9 @@ import eve
 from eve import NodeVisitor, NodeTranslator
 from eve.utils import UIDGenerator
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
-    InitStmt,
     Stmt,
+    InitStmt,
+    AssignStmt,
     ReturnStmt,
     Conditional,
     ImperativeFunctionDefinition,
@@ -80,7 +81,7 @@ class ToImpIR(NodeVisitor):
             new_expr = Replace(cur_idx=lambda_iter).visit(node.expr.rhs)
             rhs = self.visit(new_expr)  # TODO: this only supports sum_over
             self.imp_list_ir.append(
-                Stmt(op="+=", lhs=gtfn_ir.SymRef(id=kwargs["red_idx"]), rhs=rhs)
+                AssignStmt(op="+=", lhs=gtfn_ir.SymRef(id=kwargs["red_idx"]), rhs=rhs)
             )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall):
@@ -101,7 +102,7 @@ class ToImpIR(NodeVisitor):
             params = [self.visit(param) for param in node.fun.params]
             args = [self.visit(arg) for arg in node.args]
             for param, arg in zip(params, args):
-                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{param}"), rhs=arg))
+                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{param.id}"), rhs=arg))
             expr = self.visit(node.fun.expr)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir.SymRef(id=f"{lam_idx}")
@@ -128,11 +129,17 @@ class ToImpIR(NodeVisitor):
             InitStmt(
                 type="double",
                 lhs=gtfn_ir.Sym(id=cond_idx),
-                rhs=gtfn_ir.Literal("0.", type="float64"),
+                rhs=gtfn_ir.Literal(value="0.", type="float64"),
             )
         )
-        self.imp_list_ir.append(Conditional(cond=cond, if_stmts=if_, else_stmts=else_))
-        return gtfn_ir.Sym(id=cond_idx)
+        self.imp_list_ir.append(
+            Conditional(
+                cond=cond,
+                if_stmts=[AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=if_)],
+                else_stmts=[AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=else_)],
+            )
+        )
+        return gtfn_ir.SymRef(id=cond_idx)
 
 
 @dataclasses.dataclass(frozen=True)
