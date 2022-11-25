@@ -47,7 +47,16 @@ class RemoveShiftsTransformer(NodeTranslator):
 
         return self.generic_visit(node)
 
-
+# Note that `ignore_shift` and `translate_shift` on a lifted stencil call do not propagate
+# to the arguments as otherwise this:
+#
+# `deref(ignore_shift(V2EDimₒ)(↑(λ(it) → shift(V2EDimₒ, 1)(it)))(it))`
+#
+#  would be transformed into
+#
+# ⇔ `deref(↑(λ(it) → shift(V2EDimₒ, 1)(it))(ignore_shift(V2EDimₒ)(it)))`
+# ⇔ `λ(it) → shift(V2EDimₒ, 1)(ignore_shift(V2EDimₒ)(it))`
+# ⇔ `λ(it) → it`
 class PropagateShiftTransformer(NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node):
@@ -91,4 +100,5 @@ class PropagateShiftTransformer(NodeTranslator):
             ignore_shift = node.args[0].fun
 
             return ir.FunCall(fun=ignore_shift, args=[self.visit(ir.FunCall(fun=shift, args=it))])
+
         return node
