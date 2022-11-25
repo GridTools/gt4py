@@ -240,6 +240,59 @@ class TestFunction:
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
 
+    def test_use_in_expr(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_as_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_in_expr_in_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func() + 1)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
 
 class TestImportedExternals:
     def test_all_legal_combinations(self):
