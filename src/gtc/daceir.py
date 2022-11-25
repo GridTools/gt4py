@@ -879,7 +879,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[Tasklet, "DomainMap", "NestedSDFG"]]
+    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
 
 
 class ComputationState(IterationNode):
@@ -889,7 +889,7 @@ class ComputationState(IterationNode):
 class DomainLoop(IterationNode, ComputationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, "DomainLoop"]]
+    loop_states: List[Union[ComputationState, DomainLoop]]
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
