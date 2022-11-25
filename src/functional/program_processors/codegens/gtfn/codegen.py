@@ -202,8 +202,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             grid_type_str=self._grid_type_str[node.grid_type],
             **kwargs,
         )
-        scalar_functions = "\n\n".join(self._scalar_functions.values())
-        return scalar_functions + body
+        scalar_function_bodies = "\n\n".join(self._scalar_functions.values())
+        scalar_function_header = "// clang-format: off\n#include <pythonic/core.hpp>\n// clang-format: on\n"
+        return scalar_function_header + scalar_function_bodies + body
 
     TemporaryAllocation = as_fmt(
         "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
