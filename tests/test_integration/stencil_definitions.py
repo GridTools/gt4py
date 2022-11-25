@@ -136,6 +136,7 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         cbrt_res = cbrt(gamma_res)
         floor_res = floor(cbrt_res)
         ceil_res = ceil(floor_res)
+        trunc_res = trunc(ceil_res)
         field_b = (
             trunc_res
             if isfinite(trunc_res)
