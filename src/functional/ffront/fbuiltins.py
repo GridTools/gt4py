@@ -75,7 +75,7 @@ where = BuiltInFunction(
     )
 )
 
-cast = BuiltInFunction(
+astype = BuiltInFunction(
     ct.FunctionType(
         args=[
             ct.DeferredSymbolType(constraint=ct.FieldType),
@@ -191,7 +191,7 @@ FUN_BUILTIN_NAMES = [
     "min_over",
     "broadcast",
     "where",
-    "cast",
+    "astype",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES

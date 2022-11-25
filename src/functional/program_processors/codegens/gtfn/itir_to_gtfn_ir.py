@@ -365,7 +365,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     true_expr=self.visit(node.args[1], **kwargs),
                     false_expr=self.visit(node.args[2], **kwargs),
                 )
-            elif node.fun.id == "cast_":
+            elif node.fun.id == "astype_":
                 assert len(node.args) == 2
                 return CastExpr(
                     obj_expr=self.visit(node.args[0], **kwargs),

@@ -6,9 +6,9 @@ import pytest
 
 from functional.iterator.builtins import (
     and_,
+    astype_,
     can_deref,
     cartesian_domain,
-    cast_,
     deref,
     divides,
     eq,
@@ -123,7 +123,7 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [False, True, True, False],
         ),
         (
-            cast_,
+            astype_,
             [[2, 7], [float64, float64]],
             [2.0, 7.0],
         ),
@@ -135,7 +135,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    if builtin.__name__ == "cast_":
+    if builtin.__name__ == "astype_":
         out = builtin(inps[0].__array__(), float64)
     else:
         fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)

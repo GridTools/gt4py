@@ -26,8 +26,8 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
+    astype,
     broadcast,
-    cast,
     float64,
     int32,
     int64,
@@ -763,7 +763,7 @@ def test_conditional(fieldview_backend):
     assert np.allclose(np.where(mask, a, b), out)
 
 
-def test_cast(fieldview_backend):
+def test_astype(fieldview_backend):
     size = 10
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(np.ones((size,), dtype=int64))
@@ -772,19 +772,19 @@ def test_cast(fieldview_backend):
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
-    def cast_fieldop_int(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
-        d = cast(a, int64)
+    def astype_fieldop_int(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
+        d = astype(a, int64)
         return d
 
-    cast_fieldop_int(a, out=out_int, offset_provider={})
+    astype_fieldop_int(a, out=out_int, offset_provider={})
     assert np.allclose(b, out_int)
 
     @field_operator(backend=fieldview_backend)
-    def cast_fieldop_bool(b: Field[[IDim], int64]) -> Field[[IDim], bool]:
-        d = cast(b, bool)
+    def astype_fieldop_bool(b: Field[[IDim], int64]) -> Field[[IDim], bool]:
+        d = astype(b, bool)
         return d
 
-    cast_fieldop_bool(b, out=out_bool, offset_provider={})
+    astype_fieldop_bool(b, out=out_bool, offset_provider={})
     assert np.allclose(c, out_bool)
 
 

@@ -253,8 +253,8 @@ def if_(cond, t, f):
     return t if cond else f
 
 
-@builtins.cast_.register(EMBEDDED)
-def cast_(obj, new_dtype):
+@builtins.astype_.register(EMBEDDED)
+def astype_(obj, new_dtype):
     return new_dtype(obj)
 
 

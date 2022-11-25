@@ -417,10 +417,10 @@ class FieldOperatorLowering(NodeTranslator):
             f"Call to object of type {type(node.func.type).__name__} not understood."
         )
 
-    def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         obj = (to_value(node.args[0]))(self.visit(node.args[0], **kwargs))
         dtype = node.args[1].id
-        return self._lift_lambda(node)(im.call_("cast_")(obj, dtype))
+        return self._lift_lambda(node)(im.call_("astype_")(obj, dtype))
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         mask, left, right = (to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
@@ -530,9 +530,9 @@ class InsideReductionLowering(FieldOperatorLowering):
         self.lambda_params[uid] = FieldOperatorLowering.apply(node)
         return im.ref(uid)
 
-    def _visit_cast(self, node: foast.Call, **kwargs) -> itir.FunCall:  # type: ignore[override]
+    def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:  # type: ignore[override]
         return self._lift_lambda(node)(
-            im.call_("cast_")(self.visit(node.args[1], **kwargs), node.args[1].id)
+            im.call_("astype_")(self.visit(node.args[0], **kwargs), node.args[1].id)
         )
 
     def _sequential_id(self):

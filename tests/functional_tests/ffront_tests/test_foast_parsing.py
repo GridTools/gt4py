@@ -28,14 +28,14 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types, field_operator_ast as foast
-from functional.ffront.fbuiltins import Dimension, cast, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
-    cast_,
+    astype_,
     deref,
     divides,
     eq,
@@ -70,7 +70,7 @@ AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
 XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
-CAST = itir.SymRef(id=cast_.fun.__name__)
+ASTYPE = itir.SymRef(id=astype_.fun.__name__)
 
 
 # --- Parsing ---
@@ -268,22 +268,22 @@ def test_conditional_wrong_arg_type():
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
-def test_cast_wrong_args_type():
-    def cast_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
-        return cast(a, str)
+def test_astype_wrong_args_type():
+    def astype_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
+        return astype(a, str)
 
     msg_1 = r"Invalid argument types"
     with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_1:
-        _ = FieldOperatorParser.apply_to_function(cast_wrong_type_1)
+        _ = FieldOperatorParser.apply_to_function(astype_wrong_type_1)
 
     assert re.search(msg_1, exc_info_1.value.args[0]) is not None
 
 
 def test_cast():
-    def cast_fieldop(a: Field[..., "int64"]):
-        return cast(a, float64)
+    def astype_fieldop(a: Field[..., "int64"]):
+        return astype(a, float64)
 
-    parsed = FieldOperatorParser.apply_to_function(cast_fieldop)
+    parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
 
     assert parsed.body[-1].value.type == common_types.FieldType(
         dims=Ellipsis,

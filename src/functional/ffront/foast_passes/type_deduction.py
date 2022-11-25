@@ -604,7 +604,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
-    def _visit_cast(self, node: foast.Call, **kwargs) -> foast.Call:
+    def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
         casted_obj = node.args[0]
         dtype_obj = node.args[1]
         if not isinstance(dtype_obj.type, ct.FunctionType) or not (
