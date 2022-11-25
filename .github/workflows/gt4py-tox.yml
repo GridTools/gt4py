@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10"]
         backends: [internal-cpu, all-cpu]
         exclude:
-        - python-version: "3.9"
+        - python-version: "3.8"
           backends: internal-cpu
 
 

@@ -21,7 +21,7 @@ import numbers
 import textwrap
 import time
 import types
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
 import numpy as np
 
@@ -45,7 +45,7 @@ from .exceptions import (
 )
 
 
-PYTHON_AST_VERSION = (3, 9)
+PYTHON_AST_VERSION: Final = (3, 8)
 
 
 class AssertionChecker(ast.NodeTransformer):
