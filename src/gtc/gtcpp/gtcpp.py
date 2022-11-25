@@ -179,9 +179,6 @@ class GTFunctor(LocNode, eve.SymbolTableTrait):
 class Arg(LocNode):
     name: eve.Coerced[eve.SymbolRef]
 
-    # class Config(eve.concepts.FrozenModel.Config):
-    #     pass
-
     def __hash__(self) -> int:
         return hash(self.name)
 
