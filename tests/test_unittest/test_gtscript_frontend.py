@@ -705,27 +705,6 @@ class TestExternalsWithSubroutines:
             module=self.__class__.__name__,
         )
 
-    def test_no_nested_function_call(self):
-        @gtscript.function
-        def _lap(dx, phi):
-            return (phi[0, -1, 0] - 2.0 * phi[0, 0, 0] + phi[0, 1, 0]) / (dx * dx)
-
-        def definition_func(phi: gtscript.Field[np.float64], dx: float):
-            from gt4py.__externals__ import lap
-
-            with computation(PARALLEL), interval(...):
-                phi = lap(lap(phi, dx), dx)
-
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
-            parse_definition(
-                definition_func,
-                name=inspect.stack()[0][3],
-                module=self.__class__.__name__,
-                externals={
-                    "lap": _lap,
-                },
-            )
-
 
 class TestFunctionReturn:
     def test_no_return(self):
