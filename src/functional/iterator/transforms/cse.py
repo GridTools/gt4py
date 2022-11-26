@@ -12,8 +12,10 @@ class CollectSubexpressions(NodeVisitor):
     def apply(cls, node: ir.Node):
         subexprs = dict[ir.Node, tuple[list[int], Optional[ir.Node]]]()
         refs: ChainMap[str, bool] = ChainMap()
+        collector_stack: list[bool] = []
 
-        cls().visit(node, subexprs=subexprs, refs=refs, parent=None)
+        cls().visit(node, subexprs=subexprs, refs=refs, parent=None,
+                    collector_stack=collector_stack)
 
         return subexprs
 
@@ -22,10 +24,13 @@ class CollectSubexpressions(NodeVisitor):
         node: ir.SymRef,
         *,
         refs: ChainMap[str, bool],
+        collector_stack: list[bool],
         **kwargs,
     ) -> None:
         if node.id in refs:
-            refs[node.id] = True
+            # we have used a symbol that is not declared in the root node, so propagate
+            # to parent
+            collector_stack[-1] = False
 
     def visit_Lambda(
         self,
@@ -34,12 +39,17 @@ class CollectSubexpressions(NodeVisitor):
         subexprs: dict[ir.Node, tuple[list[int], Optional[ir.Node]]],
         refs: ChainMap[str, bool],
         parent: Optional[ir.Node],
+        collector_stack: list[bool],
     ) -> None:
         r = refs.new_child({p.id: False for p in node.params})
-        self.generic_visit(node, subexprs=subexprs, refs=r, parent=node)
 
-        if not any(refs.maps[0].values()):
+        child_collector_stack = [*collector_stack, True]
+        self.generic_visit(node, subexprs=subexprs, refs=r, parent=node, collector_stack=collector_stack)
+        if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
+        else:
+            if len(collector_stack) > 0:
+                collector_stack[-1] = False  # poison parent
 
     def visit_FunCall(
         self,
@@ -48,13 +58,21 @@ class CollectSubexpressions(NodeVisitor):
         subexprs: dict[ir.Node, tuple[list[int], Optional[ir.Node]]],
         refs: ChainMap[str, bool],
         parent: Optional[ir.Node],
+        collector_stack: list[bool],
     ) -> None:
-        self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node)
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
         if node.fun == ir.SymRef(id="shift"):
             return
-        if not any(refs.maps[0].values()):
+
+        child_collector_stack = [*collector_stack, True]
+
+        self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node, collector_stack=child_collector_stack)
+
+        if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
+        else:
+            if len(collector_stack) > 0:
+                collector_stack[-1] = False  # poison parent
 
 
 @dataclasses.dataclass(frozen=True)
@@ -80,8 +98,6 @@ class CommonSubexpressionElimination(NodeTranslator):
             "unstructured_domain",
         ]:
             return node
-
-        #node = self.generic_visit(node)
 
         # collect expressions
         subexprs = CollectSubexpressions.apply(node)
