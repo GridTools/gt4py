@@ -241,12 +241,14 @@ class GTFNIMCodegen(GTFNCodegen):
 
     Conditional = as_mako(
         """
-  if (${cond}) {
-  ${';\\n'.join(if_stmts)}
-  } else {
-  ${';\\n'.join(else_stmts)}
-  }
-  """
+          using ${type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
+          ${init_stmt}
+          if (${cond}) {
+            ${if_stmt}
+          } else {
+            ${else_stmt}
+          }
+    """
     )
 
     ImperativeFunctionDefinition = as_mako(
@@ -262,6 +264,11 @@ class GTFNIMCodegen(GTFNCodegen):
     )
 
     ReturnStmt = as_fmt("return {ret};")
+
+    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs):
+        if_rhs_ = self.visit(node.if_stmt.rhs)
+        else_rhs_ = self.visit(node.else_stmt.rhs)
+        return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
 
     def visit_ImperativeFunctionDefinition(
         self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs

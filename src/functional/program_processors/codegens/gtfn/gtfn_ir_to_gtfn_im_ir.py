@@ -114,19 +114,17 @@ class ToImpIR(NodeVisitor):
         if_ = self.visit(node.true_expr)
         else_ = self.visit(node.false_expr)
         cond_idx = self.uids.sequential_id(prefix="cond")
-        # this just guesses double as type of temporary
-        self.imp_list_ir.append(
-            InitStmt(
-                type="double",
-                lhs=gtfn_ir.Sym(id=cond_idx),
-                rhs=gtfn_ir.Literal(value="0.", type="float64"),
-            )
-        )
         self.imp_list_ir.append(
             Conditional(
+                type=f"{cond_idx}_t",
+                init_stmt=InitStmt(
+                    type=f"{cond_idx}_t",
+                    lhs=gtfn_ir.Sym(id=cond_idx),
+                    rhs=gtfn_ir.Literal(value="0.", type="float64"),
+                ),
                 cond=cond,
-                if_stmts=[AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=if_)],
-                else_stmts=[AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=else_)],
+                if_stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=if_),
+                else_stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=else_),
             )
         )
         return gtfn_ir.SymRef(id=cond_idx)

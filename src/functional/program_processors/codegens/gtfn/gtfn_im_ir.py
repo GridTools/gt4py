@@ -36,13 +36,15 @@ class InitStmt(AssignStmt):
 
 
 class Conditional(Stmt):
-    cond: Expr
-    if_stmts: List[Stmt]
-    else_stmts: List[Stmt]
+    type: str
+    init_stmt: Stmt
+    cond: Union[SymRef, Expr]
+    if_stmt: Stmt
+    else_stmt: Stmt
 
 
 class ReturnStmt(Stmt):
-    ret: Expr
+    ret: Union[Expr, Sym, SymRef]
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
