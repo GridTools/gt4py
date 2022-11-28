@@ -107,7 +107,9 @@ class ToImpIR(NodeVisitor):
             tuple_fun = gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="make_tuple"), args=tup_args)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{tupl_idx}"), rhs=tuple_fun))
             return gtfn_ir.SymRef(id=f"{tupl_idx}")
-        return node
+        return gtfn_ir.FunCall(
+            fun=self.visit(node.fun), args=[self.visit(arg) for arg in node.args]
+        )
 
     def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr) -> str:
         cond = self.visit(node.cond)
