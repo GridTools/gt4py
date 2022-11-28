@@ -95,8 +95,6 @@ def add_external_const(a):
 class TestInlinedExternals:
     def test_all_legal_combinations(self):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = (
                     (
@@ -115,8 +113,6 @@ class TestInlinedExternals:
 
     def test_missing(self):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
 
@@ -126,8 +122,6 @@ class TestInlinedExternals:
             )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
 
@@ -193,8 +187,6 @@ class TestInlinedExternals:
         A = 1
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = some_function()
 
@@ -213,8 +205,6 @@ class TestInlinedExternals:
         WRONG_VALUE_CONSTANT = value_type()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
 
@@ -230,12 +220,41 @@ class TestFunction:
             return 1.0
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = func()
 
         with pytest.raises(TypeError, match=r"func is not a gtscript function"):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+
+class TestAxisSyntax:
+    def test_good_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I + 1, J - 1]
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_bad_mul_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I * 1]
+
+        with pytest.raises(TypeError):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_bad_dup_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I + 1 + I]
+
+        with pytest.raises(TypeError):
             parse_definition(
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
@@ -259,7 +278,6 @@ class TestImportedExternals:
                 NESTED_CONSTANTS,
                 VERY_NESTED_CONSTANTS,
             )
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -285,7 +303,6 @@ class TestImportedExternals:
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import MISSING_CONSTANT
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -297,7 +314,6 @@ class TestImportedExternals:
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import NESTED_CONSTANTS
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing

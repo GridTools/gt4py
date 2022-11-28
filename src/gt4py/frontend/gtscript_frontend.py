@@ -1024,18 +1024,37 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
-    def _eval_index(self, node: ast.Subscript) -> Optional[List[int]]:
-        invalid_target = GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
-
+    def _eval_index(
+        self, node: ast.Subscript, axes: Optional[Set[str]] = None
+    ) -> Optional[List[int]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
-            raise invalid_target
+            raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
         if any(isinstance(cn, ast.Ellipsis) for cn in index_nodes):
             return None
+
+        # Determine if we are using the new-style axis syntax, or the old style.
+        # If this is parsing a data index, this should be fine and will return False.
+        new_style_syntax = False
+        if axes is not None:
+            for index_node in index_nodes:
+                for node in ast.walk(index_node):
+                    if isinstance(node, ast.Name) and node.id in axes:
+                        new_style_syntax = True
+                        break
+
+        if new_style_syntax:
+            index_dict = {axis: 0 for axis in axes}
+            for index_node in index_nodes:
+                axis_context = {axis: gtscript.Axis(axis) for axis in axes}
+                value = gt_meta.ASTEvaluator.apply(index_node, axis_context)
+                assert isinstance(value, gtscript.Axis)
+                index_dict[value.name] = value.shift
+            index = [index_dict[axis] for axis in ("I", "J", "K") if axis in index_dict]
         else:
             index = []
             for index_node in index_nodes:
@@ -1044,13 +1063,17 @@ class IRMaker(ast.NodeVisitor):
                     index.append(offset)
                 except Exception:
                     index.append(self.visit(index_node))
-            return index
+        return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
 
-        index = self._eval_index(node)
         result = self.visit(node.value)
+        if isinstance(result, nodes.FieldRef):
+            axes = set(result.offset.keys())
+        else:
+            axes = None
+        index = self._eval_index(node, axes)
         if isinstance(result, nodes.VarRef):
             assert index is not None
             result.index = index[0]

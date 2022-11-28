@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Optional, Type
 
 import numpy as np
 
@@ -523,12 +523,13 @@ class AxisInterval:
 
 # GTScript builtins: domain axes
 class Axis:
-    def __init__(self, name: str):
+    def __init__(self, name: str, shift: Optional[int] = 0):
         assert name
         self.name = name
+        self.shift = shift
 
     def __repr__(self):
-        return f"Axis(name={self.name})"
+        return f"Axis(name={self.name}, shift={self.shift})"
 
     def __str__(self):
         return self.name
@@ -540,6 +541,18 @@ class Axis:
             return AxisIndex(self.name, interval)
         else:
             raise TypeError("Unrecognized index type")
+
+    def __add__(self, other):
+        if not isinstance(other, int):
+            raise TypeError(f"Requires 'other' to be an int, got {type(other)}")
+
+        return Axis(self.name, shift=self.shift + other)
+
+    def __sub__(self, other):
+        if not isinstance(other, int):
+            raise TypeError(f"Requires 'other' to be an int, got {type(other)}")
+
+        return Axis(self.name, shift=self.shift - other)
 
 
 I = Axis("I")
