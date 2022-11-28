@@ -6,13 +6,11 @@ import pytest
 
 from functional.iterator.builtins import (
     and_,
-    astype_,
     can_deref,
     cartesian_domain,
     deref,
     divides,
     eq,
-    float64,
     greater,
     if_,
     less,
