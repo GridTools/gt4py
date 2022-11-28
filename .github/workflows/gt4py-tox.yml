@@ -46,7 +46,7 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
     - name: Test with tox
       env:
-        NUM_PROCESSES: 4
+        NUM_PROCESSES: auto
       run: |
         pyversion_no_dot=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion_no_dot//./}
