@@ -268,18 +268,7 @@ def test_conditional_wrong_arg_type():
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
-def test_astype_wrong_args_type():
-    def astype_wrong_type_1(a: Field[..., float64]) -> Field[..., int64]:
-        return astype(a, str)
-
-    msg_1 = r"Invalid argument types"
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info_1:
-        _ = FieldOperatorParser.apply_to_function(astype_wrong_type_1)
-
-    assert re.search(msg_1, exc_info_1.value.args[0]) is not None
-
-
-def test_cast():
+def test_astype():
     def astype_fieldop(a: Field[..., "int64"]):
         return astype(a, float64)
 

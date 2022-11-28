@@ -21,6 +21,7 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
+    astype,
     broadcast,
     float32,
     float64,
@@ -645,4 +646,17 @@ def test_where_mixed_dims():
                 ]
             ),
         ]
+    )
+
+
+def test_astype_dtype():
+    ADim = Dimension("ADim")
+
+    def simple_astype(a: Field[[ADim], float64]):
+        return astype(a, bool)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_astype)
+
+    assert parsed.body[0].value.type == ct.FieldType(
+        dims=[ADim], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL)
     )

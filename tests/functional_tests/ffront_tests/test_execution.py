@@ -1036,16 +1036,16 @@ def test_ternary_operator():
 
     left = 2.0
     right = 3.0
-    #
-    # @field_operator
-    # def ternary_field_op(
-    #     a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
-    # ) -> Field[[IDim], float]:
-    #     return a if left < right else b
-    #
-    # ternary_field_op(a, b, left, right, out=out, offset_provider={})
+
+    @field_operator
+    def ternary_field_op(
+        a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
+    ) -> Field[[IDim], float]:
+        return a if left < right else b
+
+    ternary_field_op(a, b, left, right, out=out, offset_provider={})
     e = np.asarray(a) if left < right else np.asarray(b)
-    # np.allclose(e, out)
+    np.allclose(e, out)
 
     @field_operator
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:

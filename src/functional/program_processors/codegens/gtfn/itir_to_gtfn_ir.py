@@ -338,7 +338,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         return result
 
-    def _check_shift_scan(self, node: itir.FunCall) -> None:
+    def _error_on_illegal_function_calls(self, node: itir.FunCall) -> None:
         if node.fun.id == "shift":
             raise ValueError("unapplied shift call not supported: {node}")
         elif node.fun.id == "scan":
@@ -373,7 +373,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
-            self._check_shift_scan(node)
+            self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)

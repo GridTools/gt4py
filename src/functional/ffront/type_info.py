@@ -278,7 +278,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
 
     """
     if isinstance(symbol_type, ct.FunctionType):
-        raise NotImplementedError("Comment")
+        raise NotImplementedError("`FunctionType` can not be concretizable")
     if isinstance(symbol_type, ct.DeferredSymbolType) and (
         symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
     ):
@@ -658,6 +658,3 @@ def accepts_args(
         return True
 
     return next(errors, None) is None
-
-
-# make cast type as a functionType and rename cast in front-end to astype(x, type)
