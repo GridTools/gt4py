@@ -624,9 +624,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         >>> print("Result:", infer_type(lambda a, b: a + b))
         Result: ...Callable[[typing.Any, typing.Any], typing.Any]
 
+        # Note that some patch versions of cpython3.9 show weird behaviors
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
-        Result: ...Callable[[int, typing.Any], int]
+        Result: ...Callable[[...int..., typing.Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
