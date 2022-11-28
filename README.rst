@@ -15,12 +15,13 @@ domain-specific language (DSL).
 ⚡️ Quick Start
 --------------
 
-GT4Py requires Python 3.9+ and uses the standard Python packaging method,
+GT4Py requires Python 3.8+ and uses the standard Python packaging method,
 so can be installed using `pip`.
 It is not yet released on PyPI, so users have to point to the
 git repository to install it.
 
 It is recommended to install the package in a virtual environment.
+For example:
 
 .. code-block:: bash
 
