@@ -28,8 +28,7 @@ class ToImpIR(NodeVisitor):
             return f"{value}."
         return value
 
-    # can those be replaced with a visit_Node? c.f. comments Enrique
-    def visit_Sym(self, node: gtfn_ir.Sym):
+    def visit_Node(self, node):
         return node
 
     def visit_UnaryExpr(self, node: gtfn_ir.UnaryExpr):
@@ -37,15 +36,6 @@ class ToImpIR(NodeVisitor):
 
     def visit_BinaryExpr(self, node: gtfn_ir.BinaryExpr):
         return gtfn_ir.BinaryExpr(op=node.op, lhs=self.visit(node.lhs), rhs=self.visit(node.rhs))
-
-    def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral):
-        return node
-
-    def visit_Literal(self, node: gtfn_ir.Literal):
-        return node
-
-    def visit_SymRef(self, node: gtfn_ir.SymRef):
-        return node
 
     @staticmethod
     def _depth(node: gtfn_ir.FunCall) -> int:
