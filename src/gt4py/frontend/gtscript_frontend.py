@@ -483,6 +483,8 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
+            if len(assign_targets) > 1:
+                raise GTScriptSyntaxError("Function returning tuple used in expression.")
             target_node = ast.Name(
                 ctx=ast.Store(),
                 lineno=node.lineno,

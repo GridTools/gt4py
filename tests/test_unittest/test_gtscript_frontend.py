@@ -293,6 +293,50 @@ class TestFunction:
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
         )
 
+    def test_use_in_expr_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Function returning tuple used in expression."
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_use_in_call_arg_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError, match="Function returning tuple used in expression."
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
 
 class TestImportedExternals:
     def test_all_legal_combinations(self):
@@ -769,6 +813,21 @@ class TestFunctionReturn:
         def definition_func(phi: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 phi = test_conditional_return(phi)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_return_tuple(self):
+        @gtscript.function
+        def return_tuple():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(res1: gtscript.Field[np.float64], res2: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):
+                res1, res2 = return_tuple()
 
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
