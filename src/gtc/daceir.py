@@ -11,45 +11,51 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, Union
 
 import dace
 import sympy
-from pydantic import validator
 
 import eve
 import gtc
-from eve import Int, IntEnum, Node, Str, StrEnum, SymbolName, SymbolRef, utils
+import gtc.definitions
+from eve import datamodels
 from gtc import common, oir
 from gtc.common import LocNode
-from gtc.dace.utils import get_dace_symbol
+from gtc.dace.symbol_utils import (
+    get_axis_bound_dace_symbol,
+    get_axis_bound_diff_str,
+    get_axis_bound_str,
+    get_dace_symbol,
+)
 
-from .dace.utils import get_axis_bound_dace_symbol, get_axis_bound_diff_str, get_axis_bound_str
 
-
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     dtype: common.DataType
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
 
-class Axis(StrEnum):
+class Axis(eve.StrEnum):
     I = "I"  # noqa: E741 ambiguous variable name 'I'
     J = "J"
     K = "K"
 
-    def domain_symbol(self) -> SymbolRef:
-        return SymbolRef.from_string("__" + self.upper())
+    def domain_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__" + self.upper())
 
-    def iteration_symbol(self) -> SymbolRef:
-        return SymbolRef.from_string("__" + self.lower())
+    def iteration_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__" + self.lower())
 
-    def tile_symbol(self) -> SymbolRef:
-        return SymbolRef.from_string("__tile_" + self.lower())
+    def tile_symbol(self) -> eve.SymbolRef:
+        return eve.SymbolRef("__tile_" + self.lower())
 
     @staticmethod
     def dims_3d() -> Generator["Axis", None, None]:
@@ -72,7 +78,7 @@ class Axis(StrEnum):
         return get_dace_symbol(self.tile_symbol())
 
 
-class MapSchedule(IntEnum):
+class MapSchedule(eve.IntEnum):
     Default = 0
     Sequential = 1
 
@@ -101,7 +107,7 @@ class MapSchedule(IntEnum):
         }[schedule]
 
 
-class StorageType(IntEnum):
+class StorageType(eve.IntEnum):
     Default = 0
 
     CPU_Heap = 1
@@ -145,17 +151,17 @@ class AxisBound(common.AxisBound):
         return get_axis_bound_dace_symbol(self)
 
 
-class IndexWithExtent(Node):
+class IndexWithExtent(eve.Node):
     axis: Axis
-    value: Union[AxisBound, Int, Str]
+    value: Union[AxisBound, int, str]
     extent: Tuple[int, int]
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         if isinstance(self.value, AxisBound) and self.value.level == common.LevelMarker.END:
             return {self.axis.domain_symbol()}
-        elif isinstance(self.value, Str):
-            return self.axis.iteration_symbol()
+        elif isinstance(self.value, str):
+            return {self.axis.iteration_symbol()}
         return set()
 
     @classmethod
@@ -218,12 +224,12 @@ class IndexWithExtent(Node):
         return IndexWithExtent(axis=self.axis, value=self.value, extent=extent)
 
 
-class DomainInterval(Node):
+class DomainInterval(eve.Node):
     start: AxisBound
     end: AxisBound
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         res = set()
         if self.start.level == common.LevelMarker.END:
             res.add(self.start.axis.domain_symbol())
@@ -290,7 +296,7 @@ class DomainInterval(Node):
         return self.start >= other.start and self.end <= other.end
 
 
-class TileInterval(Node):
+class TileInterval(eve.Node):
     axis: Axis
     start_offset: int
     end_offset: int
@@ -298,8 +304,10 @@ class TileInterval(Node):
     domain_limit: AxisBound
 
     @property
-    def free_symbols(self):
-        res = {self.axis.tile_symbol()}
+    def free_symbols(self) -> Set[eve.SymbolRef]:
+        res = {
+            self.axis.tile_symbol(),
+        }
         if self.domain_limit.level == common.LevelMarker.END:
             res.add(self.axis.domain_symbol())
         return res
@@ -355,8 +363,8 @@ class TileInterval(Node):
         return start, end
 
 
-class Range(Node):
-    var: SymbolRef
+class Range(eve.Node):
+    var: eve.SymbolRef
     interval: Union[DomainInterval, TileInterval]
     stride: int
 
@@ -372,11 +380,11 @@ class Range(Node):
         )
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         return {self.var, *self.interval.free_symbols}
 
 
-class GridSubset(Node):
+class GridSubset(eve.Node):
     intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]]
 
     def __iter__(self):
@@ -390,7 +398,7 @@ class GridSubset(Node):
                 yield axis, self.intervals[axis]
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[eve.SymbolRef]:
         return set().union(*(interval.free_symbols for interval in self.intervals.values()))
 
     @classmethod
@@ -450,8 +458,11 @@ class GridSubset(Node):
 
     @classmethod
     def from_interval(
-        cls, interval: Union[oir.Interval, DomainInterval, IndexWithExtent], axis: Axis
+        cls,
+        interval: Union[oir.Interval, TileInterval, DomainInterval, IndexWithExtent],
+        axis: Axis,
     ):
+        res_interval: Union[IndexWithExtent, TileInterval, DomainInterval]
         if isinstance(interval, (DomainInterval, oir.Interval)):
             res_interval = DomainInterval(
                 start=AxisBound(
@@ -485,7 +496,7 @@ class GridSubset(Node):
         return GridSubset(intervals=res_subsets)
 
     def tile(self, tile_sizes: Dict[Axis, int]):
-        res_intervals = dict()
+        res_intervals: Dict[Axis, Union[DomainInterval, TileInterval, IndexWithExtent]] = {}
         for axis, interval in self.intervals.items():
             if isinstance(interval, DomainInterval) and axis in tile_sizes:
                 if axis == Axis.K:
@@ -540,11 +551,11 @@ class GridSubset(Node):
         return GridSubset(intervals=intervals)
 
 
-class FieldAccessInfo(Node):
+class FieldAccessInfo(eve.Node):
     grid_subset: GridSubset
     global_grid_subset: GridSubset
     dynamic_access: bool = False
-    variable_offset_axes: List[Axis] = []
+    variable_offset_axes: List[Axis] = eve.field(default_factory=list)
 
     @property
     def is_dynamic(self) -> bool:
@@ -648,7 +659,7 @@ class FieldAccessInfo(Node):
         )
 
     def untile(self, tile_axes: Sequence[Axis]) -> "FieldAccessInfo":
-        res_intervals = dict()
+        res_intervals = {}
         for axis, interval in self.grid_subset.intervals.items():
             if isinstance(interval, TileInterval) and axis in tile_axes:
                 res_intervals[axis] = self.global_grid_subset.intervals[axis]
@@ -670,10 +681,10 @@ class FieldAccessInfo(Node):
         )
 
 
-class Memlet(Node):
-    field: SymbolRef
+class Memlet(eve.Node):
+    field: eve.Coerced[eve.SymbolRef]
     access_info: FieldAccessInfo
-    connector: SymbolRef
+    connector: eve.Coerced[eve.SymbolRef]
     is_read: bool
     is_write: bool
 
@@ -707,7 +718,7 @@ class Memlet(Node):
 
 
 class Decl(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -717,8 +728,8 @@ class Decl(LocNode):
 
 
 class FieldDecl(Decl):
-    strides: List[Union[Int, Str]]
-    data_dims: List[Int]
+    strides: Tuple[Union[int, str], ...]
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
     access_info: FieldAccessInfo
     storage: StorageType
 
@@ -752,7 +763,7 @@ class Literal(common.Literal, Expr):
 
 
 class ScalarAccess(common.ScalarAccess, Expr):
-    name: SymbolRef
+    name: eve.Coerced[eve.SymbolRef]
 
 
 class VariableKOffset(common.VariableKOffset[Expr]):
@@ -772,11 +783,10 @@ class MaskStmt(Stmt):
     mask: Expr
     body: List[Stmt]
 
-    @validator("mask")
-    def mask_is_boolean_field_expr(cls, v: Expr) -> Expr:
+    @datamodels.validator("mask")
+    def mask_is_boolean_field_expr(self, attribute: datamodels.Attribute, v: Expr) -> None:
         if v.dtype != common.DataType.BOOL:
             raise ValueError("Mask must be a boolean expression.")
-        return v
 
 
 class HorizontalRestriction(common.HorizontalRestriction[Stmt], Stmt):
@@ -829,15 +839,15 @@ class ComputationNode(LocNode):
     read_memlets: List[Memlet]
     write_memlets: List[Memlet]
 
-    @validator("read_memlets", "write_memlets")
-    def unique_connectors(cls, node: List[Memlet]):
-        conns: Dict[SymbolRef, Set[SymbolRef]] = {}
-        for memlet in node:
+    @datamodels.validator("read_memlets")
+    @datamodels.validator("write_memlets")
+    def _validator(self, attribute: datamodels.Attribute, value: List[Memlet]) -> None:
+        conns: Dict[eve.SymbolRef, Set[eve.SymbolRef]] = {}
+        for memlet in value:
             conns.setdefault(memlet.field, set())
             if memlet.connector in conns[memlet.field]:
                 raise ValueError(f"Found multiple Memlets for connector '{memlet.connector}'")
             conns[memlet.field].add(memlet.connector)
-        return node
 
     @property
     def read_fields(self):
@@ -856,7 +866,7 @@ class ComputationNode(LocNode):
         return set(ml.connector for ml in self.write_memlets)
 
 
-class IterationNode(Node):
+class IterationNode(eve.Node):
     grid_subset: GridSubset
 
 
@@ -869,7 +879,7 @@ class Tasklet(ComputationNode, IterationNode, eve.SymbolTableTrait):
 class DomainMap(ComputationNode, IterationNode):
     index_ranges: List[Range]
     schedule: MapSchedule
-    computations: List[Union[Tasklet, "DomainMap", "NestedSDFG"]]
+    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
 
 
 class ComputationState(IterationNode):
@@ -879,16 +889,16 @@ class ComputationState(IterationNode):
 class DomainLoop(IterationNode, ComputationNode):
     axis: Axis
     index_range: Range
-    loop_states: List[Union[ComputationState, "DomainLoop"]]
+    loop_states: List[Union[ComputationState, DomainLoop]]
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
-    label: SymbolRef
+    label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
     states: List[Union[DomainLoop, ComputationState]]
 
 
-# There are circular type references with string placeholders. These statements let pydantic resolve those.
-DomainMap.update_forward_refs()
-DomainLoop.update_forward_refs()
+# There are circular type references with string placeholders. These statements let datamodels resolve those.
+DomainMap.update_forward_refs()  # type: ignore[attr-defined]
+DomainLoop.update_forward_refs()  # type: ignore[attr-defined]

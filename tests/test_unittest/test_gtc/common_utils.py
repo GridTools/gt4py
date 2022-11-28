@@ -16,22 +16,21 @@ from typing import Any, Callable, Set
 
 import factory
 
-from eve import concepts, type_definitions, visitors
+import eve
+from eve import datamodels
 from gtc import common
 
 
 def undefined_symbol_list(
     symbol_creator: Callable[[str], Any], *fields_to_collect: str, list_creator=None
 ) -> factory.LazyAttribute:
-    class CollectSymbolsAndRefs(visitors.NodeVisitor):
-        def visit_Node(self, node: concepts.Node, *, symbols: Set[str], refs: Set[str]) -> None:
-            for name, metadata in node.__node_children__.items():
-                type_ = metadata["definition"].type_
-                if isinstance(type_, type):
-                    if issubclass(type_, type_definitions.SymbolName):
-                        symbols.add(getattr(node, name))
-                    elif issubclass(type_, type_definitions.SymbolRef):
-                        refs.add(getattr(node, name))
+    class CollectSymbolsAndRefs(eve.NodeVisitor):
+        def visit_Node(self, node: eve.Node, *, symbols: Set[str], refs: Set[str]) -> None:
+            for value in datamodels.astuple(node):
+                if issubclass(value.__class__, eve.SymbolName):
+                    symbols.add(str(value))
+                elif issubclass(value.__class__, eve.SymbolRef):
+                    refs.add(str(value))
 
             self.generic_visit(node, symbols=symbols, refs=refs)
 

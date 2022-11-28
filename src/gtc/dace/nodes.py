@@ -14,6 +14,7 @@
 
 import base64
 import pickle
+import typing
 from typing import Dict, List, Set, Union
 
 import dace.data
@@ -26,7 +27,7 @@ from dace import library
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
-from gtc.dace.utils import compute_dcir_access_infos
+from gtc.dace.expansion.expansion import StencilComputationExpansion
 from gtc.definitions import Extent
 from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
@@ -76,7 +77,9 @@ class PickledDictProperty(PickledProperty, dace.properties.DictProperty):
 
 @library.node
 class StencilComputation(library.LibraryNode):
-    implementations: Dict[str, dace.library.ExpandTransformation] = {}
+    implementations: Dict[str, dace.library.ExpandTransformation] = {
+        "default": StencilComputationExpansion
+    }
     default_implementation = "default"
 
     oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
@@ -122,6 +125,8 @@ class StencilComputation(library.LibraryNode):
     ):
         super().__init__(name=name, *args, **kwargs)
 
+        from gtc.dace.utils import compute_dcir_access_infos
+
         if oir_node is not None:
             assert extents is not None
             assert declarations is not None
@@ -130,7 +135,7 @@ class StencilComputation(library.LibraryNode):
                 for j, he in enumerate(section.horizontal_executions):
                     extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
-            self.oir_node = oir_node
+            self.oir_node = typing.cast(PickledDataclassProperty, oir_node)
             self.extents = extents_dict  # type: ignore
             self.declarations = declarations  # type: ignore
             self.symbol_mapping = {
@@ -157,7 +162,7 @@ class StencilComputation(library.LibraryNode):
             if any(
                 interval.start.level == common.LevelMarker.END
                 or interval.end.level == common.LevelMarker.END
-                for interval in oir_node.iter_tree()
+                for interval in oir_node.walk_values()
                 .if_isinstance(VerticalLoopSection)
                 .getattr("interval")
             ) or any(
@@ -203,7 +208,7 @@ class StencilComputation(library.LibraryNode):
         return result
 
     def has_splittable_regions(self):
-        for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
+        for he in self.oir_node.walk_values().if_isinstance(oir.HorizontalExecution):
             if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
                 return False
         return True
