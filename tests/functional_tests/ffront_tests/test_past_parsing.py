@@ -269,7 +269,7 @@ def test_domain_exception_6(identity_def):
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
 
 
-def test_implicit_broadcast_in_field_op_call(empty_identity_def):
+def test_implicit_broadcast(empty_identity_def):
     implicit_broadcast_field_op = field_operator(empty_identity_def)
 
     def implicit_broadcast_program(empty_identity: Field[[], float64]):
