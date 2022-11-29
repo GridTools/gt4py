@@ -665,12 +665,12 @@ class PartialExpansion(transformation.SubgraphTransformation):
             # nesting.
             new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
             subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
-        sdfg.save("failing_to_nest.sdfg")
-        for edge in (e for n in subgraph.nodes() for e in subgraph.in_edges(n)):
-            for sym in edge.data.assignments.keys():
-                if sym not in sdfg.symbols:
-                    sdfg.add_symbol(sym, stype=dace.float64)
 
+        # for edge in (e for n in subgraph.nodes() for e in subgraph.in_edges(n)):
+        #     for sym in edge.data.assignments.keys():
+        #         if sym not in sdfg.symbols:
+        #             sdfg.add_symbol(sym, stype=dace.float64)
+        sdfg.view()
         nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
         if nsdfg_state.label == "symbolic_output":
             nsdfg_state = next(iter(nsdfg_state.parent.predecessor_states(nsdfg_state)))
