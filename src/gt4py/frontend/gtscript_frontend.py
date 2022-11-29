@@ -21,7 +21,7 @@ import numbers
 import textwrap
 import time
 import types
-from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 
@@ -291,7 +291,9 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, (bool, numbers.Number, gtscript.AxisIndex)):
+            if value is None or isinstance(
+                value, (bool, numbers.Number, gtscript.AxisIndex, gtscript.Axis)
+            ):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -1027,8 +1029,52 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
+    def _eval_new_spatial_index(
+        self, index_nodes: Sequence[nodes.Expr], field_axes: Optional[Set[Literal["I", "J", "K"]]]
+    ) -> List[int]:
+        index_dict = {}
+        all_spatial_axes = ("I", "J", "K")
+        last_index = -1
+        axis_context = {axis: gtscript.ShiftedAxis(name=axis, shift=0) for axis in field_axes}
+
+        for index_node in index_nodes:
+            try:
+                value = gt_meta.ast_eval(index_node, axis_context)
+            except Exception:
+                raise GTScriptSyntaxError(
+                    message="Could not evaluate axis shift expression.", loc=index_node
+                )
+            if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
+                raise GTScriptSyntaxError(
+                    message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",
+                    loc=index_node,
+                )
+            else:
+                axis_index = all_spatial_axes.index(value.name)
+                if axis_index < 0:
+                    raise GTScriptSyntaxError(
+                        message=f"Unrecognized axis: {value.name}", loc=index_node
+                    )
+                elif axis_index < last_index:
+                    raise GTScriptSyntaxError(
+                        message=f"Axis {value.name} is specified out of order", loc=index_node
+                    )
+                elif axis_index == last_index:
+                    raise GTScriptSyntaxError(
+                        message=f"Duplicate axis found: {value.name}", loc=index_node
+                    )
+                last_index = axis_index
+
+                try:
+                    shift = value.shift
+                except AttributeError:
+                    shift = 0
+                index_dict[value.name] = shift
+
+        return [index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes]
+
     def _eval_index(
-        self, node: ast.Subscript, axes: Optional[Set[str]] = None
+        self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
     ) -> Optional[List[int]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
@@ -1042,23 +1088,19 @@ class IRMaker(ast.NodeVisitor):
 
         # Determine if we are using the new-style axis syntax, or the old style.
         # If this is parsing a data index, this should be fine and will return False.
-        new_style_syntax = False
-        if axes is not None:
-            for index_node in index_nodes:
-                for node in ast.walk(index_node):
-                    if isinstance(node, ast.Name) and node.id in axes:
-                        new_style_syntax = True
-                        break
+        new_style_spatial_syntax = field_axes is not None and any(
+            (isinstance(node, ast.Name) and node.id in field_axes)
+            or (isinstance(node, ast.Constant) and isinstance(node.value, gtscript.Axis))
+            for index_node in index_nodes
+            for node in ast.walk(index_node)
+        )
 
-        if new_style_syntax:
-            index_dict = {axis: 0 for axis in axes}
-            for index_node in index_nodes:
-                axis_context = {axis: gtscript.Axis(axis) for axis in axes}
-                value = gt_meta.ASTEvaluator.apply(index_node, axis_context)
-                assert isinstance(value, gtscript.Axis)
-                index_dict[value.name] = value.shift
-            index = [index_dict[axis] for axis in ("I", "J", "K") if axis in index_dict]
+        if new_style_spatial_syntax:
+            # This is the new-style syntax for representing spatial axis offsets, e.g. [I+1]
+            return self._eval_new_spatial_index(index_nodes, field_axes)
+
         else:
+            # This is either the old-style syntax using all spatial axes (e.g. [1, 0, 0]), or a data index.
             index = []
             for index_node in index_nodes:
                 try:
@@ -1066,7 +1108,8 @@ class IRMaker(ast.NodeVisitor):
                     index.append(offset)
                 except Exception:
                     index.append(self.visit(index_node))
-        return index
+
+            return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
@@ -1555,6 +1598,7 @@ class GTScriptParser(ast.NodeVisitor):
         types.FunctionType,
         type(None),
         gtscript.AxisIndex,
+        gtscript.Axis,
     )
 
     def __init__(self, definition, *, options, externals=None):

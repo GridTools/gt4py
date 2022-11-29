@@ -521,15 +521,37 @@ class AxisInterval:
         return self.end - self.start
 
 
-# GTScript builtins: domain axes
-class Axis:
-    def __init__(self, name: str, shift: Optional[int] = 0):
+class ShiftedAxis:
+    def __init__(self, name: str, shift: int):
         assert name
         self.name = name
         self.shift = shift
 
     def __repr__(self):
-        return f"Axis(name={self.name}, shift={self.shift})"
+        return f"ShiftedAxis(name={self.name}, shift={self.shift})"
+
+    def __str__(self):
+        return f"{self.name}+{self.shift}"
+
+    def __add__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only add type int, got {type(shift)}")
+        return ShiftedAxis(self.name, self.shift + shift)
+
+    def __sub__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only subtract type int, got {type(shift)}")
+        return ShiftedAxis(self.name, self.shift - shift)
+
+
+# GTScript builtins: domain axes
+class Axis:
+    def __init__(self, name: str):
+        assert name
+        self.name = name
+
+    def __repr__(self):
+        return f"Axis(name={self.name})"
 
     def __str__(self):
         return self.name
@@ -542,17 +564,15 @@ class Axis:
         else:
             raise TypeError("Unrecognized index type")
 
-    def __add__(self, other):
-        if not isinstance(other, int):
-            raise TypeError(f"Requires 'other' to be an int, got {type(other)}")
+    def __add__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only add type int, got {type(shift)}")
+        return ShiftedAxis(self.name, shift)
 
-        return Axis(self.name, shift=self.shift + other)
-
-    def __sub__(self, other):
-        if not isinstance(other, int):
-            raise TypeError(f"Requires 'other' to be an int, got {type(other)}")
-
-        return Axis(self.name, shift=self.shift - other)
+    def __sub__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only subtract type int, got {type(shift)}")
+        return ShiftedAxis(self.name, -shift)
 
 
 I = Axis("I")

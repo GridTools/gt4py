@@ -300,7 +300,7 @@ class ASTEvaluator(ASTPass):
         return result
 
     def __init__(self, context: dict):
-        self.context = context
+        self.context = copy.deepcopy(context)
 
     def visit_Name(self, node):
         return self.context[node.id]
