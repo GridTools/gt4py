@@ -153,7 +153,7 @@ class CallableType:
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
+    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
     dtype: ScalarType
 
     def __str__(self):
