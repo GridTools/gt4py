@@ -75,7 +75,6 @@ test py38:
     <<: *py38
 
 test py39:
-  allow_failure: true
   extends: test py38
   needs: ["build py39"]
   variables:
