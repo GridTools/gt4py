@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Union, cast
 
@@ -25,12 +24,9 @@ import dace.library
 import dace.subsets
 
 import eve
-import eve.utils
-import gtc.common as common
-import gtc.oir as oir
-from eve import NodeTranslator, SymbolRef
-from eve.iterators import iter_tree
+from gtc import common
 from gtc import daceir as dcir
+from gtc import oir
 from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
 from gtc.dace.utils import (
     compute_dcir_access_infos,
@@ -51,21 +47,20 @@ if TYPE_CHECKING:
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
     if get_outputs:
-        iterator = eve.utils.xiter(
-            itertools.chain(
-                *node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left").map(iter_tree)
-            )
-        ).if_isinstance(oir.FieldAccess)
+        iterator = filter(
+            lambda node: isinstance(node, oir.FieldAccess),
+            node.walk_values().if_isinstance(oir.AssignStmt).getattr("left"),
+        )
     else:
 
         def _iterator():
-            for n in node.iter_tree():
+            for n in node.walk_values():
                 if isinstance(n, oir.AssignStmt):
-                    yield from n.right.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.right.walk_values().if_isinstance(oir.FieldAccess)
                 elif isinstance(n, oir.While):
-                    yield from n.cond.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.cond.walk_values().if_isinstance(oir.FieldAccess)
                 elif isinstance(n, oir.MaskStmt):
-                    yield from n.mask.iter_tree().if_isinstance(oir.FieldAccess)
+                    yield from n.mask.walk_values().if_isinstance(oir.FieldAccess)
 
         iterator = _iterator()
 
@@ -116,7 +111,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
     def all_statements_in_region(scope_nodes):
         return all(
             isinstance(stmt, dcir.HorizontalRestriction)
-            for tasklet in iter_tree(scope_nodes).if_isinstance(dcir.Tasklet)
+            for tasklet in eve.walk_values(scope_nodes).if_isinstance(dcir.Tasklet)
             for stmt in tasklet.stmts
         )
 
@@ -138,7 +133,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
                         if mask.intervals[axis.to_idx()].end is None
                         else mask.intervals[axis.to_idx()].end.offset,
                     )
-                    for mask in iter_tree(scope_nodes).if_isinstance(common.HorizontalMask)
+                    for mask in eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask)
                 )
             )
             == 1
@@ -152,7 +147,7 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
     )
 
 
-class DaCeIRBuilder(NodeTranslator):
+class DaCeIRBuilder(eve.NodeTranslator):
     @dataclass
     class GlobalContext:
         library_node: "StencilComputation"
@@ -160,7 +155,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         def get_dcir_decls(
             self,
-            access_infos: Dict[SymbolRef, dcir.FieldAccessInfo],
+            access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo],
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
         ) -> List[dcir.FieldDecl]:
             return [
@@ -170,7 +165,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         def _get_dcir_decl(
             self,
-            field: SymbolRef,
+            field: eve.SymbolRef,
             access_info: dcir.FieldAccessInfo,
             symbol_collector: "DaCeIRBuilder.SymbolCollector",
         ) -> dcir.FieldDecl:
@@ -186,7 +181,7 @@ class DaCeIRBuilder(NodeTranslator):
             return dcir.FieldDecl(
                 name=field,
                 dtype=oir_decl.dtype,
-                strides=[str(s) for s in dace_array.strides],
+                strides=tuple(str(s) for s in dace_array.strides),
                 data_dims=oir_decl.data_dims,
                 access_info=access_info,
                 storage=dcir.StorageType.from_dace_storage(dace.StorageType.Default),
@@ -205,7 +200,8 @@ class DaCeIRBuilder(NodeTranslator):
         def push_axes_extents(self, axes_extents) -> "DaCeIRBuilder.IterationContext":
             res = self.grid_subset
             for axis, extent in axes_extents.items():
-                if isinstance(res.intervals[axis], dcir.DomainInterval):
+                axis_interval = res.intervals[axis]
+                if isinstance(axis_interval, dcir.DomainInterval):
                     res__interval = dcir.DomainInterval(
                         start=dcir.AxisBound(
                             level=common.LevelMarker.START, offset=extent[0], axis=axis
@@ -215,13 +211,13 @@ class DaCeIRBuilder(NodeTranslator):
                         ),
                     )
                     res = res.set_interval(axis, res__interval)
-                elif isinstance(res.intervals[axis], dcir.TileInterval):
+                elif isinstance(axis_interval, dcir.TileInterval):
                     tile_interval = dcir.TileInterval(
                         axis=axis,
                         start_offset=extent[0],
                         end_offset=extent[1],
-                        tile_size=res.intervals[axis].tile_size,
-                        domain_limit=res.intervals[axis].domain_limit,
+                        tile_size=axis_interval.tile_size,
+                        domain_limit=axis_interval.domain_limit,
                     )
                     res = res.set_interval(axis, tile_interval)
                 # if is IndexWithExtent, do nothing.
@@ -277,7 +273,7 @@ class DaCeIRBuilder(NodeTranslator):
             else:
                 assert self.symbol_decls[name].dtype == dtype
 
-        def remove_symbol(self, name: SymbolRef):
+        def remove_symbol(self, name: eve.SymbolRef):
             if name in self.symbol_decls:
                 del self.symbol_decls[name]
 
@@ -316,15 +312,19 @@ class DaCeIRBuilder(NodeTranslator):
     def visit_VariableKOffset(self, node: oir.VariableKOffset, **kwargs):
         return dcir.VariableKOffset(k=self.visit(node.k, **kwargs))
 
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> dcir.LocalScalarDecl:
+        return dcir.LocalScalarDecl(name=node.name, dtype=node.dtype)
+
     def visit_FieldAccess(
         self,
         node: oir.FieldAccess,
         *,
         is_target: bool,
-        targets: Set[SymbolRef],
-        var_offset_fields: Set[SymbolRef],
+        targets: Set[eve.SymbolRef],
+        var_offset_fields: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
+        res: Union[dcir.IndexAccess, dcir.ScalarAccess]
         if node.name in var_offset_fields:
             res = dcir.IndexAccess(
                 name=node.name + "__",
@@ -622,7 +622,7 @@ class DaCeIRBuilder(NodeTranslator):
                 if _all_stmts_same_region(scope_nodes, axis, interval):
                     masks = cast(
                         List[common.HorizontalMask],
-                        iter_tree(scope_nodes).if_isinstance(common.HorizontalMask).to_list(),
+                        eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask).to_list(),
                     )
                     horizontal_mask_interval = next(
                         iter((mask.intervals[axis.to_idx()] for mask in masks))
@@ -667,6 +667,7 @@ class DaCeIRBuilder(NodeTranslator):
                 read_memlets = res_read_memlets
                 write_memlets = res_write_memlets
 
+                assert not isinstance(interval, dcir.IndexWithExtent)
                 index_range = dcir.Range.from_axis_and_interval(axis, interval)
                 symbol_collector.remove_symbol(index_range.var)
                 ranges.append(index_range)
@@ -777,7 +778,7 @@ class DaCeIRBuilder(NodeTranslator):
             end=dcir.AxisBound(axis=dcir.Axis.K, level=end.level, offset=end.offset),
         )
         overall_extent = Extent.zeros(2)
-        for he in node.iter_tree().if_isinstance(oir.HorizontalExecution):
+        for he in node.walk_values().if_isinstance(oir.HorizontalExecution):
             overall_extent = overall_extent.union(global_ctx.library_node.get_extents(he))
 
         iteration_ctx = DaCeIRBuilder.IterationContext.init(
@@ -788,7 +789,7 @@ class DaCeIRBuilder(NodeTranslator):
 
         var_offset_fields = {
             acc.name
-            for acc in node.iter_tree().if_isinstance(oir.FieldAccess)
+            for acc in node.walk_values().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
         }
         sections_idx = next(

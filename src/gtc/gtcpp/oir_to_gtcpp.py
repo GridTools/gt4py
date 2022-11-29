@@ -33,7 +33,7 @@ from gtc.passes.oir_optimizations.utils import collect_symbol_names, symbol_name
 
 def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAccessor]:
     extents = (
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AccessorRef)
         .reduceby(
             (lambda extent, accessor_ref: extent + accessor_ref.offset),
@@ -44,7 +44,7 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
     )
 
     inout_fields: Set[str] = (
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AssignStmt)
         .getattr("left")
         .if_isinstance(gtcpp.AccessorRef)
@@ -52,7 +52,7 @@ def _extract_accessors(node: eve.Node, temp_names: Set[str]) -> List[gtcpp.GTAcc
         .to_set()
     )
     ndims = dict(
-        node.iter_tree()
+        node.walk_values()
         .if_isinstance(gtcpp.AccessorRef)
         .map(
             lambda accessor: (
@@ -95,7 +95,7 @@ class SymbolNameCreator(Protocol):
         ...
 
 
-class OIRToGTCpp(eve.NodeTranslator):
+class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class ProgramContext:
         functors: List[gtcpp.GTFunctor] = field(default_factory=list)
@@ -108,9 +108,9 @@ class OIRToGTCpp(eve.NodeTranslator):
     class GTComputationContext:
         create_symbol_name: SymbolNameCreator
         temporaries: List[gtcpp.Temporary] = field(default_factory=list)
-        arguments: Set[gtcpp.Arg] = field(default_factory=set)
         positionals: Dict[int, gtcpp.Positional] = field(default_factory=dict)
         axis_lengths: Dict[int, gtcpp.AxisLength] = field(default_factory=dict)
+        _arguments: Set[str] = field(default_factory=set)
 
         def add_temporaries(
             self, temporaries: List[gtcpp.Temporary]
@@ -118,8 +118,12 @@ class OIRToGTCpp(eve.NodeTranslator):
             self.temporaries.extend(temporaries)
             return self
 
-        def add_arguments(self, arguments: Set[gtcpp.Arg]) -> "OIRToGTCpp.GTComputationContext":
-            self.arguments.update(arguments)
+        @property
+        def arguments(self) -> List[gtcpp.Arg]:
+            return [gtcpp.Arg(name=name) for name in self._arguments]
+
+        def add_arguments(self, arguments: Set[str]) -> "OIRToGTCpp.GTComputationContext":
+            self._arguments.update(arguments)
             return self
 
         @staticmethod
@@ -147,8 +151,6 @@ class OIRToGTCpp(eve.NodeTranslator):
         @property
         def extra_decls(self) -> List[gtcpp.ComputationDecl]:
             return list(self.positionals.values()) + list(self.axis_lengths.values())
-
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> gtcpp.Literal:
         return gtcpp.Literal(value=node.value, dtype=node.dtype)
@@ -306,13 +308,12 @@ class OIRToGTCpp(eve.NodeTranslator):
         accessors = _extract_accessors(apply_method, {decl.name for decl in comp_ctx.temporaries})
         stage_args = [gtcpp.Arg(name=acc.name) for acc in accessors]
 
-        comp_ctx.add_arguments(
-            {
-                param_arg
-                for param_arg in stage_args
-                if param_arg.name not in [tmp.name for tmp in comp_ctx.temporaries]
-            }
-        )
+        tmp_names = {tmp.name for tmp in comp_ctx.temporaries}
+        param_names_not_tmps = {
+            str(param_arg.name) for param_arg in stage_args if param_arg.name not in tmp_names
+        }
+
+        comp_ctx.add_arguments(param_names_not_tmps)
 
         functor_name = type(node).__name__ + str(id(node))
         prog_ctx.add_functor(

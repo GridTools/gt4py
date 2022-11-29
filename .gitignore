@@ -82,6 +82,7 @@ target/
 # Environments
 *.env
 *.venv
+.venv*
 env/
 venv/
 ENV/

@@ -11,15 +11,3 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-# flake8: noqa: F401
-
-from . import utils
-from .concepts import (
-    TraversalOrder,
-    TreeIterationItem,
-    generic_iter_children,
-    iter_tree,
-    iter_tree_levels,
-    iter_tree_post,
-    iter_tree_pre,
-)

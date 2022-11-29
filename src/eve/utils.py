@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,35 +20,41 @@
 from __future__ import annotations
 
 import collections.abc
+import dataclasses
 import enum
 import functools
 import hashlib
 import itertools
 import operator
 import pickle
+import pprint
 import re
+import sys
 import types
 import typing
 import uuid
 import warnings
 
-import xxhash
-from boltons.iterutils import flatten, flatten_iter, is_collection  # noqa: F401
-from boltons.strutils import (  # noqa: F401
-    a10n,
-    asciify,
-    format_int_list,
-    iter_splitlines,
-    parse_int_list,
-    slugify,
-    unwrap_text,
+import deepdiff  # type: ignore[import]
+import xxhash  # type: ignore[import]
+from boltons.iterutils import flatten as flatten  # type: ignore[import]  # noqa: F401
+from boltons.iterutils import flatten_iter as flatten_iter  # type: ignore[import]  # noqa: F401
+from boltons.iterutils import is_collection as is_collection  # type: ignore[import]  # noqa: F401
+from boltons.strutils import a10n as a10n  # type: ignore[import]  # noqa: F401
+from boltons.strutils import asciify as asciify  # type: ignore[import]  # noqa: F401
+from boltons.strutils import (  # type: ignore[import]  # noqa: F401
+    format_int_list as format_int_list,
 )
-from boltons.typeutils import classproperty  # noqa: F401
+from boltons.strutils import (  # type: ignore[import]  # noqa: F401
+    iter_splitlines as iter_splitlines,
+)
+from boltons.strutils import parse_int_list as parse_int_list  # type: ignore[import]  # noqa: F401
+from boltons.strutils import slugify as slugify  # type: ignore[import]  # noqa: F401
+from boltons.strutils import unwrap_text as unwrap_text  # type: ignore[import]  # noqa: F401
 
-from .type_definitions import NOTHING
-from .typingx import (
+from . import extended_typing as xtyping
+from .extended_typing import (
     Any,
-    AnyCallable,
     Callable,
     Collection,
     Dict,
@@ -56,20 +64,23 @@ from .typingx import (
     List,
     Literal,
     Optional,
+    ParamSpec,
     Set,
     Tuple,
     Type,
     TypeVar,
     Union,
+    overload,
 )
+from .type_definitions import NOTHING, NothingType
 
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
+    import cytoolz as toolz  # type: ignore[import]
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
+    import toolz  # type: ignore[import]  # noqa: F401
 
 
 T = TypeVar("T")
@@ -217,9 +228,26 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+_P = ParamSpec("_P")
+
+
+@overload
 def optional_lru_cache(
-    func: Callable = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Union[Callable, Callable[[Callable], Callable]]:
+    func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
+    ...
+
+
+@overload
+def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+    func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Callable[_P, _T]:
+    ...
+
+
+def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+    func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
 
     Examples:
@@ -244,16 +272,19 @@ def optional_lru_cache(
         Based on :func:`typing._tp_cache`.
     """
 
-    def _decorator(func: Callable) -> Callable:
+    def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
         cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
         @functools.wraps(func)
         def inner(*args: Any, **kwargs: Any) -> Any:
             try:
                 return cached(*args, **kwargs)
-            except TypeError:
-                # Catch errors due to non-hashable arguments and fallback to original function
-                return func(*args, **kwargs)
+            except TypeError as error:
+                if error.args and error.args[0].startswith("unhashable"):
+                    # Catch errors due to non-hashable arguments and fallback to original function
+                    return func(*args, **kwargs)
+                else:
+                    raise error
 
         return inner
 
@@ -288,21 +319,35 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
-def noninstantiable(cls: Type) -> Type:
+_T = TypeVar("_T")
+
+
+def noninstantiable(cls: Type[_T]) -> Type[_T]:
+    """Make a class without abstract method non-instantiable (subclasses should be instantiable)."""
+    if not isinstance(cls, type):
+        raise ValueError(f"Non-type value ({cls}) passed to 'noninstantiable()' class decorator.")
+
     original_init = cls.__init__
 
-    def _noninstantiable_init(self, *args: Any, **kwargs: Any) -> None:  # type: ignore  # mypy somehow thinks there are missing type annotations here
+    def _noninstantiable_init(self: _T, *args: Any, **kwargs: Any) -> None:
         if self.__class__ is cls:
-            raise TypeError(f"Trying to instantiate `{cls.__name__}` non-instantiable class.")
+            raise TypeError(f"Trying to instantiate '{cls.__name__}' non-instantiable class.")
         else:
             original_init(self, *args, **kwargs)
 
-    cls.__init__ = _noninstantiable_init
+    cls.__init__ = _noninstantiable_init  # type: ignore[assignment]
+    cls.__noninstantiable__ = True  # type: ignore[attr-defined]
+
     return cls
 
 
-def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
-    """Stable hash function.
+def is_noninstantiable(cls: Type[_T]) -> bool:
+    """Return True if `model` is a non-instantiable class."""
+    return "__noninstantiable__" in cls.__dict__
+
+
+def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+    """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
@@ -319,13 +364,44 @@ def shash(*args: Any, hash_algorithm: Optional[Any] = None) -> str:
     if hash_algorithm is None:
         hash_algorithm = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)
+        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
 
-    hash_algorithm.update(pickle.dumps(args))
-    result = hash_algorithm.hexdigest()
+    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
+    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
     assert isinstance(result, str)
 
     return result
+
+
+ddiff = deepdiff.DeepDiff
+"""Shortcut for deepdiff.DeepDiff.
+
+Check https://zepworks.com/deepdiff/current/diff.html for more info.
+"""
+
+
+def dhash(obj: Any, **kwargs: Any) -> str:
+    """Shortcut for deepdiff.deephash.DeepHash.
+
+    Check https://zepworks.com/deepdiff/current/deephash.html for more info.
+    """
+    return deepdiff.deephash.DeepHash(obj)[obj]
+
+
+def pprint_ddiff(
+    old: Any,
+    new: Any,
+    *,
+    pprint_opts: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> None:
+    """Pretty printing of deepdiff.DeepDiff objects.
+
+    Keyword Arguments:
+        pprint_opts: kwargs dict with options for pprint.pprint.
+    """
+    pprint_opts = pprint_opts or {"indent": 2}
+    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
 
 
 AnyWordsIterable = Union[str, Iterable[str]]
@@ -433,8 +509,54 @@ class CaseStyleConverter:
         return name.split("-")
 
 
-class FrozenNamespace(types.SimpleNamespace, Generic[T]):
-    """An immutable `types.SimpleNamespace`-like class.
+class Namespace(types.SimpleNamespace, Generic[T]):
+    """A `types.SimpleNamespace`-like class with additional dict-like interface.
+
+    Examples:
+        >>> ns = Namespace(a=10, b="hello")
+        >>> ns.a
+        10
+        >>> ns.b = 20
+        >>> ns.b
+        20
+
+        >>> ns = Namespace(a=10, b="hello")
+        >>> list(ns.keys())
+        ['a', 'b']
+
+        >>> list(ns.values())
+        [10, 'hello']
+
+        >>> list(ns.items())
+        [('a', 10), ('b', 'hello')]
+
+    """
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__
+
+    def items(self) -> Iterable[Tuple[str, T]]:
+        return self.__dict__.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()
+
+    def values(self) -> Iterable[T]:
+        return self.__dict__.values()
+
+    def reset(self, data: Optional[Dict[str, Any]] = None) -> None:
+        self.__dict__.clear()
+        if data:
+            self.__dict__.update(data)
+
+    def as_dict(self) -> Dict[str, T]:
+        return {**self.__dict__}
+
+    asdict = as_dict
+
+
+class FrozenNamespace(Namespace[T]):
+    """An immutable version of :class:`Namespace`.
 
     Examples:
         >>> ns = FrozenNamespace(a=10, b="hello")
@@ -448,65 +570,108 @@ class FrozenNamespace(types.SimpleNamespace, Generic[T]):
         >>> ns = FrozenNamespace(a=10, b="hello")
         >>> list(ns.items())
         [('a', 10), ('b', 'hello')]
+
+        >>> ns = FrozenNamespace(a=10, b="hello")
+        >>> hashed = hash(ns)
+        >>> assert isinstance(hashed, int)
+        >>> hashed == hash(ns) == ns.__cached_hash_value__
+        True
     """
 
-    def __setattr__(self, _name: str, _value: T) -> None:
+    __slots__ = "__cached_hash_value__"  # This slot is used to avoid polluting the namespace
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
         raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
-    def items(self) -> Iterable[Tuple[str, T]]:
-        return self.__dict__.items()
+    def __delattr__(self, __name: str) -> None:
+        raise TypeError(f"Trying to modify immutable '{self.__class__.__name__}' instance.")
 
-    def keys(self) -> Iterable[str]:
-        return self.__dict__.keys()
+    def __hash__(self) -> int:  # type: ignore[override]
+        if not hasattr(self, "__cached_hash_value__"):
+            object.__setattr__(self, "__cached_hash_value__", hash(tuple(self.__dict__.items())))
 
-    def values(self) -> Iterable[T]:
-        return self.__dict__.values()
+        return self.__cached_hash_value__
 
 
+@dataclasses.dataclass
 class UIDGenerator:
     """Simple unique id generator using different methods."""
 
-    #: Constantly increasing counter for generation of sequential unique ids
-    __counter = itertools.count(1)
+    prefix: Optional[str] = (
+        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        if sys.version_info >= (3, 10)
+        else dataclasses.field(default=None)
+    )
+    width: Optional[int] = (
+        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        if sys.version_info >= (3, 10)
+        else dataclasses.field(default=None)
+    )
+    warn_unsafe: Optional[bool] = (
+        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        if sys.version_info >= (3, 10)
+        else dataclasses.field(default=None)
+    )
 
-    @classmethod
-    def random_id(cls, *, prefix: Optional[str] = None, width: int = 8) -> str:
+    _counter: Iterator[int] = dataclasses.field(
+        default_factory=functools.partial(itertools.count, 1), init=False
+    )
+    """Constantly increasing counter for generation of sequential unique ids."""
+
+    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a random globally unique id."""
-        if width is not None and width <= 4:
+        width = width or self.width or 8
+        if width <= 4:
             raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
+        prefix = prefix or self.prefix
         u = uuid.uuid4()
         s = str(u).replace("-", "")[:width]
         return f"{prefix}_{s}" if prefix else f"{s}"
 
-    @classmethod
-    def sequential_id(cls, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
+    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
         """Generate a sequential unique id (for the current session)."""
+        width = width or self.width
         if width is not None and width < 1:
             raise ValueError(f"Width must be a positive number ({width} provided).")
-        count = next(cls.__counter)
+        prefix = prefix or self.prefix
+        count = next(self._counter)
         s = f"{count:0{width}}" if width else f"{count}"
         return f"{prefix}_{s}" if prefix else f"{s}"
 
-    @classmethod
-    def reset_sequence(cls, start: int = 1) -> None:
-        """Reset global generator counter.
+    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
+        """Reset generator counter.
+
+        It returns the same instance to allow resetting at initialization:
+
+        Example:
+            >>> generator = UIDGenerator().reset_sequence(3)
 
         Notes:
             If the new start value is lower than the last generated UID, new
             IDs are not longer guaranteed to be unique.
 
         """
-        if start < next(cls.__counter):
-            warnings.warn("Unsafe reset of global UIDGenerator", RuntimeWarning)
-        cls.__counter = itertools.count(start)
+        if start < 0:
+            raise ValueError(f"Starting value must be a positive number ({start} provided).")
+        if warn_unsafe is None:
+            warn_unsafe = self.warn_unsafe
+        if warn_unsafe and start < next(self._counter):
+            warnings.warn("Unsafe reset of UIDGenerator ({self})")
+        self._counter = itertools.count(start)
 
+        return self
+
+
+UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")
 K = TypeVar("K")
 
+P = ParamSpec("P")
 
-def as_xiter(iterator_func: Callable[..., Iterator[T]]) -> Callable[..., XIterable[T]]:
+
+def as_xiter(iterator_func: Callable[P, Iterable[T]]) -> Callable[P, XIterable[T]]:
     """Wrap the provided callable to convert its output in a :class:`XIterable`."""
 
     @functools.wraps(iterator_func)
@@ -539,7 +704,7 @@ class XIterable(Iterable[T]):
     def __iter__(self) -> Iterator[T]:
         return self.iterator
 
-    def map(self, func: AnyCallable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
+    def map(self, func: Callable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
         """Apply a callable to every iterator element.
 
         Equivalent to ``map(func, self)``.
@@ -1022,7 +1187,10 @@ class XIterable(Iterable[T]):
         ...
 
     def islice(
-        self, __start_or_stop: int, __stop_or_nothing: Union[int, NOTHING] = NOTHING, step: int = 1
+        self,
+        __start_or_stop: int,
+        __stop_or_nothing: Union[int, NothingType] = NOTHING,
+        step: int = 1,
     ) -> XIterable[T]:
         """Select elements from an iterable.
 
@@ -1048,6 +1216,7 @@ class XIterable(Iterable[T]):
             start = 0
             stop = __start_or_stop
         else:
+            assert isinstance(__stop_or_nothing, int)
             start = __start_or_stop
             stop = __stop_or_nothing
         return XIterable(itertools.islice(self.iterator, start, stop, step))
@@ -1234,8 +1403,8 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: str,
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[False],
+        init: Union[S, NothingType],
     ) -> XIterable[Tuple[str, S]]:
         ...
 
@@ -1246,8 +1415,8 @@ class XIterable(Iterable[T]):
         key: str,
         __attr_keys1: str,
         *attr_keys: str,
-        init: Union[S, NOTHING],
         as_dict: Literal[False],
+        init: Union[S, NothingType],
     ) -> XIterable[Tuple[Tuple[str, ...], S]]:
         ...
 
@@ -1257,8 +1426,8 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: str,
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[True],
+        init: Union[S, NothingType],
     ) -> Dict[str, S]:
         ...
 
@@ -1269,8 +1438,8 @@ class XIterable(Iterable[T]):
         key: str,
         __attr_keys1: str,
         *attr_keys: str,
-        init: Union[S, NOTHING],
         as_dict: Literal[True],
+        init: Union[S, NothingType],
     ) -> Dict[Tuple[str, ...], S]:
         ...
 
@@ -1280,8 +1449,8 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: List[K],
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[False],
+        init: Union[S, NothingType],
     ) -> XIterable[Tuple[K, S]]:
         ...
 
@@ -1291,8 +1460,8 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: List[K],
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[True],
+        init: Union[S, NothingType],
     ) -> Dict[K, S]:
         ...
 
@@ -1302,8 +1471,8 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: Callable[[T], K],
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[False],
+        init: Union[S, NothingType],
     ) -> XIterable[Tuple[K, S]]:
         ...
 
@@ -1313,18 +1482,18 @@ class XIterable(Iterable[T]):
         bin_op_func: Callable[[S, T], S],
         key: Callable[[T], K],
         *,
-        init: Union[S, NOTHING],
         as_dict: Literal[True],
+        init: Union[S, NothingType],
     ) -> Dict[K, S]:
         ...
 
-    def reduceby(
+    def reduceby(  # type: ignore[misc] # signatures 2 and 4 are not satified due to inconsistencies with type variables
         self,
         bin_op_func: Callable[[S, T], S],
         key: Union[str, List[K], Callable[[T], K]],
         *attr_keys: str,
-        init: Union[S, NOTHING] = NOTHING,
         as_dict: bool = False,
+        init: Union[S, NothingType] = NOTHING,
     ) -> Union[
         XIterable[Tuple[str, S]],
         Dict[str, S],

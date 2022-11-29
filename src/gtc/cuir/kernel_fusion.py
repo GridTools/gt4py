@@ -35,7 +35,7 @@ class FuseKernels(NodeTranslator):
         previous_parallel = is_parallel(kernels[-1])
         previous_writes = (
             kernels[-1]
-            .iter_tree()
+            .walk_values()
             .if_isinstance(cuir.AssignStmt)
             .getattr("left")
             .if_isinstance(cuir.FieldAccess)
@@ -45,7 +45,7 @@ class FuseKernels(NodeTranslator):
         for kernel in node.kernels[1:]:
             parallel = is_parallel(kernel)
             reads_with_offsets = (
-                kernel.iter_tree()
+                kernel.walk_values()
                 .if_isinstance(cuir.FieldAccess)
                 .filter(
                     lambda x, parallel=parallel: any(
@@ -57,7 +57,7 @@ class FuseKernels(NodeTranslator):
                 .to_set()
             )
             new_writes = (
-                kernel.iter_tree()
+                kernel.walk_values()
                 .if_isinstance(cuir.AssignStmt)
                 .getattr("left")
                 .if_isinstance(cuir.FieldAccess)

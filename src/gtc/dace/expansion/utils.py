@@ -20,7 +20,6 @@ import dace.library
 import dace.subsets
 
 import eve
-from eve.iterators import iter_tree
 from gtc import common
 from gtc import daceir as dcir
 from gtc import oir
@@ -45,7 +44,7 @@ def get_dace_debuginfo(node: common.LocNode):
         return dace.dtypes.DebugInfo(0)
 
 
-class HorizontalIntervalRemover(eve.NodeMutator):
+class HorizontalIntervalRemover(eve.NodeTranslator):
     def visit_HorizontalMask(self, node: common.HorizontalMask, *, axis: "dcir.Axis"):
         mask_attrs = dict(i=node.i, j=node.j)
         mask_attrs[axis.lower()] = self.visit(getattr(node, axis.lower()))
@@ -55,7 +54,7 @@ class HorizontalIntervalRemover(eve.NodeMutator):
         return common.HorizontalInterval(start=None, end=None)
 
 
-class HorizontalMaskRemover(eve.NodeMutator):
+class HorizontalMaskRemover(eve.NodeTranslator):
     def visit_Tasklet(self, node: "dcir.Tasklet"):
 
         res_body = []
@@ -125,12 +124,16 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
             elif isinstance(stmt, oir.AssignStmt) and isinstance(stmt.left, oir.ScalarAccess):
                 continue
             return False
-        regions: List[common.HorizontalMask] = list()
-        for stmt in he.iter_tree().if_isinstance(oir.HorizontalRestriction):
+
+        # If the regions are not disjoint, then the horizontal executions are not splittable.
+        regions: List[common.HorizontalMask] = []
+        for stmt in he.walk_values().if_isinstance(oir.HorizontalRestriction):
+            assert isinstance(stmt, oir.HorizontalRestriction)
             for region in regions:
                 if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
                     return False
             regions.append(stmt.mask)
+
         return True
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, extents, library_node):
@@ -153,7 +156,7 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
         res_hes = []
         for stmts in res_he_stmts:
             accessed_scalars = (
-                iter_tree(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
+                eve.walk_values(stmts).if_isinstance(oir.ScalarAccess).getattr("name").to_set()
             )
             declarations = [decl for decl in node.declarations if decl.name in accessed_scalars]
             res_he = oir.HorizontalExecution(declarations=declarations, body=stmts)

@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import copy
 from typing import Any, ChainMap, List, Optional, Union
 
 import dace
@@ -21,16 +22,13 @@ import dace.subsets
 
 import eve
 import gtc.common as common
-from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from gtc import daceir as dcir
 from gtc.dace.symbol_utils import get_axis_bound_str
 from gtc.dace.utils import make_dace_subset
 
 
-class TaskletCodegen(codegen.TemplatedGenerator):
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
-
+class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     ScalarAccess = as_fmt("{name}")
 
     def _visit_offset(
@@ -40,7 +38,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         access_info: dcir.FieldAccessInfo,
         decl: dcir.FieldDecl,
         **kwargs,
-    ):
+    ) -> str:
         int_sizes: List[Optional[int]] = []
         for i, axis in enumerate(access_info.axes()):
             memlet_shape = access_info.shape
@@ -57,15 +55,10 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         ]
         for axis in access_info.variable_offset_axes:
             access_info = access_info.restricted_to_index(axis)
+        context_info = copy.deepcopy(access_info)
+        context_info.variable_offset_axes = []
         ranges = make_dace_subset(
-            access_info,
-            dcir.FieldAccessInfo(
-                grid_subset=access_info.grid_subset,
-                global_grid_subset=access_info.global_grid_subset,
-                dynamic_access=access_info.dynamic_access,
-                variable_offset_axes=[],
-            ),
-            data_dims=(),  # data_index added in visit_IndexAccess
+            access_info, context_info, data_dims=()  # data_index added in visit_IndexAccess
         )
         ranges.offset(sym_offsets, negative=False)
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])
@@ -83,7 +76,7 @@ class TaskletCodegen(codegen.TemplatedGenerator):
         *,
         is_target,
         sdfg_ctx,
-        symtable: ChainMap[common.SymbolRef, dcir.Decl],
+        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ):
 

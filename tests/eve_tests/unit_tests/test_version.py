@@ -31,5 +31,5 @@ def test_version_info():
     assert eve.version.__version_info__.release == tuple(
         int(p) for p in eve.version.__version__.split(".")
     )
-    assert (0, 1) <= eve.version.__version_info__.release < (0, 2)
+    assert (0, 2) <= eve.version.__version_info__.release < (0, 3)
     assert eve.version.__version_info__ == eve.__version_info__
