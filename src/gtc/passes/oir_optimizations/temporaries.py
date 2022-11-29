@@ -15,21 +15,20 @@
 import collections
 from typing import Any, Callable, Dict, Set, Union
 
-from eve import NodeTranslator, SymbolTableTrait
+import eve
 from gtc import oir
 
 from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 
 
-class TemporariesToScalarsBase(NodeTranslator):
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
-
+class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, tmps_name_map: Dict[str, str], **kwargs: Any
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
+        offsets = node.offset.to_dict()
         if node.name in tmps_name_map:
             assert (
-                node.offset.i == node.offset.j == node.offset.k == 0
+                offsets["i"] == offsets["j"] == offsets["k"] == 0
             ), "Non-zero offset in temporary that is replaced?!"
             return oir.ScalarAccess(name=tmps_name_map[node.name], dtype=node.dtype)
         return self.generic_visit(node, tmps_name_map=tmps_name_map, **kwargs)
@@ -43,7 +42,7 @@ class TemporariesToScalarsBase(NodeTranslator):
         **kwargs: Any,
     ) -> oir.HorizontalExecution:
         local_tmps_to_replace = (
-            node.iter_tree()
+            node.walk_values()
             .if_isinstance(oir.FieldAccess)
             .getattr("name")
             .if_in(tmps_to_replace)
@@ -106,14 +105,14 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
     """
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
         temps_without_data_dims = set(
             [decl.name for decl in node.declarations if not decl.data_dims]
         )
         counts: collections.Counter = sum(
             (
                 collections.Counter(
-                    horizontal_execution.iter_tree()
+                    horizontal_execution.walk_values()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
                     .if_in(temps_without_data_dims)
@@ -143,7 +142,7 @@ class WriteBeforeReadTemporariesToScalars(TemporariesToScalarsBase):
             for symbol, value in kwargs["symtable"].items()
             if isinstance(value, oir.Temporary) and not value.data_dims
         }
-        horizontal_executions = node.iter_tree().if_isinstance(oir.HorizontalExecution)
+        horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
 
         for horizontal_execution in horizontal_executions:
             accesses = AccessCollector.apply(horizontal_execution)

@@ -128,7 +128,7 @@ def bindings_main_template():
 
 def gtir_is_not_empty(pipeline: GtirPipeline) -> bool:
     node = pipeline.full()
-    return bool(node.iter_tree().if_isinstance(gtir.ParAssignStmt).to_list())
+    return bool(node.walk_values().if_isinstance(gtir.ParAssignStmt).to_list())
 
 
 def gtir_has_effect(pipeline: GtirPipeline) -> bool:

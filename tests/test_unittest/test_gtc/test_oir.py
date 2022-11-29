@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
-from pydantic.error_wrappers import ValidationError
 
 from gtc.common import DataType, LoopOrder
 from gtc.oir import AxisBound, Interval
@@ -30,12 +29,12 @@ from .oir_utils import (
 
 
 def test_no_horizontal_offset_allowed():
-    with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
+    with pytest.raises(ValueError, match=r"must not have .*horizontal offset"):
         AssignStmtFactory(left__offset__i=1)
 
 
 def test_mask_must_be_bool():
-    with pytest.raises(ValidationError, match=r".*must be.* bool.*"):
+    with pytest.raises(ValueError, match=r".*must be.* bool.*"):
         MaskStmtFactory(mask=FieldAccessFactory(dtype=DataType.INT32))
 
 
@@ -263,7 +262,7 @@ class TestIntervalOperations:
 def test_assign_to_ik_fwd():
     out_name = "ik_field"
     in_name = "other_ik_field"
-    with pytest.raises(ValidationError, match=r"Not allowed to assign to ik-field"):
+    with pytest.raises(ValueError, match=r"Not allowed to assign to ik-field"):
         StencilFactory(
             params=[
                 FieldDeclFactory(

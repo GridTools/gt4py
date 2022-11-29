@@ -14,19 +14,18 @@
 
 from typing import Any, List, Optional, Tuple, Union
 
-from pydantic import validator
-
-from eve import Str, SymbolName, SymbolTableTrait, field, utils
+import eve
+from eve import datamodels
 from gtc import common
 from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(common.Expr):
     pass
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(common.Stmt):
     pass
 
@@ -50,39 +49,39 @@ class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ign
 class IJCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     ij_cache_is_different_from_field_access = True
 
-    @validator("offset")
-    def zero_k_offset(cls, v: CartesianOffset) -> CartesianOffset:
-        if v.k != 0:
+    @datamodels.validator("offset")
+    def zero_k_offset(self, attribute: datamodels.Attribute, value: CartesianOffset) -> None:
+        if value.k != 0:
             raise ValueError("No k-offset allowed")
-        return v
 
-    @validator("data_index")
-    def no_additional_dimensions(cls, v: List[int]) -> List[int]:
-        if v:
+    @datamodels.validator("data_index")
+    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: List[int]) -> None:
+        if len(value) > 0:
             raise ValueError("IJ-cached higher-dimensional fields are not supported")
-        return v
 
 
 class KCacheAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     k_cache_is_different_from_field_access = True
 
-    @validator("offset")
-    def has_no_ij_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
-        if not v.i == v.j == 0:
+    @datamodels.validator("offset")
+    def has_no_ij_offset(
+        self, attribute: datamodels.Attribute, value: Union[CartesianOffset, VariableKOffset]
+    ) -> None:
+        offsets = value.to_dict()
+        if not offsets["i"] == offsets["j"] == 0:
             raise ValueError("No ij-offset allowed")
-        return v
 
-    @validator("offset")
-    def not_variable_offset(cls, v: Union[CartesianOffset, VariableKOffset]) -> CartesianOffset:
-        if isinstance(v, VariableKOffset):
+    @datamodels.validator("offset")
+    def not_variable_offset(
+        self, attribute: datamodels.Attribute, value: Union[CartesianOffset, VariableKOffset]
+    ) -> None:
+        if isinstance(value, VariableKOffset):
             raise ValueError("Cannot k-cache a variable k offset")
-        return v
 
-    @validator("data_index")
-    def no_additional_dimensions(cls, v: List[int]) -> List[int]:
-        if v:
+    @datamodels.validator("data_index")
+    def no_additional_dimensions(self, attribute: datamodels.Attribute, value: List[int]) -> None:
+        if len(value) > 0:
             raise ValueError("K-cached higher-dimensional fields are not supported")
-        return v
 
 
 class AssignStmt(
@@ -121,7 +120,7 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 
 class Decl(LocNode):
-    name: SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: DataType
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -132,7 +131,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):
@@ -144,12 +143,12 @@ class LocalScalar(Decl):
 
 
 class Temporary(Decl):
-    data_dims: Tuple[int, ...] = field(default_factory=tuple)
+    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
 
 
 class Positional(Decl):
     axis_name: str
-    dtype = DataType.INT32
+    dtype: DataType = DataType.INT32
 
 
 class IJExtent(LocNode):
@@ -198,17 +197,17 @@ class KExtent(LocNode):
 
 
 class IJCacheDecl(Decl):
-    extent: Optional[IJExtent]
+    extent: Optional[IJExtent] = None
 
 
 class KCacheDecl(Decl):
-    extent: Optional[KExtent]
+    extent: Optional[KExtent] = None
 
 
-class HorizontalExecution(LocNode, SymbolTableTrait):
+class HorizontalExecution(LocNode, eve.SymbolTableTrait):
     body: List[Stmt]
     declarations: List[LocalScalar]
-    extent: Optional[IJExtent]
+    extent: Optional[IJExtent] = None
 
 
 class VerticalLoopSection(LocNode):
@@ -227,14 +226,13 @@ class VerticalLoop(LocNode):
 class Kernel(LocNode):
     vertical_loops: List[VerticalLoop]
 
-    @validator("vertical_loops")
-    def check_loops(cls, v: List[VerticalLoop]) -> List[VerticalLoop]:
-        if not v:
+    @datamodels.validator("vertical_loops")
+    def check_loops(self, attribute: datamodels.Attribute, value: List[VerticalLoop]) -> None:
+        if len(value) < 1:
             raise ValueError("At least one loop required")
-        parallel = [loop.loop_order == LoopOrder.PARALLEL for loop in v]
+        parallel = [loop.loop_order == LoopOrder.PARALLEL for loop in value]
         if any(parallel) and not all(parallel):
             raise ValueError("Mixed k-parallelism in kernel")
-        return v
 
 
 def axis_size_decls() -> List[ScalarDecl]:
@@ -245,10 +243,10 @@ def axis_size_decls() -> List[ScalarDecl]:
     ]
 
 
-class Program(LocNode, SymbolTableTrait):
-    name: Str
+class Program(LocNode, eve.ValidatedSymbolTableTrait):
+    name: str
     params: List[Decl]
     positionals: List[Positional]
     temporaries: List[Temporary]
     kernels: List[Kernel]
-    axis_sizes: List[ScalarDecl] = axis_size_decls()
+    axis_sizes: List[ScalarDecl] = eve.field(default_factory=axis_size_decls)

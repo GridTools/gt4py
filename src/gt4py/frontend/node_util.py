@@ -18,6 +18,7 @@ from typing import Generator, Optional, Type
 
 import boltons.typeutils
 
+import eve
 import gtc.utils as gtc_utils
 from gt4py import utils as gt_utils
 from gtc import common
@@ -142,7 +143,7 @@ def iter_nodes_of_type(root_node: Node, node_type: Type) -> Generator[Node, None
     yield from recurse(root_node)
 
 
-def location_to_source_location(loc: Optional[Location]) -> Optional[common.SourceLocation]:
+def location_to_source_location(loc: Optional[Location]) -> Optional[eve.SourceLocation]:
     if loc is None or loc.line <= 0 or loc.column <= 0:
         return None
-    return common.SourceLocation(loc.line, loc.column, loc.scope)
+    return eve.SourceLocation(line=loc.line, column=loc.column, source=loc.scope)

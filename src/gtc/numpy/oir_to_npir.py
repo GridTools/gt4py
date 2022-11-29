@@ -14,10 +14,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from eve.concepts import BaseNode
-from eve.traits import SymbolTableTrait
-from eve.type_definitions import NOTHING
-from eve.visitors import NodeTranslator
+import eve
 from gtc import common, oir, utils
 from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import compute_relative_mask
@@ -26,10 +23,8 @@ from gtc.passes.oir_optimizations.utils import compute_extents
 from . import npir
 
 
-class OirToNpir(NodeTranslator):
+class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Lower from optimizable IR (OIR) to numpy IR (NPIR)."""
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     # --- Decls ---
     def visit_FieldDecl(
@@ -47,16 +42,16 @@ class OirToNpir(NodeTranslator):
     def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> npir.ScalarDecl:
         return npir.ScalarDecl(name=node.name, dtype=node.dtype)
 
-    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.ScalarDecl:
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> npir.LocalScalarDecl:
         return npir.LocalScalarDecl(name=node.name, dtype=node.dtype)
 
     def visit_Temporary(
         self, node: oir.Temporary, *, field_extents: Dict[str, Extent], **kwargs: Any
     ) -> npir.TemporaryDecl:
         temp_extent = field_extents[node.name]
-        offset = [-ext[0] for ext in temp_extent]
+        offset = tuple(-ext[0] for ext in temp_extent)
         assert all(off >= 0 for off in offset)
-        padding = [ext[1] - ext[0] for ext in temp_extent]
+        padding = tuple(ext[1] - ext[0] for ext in temp_extent)
         return npir.TemporaryDecl(
             name=node.name,
             dtype=node.dtype,
@@ -86,7 +81,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_VariableKOffset(
         self, node: oir.VariableKOffset, **kwargs: Any
-    ) -> Tuple[int, int, BaseNode]:
+    ) -> Tuple[int, int, eve.Node]:
         return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
     def visit_FieldAccess(self, node: oir.FieldAccess, **kwargs: Any) -> npir.FieldSlice:
@@ -126,7 +121,7 @@ class OirToNpir(NodeTranslator):
 
     def visit_Cast(self, node: oir.Cast, **kwargs: Any) -> Union[npir.VectorCast, npir.ScalarCast]:
         expr = self.visit(node.expr, **kwargs)
-        args = dict(dtype=node.dtype, expr=expr)
+        args = {"dtype": node.dtype, "expr": expr}
         return (
             npir.VectorCast(**args)
             if expr.kind == common.ExprKind.FIELD
@@ -188,7 +183,7 @@ class OirToNpir(NodeTranslator):
     ) -> Any:
         mask = compute_relative_mask(extent, node.mask)
         if mask is None:
-            return NOTHING
+            return eve.NOTHING
 
         horizontal_mask = npir.HorizontalMask(i=mask[0], j=mask[1])
 

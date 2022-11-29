@@ -22,8 +22,6 @@ import dace.library
 import dace.subsets
 
 import eve
-import gtc.common as common
-from eve import NodeVisitor
 from gtc import daceir as dcir
 from gtc.dace.expansion.tasklet_codegen import TaskletCodegen
 from gtc.dace.expansion.utils import get_dace_debuginfo
@@ -31,9 +29,7 @@ from gtc.dace.symbol_utils import data_type_to_dace_typeclass
 from gtc.dace.utils import make_dace_subset
 
 
-class StencilComputationSDFGBuilder(NodeVisitor):
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
-
+class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
     @dataclass
     class NodeContext:
         input_node_and_conns: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]]
@@ -64,6 +60,8 @@ class StencilComputationSDFGBuilder(NodeVisitor):
                     edge.dst,
                     edge.data,
                 )
+
+            assert isinstance(index_range.interval, dcir.DomainInterval)
             if index_range.stride < 0:
                 initialize_expr = f"{index_range.interval.end} - 1"
                 end_expr = f"{index_range.interval.start} - 1"
@@ -100,7 +98,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
         connector_prefix="",
-        symtable: ChainMap[common.SymbolRef, dcir.Decl],
+        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
     ) -> None:
         field_decl = symtable[node.field]
         assert isinstance(field_decl, dcir.FieldDecl)
@@ -148,7 +146,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         node_ctx: "StencilComputationSDFGBuilder.NodeContext",
-        symtable: ChainMap[common.SymbolRef, dcir.Decl],
+        symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ) -> None:
         code = TaskletCodegen.apply_codegen(
@@ -299,7 +297,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         node: dcir.FieldDecl,
         *,
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
-        non_transients: Set[common.SymbolRef],
+        non_transients: Set[eve.SymbolRef],
         **kwargs,
     ) -> None:
         assert len(node.strides) == len(node.shape)
@@ -329,7 +327,7 @@ class StencilComputationSDFGBuilder(NodeVisitor):
         *,
         sdfg_ctx: Optional["StencilComputationSDFGBuilder.SDFGContext"] = None,
         node_ctx: Optional["StencilComputationSDFGBuilder.NodeContext"] = None,
-        symtable: ChainMap[common.SymbolRef, Any],
+        symtable: ChainMap[eve.SymbolRef, Any],
         **kwargs,
     ) -> dace.nodes.NestedSDFG:
 

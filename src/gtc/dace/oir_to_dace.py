@@ -99,7 +99,7 @@ class OirSDFGBuilder(eve.NodeVisitor):
     ):
         declarations = {
             acc.name: ctx.decls[acc.name]
-            for acc in node.iter_tree().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
+            for acc in node.walk_values().if_isinstance(oir.FieldAccess, oir.ScalarAccess)
             if acc.name in ctx.decls
         }
         library_node = StencilComputation(

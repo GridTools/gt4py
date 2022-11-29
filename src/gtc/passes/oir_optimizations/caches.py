@@ -16,7 +16,7 @@ import collections
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
-from eve import NodeTranslator, SymbolTableTrait
+import eve
 from gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
@@ -49,7 +49,7 @@ statements.
 """
 
 
-class IJCacheDetection(NodeTranslator):
+class IJCacheDetection(eve.NodeTranslator):
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, local_tmps: Set[str], **kwargs: Any
     ) -> oir.VerticalLoop:
@@ -81,11 +81,11 @@ class IJCacheDetection(NodeTranslator):
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
-        vertical_loops = node.iter_tree().if_isinstance(oir.VerticalLoop)
+        vertical_loops = node.walk_values().if_isinstance(oir.VerticalLoop)
         counts: collections.Counter = sum(
             (
                 collections.Counter(
-                    vertical_loop.iter_tree()
+                    vertical_loop.walk_values()
                     .if_isinstance(oir.FieldAccess)
                     .getattr("name")
                     .if_in({tmp.name for tmp in node.declarations})
@@ -100,7 +100,7 @@ class IJCacheDetection(NodeTranslator):
 
 
 @dataclass
-class KCacheDetection(NodeTranslator):
+class KCacheDetection(eve.NodeTranslator):
     max_cacheable_offset: int = 5
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, **kwargs: Any) -> oir.VerticalLoop:
@@ -156,7 +156,7 @@ class KCacheDetection(NodeTranslator):
         )
 
 
-class PruneKCacheFills(NodeTranslator):
+class PruneKCacheFills(eve.NodeTranslator):
     """Prunes unneeded k-cache fills.
 
     A fill is classified as required if at least one of the two following conditions holds in any of the loop sections:
@@ -228,7 +228,7 @@ class PruneKCacheFills(NodeTranslator):
         return self.generic_visit(node, pruneable=pruneable, **kwargs)
 
 
-class PruneKCacheFlushes(NodeTranslator):
+class PruneKCacheFlushes(eve.NodeTranslator):
     """Prunes unneeded k-cache flushes.
 
     A flush is classified as unneeded under the following conditions:
@@ -267,7 +267,7 @@ class PruneKCacheFlushes(NodeTranslator):
         )
 
 
-class FillFlushToLocalKCaches(NodeTranslator):
+class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """Converts fill and flush k-caches to local k-caches.
 
     For each cached field, the following actions are performed:
@@ -277,8 +277,6 @@ class FillFlushToLocalKCaches(NodeTranslator):
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(
         self, node: oir.FieldAccess, *, name_map: Dict[str, str], **kwargs: Any
@@ -378,10 +376,10 @@ class FillFlushToLocalKCaches(NodeTranslator):
             )
             entry_interval = oir.Interval(start=bound, end=section.interval.end)
             rest_interval = oir.Interval(start=section.interval.start, end=bound)
-        decls = list(section.iter_tree().if_isinstance(oir.Decl))
+        decls = list(section.walk_values().if_isinstance(oir.Decl))
         decls_map = {decl.name: new_symbol_name(decl.name) for decl in decls}
 
-        class FixSymbolNameClashes(NodeTranslator):
+        class FixSymbolNameClashes(eve.NodeTranslator):
             def visit_ScalarAccess(self, node: oir.ScalarAccess) -> oir.ScalarAccess:
                 if node.name not in decls_map:
                     return node

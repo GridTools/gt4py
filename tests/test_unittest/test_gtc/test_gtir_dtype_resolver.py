@@ -50,7 +50,7 @@ def test_propagate_dtype_to_FieldAccess():
 
 def get_nodes_with_name_and_dtype(stencil: Stencil, name: str):
     return (
-        stencil.iter_tree()
+        stencil.walk_values()
         .if_hasattr("name")
         .filter(lambda node: hasattr(node, "dtype") and node.name == name)
         .to_list()
