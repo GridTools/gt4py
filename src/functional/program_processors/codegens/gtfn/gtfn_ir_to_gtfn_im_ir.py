@@ -58,7 +58,7 @@ class ToImpIR(NodeVisitor):
     def visit_Lambda(self, node: gtfn_ir.Lambda, **kwargs):
         idx_to_replace = node.params[1].id  # find _i_X parameter
 
-        class Replace(NodeTranslator):
+        class PlugInCurrentIdx(NodeTranslator):
             def visit_SymRef(self, node):
                 if node.id == idx_to_replace:
                     return gtfn_ir.OffsetLiteral(value=self.cur_idx)
@@ -67,12 +67,46 @@ class ToImpIR(NodeVisitor):
             def __init__(self, cur_idx: int):
                 self.cur_idx = cur_idx
 
+        class UndoCSE(NodeTranslator):
+            def visit_SymRef(self, node):
+                if node.id in expr_map:
+                    return self.expr_map[node.id]
+                return self.generic_visit(node)
+
+            def __init__(self, expr_map):
+                self.expr_map = expr_map
+
         for lambda_iter in range(kwargs["num_iter"]):
-            new_expr = Replace(cur_idx=lambda_iter).visit(node.expr.rhs)
-            rhs = self.visit(new_expr)  # TODO: this only supports sum_over
-            self.imp_list_ir.append(
-                AssignStmt(op="+=", lhs=gtfn_ir.SymRef(id=kwargs["red_idx"]), rhs=rhs)
-            )
+            # potentially, CSE was run on the contents of the redcution
+            #   for now, just undo the CSE pass
+            if isinstance(node.expr, gtfn_ir.FunCall) and isinstance(node.expr.fun, gtfn_ir.Lambda):
+                expr_map = dict(zip([param.id for param in node.expr.fun.params], node.expr.args))
+                nary_expr = UndoCSE(expr_map=expr_map).visit(node.expr.fun.expr)
+            else:
+                nary_expr = node.expr
+
+            # neighbor sum
+            if isinstance(nary_expr, gtfn_ir.BinaryExpr):
+                new_expr = PlugInCurrentIdx(cur_idx=lambda_iter).visit(nary_expr.rhs)
+                rhs = self.visit(new_expr)  # TODO: this only supports sum_over
+                self.imp_list_ir.append(
+                    AssignStmt(op="+=", lhs=gtfn_ir.SymRef(id=kwargs["red_idx"]), rhs=rhs)
+                )
+            # max_over, min_over
+            elif isinstance(nary_expr, gtfn_ir.TernaryExpr):
+                new_false_expr = PlugInCurrentIdx(cur_idx=lambda_iter).visit(nary_expr.false_expr)
+                fun_name = "maximum" if nary_expr.cond.op == ">" else "minimum"
+                self.imp_list_ir.append(
+                    AssignStmt(
+                        lhs=gtfn_ir.SymRef(id=kwargs["red_idx"]),
+                        rhs=gtfn_ir.FunCall(
+                            fun=gtfn_ir.SymRef(id=fun_name),
+                            args=[gtfn_ir.SymRef(id=kwargs["red_idx"]), new_false_expr],
+                        ),
+                    )
+                )
+            else:
+                raise NotImplementedError(f"unknown reduction type {nary_expr}")
 
     def visit_FunCall(self, node: gtfn_ir.FunCall):
         if (
