@@ -1293,28 +1293,54 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-def test_implicit_broadcast():
+def test_implicit_broadcast_zero_dims_only():
+    inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
-    inp_val = 1.0
 
     @field_operator
-    def fieldop_implicit_broadcast(scalar_1: float, scalar: Field[[], float]) -> Field[[], float]:
-        return scalar_1 * scalar
+    def func_2(inp: Field[[], float]):
+        return inp
 
-    fieldop_implicit_broadcast(inp_val, inp_val, out=out, offset_provider={})
-    assert out == np.asarray(inp_val)
+    func_2(inp, out=out, offset_provider={})
+    assert np.allclose(out, np.array(1.0))
 
-    inp_val = 2.0
+
+def test_implicit_broadcast_mixed_dims():
+    input1 = np_as_located_field(IDim)(np.ones((10,)))
+    inp = np_as_located_field()(np.array(1.0))
+    out = np_as_located_field(IDim)(np.ones((10,)))
+
+    @field_operator
+    def fieldop_implicit_broadcast(
+        scalar_1: Field[[], float], inp: Field[[IDim], float], scalar: float
+    ) -> Field[[IDim], float]:
+        return inp + scalar_1 * scalar
+
+    @field_operator
+    def fieldop_implicit_broadcast_2(inp: Field[[IDim], float]) -> Field[[IDim], float]:
+        fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
+        return fi
 
     @program
-    def program_implicit_broadcast(
-        scalar_1: float, scalar: Field[[], float], out: Field[[], float]
-    ):
-        fieldop_implicit_broadcast(scalar_1, scalar, out=out)
+    def program_implicit_broadcast_2(inp: Field[[IDim], float], out: Field[[IDim], float]):
+        fieldop_implicit_broadcast_2(inp, out=out)
 
-    program_implicit_broadcast(inp_val, inp_val, out, offset_provider={})
+    program_implicit_broadcast_2(input1, out, offset_provider={})
+    assert np.allclose(out, np.asarray(inp) * 2)
 
-    assert out == np.asarray(inp_val * inp_val)
+
+def test_implicit_broadcast_scalars():
+    value = 1.0
+    out = np_as_located_field()(np.array(0.0))
+    expected = np_as_located_field()(np.array(value))
+
+    @field_operator
+    def imp_broadcast_scalars(scalar: float) -> float:
+        return scalar
+
+    imp_broadcast_scalars(value, out=out, offset_provider={})
+
+    assert np.allclose(out, expected)
 
 
 def test_constant_closure_vars():

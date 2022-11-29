@@ -324,7 +324,7 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
     ... )
     False
     >>> is_zero_dim_field_compatible(
-    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64),
+    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
     ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
     ... )
     True
@@ -339,12 +339,26 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
     ... )
     True
     """
-    if (
-        (_is_zero_dim_field(b_arg) or is_number(b_arg))
-        and (_is_zero_dim_field(b_arg) or is_number(b_arg))
-    ) and extract_dtype(a_arg) == extract_dtype(b_arg):
+    if (_is_zero_dim_field(b_arg) or is_number(b_arg)) and extract_dtype(a_arg) == extract_dtype(
+        b_arg
+    ):
         return True
     return False
+
+
+def check_zero_dims_fields(
+    args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
+):
+    """Cast args type to zero dimensional fields if compatible and input requires it."""
+    for arg_i, arg in enumerate(args):
+        def_type = function_type.definition.args[arg_i]
+        if _is_zero_dim_field(
+            function_type.definition.args[arg_i]
+        ) and is_zero_dim_field_compatible(def_type, arg):
+            args[arg_i] = def_type
+        elif _is_zero_dim_field(def_type):
+            raise GTTypeError(f"{arg} is not compatible with {def_type}")
+    return args
 
 
 def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
@@ -593,12 +607,8 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    if not _is_zero_dim_field(fieldop_type.definition.returns):
-        yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
-    else:
-        for i, (a_arg, b_arg) in enumerate(zip(fieldop_type.definition.args, args)):
-            if not is_zero_dim_field_compatible(a_arg, b_arg):
-                yield f"Expected {i}-th argument to be of type {a_arg}, but got {b_arg}."
+    args_new = check_zero_dims_fields(args, fieldop_type)
+    yield from function_signature_incompatibilities_func(fieldop_type.definition, args_new, kwargs)
 
 
 @function_signature_incompatibilities.register
@@ -654,9 +664,8 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    # case when out is not a zero-dimensional field
-    if not _is_zero_dim_field(program_type.definition.args[-1]):
-        yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
+    args_new = check_zero_dims_fields(args, program_type)
+    yield from function_signature_incompatibilities_func(program_type.definition, args_new, kwargs)
 
 
 @function_signature_incompatibilities.register
