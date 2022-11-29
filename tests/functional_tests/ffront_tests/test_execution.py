@@ -1313,20 +1313,6 @@ def test_implicit_broadcast_mixed_dims():
     assert np.allclose(out, np.asarray(inp) * 2)
 
 
-def test_implicit_broadcast_scalars():
-    value = 1.0
-    out = np_as_located_field()(np.array(0.0))
-    expected = np_as_located_field()(np.array(value))
-
-    @field_operator
-    def imp_broadcast_scalars(scalar: float) -> float:
-        return scalar
-
-    imp_broadcast_scalars(value, out=out, offset_provider={})
-
-    assert np.allclose(out, expected)
-
-
 def test_constant_closure_vars():
     from eve.utils import FrozenNamespace
 
