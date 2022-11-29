@@ -22,6 +22,7 @@ from functional.iterator.builtins import (
     or_,
     plus,
     shift,
+    xor_,
 )
 from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
@@ -114,6 +115,11 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [True, False, False, False],
         ),
         (or_, [[True, True, False, False], [True, False, True, False]], [True, True, True, False]),
+        (
+            xor_,
+            [[True, True, False, False], [True, False, True, False]],
+            [False, True, True, False],
+        ),
     ],
 )
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):

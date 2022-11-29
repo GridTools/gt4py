@@ -274,6 +274,13 @@ def or_(a, b):
     return a or b
 
 
+@builtins.xor_.register(EMBEDDED)
+def xor_(a, b):
+    if isinstance(a, Column):
+        return np.logical_xor(a, b)
+    return a ^ b
+
+
 @builtins.tuple_get.register(EMBEDDED)
 def tuple_get(i, tup):
     if isinstance(tup, Column):
