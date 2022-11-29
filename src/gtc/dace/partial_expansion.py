@@ -666,11 +666,10 @@ class PartialExpansion(transformation.SubgraphTransformation):
             new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
             subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
 
-        # for edge in (e for n in subgraph.nodes() for e in subgraph.in_edges(n)):
-        #     for sym in edge.data.assignments.keys():
-        #         if sym not in sdfg.symbols:
-        #             sdfg.add_symbol(sym, stype=dace.float64)
-        sdfg.view()
+        for edge in (e for n in subgraph.nodes() for e in subgraph.in_edges(n)):
+            for sym in edge.data.assignments.keys():
+                if sym not in sdfg.symbols:
+                    sdfg.add_symbol(sym, stype=dace.float64)
         nsdfg_state: dace.SDFGState = nest_sdfg_subgraph(sdfg, subgraph)
         if nsdfg_state.label == "symbolic_output":
             nsdfg_state = next(iter(nsdfg_state.parent.predecessor_states(nsdfg_state)))
@@ -703,17 +702,20 @@ class PartialExpansion(transformation.SubgraphTransformation):
         for edge in nsdfg_state.in_edges(nsdfg_node):
             memlet = edge.data
             name = memlet.data
-            access_info = nsdfg_access_infos[name]
-            naxes = len(access_info.grid_subset.intervals)
-            data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+            if name in nsdfg_access_infos:
+                access_info = nsdfg_access_infos[name]
+                naxes = len(access_info.grid_subset.intervals)
+                data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+                new_subset = _make_dace_subset_symbolic_context(
+                    (parent_symbolic_split[0][name], parent_symbolic_split[1]),
+                    access_info,
+                    data_dims=data_dims,
+                    tile_sizes={it.axis: it.stride for it in original_item.iterations},
+                )
+            else:
+                new_subset = edge.data.subset
             map_entry.add_in_connector("IN_" + name)
             map_entry.add_out_connector("OUT_" + name)
-            new_subset = _make_dace_subset_symbolic_context(
-                (parent_symbolic_split[0][name], parent_symbolic_split[1]),
-                access_info,
-                data_dims=data_dims,
-                tile_sizes={it.axis: it.stride for it in original_item.iterations},
-            )
             nsdfg_state.add_edge(edge.src, edge.src_conn, map_entry, "IN_" + name, memlet=edge.data)
             nsdfg_state.add_edge(
                 map_entry,
@@ -726,17 +728,20 @@ class PartialExpansion(transformation.SubgraphTransformation):
         for edge in nsdfg_state.out_edges(nsdfg_node):
             memlet = edge.data
             name = memlet.data
-            access_info = nsdfg_access_infos[name]
-            naxes = len(access_info.grid_subset.intervals)
-            data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+            if name in nsdfg_access_infos:
+                access_info = nsdfg_access_infos[name]
+                naxes = len(access_info.grid_subset.intervals)
+                data_dims = nsdfg_node.sdfg.arrays[name].shape[naxes:]
+                new_subset = _make_dace_subset_symbolic_context(
+                    (parent_symbolic_split[0][name], parent_symbolic_split[1]),
+                    access_info,
+                    data_dims=data_dims,
+                    tile_sizes={it.axis: it.stride for it in original_item.iterations},
+                )
+            else:
+                new_subset = edge.data.subset
             map_exit.add_in_connector("IN_" + name)
             map_exit.add_out_connector("OUT_" + name)
-            new_subset = _make_dace_subset_symbolic_context(
-                (parent_symbolic_split[0][name], parent_symbolic_split[1]),
-                access_info,
-                data_dims=data_dims,
-                tile_sizes={it.axis: it.stride for it in original_item.iterations},
-            )
             nsdfg_state.add_edge(
                 edge.src,
                 edge.src_conn,
@@ -806,11 +811,11 @@ def partially_expand(sdfg: dace.SDFG):
                 candidate = set()
                 subsubgraphs = []
                 if isinstance(child, cf.IfScope):
-                    subsubgraphs += _recurse(child.body)
+                    subsubgraphs += _recurse(sd, child.body)
                     if child.orelse is not None:
-                        subsubgraphs += _recurse(child.orelse)
+                        subsubgraphs += _recurse(sd, child.orelse)
                 elif isinstance(child, cf.ForScope):
-                    subsubgraphs += _recurse(child.body)
+                    subsubgraphs += _recurse(sd, child.body)
                 if subsubgraphs:
                     subgraphs.extend(subsubgraphs)
         if candidate:
