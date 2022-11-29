@@ -1,5 +1,7 @@
 # Scalar operators
 
+How about "elementwise operators"?
+
 ## What are scalar operators?
 
 Scalar operators are functions that take scalar arguments and return a scalar result. They can be used to implement arbitrary pointwise operations on fields.
@@ -27,9 +29,9 @@ In the code above, the function `agm` is executed once for every element pair of
 
 Gt4py is concerned with the efficient parallelization of code, which is much easier to do when the source code can be turned into a simple data flow graph. To ensure this, the syntax of field operators is restricted and several Python constructs, such as loops, cannot be used.
 
-However, gt4py is not concerned with the optimziation of a single thread in the parallel grid, as that is delegated to platform compilers and has a smaller interference with parallel optimizations. Consequently, gt4py could allow fewer restrictions on the syntax in a scalar operator that describes only a single thread of executions. Unlike field operators, scalar operators can easily support conditionals, loops and mutable variables.
+However, gt4py is not concerned with the optimziation of a single thread in the parallel grid, as that is delegated to platform compilers and has a smaller interference with parallel optimizations. Consequently, gt4py could allow fewer restrictions on the syntax in a scalar operator that describes only a single thread of execution. Unlike field operators, scalar operators can easily support conditionals, loops and mutable variables.
 
-Scalar operators can be used to implement features that, using the pure field operator syntax, would be difficult, impractical, or downright impossible. In weather and climate the general targets would be iterative algorithms and solvers. 
+Scalar operators can be used to implement features that, using the pure field operator syntax, would be difficult, impractical, or downright impossible. In weather and climate the general targets for scalar operators would be iterative algorithms and solvers. 
 
 ## Implementation options
 
@@ -39,7 +41,7 @@ Due to their execution model, scalar operators can be implemented both within an
 
 #### Within the toolchain
 
-When implemented within the toolchain, scalar operators are parsed just like field operators and scan operators, it gets lowered to iterator IR, and C++ code is emitted. Since iterator IR is a functional language, the lowering must convert statement-based conditionals and loops into expression-based equivalents to create valid iterator IR.
+When implemented within the toolchain, scalar operators are parsed just like field operators and scan operators, then get lowered to iterator IR, and finally C++ code is emitted. Since iterator IR is a functional language, the lowering must convert statement-based conditionals and loops into expression-based equivalents to create valid iterator IR.
 
 Statement-based:
 ```python
@@ -61,9 +63,9 @@ e, f = do_for(
 
 #### Outside the toolchain
 
-Since the statement to expression conversion requires considerable effort, it makes sense to skip using iterator IR and generate C++ directly from Python. This conversion does not require rewriting statements to expressions, but has other difficulties when bridging the Python syntax to C++. The generation, however, can be outsourced to external libraries.
+Since the code generated from scalar operators won't use any GridTools features, the Python to C++ transpilation can happen outside the iterator IR toolchain. The transpiled C++ also does not need to be in a functional form, although that's not the only challenge when bridging the Python syntax to C++. 
 
-In this variant, the scalar operator is parsed as regular Python code by any tool that produces regular C or C++ code. The C++ code, which will be a single function, is simply inserted into the generated GTFN C++ and is called as a regular C++ function.
+When bypassing the toolchain, any internal or third party tool can be used to translate Python to C or C++. The C++ code, which will be a single function, is simply inserted into the generated GTFN C++ and is called as a regular C++ function.
 
 ### Options to bypass the toolchain
 
@@ -93,7 +95,7 @@ if (condition) {
 use(value);
 ```
 
-Since this would probably be too slow, we can settle for:
+Since this would probably be too slow for high performance computing, we can settle for:
 ```c++
 std::common_type_t<long, double> value;
 if (condition) {
@@ -116,7 +118,7 @@ use(value)
 
 #### Option 1: DaCe
 
-While DaCe is a data-parallel optimization framework, it also has builtin capabalities to translate Python to C++ code, furthermore, it also supports CUDA. Unfortunately, DaCe does not produce correct C++ code for the scoping cases, neither does it emit its own diagnostics. The generated C++ code fails to compile, however, so it won't just produce garbage results. DaCe also allows the last method with explicit variable declarations.
+While DaCe is a data-parallel optimization framework, it also has builtin capabalities to translate Python to C++ code, furthermore, it also supports CUDA. Unfortunately, DaCe does not produce correct C++ code for the scoping cases, neither does it emit its own diagnostics. The generated C++ code fails to compile, however, so it won't just produce invalid results. DaCe works as expected when explicit variable declarations are used, but work needs to be done to get diagnostics.
 
 #### Option 2: Pythran
 
