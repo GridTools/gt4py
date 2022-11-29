@@ -1340,7 +1340,44 @@ def test_constant_closure_vars():
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
 
 
-def test_scalar_operator(fieldview_backend):
+def test_scalar_operator_singlearg(fieldview_backend):
+    @scalar_operator
+    def mul_by_two(p: float) -> float:
+        return 2*p
+
+    @field_operator(backend=fieldview_backend)
+    def wrapper(p: Field[[IDim], float]) -> Field[[IDim], float]:
+        return mul_by_two(p)
+
+    inp = np_as_located_field(IDim)(np.arange(start=1, stop=10)*0.3)
+    out = np_as_located_field(IDim)(np.zeros_like(np.asarray(inp)))
+    expected = 2*np.asarray(inp)
+
+    wrapper(inp, out=out, offset_provider={})
+
+    assert np.allclose(np.asarray(out), expected)
+
+
+def test_scalar_operator_multiarg(fieldview_backend):
+    @scalar_operator
+    def mul(a: float, b: float) -> float:
+        return a * b
+
+    @field_operator(backend=fieldview_backend)
+    def wrapper(a: Field[[IDim], float], b: Field[[IDim], float]) -> Field[[IDim], float]:
+        return mul(a, b)
+
+    a = np_as_located_field(IDim)(np.arange(start=1, stop=10)*0.3)
+    b = np_as_located_field(IDim)(np.arange(start=7, stop=16)*0.3)
+    out = np_as_located_field(IDim)(np.zeros_like(np.asarray(a)))
+    expected = np.asarray(a) * np.asarray(b)
+
+    wrapper(a, b, out=out, offset_provider={})
+
+    assert np.allclose(np.asarray(out), expected)
+
+
+def test_scalar_operator_controlflow(fieldview_backend):
     @scalar_operator
     def bisect_single(p: float, y: float) -> float:
         a = 0.0
@@ -1357,7 +1394,7 @@ def test_scalar_operator(fieldview_backend):
         return c
 
     @field_operator(backend=fieldview_backend)
-    def bisect(p: Field[[IDim], float]):
+    def bisect(p: Field[[IDim], float]) -> Field[[IDim], float]:
         return bisect_single(p, 0.5)
 
     powers = np_as_located_field(IDim)(np.arange(start=1, stop=10)*0.3)
