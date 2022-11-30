@@ -17,8 +17,10 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
 
-from eve import SymbolTableTrait
-from eve.codegen import FormatTemplate, JinjaTemplate, TemplatedGenerator
+import eve
+from eve import codegen
+from eve.codegen import FormatTemplate as as_fmt
+from eve.codegen import JinjaTemplate as as_jinja
 from gtc import common
 from gtc.numpy import npir
 
@@ -49,7 +51,7 @@ def _slice_string(ch: str, offset: int, interval: Tuple[common.AxisBound, common
 def _make_slice_access(
     offset: Tuple[Optional[int], Optional[int], Union[str, Optional[int]]],
     is_serial: bool,
-    interval: Optional[common.HorizontalMask] = None,
+    interval: Optional[npir.HorizontalMask] = None,
 ) -> List[str]:
     axes: List[str] = []
 
@@ -142,7 +144,7 @@ ORIGIN_CORRECTED_VIEW_CLASS = textwrap.dedent(
 )
 
 
-class NpirCodegen(TemplatedGenerator):
+class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class BlockContext:
         locals_declared: Set[str] = field(default_factory=set)
@@ -150,11 +152,7 @@ class NpirCodegen(TemplatedGenerator):
         def add_declared(self, *args):
             self.locals_declared |= set(args)
 
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
-
-    FieldDecl = FormatTemplate(
-        "{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))"
-    )
+    FieldDecl = as_fmt("{name} = Field({name}, _origin_['{name}'], ({', '.join(dimensions)}))")
 
     def visit_TemporaryDecl(
         self, node: npir.TemporaryDecl, **kwargs
@@ -166,11 +164,11 @@ class NpirCodegen(TemplatedGenerator):
         dtype = self.visit(node.dtype, **kwargs)
         return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
 
-    LocalScalarDecl = FormatTemplate(
+    LocalScalarDecl = as_fmt(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
     )
 
-    VarKOffset = FormatTemplate("lk + {k}")
+    VarKOffset = as_fmt("lk + {k}")
 
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         k_offset = (
@@ -205,7 +203,7 @@ class NpirCodegen(TemplatedGenerator):
         node: npir.LocalScalarAccess,
         *,
         is_serial: bool,
-        horizontal_mask: Optional[common.HorizontalMask] = None,
+        horizontal_mask: Optional[npir.HorizontalMask] = None,
         **kwargs: Any,
     ) -> Union[str, Collection[str]]:
         args = _make_slice_access((0, 0, 0), is_serial, horizontal_mask)
@@ -213,7 +211,7 @@ class NpirCodegen(TemplatedGenerator):
             args[2] = ":"
         return f"{node.name}[{', '.join(args)}]"
 
-    ParamAccess = FormatTemplate("{name}")
+    ParamAccess = as_fmt("{name}")
 
     def visit_DataType(self, node: common.DataType, **kwargs: Any) -> Union[str, Collection[str]]:
         # `np.bool` is a deprecated alias for the builtin `bool` or `np.bool_`.
@@ -240,9 +238,9 @@ class NpirCodegen(TemplatedGenerator):
         value = self.visit(node.value, inside_slice=inside_slice, **kwargs)
         return f"{value}" if inside_slice else f"{dtype}({value})"
 
-    ScalarCast = FormatTemplate("{dtype}({expr})")
+    ScalarCast = as_fmt("{dtype}({expr})")
 
-    VectorCast = FormatTemplate("{expr}.astype({dtype})")
+    VectorCast = as_fmt("{expr}.astype({dtype})")
 
     def visit_NativeFunction(
         self, node: common.NativeFunction, **kwargs: Any
@@ -265,7 +263,7 @@ class NpirCodegen(TemplatedGenerator):
         kwargs["mask_arg"] = f", where={mask}" if mask else ""
         return self.generic_visit(node, mask=mask, **kwargs)
 
-    NativeFuncCall = FormatTemplate("{func}({', '.join(arg for arg in args)}{mask_arg})")
+    NativeFuncCall = as_fmt("{func}({', '.join(arg for arg in args)}{mask_arg})")
 
     def visit_VectorAssign(
         self, node: npir.VectorAssign, *, ctx: "BlockContext", **kwargs: Any
@@ -274,9 +272,9 @@ class NpirCodegen(TemplatedGenerator):
         right = self.visit(node.right, horizontal_mask=node.horizontal_mask, **kwargs)
         return f"{left} = {right}"
 
-    VectorArithmetic = FormatTemplate("({left} {op} {right})")
+    VectorArithmetic = as_fmt("({left} {op} {right})")
 
-    VectorLogic = FormatTemplate("np.bitwise_{op}({left}, {right})")
+    VectorLogic = as_fmt("np.bitwise_{op}({left}, {right})")
 
     def visit_UnaryOperator(
         self, node: common.UnaryOperator, **kwargs: Any
@@ -285,9 +283,9 @@ class NpirCodegen(TemplatedGenerator):
             return "np.bitwise_not"
         return self.generic_visit(node, **kwargs)
 
-    VectorUnaryOp = FormatTemplate("({op}({expr}))")
+    VectorUnaryOp = as_fmt("({op}({expr}))")
 
-    VectorTernaryOp = FormatTemplate("np.where({cond}, {true_expr}, {false_expr})")
+    VectorTernaryOp = as_fmt("np.where({cond}, {true_expr}, {false_expr})")
 
     def visit_LevelMarker(
         self, node: common.LevelMarker, **kwargs: Any
@@ -303,7 +301,7 @@ class NpirCodegen(TemplatedGenerator):
             voffset = f" - {-node.offset}"
         return self.generic_visit(node, voffset=voffset, **kwargs)
 
-    AxisBound = FormatTemplate("_d{level}_{voffset}")
+    AxisBound = as_fmt("_d{level}_{voffset}")
 
     def visit_LoopOrder(self, node: common.LoopOrder, **kwargs) -> Union[str, Collection[str]]:
         if node is common.LoopOrder.FORWARD:
@@ -312,9 +310,9 @@ class NpirCodegen(TemplatedGenerator):
             return "for k_ in range(K-1, k-1, -1):"
         return ""
 
-    Broadcast = FormatTemplate("{expr}")
+    Broadcast = as_fmt("{expr}")
 
-    While = JinjaTemplate(
+    While = as_jinja(
         textwrap.dedent(
             """\
             while np.any({{ cond }}):
@@ -333,7 +331,7 @@ class NpirCodegen(TemplatedGenerator):
 
     def visit_VerticalPass(self, node: npir.VerticalPass, **kwargs):
         is_serial = node.direction != common.LoopOrder.PARALLEL
-        has_variable_k = bool(node.iter_tree().if_isinstance(npir.VarKOffset).to_list())
+        has_variable_k = bool(node.walk_values().if_isinstance(npir.VarKOffset).to_list())
         return self.generic_visit(
             node,
             is_serial=is_serial,
@@ -343,7 +341,7 @@ class NpirCodegen(TemplatedGenerator):
             **kwargs,
         )
 
-    VerticalPass = JinjaTemplate(
+    VerticalPass = as_jinja(
         textwrap.dedent(
             """\
             # --- begin vertical block ---{% set body_indent = 0 %}
@@ -367,7 +365,7 @@ class NpirCodegen(TemplatedGenerator):
         upper = (node.extent[0][1], node.extent[1][1])
         return self.generic_visit(node, lower=lower, upper=upper, ctx=self.BlockContext(), **kwargs)
 
-    HorizontalBlock = JinjaTemplate(
+    HorizontalBlock = as_jinja(
         textwrap.dedent(
             """\
             # --- begin horizontal block --
@@ -394,7 +392,7 @@ class NpirCodegen(TemplatedGenerator):
             **kwargs,
         )
 
-    Computation = JinjaTemplate(
+    Computation = as_jinja(
         textwrap.dedent(
             """\
             import numbers

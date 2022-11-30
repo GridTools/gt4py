@@ -57,7 +57,7 @@ def test_local_temporaries_to_scalars_multiexec():
     )
     transformed = LocalTemporariesToScalars().visit(testee)
     assert "tmp" in {d.name for d in transformed.declarations}
-    assert not transformed.iter_tree().if_isinstance(oir.ScalarAccess).to_list()
+    assert not transformed.walk_values().if_isinstance(oir.ScalarAccess).to_list()
 
 
 def test_write_before_read_temporaries_to_scalars():

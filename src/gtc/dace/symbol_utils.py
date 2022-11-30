@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import dace
 import numpy as np
 
+import eve
 from gtc import common
 
 
@@ -55,5 +56,5 @@ def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
 
 
 @lru_cache(maxsize=None)
-def get_dace_symbol(name: common.SymbolRef, dtype: common.DataType = common.DataType.INT32):
+def get_dace_symbol(name: eve.SymbolRef, dtype: common.DataType = common.DataType.INT32):
     return dace.symbol(name, dtype=data_type_to_dace_typeclass(dtype))

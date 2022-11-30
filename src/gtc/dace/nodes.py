@@ -14,6 +14,7 @@
 
 import base64
 import pickle
+import typing
 from typing import Dict, List, Set, Union
 
 import dace.data
@@ -134,7 +135,7 @@ class StencilComputation(library.LibraryNode):
                 for j, he in enumerate(section.horizontal_executions):
                     extents_dict[j * len(oir_node.sections) + i] = extents[id(he)]
 
-            self.oir_node = oir_node
+            self.oir_node = typing.cast(PickledDataclassProperty, oir_node)
             self.extents = extents_dict  # type: ignore
             self.declarations = declarations  # type: ignore
             self.symbol_mapping = {
@@ -161,7 +162,7 @@ class StencilComputation(library.LibraryNode):
             if any(
                 interval.start.level == common.LevelMarker.END
                 or interval.end.level == common.LevelMarker.END
-                for interval in oir_node.iter_tree()
+                for interval in oir_node.walk_values()
                 .if_isinstance(VerticalLoopSection)
                 .getattr("interval")
             ) or any(
@@ -207,7 +208,7 @@ class StencilComputation(library.LibraryNode):
         return result
 
     def has_splittable_regions(self):
-        for he in self.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution):
+        for he in self.oir_node.walk_values().if_isinstance(oir.HorizontalExecution):
             if not HorizontalExecutionSplitter.is_horizontal_execution_splittable(he):
                 return False
         return True

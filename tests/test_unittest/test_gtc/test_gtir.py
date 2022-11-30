@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import pytest
-from pydantic.error_wrappers import ValidationError
 
 from gtc.common import ArithmeticOperator, ComparisonOperator, DataType
 from gtc.gtir import Decl, Expr, Stmt
@@ -68,12 +67,12 @@ def test_can_have_vertical_offset():
     ],
 )
 def test_no_horizontal_offset_allowed(assign_stmt_with_offset):
-    with pytest.raises(ValidationError, match=r"must not have .*horizontal offset"):
+    with pytest.raises(ValueError, match=r"must not have .*horizontal offset"):
         assign_stmt_with_offset()
 
 
 def test_symbolref_without_decl():
-    with pytest.raises(ValidationError, match=r"Symbol.*not found"):
+    with pytest.raises(ValueError, match=r"Symbol.*not found"):
         StencilFactory(
             params=[],
             vertical_loops__0__body__0=ParAssignStmtFactory(
@@ -117,7 +116,7 @@ def test_symbolref_without_decl():
     ],
 )
 def test_write_and_read_with_offset_violation(write_and_read_with_horizontal_offset):
-    with pytest.raises(ValidationError, match=r"Illegal write.*read with.*offset"):
+    with pytest.raises(ValueError, match=r"Illegal write.*read with.*offset"):
         write_and_read_with_horizontal_offset()
 
 
@@ -132,7 +131,7 @@ def test_temporary_write_and_read_with_offset_is_allowed():
 
 
 def test_illegal_self_assignment_with_offset():
-    with pytest.raises(ValidationError, match=r"Self-assignment"):
+    with pytest.raises(ValueError, match=r"Self-assignment"):
         ParAssignStmtFactory(left__name="foo", right__name="foo", right__offset__i=1)
 
 
@@ -148,11 +147,7 @@ def test_indirect_address_data_dims():
 def test_while_without_boolean_condition():
     with pytest.raises(ValueError, match=r"Condition in.*must be boolean."):
         WhileFactory(
-            cond=BinaryOpFactory(
-                left__name="foo",
-                right__name="bar",
-            ),
-            dtype=DataType.FLOAT32,
+            cond=BinaryOpFactory(left__name="foo", right__name="bar", op=ArithmeticOperator.ADD)
         )
 
 

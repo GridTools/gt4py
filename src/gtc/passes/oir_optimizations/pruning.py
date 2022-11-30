@@ -14,32 +14,32 @@
 
 from typing import Any, Dict
 
-from eve import NOTHING, NodeTranslator, iter_tree
+import eve
 from gtc import oir
 from gtc.definitions import Extent
 from gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
-class NoFieldAccessPruning(NodeTranslator):
+class NoFieldAccessPruning(eve.NodeTranslator):
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution) -> Any:
         try:
             next(
                 iter(
                     acc
-                    for left in node.iter_tree().if_isinstance(oir.AssignStmt).getattr("left")
-                    for acc in left.iter_tree().if_isinstance(oir.FieldAccess)
+                    for left in node.walk_values().if_isinstance(oir.AssignStmt).getattr("left")
+                    for acc in left.walk_values().if_isinstance(oir.FieldAccess)
                 )
             )
         except StopIteration:
-            return NOTHING
+            return eve.NOTHING
 
         return node
 
     def visit_VerticalLoopSection(self, node: oir.VerticalLoopSection) -> Any:
         horizontal_executions = self.visit(node.horizontal_executions)
         if not horizontal_executions:
-            return NOTHING
+            return eve.NOTHING
         return oir.VerticalLoopSection(
             interval=node.interval,
             horizontal_executions=horizontal_executions,
@@ -49,7 +49,7 @@ class NoFieldAccessPruning(NodeTranslator):
     def visit_VerticalLoop(self, node: oir.VerticalLoop) -> Any:
         sections = self.visit(node.sections)
         if not sections:
-            return NOTHING
+            return eve.NOTHING
         return oir.VerticalLoop(
             loop_order=node.loop_order,
             sections=sections,
@@ -60,7 +60,7 @@ class NoFieldAccessPruning(NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
         vertical_loops = self.visit(node.vertical_loops, **kwargs)
         accessed_fields = (
-            iter_tree(vertical_loops).if_isinstance(oir.FieldAccess).getattr("name").to_set()
+            eve.walk_values(vertical_loops).if_isinstance(oir.FieldAccess).getattr("name").to_set()
         )
         declarations = [decl for decl in node.declarations if decl.name in accessed_fields]
         return oir.Stencil(
@@ -72,7 +72,7 @@ class NoFieldAccessPruning(NodeTranslator):
         )
 
 
-class UnreachableStmtPruning(NodeTranslator):
+class UnreachableStmtPruning(eve.NodeTranslator):
     def visit_Stencil(self, node: oir.Stencil) -> oir.Stencil:
         block_extents = compute_horizontal_block_extents(node)
         return self.generic_visit(node, block_extents=block_extents)
@@ -86,4 +86,4 @@ class UnreachableStmtPruning(NodeTranslator):
         self, node: oir.HorizontalRestriction, *, block_extent: Extent, **kwargs: Any
     ) -> Any:
         overlap = mask_overlap_with_extent(node.mask, block_extent)
-        return NOTHING if overlap is None else node
+        return eve.NOTHING if overlap is None else node
