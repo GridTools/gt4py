@@ -46,7 +46,7 @@ class CollectSubexpressions(NodeVisitor):
 
         child_collector_stack = [*collector_stack, True]
         self.generic_visit(
-            node, subexprs=subexprs, refs=r, parent=node, collector_stack=collector_stack
+            node, subexprs=subexprs, refs=r, parent=node, collector_stack=child_collector_stack
         )
         if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
@@ -63,11 +63,12 @@ class CollectSubexpressions(NodeVisitor):
         parent: Optional[ir.Node],
         collector_stack: list[bool],
     ) -> None:
-        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
-        if node.fun == ir.SymRef(id="shift"):
-            return
-
-        child_collector_stack = [*collector_stack, True]
+        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
+        #  visited, to ensure symbol dependencies are recognized correctly.
+        allow_collection = node.fun != ir.SymRef(id="shift")
+        #if not allow_collection:
+        #    breakpoint()
+        child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(
             node, subexprs=subexprs, refs=refs, parent=node, collector_stack=child_collector_stack
