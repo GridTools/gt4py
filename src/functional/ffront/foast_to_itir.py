@@ -20,6 +20,7 @@ from typing import Any, Callable, Optional, cast
 
 import numpy as np
 
+import eve
 from eve import NodeTranslator
 from functional.common import DimensionKind
 from functional.ffront import (
@@ -221,14 +222,9 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_ScalarOperator(self, node: foast.ScalarOperator) -> itir.FunctionDefinition:
-        symtable = node.annex.symtable
-        params = self.visit(node.params, symtable=symtable)
-        param_refs = [im.deref_(im.ref(param.id)) for param in node.params]
-
-        return itir.FunctionDefinition(
+        return itir.ScalarFunDef(
             id=node.id,
-            params=params,
-            expr=itir.FunCallScalar(fun=node.definition, args=param_refs),
+            definition=node.definition
         )
 
     def _visit_body(
@@ -410,7 +406,7 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType, ct.ScalarOperatorType)):
+        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
             # operators are lowered into stencils and only accept iterator
             #  arguments. As such transform all value arguments, e.g. scalars
             #  and tuples thereof, into iterators. See ADR-0002 for more
@@ -424,6 +420,13 @@ class FieldOperatorLowering(NodeTranslator):
                 lowered_args.append(lowered_arg)
 
             return self._lift_if_field(node)(im.call_(lowered_func)(*lowered_args))
+        elif isinstance(node.func.type, ct.ScalarOperatorType):
+            args = [to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args]
+            call = itir.ScalarFunCall(
+                fun=im.ref(node.func.id),
+                args=args
+            )
+            return self._lift_if_field(node)(call)
 
         raise AssertionError(
             f"Call to object of type {type(node.func.type).__name__} not understood."

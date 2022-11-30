@@ -121,19 +121,20 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
 
-    def visit_FunCallScalar(self, node: gtfn_ir.FunCallScalar, **kwargs):
-        name = node.fun.__name__
-        args = self.visit(node.args)
-        if name not in self._scalar_functions:
-            source_lines = inspect.getsourcelines(node.fun)[0]
-            for i in range(len(source_lines)):
-                if re.match(r"\s*def\s+.*", source_lines[i]):
-                    break
-            py_code = textwrap.dedent("".join(source_lines[i:]))
-            cpp_code = str(pythran.generate_cxx("generated", py_code)[0])
-            self._scalar_functions[name] = cpp_code
+    def visit_ScalarFunCall(self, node: gtfn_ir.ScalarFunCall, **kwargs):
+        name = self.visit(node.fun, **kwargs)
+        args = self.visit(node.args, **kwargs)
         return f"__pythran_generated::{name}{{}}({', '.join(args)})"
 
+    def visit_ScalarFunDef(self, node: gtfn_ir.ScalarFunDef, **kwargs):
+        name = node.definition.__name__
+        source_lines = inspect.getsourcelines(node.definition)[0]
+        for i in range(len(source_lines)):
+            if re.match(r"\s*def\s+.*", source_lines[i]):
+                break
+        py_code = textwrap.dedent("".join(source_lines[i:]))
+        self._scalar_functions[name] = py_code
+        return ""
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -204,7 +205,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         )
         scalar_function_bodies = "\n\n".join(self._scalar_functions.values())
         scalar_function_header = "// clang-format: off\n#include <pythonic/core.hpp>\n// clang-format: on\n"
-        return scalar_function_header + scalar_function_bodies + body
+        cpp_code = pythran.generate_cxx("generated", scalar_function_bodies)
+        return scalar_function_header + str(cpp_code[0]) + body
 
     TemporaryAllocation = as_fmt(
         "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"

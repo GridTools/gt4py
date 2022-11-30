@@ -83,10 +83,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def apply(
         cls,
         node: past.Program,
+        scalar_definitions: list[itir.ScalarFunDef],
         function_definitions: list[itir.FunctionDefinition],
         grid_type: GridType,
     ) -> itir.FencilDefinition:
-        return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
+        return cls(grid_type=grid_type).visit(node, scalar_definitions=scalar_definitions, function_definitions=function_definitions)
 
     def __init__(self, grid_type):
         self.grid_type = grid_type
@@ -106,7 +107,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return size_params
 
     def visit_Program(
-        self, node: past.Program, *, function_definitions, **kwargs
+        self, node: past.Program, *, scalar_definitions, function_definitions, **kwargs
     ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
@@ -124,6 +125,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         return itir.FencilDefinition(
             id=node.id,
+            scalar_definitions=scalar_definitions,
             function_definitions=function_definitions,
             params=params,
             closures=closures,

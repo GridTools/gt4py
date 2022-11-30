@@ -27,8 +27,9 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     Expr,
     FencilDefinition,
     FunCall,
-    FunCallScalar,
+    ScalarFunCall,
     FunctionDefinition,
+    ScalarFunDef,
     Lambda,
     Literal,
     Node,
@@ -395,10 +396,16 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
-    def visit_FunCallScalar(self, node: itir.FunCallScalar, **kwargs):
-        return FunCallScalar(
-            fun=node.fun,
+    def visit_ScalarFunCall(self, node: itir.ScalarFunCall, **kwargs):
+        return ScalarFunCall(
+            fun=self.visit(node.fun, **kwargs),
             args=self.visit(node.args, **kwargs)
+        )
+
+    def visit_ScalarFunDef(self, node: itir.ScalarFunDef, **kwargs):
+        return ScalarFunDef(
+            id=self.visit(node.id, **kwargs),
+            definition=node.definition
         )
 
     def visit_FunctionDefinition(
@@ -521,6 +528,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             extracted_functions=extracted_functions,
         )
         executions = self._merge_scans(executions)
+        scalar_definitions = self.visit(node.scalar_definitions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
             **_collect_dimensions_from_domain(node.closures),
@@ -532,6 +540,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             executions=executions,
             grid_type=self.grid_type,
             offset_definitions=list(offset_definitions.values()),
+            scalar_definitions=scalar_definitions,
             function_definitions=function_definitions,
             temporaries=[],
         )

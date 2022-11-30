@@ -1404,3 +1404,25 @@ def test_scalar_operator_controlflow(fieldview_backend):
     bisect(powers, out=out, offset_provider={})
 
     assert np.allclose(np.asarray(out), expected)
+
+
+def test_scalar_operator_call(fieldview_backend):
+    @scalar_operator
+    def sc_callee(p: float) -> float:
+        return 3*p
+
+    @scalar_operator
+    def sc_caller(p: float) -> float:
+        return 2*sc_callee(p)
+
+    @field_operator(backend=fieldview_backend)
+    def wrapper(p: Field[[IDim], float]) -> Field[[IDim], float]:
+        return sc_caller(p)
+
+    inp = np_as_located_field(IDim)(np.arange(start=1, stop=10)*0.3)
+    out = np_as_located_field(IDim)(np.zeros_like(np.asarray(inp)))
+    expected = 6*np.asarray(inp)
+
+    wrapper(inp, out=out, offset_provider={})
+
+    assert np.allclose(np.asarray(out), expected)

@@ -63,18 +63,20 @@ class FunCall(Expr):
     args: List[Expr]
 
 
-class FunCallScalar(Expr):
-    fun: types.FunctionType
+class ScalarFunCall(Expr):
+    fun: SymRef
     args: List[Expr]
-
-    def __hash__(self):
-        return hash(self.fun) ^ hash(tuple(self.args))
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
     params: List[Sym]
     expr: Expr
+
+
+class ScalarFunDef(Node, SymbolTableTrait):
+    id: Coerced[SymbolName]
+    definition: types.FunctionType
 
 
 class StencilClosure(Node):
@@ -153,6 +155,7 @@ BUILTINS = {
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
+    scalar_definitions: List[ScalarFunDef]
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
@@ -170,6 +173,8 @@ AxisLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
 SymRef.__hash__ = Node.__hash__  # type: ignore[assignment]
 Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
 FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
+ScalarFunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
+ScalarFunDef.__hash__ = Node.__hash__  # type: ignore[assignment]
 StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]

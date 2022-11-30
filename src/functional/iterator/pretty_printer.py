@@ -4,6 +4,8 @@ Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 """
 from __future__ import annotations
 
+import inspect
+import textwrap
 from collections.abc import Iterable, Sequence
 from typing import Final
 
@@ -217,9 +219,8 @@ class PrettyPrinter(NodeTranslator):
         vfun = self._vmerge(self._hmerge(fun, ["("]), self._indent(args), [")"])
         return self._prec_parens(self._optimum(hfun, vfun), prec, PRECEDENCE["__call__"])
 
-    def visit_FunCallScalar(self, node: ir.FunCallScalar, **kwargs):
-        symref = ir.SymRef(id=f"__pyfun_{node.fun.__name__}")
-        proxy_call = ir.FunCall(fun=symref, args=node.args)
+    def visit_ScalarFunCall(self, node: ir.ScalarFunCall, **kwargs):
+        proxy_call = ir.FunCall(fun=node.fun, args=node.args)
         return self.visit(proxy_call, **kwargs)
 
     def visit_FunctionDefinition(self, node: ir.FunctionDefinition, prec: int) -> list[str]:
@@ -238,6 +239,10 @@ class PrettyPrinter(NodeTranslator):
         hbody = self._hmerge(params, expr)
         vbody = self._vmerge(params, self._indent(expr))
         return self._optimum(hbody, vbody)
+
+    def visit_ScalarFunDef(self, node: ir.ScalarFunDef, *, prec: int) -> list[str]:
+        assert prec == 0
+        return [textwrap.dedent(inspect.getsource(node.definition))]
 
     def visit_StencilClosure(self, node: ir.StencilClosure, *, prec: int) -> list[str]:
         assert prec == 0
@@ -263,6 +268,7 @@ class PrettyPrinter(NodeTranslator):
 
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
+        scalar_definitions = self.visit(node.scalar_definitions, prec=0)
         function_definitions = self.visit(node.function_definitions, prec=0)
         closures = self.visit(node.closures, prec=0)
         params = self.visit(node.params, prec=0)
@@ -273,11 +279,12 @@ class PrettyPrinter(NodeTranslator):
         )
         params = self._optimum(hparams, vparams)
 
+        scalar_definitions = self._vmerge(*scalar_definitions)
         function_definitions = self._vmerge(*function_definitions)
         closures = self._vmerge(*closures)
 
         return self._vmerge(
-            params, self._indent(function_definitions), self._indent(closures), ["}"]
+            params, self._indent(scalar_definitions), self._indent(function_definitions), self._indent(closures), ["}"]
         )
 
     @classmethod

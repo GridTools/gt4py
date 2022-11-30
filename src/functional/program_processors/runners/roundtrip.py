@@ -33,8 +33,6 @@ from functional.program_processors.processor_interface import program_executor
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
-    scalar_functions: dict[str, str] = {}
-
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     Literal = as_fmt("{value}")
@@ -46,6 +44,7 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
     FencilDefinition = as_mako(
         """
+${'\\n'.join(scalar_definitions)}
 ${''.join(function_definitions)}
 @fendef
 def ${id}(${','.join(params)}):
@@ -60,20 +59,16 @@ def ${id}(${','.join(params)}):
     """
     )
 
-    def visit_FencilDefinition(self, node, **kwargs):
-        fencil = self.generic_visit(node, **kwargs)
-        scalar_functions = "\n\n".join(self.scalar_functions.values())
-        return scalar_functions + fencil
+    def visit_ScalarFunDef(self, node, **kwargs):
+        source_lines = inspect.getsourcelines(node.definition)[0]
+        for i in range(len(source_lines)):
+            if re.match(r"\s*def\s+.*", source_lines[i]):
+                break
+        source_code = textwrap.dedent("".join(source_lines[i:]))
+        return source_code
 
-    def visit_FunCallScalar(self, node, **kwargs):
-        name = node.fun.__name__
-        if name not in self.scalar_functions:
-            source_lines = inspect.getsourcelines(node.fun)[0]
-            for i in range(len(source_lines)):
-                if re.match(r"\s*def\s+.*", source_lines[i]):
-                    break
-            source_code = textwrap.dedent("".join(source_lines[i:]))
-            self.scalar_functions[name] = source_code
+    def visit_ScalarFunCall(self, node, **kwargs):
+        name = str(node.fun.id)
         args = [self.visit(arg, **kwargs) for arg in node.args]
         return f"{name}({', '.join(args)})"
 

@@ -77,8 +77,8 @@ class FunCall(Expr):
     args: list[Expr]
 
 
-class FunCallScalar(Expr):
-    fun: types.FunctionType
+class ScalarFunCall(Expr):
+    fun: SymRef
     args: list[Expr]
 
 
@@ -86,6 +86,11 @@ class FunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
     params: list[Sym]
     expr: Expr
+
+
+class ScalarFunDef(Node, SymbolTableTrait):
+    id: Coerced[SymbolName]
+    definition: types.FunctionType
 
 
 class ScanPassDefinition(Node, SymbolTableTrait):
@@ -178,6 +183,7 @@ class TagDefinition(Node):
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
+    scalar_definitions: list[ScalarFunDef]
     function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_definitions: list[TagDefinition]

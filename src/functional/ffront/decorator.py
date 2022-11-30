@@ -261,8 +261,10 @@ class Program:
 
         gt_callables = _filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+        function_defs = [fun for fun in lowered_funcs if isinstance(fun, itir.FunctionDefinition)]
+        scalar_defs = [fun for fun in lowered_funcs if isinstance(fun, itir.ScalarFunDef)]
         return ProgramLowering.apply(
-            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            self.past_node, scalar_definitions=scalar_defs, function_definitions=function_defs, grid_type=grid_type
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
@@ -718,6 +720,7 @@ def scan_operator(
 @dataclasses.dataclass(frozen=True)
 class ScalarOperator(GTCallable):
     node: foast.ScalarOperator
+    closure_vars: dict[str, Any]
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
@@ -732,6 +735,9 @@ class ScalarOperator(GTCallable):
     def __gt_type__(self) -> ct.CallableType:
         assert isinstance(self.node.type, ct.ScalarOperatorType)
         return self.node.type
+
+    def __gt_closure_vars__(self) -> dict[str, Any]:
+        return self.closure_vars
 
 
 def scalar_operator(
@@ -771,4 +777,4 @@ def scalar_operator(
         location=loc,
         type=ct.ScalarOperatorType(definition=function_type)
     )
-    return ScalarOperator(node)
+    return ScalarOperator(node, closure_vars=get_closure_vars_from_function(definition))
