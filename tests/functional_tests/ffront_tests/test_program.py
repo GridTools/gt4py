@@ -24,6 +24,7 @@ from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GridType, GTTypeError
 from functional.ffront import common_types, program_ast as past
 from functional.ffront.decorator import field_operator, program
+from functional.ffront.fbuiltins import broadcast
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
@@ -251,8 +252,8 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
-        " but got Field\[\[JDim\], dtype=float64\].",
+        "- Expected 0-th argument to be of type Field\[\[IDim], float64\],"
+        " but got Field\[\[JDim\], float64\].",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -278,3 +279,44 @@ def test_dimensions_domain():
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})
+
+
+def test_input_kwargs(fieldview_backend):
+    size = 10
+    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
+    input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+
+    expected = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_input_kwargs(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+        c: Field[[IDim, JDim], float64],
+    ) -> Field[[IDim, JDim], float64]:
+        return c * a - b
+
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    assert np.allclose(expected, out)
+
+    @program(backend=fieldview_backend)
+    def program_input_kwargs(
+        a: Field[[IDim, JDim], float64],
+        b: Field[[IDim, JDim], float64],
+        c: Field[[IDim, JDim], float64],
+        out: Field[[IDim, JDim], float64],
+    ):
+        fieldop_input_kwargs(a, b, c, out=out)
+
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    assert np.allclose(expected, out)
+
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
+    assert np.allclose(expected, out)
+
+    with pytest.raises(GTTypeError, match="got multiple values for argument"):
+        program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})

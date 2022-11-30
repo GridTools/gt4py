@@ -288,6 +288,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
+    def visit_Expr(self, node: ast.Expr) -> foast.Expr:
+        return self.visit(node.value)
+
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 
@@ -296,14 +299,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.NOT
+
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(
@@ -331,14 +337,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.MOD
 
     def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_AND
 
     def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
         return ct.BinaryOperator.BIT_OR
+
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ct.BinaryOperator:
+        return ct.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")

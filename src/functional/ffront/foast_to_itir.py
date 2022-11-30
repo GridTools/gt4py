@@ -246,7 +246,8 @@ class FieldOperatorLowering(NodeTranslator):
             if isinstance(node.definition.params[i].type, ct.ScalarType):
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
-        new_body = im.deref_(new_body)
+        if iterator_type_kind(node.type.definition.returns) == ITIRTypeKind.ITERATOR:
+            new_body = im.deref_(new_body)
 
         return itir.FunctionDefinition(
             id=func_definition.id,
@@ -411,9 +412,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]:
             return self._lift_if_field(node)(
-                im.call_(node.op.value)(to_value(node.operand)(self.visit(node.operand, **kwargs)))
+                im.call_("not_")(to_value(node.operand)(self.visit(node.operand, **kwargs)))
             )
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
@@ -625,7 +626,7 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op is ct.UnaryOperator.NOT:
             return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
 
         return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))

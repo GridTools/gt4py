@@ -34,7 +34,9 @@ class BinaryOperator(StrEnum):
     FLOOR_DIV = "floordiv"
     BIT_AND = "and_"
     BIT_OR = "or_"
+    BIT_XOR = "xor_"
     POW = "power"
+    MOD = "mod"
 
     def __str__(self) -> str:
         if self is self.ADD:
@@ -49,11 +51,33 @@ class BinaryOperator(StrEnum):
             return "//"
         elif self is self.BIT_AND:
             return "&"
+        elif self is self.BIT_XOR:
+            return "^"
         elif self is self.BIT_OR:
             return "|"
         elif self is self.POW:
             return "**"
+        elif self is self.MOD:
+            return "%"
         return "Unknown BinaryOperator"
+
+
+class UnaryOperator(StrEnum):
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
+    INVERT = "invert"
+
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        elif self is self.INVERT:
+            return "~"
+        return "Unknown UnaryOperator"
 
 
 class SymbolType:
@@ -129,12 +153,12 @@ class CallableType:
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
+    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
     dtype: ScalarType
 
     def __str__(self):
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
-        return f"Field[{dims}, dtype={self.dtype}]"
+        return f"Field[{dims}, {self.dtype}]"
 
 
 @dataclass(frozen=True)
