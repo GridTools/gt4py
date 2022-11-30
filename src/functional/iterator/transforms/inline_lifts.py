@@ -103,7 +103,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall, *, recurse=True, **kwargs):
         symtable = kwargs["symtable"]
 
-        node = self.generic_visit(node, symtable=symtable) if recurse else node
+        node = self.generic_visit(node, **kwargs) if recurse else node
 
         if _is_shift_lift(node):
             # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
@@ -111,7 +111,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert len(node.args) == 1
             lift_call = node.args[0]
             new_args = [
-                self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False)
+                self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False, **kwargs)
                 for arg in lift_call.args
             ]
             result = ir.FunCall(fun=lift_call.fun, args=new_args)
@@ -189,7 +189,8 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 inlined_call = self.visit(
                     inline_lambda(
                         ir.FunCall(fun=stencil, args=inlined_args), opcount_preserving=True
-                    )
+                    ),
+                    **kwargs
                 )
 
                 new_stencil = im.lambda__(*new_args.keys())(inlined_call)
