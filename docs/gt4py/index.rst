@@ -72,6 +72,7 @@ Features:
    :caption: Contents:
 
    quickstart
+   gtscript
    arrays
    commandline
    apiref
