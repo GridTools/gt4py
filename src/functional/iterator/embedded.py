@@ -317,9 +317,20 @@ def lift(stencil):
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
-                open_offsets = get_open_offsets(*self.offsets)
+                open_offsets = get_open_offsets(*self.incomplete_offsets, *self.offsets)
                 assert open_offsets
                 return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
+
+            @property
+            def incomplete_offsets(self):
+                incomplete_offsets = None
+                for arg in self.args:
+                    if arg.incomplete_offsets:
+                        assert (
+                            not incomplete_offsets or incomplete_offsets == arg.incomplete_offsets
+                        )
+                        incomplete_offsets = arg.incomplete_offsets
+                return incomplete_offsets
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
