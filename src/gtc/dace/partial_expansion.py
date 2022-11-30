@@ -805,6 +805,7 @@ def partially_expand(sdfg: dace.SDFG):
                                     nsdfg_node.sdfg, lambda _: ""
                                 )
                                 subsubgraphs += _recurse(nsdfg_node.sdfg, nsdfg_cft)
+                        subgraphs.extend(subsubgraphs)
             else:
                 if candidate:
                     subgraphs.append((sd, candidate))
