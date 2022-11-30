@@ -54,7 +54,7 @@ def _is_shift_lift(node: ir.Expr):
 def _transform_and_extract_lift_args(
     node: ir.FunCall,
     symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: Optional[dict[ir.Sym, ir.Expr]] = None,
+    extracted_args: dict[ir.Sym, ir.Expr],
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -64,7 +64,6 @@ def _transform_and_extract_lift_args(
     being ``{sym1: sym1, sym2: expr1}``.
     """
     assert _is_lift(node)
-    extracted_args = extracted_args or {}
     inner_stencil = node.fun.args[0]
 
     new_args = []
