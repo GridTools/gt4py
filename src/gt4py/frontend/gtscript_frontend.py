@@ -351,9 +351,11 @@ class CallInliner(ast.NodeTransformer):
     """
 
     @classmethod
-    def apply(cls, func_node: ast.FunctionDef, context: dict):
+    def apply(
+        cls, func_node: ast.FunctionDef, context: dict, *, call_stack: Optional[Set[str]] = None
+    ):
         inliner = cls(context)
-        inliner(func_node)
+        inliner(func_node, call_stack=call_stack or set())
         return inliner.all_skip_names
 
     def __init__(self, context: dict):
@@ -361,7 +363,8 @@ class CallInliner(ast.NodeTransformer):
         self.current_block = None
         self.all_skip_names = set(gtscript.builtins) | {"gt4py", "gtscript"}
 
-    def __call__(self, func_node: ast.FunctionDef):
+    def __call__(self, func_node: ast.FunctionDef, *, call_stack: Set[str]):
+        self.call_stack = call_stack
         self.current_name = func_node.name
         self.visit(func_node)
 
@@ -420,6 +423,13 @@ class CallInliner(ast.NodeTransformer):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         node.args = [self.visit(arg) for arg in node.args]
+
+        if call_name in self.call_stack:
+            raise GTScriptSyntaxError(
+                message=f"Found recursive function call '{call_name}' in the stack.",
+                loc=nodes.Location.from_ast_node(node),
+            )
+
         if call_name in gtscript.IGNORE_WHEN_INLINING:
             # Not a function to inline, return as-is.
             return node
@@ -430,7 +440,9 @@ class CallInliner(ast.NodeTransformer):
         call_info = self.context[call_name]._gtscript_
         call_ast = copy.deepcopy(call_info["ast"])
         self.current_name = call_name
-        CallInliner.apply(call_ast, call_info["local_context"])
+        CallInliner.apply(
+            call_ast, call_info["local_context"], call_stack={*self.call_stack, call_name}
+        )
 
         # Extract call arguments
         call_signature = call_info["api_signature"]
@@ -1779,6 +1791,7 @@ class GTScriptParser(ast.NodeVisitor):
                 resolved_imports[imported_name] = imported_value
 
         # Collect all imported and inlined values recursively through all the external symbols
+        last_resolved_symbols = set()
         while resolved_imports or resolved_values_list:
             new_imports = {}
             for name, accesses in resolved_imports.items():
@@ -1814,6 +1827,14 @@ class GTScriptParser(ast.NodeVisitor):
                             for attr_name, attr_nodes in imported_name_accesses.items():
                                 new_imports[imported_name].setdefault(attr_name, [])
                                 new_imports[imported_name][attr_name].extend(attr_nodes)
+
+            # Check that we aren't recursively importing the same function
+            current_resolved_symbols = dict(resolved_values_list).keys()
+            if last_resolved_symbols == current_resolved_symbols:
+                raise GTScriptSyntaxError(
+                    message=f"Found recursive imports {', '.join(last_resolved_symbols)}"
+                )
+            last_resolved_symbols = current_resolved_symbols
 
             result.update(dict(resolved_values_list))
             resolved_imports = new_imports
