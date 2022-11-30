@@ -21,6 +21,7 @@ import numbers
 import textwrap
 import time
 import types
+import warnings
 from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -573,15 +574,12 @@ class CallInliner(ast.NodeTransformer):
 
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
-    def apply(cls, ast_object, context):
-        preprocessor = cls(context)
-        preprocessor(ast_object)
+    def apply(cls, ast_object: ast.AST, context: Dict[str, Any], stencil_name: str):
+        cls(context, stencil_name).visit(ast_object)
 
-    def __init__(self, context):
+    def __init__(self, context: Dict[str, Any], stencil_name: str):
         self.context = context
-
-    def __call__(self, ast_object):
-        self.visit(ast_object)
+        self.stencil_name = stencil_name
 
     def visit_If(self, node: ast.If):
         # Compile-time evaluation of "if" conditions
@@ -592,13 +590,17 @@ class CompiledIfInliner(ast.NodeTransformer):
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
         ):
+            warnings.warn(
+                f"stencil {self.stencil_name}, line {node.lineno}, column {node.col_offset}: compile-time if condition via __INLINED deprecated",
+                category=DeprecationWarning,
+            )
             eval_node = node.test.args[0]
             condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
             if condition_value is not NOTHING:
                 node = node.body if condition_value else node.orelse
             else:
                 raise GTScriptSyntaxError(
-                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                    "Evaluation of compile-time 'if' condition failed at the preprocessing step"
                 )
 
         return node if node else None
@@ -1919,7 +1921,7 @@ class GTScriptParser(ast.NodeVisitor):
         CallInliner.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
-        CompiledIfInliner.apply(main_func_node, context=local_context)
+        CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
