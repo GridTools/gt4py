@@ -36,6 +36,7 @@ def apply_common_transforms(
     offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
+    force_inline_lift=False,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -46,14 +47,16 @@ def apply_common_transforms(
     if lift_mode != LiftMode.FORCE_TEMPORARIES:
         for _ in range(10):
             inlined = _inline_lifts(ir, lift_mode)
-            inlined = InlineLambdas.apply(inlined)
+            inlined = InlineLambdas.apply(
+                inlined, opcount_preserving=True, force_inline_lift=force_inline_lift
+            )
             if inlined == ir:
                 break
             ir = inlined
         else:
             raise RuntimeError("Inlining lift and lambdas did not converge.")
     else:
-        ir = InlineLambdas.apply(ir)
+        ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
     ir = NormalizeShifts().visit(ir)
 
@@ -78,6 +81,6 @@ def apply_common_transforms(
     if common_subexpression_elimination:
         ir = CommonSubexpressionElimination().visit(ir)
 
-    ir = InlineLambdas.apply(ir, opcount_preserving=common_subexpression_elimination)
+    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lift=force_inline_lift)
 
     return ir

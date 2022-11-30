@@ -29,7 +29,10 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         program,
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
+        # required since backend has no `reduce` builtin
         unroll_reduce=True,
+        # required since backend has no `lift` builtin
+        force_inline_lift=True,
     )
     gtfn_ir = GTFN_lowering.apply(
         transformed,

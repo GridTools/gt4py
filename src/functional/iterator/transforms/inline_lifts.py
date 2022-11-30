@@ -4,15 +4,18 @@ from typing import Optional
 
 import eve
 from eve import NodeTranslator, traits
+from functional.ffront import itir_makers as im
 from functional.iterator import ir
 from functional.iterator.transforms.inline_lambdas import inline_lambda
-from functional.ffront import itir_makers as im
+
 
 def _generate_unique_symbol(
     desired_name: Optional[eve.SymbolName | tuple[ir.Lambda | ir.SymRef, int]] = None,
-    occupied_names=set(),
-    occupied_symbols=set()
+    occupied_names=None,
+    occupied_symbols=None,
 ):
+    occupied_names = occupied_names or set()
+    occupied_symbols = occupied_symbols or set()
     if not desired_name:
         desired_name = "__sym"
     elif isinstance(desired_name, tuple):
@@ -29,10 +32,29 @@ def _generate_unique_symbol(
     return new_symbol
 
 
+def _is_lift(node: ir.Node):
+    return (
+        isinstance(node, ir.FunCall)
+        and isinstance(node.fun, ir.FunCall)
+        and node.fun.fun == ir.SymRef(id="lift")
+    )
+
+
+def _is_shift_lift(node: ir.Expr):
+    return (
+        isinstance(node, ir.FunCall)
+        and isinstance(node.fun, ir.FunCall)
+        and node.fun.fun == ir.SymRef(id="shift")
+        and isinstance(node.args[0], ir.FunCall)
+        and isinstance(node.args[0].fun, ir.FunCall)
+        and node.args[0].fun.fun == ir.SymRef(id="lift")
+    )
+
+
 def _transform_and_extract_lift_args(
     node: ir.FunCall,
     symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr] = {}
+    extracted_args: Optional[dict[ir.Sym, ir.Expr]] = None,
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -41,7 +63,8 @@ def _transform_and_extract_lift_args(
     ``lift(lambda a: ...)(sym1, sym2)`` with the extracted arguments
     being ``{sym1: sym1, sym2: expr1}``.
     """
-    # TODO(tehrengruber): assert correct format
+    assert _is_lift(node)
+    extracted_args = extracted_args or {}
     inner_stencil = node.fun.args[0]
 
     new_args = []
@@ -55,9 +78,9 @@ def _transform_and_extract_lift_args(
             new_symbol = _generate_unique_symbol(
                 desired_name=(inner_stencil, i),
                 occupied_names=symtable.keys(),
-                occupied_symbols=extracted_args.keys()
+                occupied_symbols=extracted_args.keys(),
             )
-            #assert new_symbol not in extracted_args
+            # assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
@@ -78,41 +101,25 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             self.predicate = predicate
 
-    @staticmethod
-    def _is_lift(node: ir.Node):
-        return (
-            isinstance(node, ir.FunCall)
-            and isinstance(node.fun, ir.FunCall)
-            and node.fun.fun == ir.SymRef(id="lift")
-        )
-
-    @staticmethod
-    def _is_shift_lift(node: ir.Expr):
-        return (
-            isinstance(node, ir.FunCall)
-            and isinstance(node.fun, ir.FunCall)
-            and node.fun.fun == ir.SymRef(id="shift")
-            and isinstance(node.args[0], ir.FunCall)
-            and isinstance(node.args[0].fun, ir.FunCall)
-            and node.args[0].fun.fun == ir.SymRef(id="lift")
-        )
-
     def visit_FunCall(self, node: ir.FunCall, *, recurse=True, **kwargs):
         symtable = kwargs["symtable"]
 
         node = self.generic_visit(node, symtable=symtable) if recurse else node
 
-        if self._is_shift_lift(node):
+        if _is_shift_lift(node):
             # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
             shift = node.fun
             assert len(node.args) == 1
             lift_call = node.args[0]
-            new_args = [self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False) for arg in lift_call.args]
+            new_args = [
+                self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False)
+                for arg in lift_call.args
+            ]
             result = ir.FunCall(fun=lift_call.fun, args=new_args)
             return self.visit(result, recurse=False, **kwargs)
         elif node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
-            if self._is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
+            if _is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
                 # deref(lift(f)(args...)) -> f(args...)
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].fun, ir.FunCall)
@@ -127,7 +134,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions,
             #  this need to be changed to be 100% compliant
             assert len(node.args) == 1
-            if self._is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
+            if _is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].fun, ir.FunCall)
@@ -143,7 +150,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
                     )
                 return res
-        elif self._is_lift(node) and len(node.args) > 0:
+        elif _is_lift(node) and len(node.args) > 0:
             # Inline arguments to lifted stencil calls, e.g.:
             #  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
             # is transformed into:
@@ -155,7 +162,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # Due to it's complexity we might want to remove this branch at some point again,
             # when we see that it is not required.
             stencil = node.fun.args[0]
-            lifted_args = [self._is_lift(arg) for arg in node.args]
+            lifted_args = [_is_lift(arg) for arg in node.args]
 
             if isinstance(stencil, ir.Lambda) and any(lifted_args):
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
@@ -174,16 +181,17 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                             new_arg_sym = _generate_unique_symbol(
                                 desired_name=(stencil, i),
                                 occupied_names=symtable.keys(),
-                                occupied_symbols=new_args.keys()
+                                occupied_symbols=new_args.keys(),
                             )
 
                         new_args[new_arg_sym] = arg
                         inlined_args.append(ir.SymRef(id=new_arg_sym.id))
 
-                inlined_call = self.visit(inline_lambda(
-                    ir.FunCall(fun=stencil, args=inlined_args),
-                    opcount_preserving=True
-                ))
+                inlined_call = self.visit(
+                    inline_lambda(
+                        ir.FunCall(fun=stencil, args=inlined_args), opcount_preserving=True
+                    )
+                )
 
                 new_stencil = im.lambda__(*new_args.keys())(inlined_call)
                 return im.lift_(new_stencil)(*new_args.values())

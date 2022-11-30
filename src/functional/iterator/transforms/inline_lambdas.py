@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Callable, Optional
+from typing import Optional
 
 from eve import NodeTranslator, NodeVisitor
 from functional.iterator import ir
@@ -32,34 +32,31 @@ class CountSymbolRefs(NodeVisitor):
 
 def inline_lambda(
     node: ir.FunCall,
-    opcount_preserving = False,
-    force_inline_lift = False,
-    eligible_params: Optional[list[bool]] = None
+    opcount_preserving=False,
+    force_inline_lift=False,
+    eligible_params: Optional[list[bool]] = None,
 ):
     eligible_params = eligible_params or [True] * len(node.fun.params)
 
     assert len(eligible_params) == len(node.fun.params) == len(node.args)
 
     if opcount_preserving:
-        ref_counts = CountSymbolRefs.apply(node.fun.expr,
-                                           [p.id for p in node.fun.params])
+        ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
-            #  ignore_shift(...)(it_sym)
-            if ref_counts[param.id] != 1 and not isinstance(node.args[i], (
-            ir.SymRef, ir.Literal)):
+            #  ignore_shift(...)(it_sym)  # noqa: E800
+            if ref_counts[param.id] != 1 and not isinstance(node.args[i], (ir.SymRef, ir.Literal)):
                 eligible_params[i] = False
 
     if force_inline_lift:
         for i, arg in enumerate(node.args):
             if (
-                    isinstance(arg, ir.FunCall)
-                    and isinstance(arg.fun, ir.FunCall)
-                    and isinstance(arg.fun.fun, ir.SymRef)
-                    and arg.fun.fun.id in ["lift", "translate_shift",
-                                           "ignore_shift"]
-            ):  # TODO(tehrengruber): fix
+                isinstance(arg, ir.FunCall)
+                and isinstance(arg.fun, ir.FunCall)
+                and isinstance(arg.fun.fun, ir.SymRef)
+                and arg.fun.fun.id == "lift"
+            ):
                 eligible_params[i] = True
 
     if len(eligible_params) != 0 and not any(eligible_params):
@@ -67,8 +64,7 @@ def inline_lambda(
 
     refs = set().union(
         *(
-            arg.pre_walk_values().if_isinstance(ir.SymRef).getattr(
-                "id").to_set()
+            arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
             for i, arg in enumerate(node.args)
             if eligible_params[i]
         )
@@ -80,7 +76,7 @@ def inline_lambda(
         # TODO(tehrengruber): find a better way of generating new symbols
         #  in `name_map` that don't collide with each other. E.g. this
         #  must still work:
-        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)
+        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: E800
         name_map = {}
 
         def new_name(name):
@@ -112,8 +108,7 @@ def inline_lambda(
                 ],
                 expr=new_expr,
             ),
-            args=[arg for arg, eligable in zip(node.args, eligible_params) if
-                  not eligable],
+            args=[arg for arg, eligable in zip(node.args, eligible_params) if not eligable],
         )
 
 
@@ -149,8 +144,10 @@ class InlineLambdas(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
-            return inline_lambda(node,
-                          opcount_preserving=self.opcount_preserving,
-                          force_inline_lift=self.force_inline_lift)
+            return inline_lambda(
+                node,
+                opcount_preserving=self.opcount_preserving,
+                force_inline_lift=self.force_inline_lift,
+            )
 
         return node
