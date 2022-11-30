@@ -856,7 +856,7 @@ class TestFunctions:
             with computation(PARALLEL), interval(...):
                 inout_field = func2(inout_field)
 
-        with pytest.raises(gt_frontend.GTScriptDefinitionError, match="recursive"):
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="recursive function call"):
             parse_definition(
                 definition_func,
                 name="testf",
