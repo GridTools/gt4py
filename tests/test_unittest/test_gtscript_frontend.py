@@ -307,7 +307,9 @@ class TestFunction:
                 inout_field = func() + 1
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Function returning tuple used in expression."
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
         ):
             parse_definition(
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
@@ -331,7 +333,9 @@ class TestFunction:
                 inout_field = func_outer(func())
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Function returning tuple used in expression."
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
         ):
             parse_definition(
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__

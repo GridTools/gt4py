@@ -488,7 +488,10 @@ class CallInliner(ast.NodeTransformer):
                 for nd in ast.walk(call_ast)
                 if isinstance(nd, ast.Return)
             ):
-                raise GTScriptSyntaxError("Function returning tuple used in expression.")
+                raise GTScriptSyntaxError(
+                    "Only functions with a single return value can be used in expressions, including as call arguments. "
+                    "Please assign the function results to symbols first."
+                )
             target_node = ast.Name(
                 ctx=ast.Store(),
                 lineno=node.lineno,
