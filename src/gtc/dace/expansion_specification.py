@@ -427,26 +427,26 @@ def _k_inside_dims(node: "StencilComputation"):
             i_offset_fields = set(
                 (
                     acc.name
-                    for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
+                    for acc in he.walk_values().if_isinstance(oir.FieldAccess)
                     if acc.offset.to_dict()["i"] != 0
                 )
             )
             j_offset_fields = set(
                 (
                     acc.name
-                    for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
+                    for acc in he.walk_values().if_isinstance(oir.FieldAccess)
                     if acc.offset.to_dict()["j"] != 0
                 )
             )
             k_offset_fields = set(
                 (
                     acc.name
-                    for acc in he.iter_tree().if_isinstance(oir.FieldAccess)
+                    for acc in he.walk_values().if_isinstance(oir.FieldAccess)
                     if isinstance(acc.offset, oir.VariableKOffset) or acc.offset.to_dict()["k"] != 0
                 )
             )
             modified_fields: Set[str] = (
-                he.iter_tree()
+                he.walk_values()
                 .if_isinstance(oir.AssignStmt)
                 .getattr("left")
                 .if_isinstance(oir.FieldAccess)
@@ -475,7 +475,7 @@ def _k_inside_stages(node: "StencilComputation"):
         for he in section.horizontal_executions:
             if modified_fields:
                 ahead_acc = list()
-                for acc in he.iter_tree().if_isinstance(oir.FieldAccess):
+                for acc in he.walk_values().if_isinstance(oir.FieldAccess):
                     if (
                         isinstance(acc.offset, oir.VariableKOffset)
                         or (
@@ -492,7 +492,7 @@ def _k_inside_stages(node: "StencilComputation"):
                     return False
 
             modified_fields.update(
-                he.iter_tree()
+                he.walk_values()
                 .if_isinstance(oir.AssignStmt)
                 .getattr("left")
                 .if_isinstance(oir.FieldAccess)
@@ -591,7 +591,7 @@ def _ij_outside_sections_valid(
             break
         for it in getattr(item, "iterations", []):
             if it.axis in dcir.Axis.dims_horizontal() and it.kind == "contiguous":
-                xiter = iter(node.oir_node.iter_tree().if_isinstance(oir.HorizontalExecution))
+                xiter = iter(node.oir_node.walk_values().if_isinstance(oir.HorizontalExecution))
                 extent = node.get_extents(next(xiter))
                 for he in xiter:
                     if node.get_extents(he)[it.axis.to_idx()] != extent[it.axis.to_idx()]:

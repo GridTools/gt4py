@@ -21,7 +21,7 @@ import numbers
 import textwrap
 import time
 import types
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
 import numpy as np
 
@@ -43,6 +43,9 @@ from .exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
+
+
+PYTHON_AST_VERSION: Final = (3, 8)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -1537,7 +1540,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.definition = definition
         self.filename = inspect.getfile(definition)
         self.source, decorators_source = gt_meta.split_def_decorators(self.definition)
-        self.ast_root = ast.parse(self.source)
+        self.ast_root = ast.parse(self.source, feature_version=PYTHON_AST_VERSION)
         self.options = options
         self.build_info = options.build_info
         self.main_name = options.name
@@ -1608,8 +1611,8 @@ class GTScriptParser(ast.NodeVisitor):
                 api_annotations.append(dtype_annotation)
 
         nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(definition)
-        ast_func_def = gt_meta.get_ast(definition).body[0]
-        canonical_ast = gt_meta.ast_dump(ast_func_def)
+        ast_func_def = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION).body[0]
+        canonical_ast = gt_meta.ast_dump(ast_func_def, feature_version=PYTHON_AST_VERSION)
 
         # resolve externals
         if externals is not None:
@@ -1668,7 +1671,11 @@ class GTScriptParser(ast.NodeVisitor):
 
     @staticmethod
     def collect_external_symbols(definition):
-        bare_imports, from_imports, relative_imports = gt_meta.collect_imported_symbols(definition)
+        gtscript_ast = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION)
+
+        bare_imports, from_imports, relative_imports = gt_meta.collect_imported_symbols(
+            gtscript_ast
+        )
         wrong_imports = list(bare_imports.keys()) + list(relative_imports.keys())
         imported_names = set()
         for key, value in from_imports.items():
@@ -1692,18 +1699,15 @@ class GTScriptParser(ast.NodeVisitor):
         if wrong_imports:
             raise GTScriptSyntaxError("Invalid 'import' statements ({})".format(wrong_imports))
 
-        imported_symbols = {name: {} for name in imported_names}
-
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=True, include_builtins=False
         )
 
-        gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
+        imported_symbols = {name: {} for name in imported_names}
         local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
-
         nonlocal_symbols = {}
 
-        name_nodes = gt_meta.collect_names(definition, skip_annotations=False)
+        name_nodes = gt_meta.collect_names(gtscript_ast, skip_annotations=False)
         for collected_name in name_nodes.keys():
             if collected_name not in gtscript.builtins:
                 root_name = collected_name.split(".")[0]
@@ -1892,7 +1896,7 @@ class GTScriptParser(ast.NodeVisitor):
         for value in self.resolved_externals.values():
             if hasattr(value, "_gtscript_"):
                 assert callable(value)
-                func_node = ast.parse(gt_meta.get_ast(value)).body[0]
+                func_node = gt_meta.get_ast(value, feature_version=PYTHON_AST_VERSION).body[0]
                 local_context = self.resolve_external_symbols(
                     value._gtscript_["nonlocals"],
                     value._gtscript_["imported"],

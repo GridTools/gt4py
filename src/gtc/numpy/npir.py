@@ -14,9 +14,8 @@
 
 from typing import List, Optional, Tuple, Union
 
-from pydantic import validator
-
 import eve
+from eve import datamodels
 from gtc import common
 from gtc.definitions import Extent
 
@@ -39,7 +38,7 @@ class HorizontalMask(eve.Node):
 # --- Decls ---
 @eve.utils.noninstantiable
 class Decl(eve.Node):
-    name: eve.SymbolName
+    name: eve.Coerced[eve.SymbolName]
     dtype: common.DataType
 
 
@@ -94,19 +93,18 @@ class Expr(common.Expr):
 
 
 @eve.utils.noninstantiable
-class VectorLValue(common.LocNode):
+class VectorLValue(Expr):
     pass
 
 
 class ScalarLiteral(common.Literal, Expr):
     kind = common.ExprKind.SCALAR
 
-    @validator("dtype")
-    def is_defined(cls, dtype: common.DataType) -> common.DataType:
+    @datamodels.validator("dtype")
+    def is_defined(self, attribute: datamodels.Attribute, dtype: common.DataType) -> None:
         undefined = [common.DataType.AUTO, common.DataType.DEFAULT, common.DataType.INVALID]
         if dtype in undefined:
             raise ValueError("npir.Literal may not have undefined data type.")
-        return dtype
 
 
 class ScalarCast(common.Cast[Expr], Expr):
@@ -119,37 +117,38 @@ class VectorCast(common.Cast[Expr], Expr):
 
 class Broadcast(Expr):
     expr: Expr
-    kind = common.ExprKind.FIELD
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class FieldSlice(Expr, VectorLValue):
-    name: eve.SymbolRef
+class FieldSlice(VectorLValue):
+    name: eve.Coerced[eve.SymbolRef]
     i_offset: int
     j_offset: int
     k_offset: Union[int, VarKOffset]
-    data_index: List[Expr] = []
-    kind = common.ExprKind.FIELD
+    data_index: List[Expr] = eve.field(default_factory=list)
+    kind: common.ExprKind = common.ExprKind.FIELD
 
-    @validator("data_index")
-    def data_indices_are_scalar(cls, data_index: List[Expr]) -> List[Expr]:
+    @datamodels.validator("data_index")
+    def data_indices_are_scalar(
+        self, attribute: datamodels.Attribute, data_index: List[Expr]
+    ) -> None:
         for index in data_index:
             if index.kind != common.ExprKind.SCALAR:
                 raise ValueError("Data indices must be scalars")
-        return data_index
 
 
 class ParamAccess(Expr):
-    name: eve.SymbolRef
-    kind = common.ExprKind.SCALAR
+    name: eve.Coerced[eve.SymbolRef]
+    kind: common.ExprKind = common.ExprKind.SCALAR
 
 
-class LocalScalarAccess(Expr, VectorLValue):
-    name: eve.SymbolRef
-    kind = common.ExprKind.FIELD
+class LocalScalarAccess(VectorLValue):
+    name: eve.Coerced[eve.SymbolRef]
+    kind: common.ExprKind = common.ExprKind.FIELD
 
 
 class VectorArithmetic(common.BinaryOp[Expr], Expr):
@@ -176,21 +175,18 @@ class NativeFuncCall(common.NativeFuncCall[Expr], Expr):
 
 # --- Statements ---
 @eve.utils.noninstantiable
-class Stmt(eve.Node):
+class Stmt(common.Stmt):
     pass
 
 
 class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
-    left: VectorLValue
-    right: Expr
     # NOTE HorizontalMask in npir differs from common.HorizontalMask (see above)
     horizontal_mask: Optional[HorizontalMask] = None
 
-    @validator("right")
-    def right_is_field_kind(cls, right: Expr) -> Expr:
+    @datamodels.validator("right")
+    def right_is_field_kind(self, attribute: datamodels.Attribute, right: Expr) -> None:
         if right.kind != common.ExprKind.FIELD:
             raise ValueError("right is not a common.ExprKind.FIELD")
-        return right
 
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 

@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from typing import Type
+
 import pytest
 
 from gtc import common, oir
@@ -116,6 +118,7 @@ def test_assign_stmt_broadcast() -> None:
 
     v_assign = block.body[0]
     assert isinstance(v_assign, npir.VectorAssign)
+    assert isinstance(v_assign.left, npir.FieldSlice)
     assert v_assign.left.name == "a"
     assert isinstance(v_assign.right, npir.Broadcast)
 
@@ -159,7 +162,7 @@ def test_field_access_to_field_slice_variablek() -> None:
         ),
     ),
 )
-def test_binary_op_to_npir(oir_node: oir.Expr, npir_type: npir.Expr) -> None:
+def test_binary_op_to_npir(oir_node: oir.Expr, npir_type: Type[npir.Expr]) -> None:
     assert isinstance(OirToNpir().visit(oir_node), npir_type)
 
 
@@ -172,6 +175,7 @@ def test_literal_broadcast() -> None:
         local_assigns={},
     )
     assert isinstance(result.right, npir.Broadcast)
+    assert isinstance(result.right.expr, npir.ScalarLiteral)
     assert (result.right.expr.value, result.right.expr.dtype) == ("42", common.DataType.FLOAT32)
 
 

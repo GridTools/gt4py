@@ -35,12 +35,3 @@ def test_version_info():
     )
     assert (0, 1) <= gt4py.version.__version_info__.release < (0, 2)
     assert gt4py.version.__version_info__ == gt4py.__version_info__
-
-
-# TODO(egparedes): remove this test when changing the structure of the repo
-def test_subprojects_version_sync():
-    import eve
-    import gtc
-
-    assert gt4py.version.__version__ == eve.version.__version__
-    assert gt4py.version.__version__ == gtc.version.__version__
