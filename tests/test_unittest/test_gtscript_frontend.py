@@ -1322,8 +1322,8 @@ class TestNativeFunctions:
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
-class TestWarnInline:
-    def test_inline_emits_warning(self):
+class TestWarnInlined:
+    def test_inlined_emits_warning(self):
         def func(field: gtscript.Field[np.float_]):
             from gt4py.__externals__ import SET_TO_ONE
 
