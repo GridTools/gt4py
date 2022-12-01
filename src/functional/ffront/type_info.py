@@ -350,7 +350,7 @@ def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> 
 def check_zero_dims_fields(
     args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
 ):
-    """Cast args type to zero dimensional fields if compatible and input requires it."""
+    """Cast arg types to zero dimensional fields if compatible and required by function signature."""
     for arg_i, arg in enumerate(args):
         def_type = function_type.definition.args[arg_i]
         if _is_zero_dim_field(
