@@ -1305,7 +1305,7 @@ def test_implicit_broadcast_mixed_dims():
         fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
         return fi
 
-    fieldop_implicit_broadcast_2(input1, out, offset_provider={})
+    fieldop_implicit_broadcast_2(input1, out=out, offset_provider={})
     assert np.allclose(out, np.asarray(inp) * 2)
 
 
