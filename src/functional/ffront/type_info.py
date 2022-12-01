@@ -606,7 +606,7 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    args_new = check_zero_dims_fields(args, fieldop_type)
+    new_args = check_zero_dims_fields(args, fieldop_type)
     yield from function_signature_incompatibilities_func(fieldop_type.definition, args_new, kwargs)
 
 
