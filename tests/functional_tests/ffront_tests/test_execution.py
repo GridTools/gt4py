@@ -1282,7 +1282,7 @@ def test_implicit_broadcast_zero_dims_only():
     out = np_as_located_field()(np.array(0.0))
 
     @field_operator
-    def func_2(inp: Field[[], float]):
+    def foo(inp: Field[[], float]):
         return inp
 
     func_2(inp, out=out, offset_provider={})
