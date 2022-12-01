@@ -1296,7 +1296,7 @@ def test_implicit_broadcast_mixed_dims():
 
     @field_operator
     def fieldop_implicit_broadcast(
-        scalar_1: Field[[], float], inp: Field[[IDim], float], scalar: float
+        zero_dim_inp: Field[[], float], inp: Field[[IDim], float], scalar: float
     ) -> Field[[IDim], float]:
         return inp + scalar_1 * scalar
 
