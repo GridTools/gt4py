@@ -96,7 +96,7 @@ We create a context using the `computation` context manager. Since it is a GTScr
 
 GT4Py is responsible for running it all for each element in the right order, parallelizing when possible. The machine code equivalent to a computation context would be a triple-nested for loop over each dimension.
 
-GT4Py is of course also aware that computations that access offset values can not be run in certain margin areas of the data (where the offset values would not exist). For horizontal offsets, GTScript will automatically take care of the margins and leave them untouched. If we want to enforce horizontal boundary conditions, they require their own computation context. For vertical offsets we can use computation intervals to run different computations on the boundaries. This means we can "force" computations to run in the vertical margins where the offset elements do not exist. GTScript will fail to compile in those cases.
+GT4Py is of course also aware that computations that access offset values can not be run in certain margin areas of the data (where the offset values would not exist). For horizontal offsets, GTScript will automatically take care of the margins and leave them untouched. If we want to enforce horizontal boundary conditions, we require a separate stencil, to which we pass the boundarie's horizontal domain. For vertical offsets we can use computation :ref:`intervals<Interval Contexts>` to run different computations on the boundaries. This means we can "force" computations to run in the vertical margins where the offset elements do not exist. GTScript will fail to compile in those cases.
 
 Parallel Contexts
 -----------------
@@ -154,3 +154,34 @@ The name "backward" describes the mental model of processing each plane in rever
 
 
 In this example, :code:`field[0, 0, -1]` refers to the value of the element directly above **after processing**. Each element of :code:`field` will afterwards contain a sum of all the previous elements above it in it's vertical column down to and including itself.
+
+
+.. _Interval Contexts:
+
+-----------------
+Interval Contexts
+-----------------
+
+Because it is very common to do different computations on different horizontal planes, depending on their vertical position, GTScript has vertical intervals built in:
+
+.. code-block:: python
+   :emphasize-lines: 8,10,12
+
+   import numpy as np
+
+   from gt4py import gtscript
+
+   @gtscript.stencil
+   def use_vertical_intervals(field: gtscript.Field[np.float64], updated_vertical_boundary: gtscript.Field[np.float64]):
+      with computation(PARALLEL):
+          with interval(0, 1):
+              field = updated_vertical_boundary[0, 0, 0]
+          with interval(1, -1):
+              field = field[0, 0, -1] + field[0, 0, 1] - 2 * field[0, 0, 0]
+          with interval(-1, None):
+              field = updated_vertical_boundary[0, 0, 0]
+
+
+The above stencil would update the bottom and top vertical level and at the same time compute vertical finite difference in between (using the old boundary values, since it is inside a parallel compute context)
+
+Interval contexts may only occur inside compute contexts. They do not alter the vertical offset semantics of the given compute context they are in. The intervals inside a given compute context may not overlap.
