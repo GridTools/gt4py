@@ -594,6 +594,8 @@ def function_signature_incompatibilities_scanop(
         yield "Arguments to scan operator must be fields, scalars or tuples thereof."
         return
 
+    args = [ct.FieldType(dims=[], dtype=extract_dtype(arg)) if is_number(arg) else arg for arg in args]
+
     arg_dims = [extract_dims(el) for arg in args for el in primitive_constituents(arg)]
     try:
         promote_dims(*arg_dims)

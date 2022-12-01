@@ -1099,7 +1099,6 @@ def scan(scan_pass, is_forward: bool, init):
         column_range = _column_range if is_forward else reversed(_column_range)
         state = init
         col = _make_column(_column_range, _column_dtype(init))
-
         for i in column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
