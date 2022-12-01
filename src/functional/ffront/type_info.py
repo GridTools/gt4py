@@ -663,7 +663,7 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    args_new = check_zero_dims_fields(args, program_type)
+    new_args = check_zero_dims_fields(args, program_type)
     yield from function_signature_incompatibilities_func(program_type.definition, args_new, kwargs)
 
 
