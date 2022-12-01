@@ -611,17 +611,65 @@ assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
 
 ## 4. Scan Operator
 
-The unique feature of this operator is that it provides the return state of the previous iteration (i.e., the previous grid point) as its first argument. In other words, all the arguments of the current `return` will be available (as a tuple) in the next iteration from the first argument of the defined function.  
+The unique feature of this operator is that it provides the return state of the previous iteration as its first argument (i.e., the result from the previous grid point). In other words, all the arguments of the current `return` will be available (as a tuple) in the next iteration from the first argument of the defined function.  
 
-Example: In an atmospheric model,  column integral of could be implemented as follows: 
+Example: A FORTRAN pseudocode for integrating a moisture variable (e.g., cloud water or water vapour) over a column could look as follows:
+
+
+```FORTRAN
+SUBROUTINE column_integral( var_in, rho, dz, var_out, ie, je, ke )
+    ! Return the column integral of a moist species.
+    INTEGER, INTENT (IN) :: &
+      ie, je, ke         ! array dimensions of the I/O-fields (horizontal, horizontal, vertical)
+
+    REAL (KIND=wp), INTENT (OUT) :: &
+      q_colsum (ie,je) ! Vertically-integrated mass of water species
+
+    REAL (KIND=wp), INTENT (IN) ::  &
+      rho (ie,je,ke),  & 
+      dz (ie,je,ke),   & ! height of model half levels
+      var_in  (ie,je,ke) ! humidity mass concentration at time-level nnow
+    
+    !$acc parallel present( iq ) if (lzacc)
+    !$acc loop gang
+    DO j=1,je
+      !$acc loop vector
+      DO i=1,ie
+        q_sum(i,j) = 0.0_wp
+      END DO
+    END DO
+    !$acc end parallel
+    
+    
+    !$acc parallel present( iq, rho, hhl, q ) if (lzacc)
+    DO k = 1, ke ! Vertical loop
+      !$acc loop gang
+      DO j=1,je
+        !$acc loop vector
+        DO i=1,ie
+          q_colsum(i,j) = q_colsum(i,j) + var_in(i,j,k) * rho(i,j,k)* dz(i,j,k)
+        END DO
+      END DO
+    END DO
+    !$acc end parallel
+```
+
+Where `var_in` is the 3D variable that will be summed up, `q_colsum` is the resulting 2D variable, `rho` the air density and `dz`the thickness of the vertical layers.
+
+In the first loop nest, `column_sum` is set to zero for all grid columns. The vertical dependency enters on the RHS of the second loop nest `q_colsum(i,j) = q_colsum(i,j) + ...`. Note that `q_colsum(i, j)` does not contain a `k` index and thus sums up over all k-levels (i.e., a reduction operator).
+
+Using the `scan_operator` this operation would be written like this:
 
 ```python
 @scan_operator(axis=KDim, forward=True, init=0.0)
-def column_sum(float: state_kminus1, float: var, float: rho, float: dz)
-    """Return the column integral of a variable."""
-    return var * rho * dp + state_kminus1
+def column_integral(float: state_kminus1, float: var, float: rho, float: dz)
+    """Return the column integral of a moist species."""
+    return var * rho * dz + state_kminus1
 ```
-Where `var` is the variable to sum up, `rho` the air density and `dz`the thickness of the vertical layers.  The first argument `state_kminus1` denotes the return from the previous level (from k minus 1). It is intialized to `init=0.0` in the function decorator.
+
+
+
+Here the vertical dependency is expressed by the first function argument (`state_kminus1`).  This argument carries the return from the previous level (from k minus 1) and does not need to be specified when the function is called (similar to the `self` arguemnt in Python classes). The argument is intialized to `init=0.0` in the function decorator (first loop nest above) and the dimension of the integral is specified with `axis=KDim`.
 
 +++
 
