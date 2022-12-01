@@ -82,6 +82,7 @@ def apply_common_transforms(
 
     if common_subexpression_elimination:
         ir = CommonSubexpressionElimination().visit(ir)
+        ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lift=force_inline_lift)
 
