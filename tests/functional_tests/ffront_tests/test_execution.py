@@ -1282,10 +1282,10 @@ def test_implicit_broadcast_zero_dims_only():
     out = np_as_located_field()(np.array(0.0))
 
     @field_operator
-    def foo(inp: Field[[], float]):
+    def implicit_boradcast_scalar(inp: Field[[], float]):
         return inp
 
-    func_2(inp, out=out, offset_provider={})
+    implicit_boradcast_scalar(inp, out=out, offset_provider={})
     assert np.allclose(out, np.array(1.0))
 
 
@@ -1298,7 +1298,7 @@ def test_implicit_broadcast_mixed_dims():
     def fieldop_implicit_broadcast(
         zero_dim_inp: Field[[], float], inp: Field[[IDim], float], scalar: float
     ) -> Field[[IDim], float]:
-        return inp + scalar_1 * scalar
+        return inp + zero_dim_inp * scalar
 
     @field_operator
     def fieldop_implicit_broadcast_2(inp: Field[[IDim], float]) -> Field[[IDim], float]:
