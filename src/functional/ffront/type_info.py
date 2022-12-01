@@ -140,7 +140,7 @@ def is_floating_point(symbol_type: ct.SymbolType) -> bool:
     True
     >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
     False
-    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    >>> is_floating_point(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)))
     True
     """
     return extract_dtype(symbol_type).kind in [
@@ -161,7 +161,7 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
     True
     >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
     False
-    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    >>> is_integral(ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
     True
     """
     return extract_dtype(symbol_type).kind in [
@@ -169,6 +169,27 @@ def is_integral(symbol_type: ct.SymbolType) -> bool:
         ct.ScalarKind.INT32,
         ct.ScalarKind.INT64,
     ]
+
+
+def is_number(symbol_type: ct.SymbolType) -> bool:
+    """
+    Check if ``symbol_type`` is either intergral or float.
+
+    Examples:
+    ---------
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    True
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    True
+    >>> is_number(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    False
+    >>> is_number(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    False
+    """
+    if not isinstance(symbol_type, ct.ScalarType):
+        return False
+    # TODO: @nfarabullini re-factor is_arithmetic such it only checks for scalars and the emtpy field pass is in an another function
+    return is_arithmetic(symbol_type)
 
 
 def is_logical(symbol_type: ct.SymbolType) -> bool:
@@ -284,6 +305,35 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     elif is_concrete(symbol_type):
         return symbol_type == to_type
     return False
+
+
+def _is_zero_dim_field(field: ct.SymbolType) -> bool:
+    return isinstance(field, ct.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
+
+
+def is_zero_dim_field_broadcastable(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
+    """
+    Check if first argument is a zero-dimensional field and second is of ScalarType.
+
+    If arguments have the same dtype, the latter is broadcastable to a zero-dimensional field.
+    """
+    if is_number(b_arg) and extract_dtype(a_arg) == extract_dtype(b_arg):
+        return True
+    elif is_number(b_arg):
+        raise GTTypeError(f"{b_arg} is not compatible with {a_arg}")
+    return False
+
+
+def promote_zero_dims(
+    args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
+):
+    """Cast arg types to zero dimensional fields if compatible and required by function signature."""
+    new_args = args
+    for arg_i, arg in enumerate(args):
+        def_type = function_type.definition.args[arg_i]
+        if _is_zero_dim_field(def_type) and is_zero_dim_field_broadcastable(def_type, arg):
+            new_args[arg_i] = def_type
+    return new_args
 
 
 def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
@@ -499,7 +549,9 @@ def function_signature_incompatibilities(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
-    func_type: ct.FunctionType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    func_type: ct.FunctionType,
+    args: list[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
 ) -> Iterator[str]:
 
     # check positional arguments
@@ -528,7 +580,8 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
+    new_args = promote_zero_dims(args, fieldop_type)
+    yield from function_signature_incompatibilities_func(fieldop_type.definition, new_args, kwargs)
 
 
 @function_signature_incompatibilities.register
@@ -586,7 +639,8 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
+    new_args = promote_zero_dims(args, program_type)
+    yield from function_signature_incompatibilities_func(program_type.definition, new_args, kwargs)
 
 
 @function_signature_incompatibilities.register
