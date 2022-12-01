@@ -311,53 +311,28 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
     return isinstance(field, ct.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
 
 
-def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
+def is_zero_dim_field_broadcastable(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
     """
-    Check if first argument is a zero-dimensional field and second is of a compatible type.
+    Check if first argument is a zero-dimensional field and second is of ScalarType.
 
-    In both cases, arguments dtypes have to be the same.
-
-    Examples:
-    ---------
-    >>> is_zero_dim_field_compatible(
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
-    ...     ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
-    ... )
-    False
-    >>> is_zero_dim_field_compatible(
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64)),
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.FLOAT64))
-    ... )
-    True
-    >>> is_zero_dim_field_compatible(
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
-    ...     ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
-    ... )
-    False
-    >>> is_zero_dim_field_compatible(
-    ...     ct.FieldType(dims=[], dtype=ct.ScalarType(ct.ScalarKind.INT64)),
-    ...     ct.ScalarType(kind=ct.ScalarKind.INT64)
-    ... )
-    True
+    If arguments have the same dtype, the latter is broadcastable to a zero-dimensional field.
     """
-    if (_is_zero_dim_field(b_arg) or is_number(b_arg)) and extract_dtype(a_arg) == extract_dtype(
-        b_arg
-    ):
+    if is_number(b_arg) and extract_dtype(a_arg) == extract_dtype(b_arg):
         return True
+    elif is_number(b_arg):
+        raise GTTypeError(f"{b_arg} is not compatible with {a_arg}")
     return False
 
 
-def promote_zero_dims_fields(
+def promote_zero_dims(
     args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
 ):
     """Cast arg types to zero dimensional fields if compatible and required by function signature."""
     new_args = args
     for arg_i, arg in enumerate(args):
         def_type = function_type.definition.args[arg_i]
-        if _is_zero_dim_field(def_type) and is_zero_dim_field_compatible(def_type, arg):
+        if _is_zero_dim_field(def_type) and is_zero_dim_field_broadcastable(def_type, arg):
             new_args[arg_i] = def_type
-        elif _is_zero_dim_field(def_type) and is_number(arg):
-            raise GTTypeError(f"{arg} is not compatible with {def_type}")
     return new_args
 
 
@@ -605,7 +580,7 @@ def function_signature_incompatibilities_func(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    new_args = promote_zero_dims_fields(args, fieldop_type)
+    new_args = promote_zero_dims(args, fieldop_type)
     yield from function_signature_incompatibilities_func(fieldop_type.definition, new_args, kwargs)
 
 
@@ -662,7 +637,7 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
 ) -> Iterator[str]:
-    new_args = promote_zero_dims_fields(args, program_type)
+    new_args = promote_zero_dims(args, program_type)
     yield from function_signature_incompatibilities_func(program_type.definition, new_args, kwargs)
 
 

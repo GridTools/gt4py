@@ -267,12 +267,3 @@ def test_domain_exception_6(identity_def):
     assert exc_info.match("Invalid call to `domain_format_6`")
 
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
-
-
-def test_implicit_broadcast(empty_identity_def):
-    implicit_broadcast_field_op = field_operator(empty_identity_def)
-
-    def implicit_broadcast_program(empty_identity: Field[[], float64]):
-        implicit_broadcast_field_op(empty_identity, out=empty_identity)
-
-    ProgramParser.apply_to_function(implicit_broadcast_program)

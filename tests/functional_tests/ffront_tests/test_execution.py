@@ -1277,7 +1277,7 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-def test_implicit_broadcast_zero_dims_only():
+def test_zero_dims_fields():
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
 
@@ -1305,11 +1305,7 @@ def test_implicit_broadcast_mixed_dims():
         fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
         return fi
 
-    @program
-    def program_implicit_broadcast_2(inp: Field[[IDim], float], out: Field[[IDim], float]):
-        fieldop_implicit_broadcast_2(inp, out=out)
-
-    program_implicit_broadcast_2(input1, out, offset_provider={})
+    fieldop_implicit_broadcast_2(input1, out, offset_provider={})
     assert np.allclose(out, np.asarray(inp) * 2)
 
 
