@@ -14,7 +14,7 @@
 
 from pathlib import Path
 
-import gridtools
+import gridtools_cpp
 import pytest
 import setuptools
 

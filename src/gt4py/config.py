@@ -17,7 +17,7 @@ import multiprocessing
 import os
 from typing import Any, Dict, Optional
 
-import gridtools
+import gridtools_cpp
 
 
 GT4PY_INSTALLATION_PATH: str = os.path.dirname(os.path.abspath(__file__))
