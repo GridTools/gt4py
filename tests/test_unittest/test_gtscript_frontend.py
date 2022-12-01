@@ -240,6 +240,107 @@ class TestFunction:
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
 
+    def test_use_in_expr(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_as_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_in_expr_in_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func() + 1)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_in_expr_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_use_in_call_arg_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
 
 class TestImportedExternals:
     def test_all_legal_combinations(self):
@@ -652,27 +753,6 @@ class TestExternalsWithSubroutines:
             module=self.__class__.__name__,
         )
 
-    def test_no_nested_function_call(self):
-        @gtscript.function
-        def _lap(dx, phi):
-            return (phi[0, -1, 0] - 2.0 * phi[0, 0, 0] + phi[0, 1, 0]) / (dx * dx)
-
-        def definition_func(phi: gtscript.Field[np.float64], dx: float):
-            from gt4py.__externals__ import lap
-
-            with computation(PARALLEL), interval(...):
-                phi = lap(lap(phi, dx), dx)
-
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
-            parse_definition(
-                definition_func,
-                name=inspect.stack()[0][3],
-                module=self.__class__.__name__,
-                externals={
-                    "lap": _lap,
-                },
-            )
-
 
 class TestFunctionReturn:
     def test_no_return(self):
@@ -737,6 +817,21 @@ class TestFunctionReturn:
         def definition_func(phi: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 phi = test_conditional_return(phi)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_return_tuple(self):
+        @gtscript.function
+        def return_tuple():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(res1: gtscript.Field[np.float64], res2: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):
+                res1, res2 = return_tuple()
 
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
