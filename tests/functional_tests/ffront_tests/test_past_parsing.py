@@ -30,7 +30,6 @@ from .past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
     double_copy_program_def,
-    empty_identity_def,
     float64,
     identity_def,
     invalid_call_sig_program_def,
