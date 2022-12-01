@@ -45,7 +45,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[gridtools.get_include_dir(), config.build_settings["boost_include_path"]],
+        include_dirs=[gridtools_cpp.get_include_dir(), config.build_settings["boost_include_path"]],
         language="c++",
         extra_compile_args=extra_compile_args,
     )

@@ -35,7 +35,7 @@ CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
 
 
 GT_REPO_DIRNAME: str = "gridtools"
-GT_INCLUDE_PATH: str = os.path.abspath(gridtools.get_include_dir())
+GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
