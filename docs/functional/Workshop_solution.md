@@ -917,7 +917,7 @@ SUBROUTINE column_integral( var_in, rho, dz, var_out, ie, je, ke )
     DO j=1,je
       !$acc loop vector
       DO i=1,ie
-        q_sum(i,j) = 0.0_wp
+        q_sum(i,j) = 0.0
       END DO
     END DO
     !$acc end parallel
@@ -951,6 +951,11 @@ def column_integral(float: state_kminus1, float: var, float: rho, float: dz)
 ```
 
 Here the vertical dependency is expressed by the first function argument (`state_kminus1`).  This argument carries the return from the previous level (from k minus 1) and does not need to be specified when the function is called (similar to the `self` argument of Python classes). The argument is intialized to `init=0.0` in the function decorator (first loop nest above) and the dimension of the integral is specified with `axis=KDim`.
+
+
+```python
+q_colsum = column_integral(qv, rho, dz)
+```
 
 +++
 

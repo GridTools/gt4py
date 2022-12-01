@@ -635,7 +635,7 @@ SUBROUTINE column_integral( var_in, rho, dz, var_out, ie, je, ke )
     DO j=1,je
       !$acc loop vector
       DO i=1,ie
-        q_sum(i,j) = 0.0_wp
+        q_sum(i,j) = 0.0
       END DO
     END DO
     !$acc end parallel
