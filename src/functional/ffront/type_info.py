@@ -357,7 +357,7 @@ def check_zero_dims_fields(
             function_type.definition.args[arg_i]
         ) and is_zero_dim_field_compatible(def_type, arg):
             args[arg_i] = def_type
-        elif _is_zero_dim_field(def_type):
+        elif _is_zero_dim_field(def_type) and is_number(arg):
             raise GTTypeError(f"{arg} is not compatible with {def_type}")
     return args
 
