@@ -652,6 +652,7 @@ SUBROUTINE column_integral( var_in, rho, dz, var_out, ie, je, ke )
       END DO
     END DO
     !$acc end parallel
+END SUBROUTINE column_integral
 ```
 
 Where `var_in` is the 3D variable that will be summed up, `q_colsum` is the resulting 2D variable, `rho` the air density and `dz`the thickness of the vertical layers.
@@ -669,7 +670,7 @@ def column_integral(float: state_kminus1, float: var, float: rho, float: dz)
 
 
 
-Here the vertical dependency is expressed by the first function argument (`state_kminus1`).  This argument carries the return from the previous level (from k minus 1) and does not need to be specified when the function is called (similar to the `self` arguemnt in Python classes). The argument is intialized to `init=0.0` in the function decorator (first loop nest above) and the dimension of the integral is specified with `axis=KDim`.
+Here the vertical dependency is expressed by the first function argument (`state_kminus1`).  This argument carries the return from the previous level (from k minus 1) and does not need to be specified when the function is called (similar to the `self` argument of Python classes). The argument is intialized to `init=0.0` in the function decorator (first loop nest above) and the dimension of the integral is specified with `axis=KDim`.
 
 +++
 

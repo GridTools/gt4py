@@ -934,6 +934,7 @@ SUBROUTINE column_integral( var_in, rho, dz, var_out, ie, je, ke )
       END DO
     END DO
     !$acc end parallel
+END SUBROUTINE column_integral
 ```
 
 Where `var_in` is the 3D variable that will be summed up, `q_colsum` is the resulting 2D variable, `rho` the air density and `dz`the thickness of the vertical layers.
