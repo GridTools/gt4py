@@ -21,6 +21,7 @@ import numbers
 import textwrap
 import time
 import types
+import warnings
 from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -419,18 +420,10 @@ class CallInliner(ast.NodeTransformer):
     ):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
+        node.args = [self.visit(arg) for arg in node.args]
         if call_name in gtscript.IGNORE_WHEN_INLINING:
-            # Not a function to inline. Visit arguments and return as-is.
-            node.args = [self.visit(arg) for arg in node.args]
+            # Not a function to inline, return as-is.
             return node
-        elif any(
-            isinstance(arg, ast.Call) and arg.func.id not in gtscript.MATH_BUILTINS
-            for arg in node.args
-        ):
-            raise GTScriptSyntaxError(
-                "Function calls are not supported in arguments to function calls",
-                loc=nodes.Location.from_ast_node(node),
-            )
         elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
 
@@ -494,6 +487,15 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
+            if any(
+                isinstance(nd.value, ast.Tuple)
+                for nd in ast.walk(call_ast)
+                if isinstance(nd, ast.Return)
+            ):
+                raise GTScriptSyntaxError(
+                    "Only functions with a single return value can be used in expressions, including as call arguments. "
+                    "Please assign the function results to symbols first."
+                )
             target_node = ast.Name(
                 ctx=ast.Store(),
                 lineno=node.lineno,
@@ -573,15 +575,12 @@ class CallInliner(ast.NodeTransformer):
 
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
-    def apply(cls, ast_object, context):
-        preprocessor = cls(context)
-        preprocessor(ast_object)
+    def apply(cls, ast_object: ast.AST, context: Dict[str, Any], stencil_name: str):
+        cls(context, stencil_name).visit(ast_object)
 
-    def __init__(self, context):
+    def __init__(self, context: Dict[str, Any], stencil_name: str):
         self.context = context
-
-    def __call__(self, ast_object):
-        self.visit(ast_object)
+        self.stencil_name = stencil_name
 
     def visit_If(self, node: ast.If):
         # Compile-time evaluation of "if" conditions
@@ -592,13 +591,17 @@ class CompiledIfInliner(ast.NodeTransformer):
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
         ):
+            warnings.warn(
+                f"stencil {self.stencil_name}, line {node.lineno}, column {node.col_offset}: compile-time if condition via __INLINED deprecated",
+                category=DeprecationWarning,
+            )
             eval_node = node.test.args[0]
             condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
             if condition_value is not NOTHING:
                 node = node.body if condition_value else node.orelse
             else:
                 raise GTScriptSyntaxError(
-                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                    "Evaluation of compile-time 'if' condition failed at the preprocessing step"
                 )
 
         return node if node else None
@@ -1919,7 +1922,7 @@ class GTScriptParser(ast.NodeVisitor):
         CallInliner.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
-        CompiledIfInliner.apply(main_func_node, context=local_context)
+        CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 
