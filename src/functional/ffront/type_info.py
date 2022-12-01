@@ -313,7 +313,7 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
 
 def is_zero_dim_field_compatible(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
     """
-    Check if first argument is an empty field and second is of a compatible type.
+    Check if first argument is a zero-dimensional field and second is of a compatible type.
 
     In both cases, arguments dtypes have to be the same.
     
