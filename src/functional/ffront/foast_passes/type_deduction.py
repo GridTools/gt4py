@@ -33,7 +33,7 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
     >>> field_t = ct.FieldType(dims=[Dimension(value="I")], dtype=ct.ScalarType(kind=ct.ScalarKind))
     >>> print(boolified_type(field_t))
-    Field[[I], dtype=bool]
+    Field[[I], bool]
     """
     shape = None
     if type_info.is_concrete(symbol_type):
@@ -431,7 +431,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
-            type_info.is_logical if node.op is foast.UnaryOperator.NOT else type_info.is_arithmetic
+            type_info.is_logical
+            if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]
+            else type_info.is_arithmetic
         )
         if not is_compatible(new_operand.type):
             raise FieldOperatorTypeDeductionError.from_foast_node(

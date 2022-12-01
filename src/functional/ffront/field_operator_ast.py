@@ -11,18 +11,32 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
 from functional.ffront import common_types as ct
+from functional.utils import RecursionGuard
 
 
 class LocatedNode(Node):
     location: SourceLocation
+
+    def __str__(self):
+        from functional.ffront.foast_pretty_printer import pretty_format
+
+        try:
+            with RecursionGuard(self):
+                return pretty_format(self)
+        except RecursionGuard.RecursionDetected:
+            # If `pretty_format` itself calls `__str__`, i.e. when printing
+            # an error that happend during formatting, just return the regular
+            # string representation, consequently avoiding an infinite recursion.
+            # Note that avoiding circular calls to `__str__` is not possible
+            # as the pretty printer depends on eve utilities that use the string
+            # representation of a node in the error handling.
+            return super().__str__()
 
 
 SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
@@ -80,26 +94,8 @@ class TupleExpr(Expr):
     elts: list[Expr]
 
 
-class UnaryOperator(StrEnum):
-    UADD = "plus"
-    USUB = "minus"
-    NOT = "not_"
-    INVERT = "invert"
-
-    def __str__(self) -> str:
-        if self is self.UADD:
-            return "+"
-        elif self is self.USUB:
-            return "-"
-        elif self is self.NOT:
-            return "not"
-        elif self is self.INVERT:
-            return "~"
-        return "Unknown UnaryOperator"
-
-
 class UnaryOp(Expr):
-    op: UnaryOperator
+    op: ct.UnaryOperator
     operand: Expr
 
 
@@ -116,6 +112,21 @@ class CompareOperator(StrEnum):
     LTE = "less_equal"
     GT = "greater"
     GTE = "greater_equal"
+
+    def __str__(self) -> str:
+        if self is self.EQ:
+            return "=="
+        elif self is self.NOTEQ:
+            return "!="
+        elif self is self.LT:
+            return "<"
+        elif self is self.LTE:
+            return "<="
+        elif self is self.GT:
+            return ">"
+        elif self is self.GTE:
+            return ">="
+        return "Unknown CompareOperator"
 
 
 class Compare(Expr):
@@ -154,13 +165,17 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Optional[ct.FunctionType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ct.FunctionType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.FunctionType
+    )
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Optional[ct.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ct.FieldOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.FieldOperatorType
+    )
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
@@ -169,4 +184,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Optional[ct.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
+    type: Union[ct.ScanOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
+        constraint=ct.ScanOperatorType
+    )
