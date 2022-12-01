@@ -190,7 +190,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     inline_lambda(
                         ir.FunCall(fun=stencil, args=inlined_args), opcount_preserving=True
                     ),
-                    **kwargs
+                    **kwargs,
                 )
 
                 new_stencil = im.lambda__(*new_args.keys())(inlined_call)

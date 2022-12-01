@@ -7,6 +7,7 @@ from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
+from functional.iterator.transforms.merge_let import MergeLet
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 from functional.iterator.transforms.simple_inline_heuristic import heuristic
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
@@ -41,6 +42,7 @@ def apply_common_transforms(
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
+    ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = NormalizeShifts().visit(ir)

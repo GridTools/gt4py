@@ -66,8 +66,6 @@ class CollectSubexpressions(NodeVisitor):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
         allow_collection = node.fun != ir.SymRef(id="shift")
-        # if not allow_collection:
-        #    breakpoint()
         child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(
