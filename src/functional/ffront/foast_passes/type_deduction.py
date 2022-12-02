@@ -131,7 +131,7 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
             incomplete_nodes.append(node)
 
 
-class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
