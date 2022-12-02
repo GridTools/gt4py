@@ -1323,9 +1323,7 @@ def test_tuple_unpacking(fieldview_backend):
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
     size = 10
-
     inp = np_as_located_field(IDim)(np.ones((size)))
-
     out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
 
     OutType = tuple[
