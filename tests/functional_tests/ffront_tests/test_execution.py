@@ -35,13 +35,13 @@ from functional.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
     np_as_located_field,
 )
 from functional.program_processors.runners import gtfn_cpu, roundtrip
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
 
 @pytest.fixture(params=[roundtrip.executor])
@@ -93,7 +93,7 @@ def test_multicopy(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def multicopy(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
@@ -111,7 +111,7 @@ def test_arithmetic(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def arithmetic(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return (inp1 + inp2) * 2.0
 
@@ -130,7 +130,7 @@ def test_power(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 ** 2
+        return inp1**2
 
     pow(a, out=b, offset_provider={})
 
@@ -148,7 +148,7 @@ def test_power_arithmetic(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def power_arithmetic(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return inp2 + ((inp1 + inp2) ** 2)
 
@@ -217,14 +217,14 @@ def test_fold_shifts(fieldview_backend):
 
     @field_operator
     def auto_lift(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
     @program(backend=fieldview_backend)
     def fencil(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
         auto_lift(inp1, inp2, out=out)
 
@@ -243,7 +243,7 @@ def test_tuples(fieldview_backend):
 
     @field_operator
     def tuples(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         inps = inp1, inp2
         scalars = 1.3, float64(5.0), float64("3.4")
@@ -251,7 +251,7 @@ def test_tuples(fieldview_backend):
 
     @program(backend=fieldview_backend)
     def fencil(
-            inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
     ) -> None:
         tuples(inp1, inp2, out=out)
 
@@ -272,7 +272,7 @@ def test_promotion(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def promotion(
-            inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
+        inp1: Field[[Edge, K], float64], inp2: Field[[K], float64]
     ) -> Field[[Edge, K], float64]:
         return inp1 / inp2
 
@@ -385,7 +385,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def maxover_negvals(
-            edge_f: Field[[Edge], int64],
+        edge_f: Field[[Edge], int64],
     ) -> Field[[Vertex], int64]:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
@@ -503,7 +503,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
-    ref = 3 * np.sum(-(rs.v2e_table ** 2) * 2, axis=1)
+    ref = 3 * np.sum(-(rs.v2e_table**2) * 2, axis=1)
     assert np.allclose(ref, rs.out.array())
 
 
@@ -529,23 +529,23 @@ def test_scalar_arg(fieldview_backend):
 def test_conditional_tuple_1():
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0: (size // 2)] = True
+    mask.array()[0 : (size // 2)] = True
     a = np_as_located_field(IDim)(np.ones((size,)))
     c = np_as_located_field(IDim)(np.zeros((size,)))
     d = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
     def conditional_tuple(
-            mask: Field[[IDim], bool], a: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return where(mask, (a, 3.0), (2.0, 7.0))
 
     @program
     def conditional_tuple_p(
-            mask: Field[[IDim], bool],
-            a: Field[[IDim], float64],
-            c: Field[[IDim], float64],
-            d: Field[[IDim], float64],
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        d: Field[[IDim], float64],
     ):
         conditional_tuple(mask, a, out=(c, d))
 
@@ -559,7 +559,7 @@ def test_conditional_tuple_1():
 def test_conditional_nested_tuple():
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0: (size // 2)] = True
+    mask.array()[0 : (size // 2)] = True
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(np.ones((size,)))
     c = np_as_located_field(IDim)(np.zeros((size,)))
@@ -567,7 +567,7 @@ def test_conditional_nested_tuple():
 
     @field_operator
     def conditional_tuple_3_field_op(
-            mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[
         tuple[Field[[IDim], float64], Field[[IDim], float64]],
         tuple[Field[[IDim], float64], Field[[IDim], float64]],
@@ -576,11 +576,11 @@ def test_conditional_nested_tuple():
 
     @program
     def conditional_tuple_3_p(
-            mask: Field[[IDim], bool],
-            a: Field[[IDim], float64],
-            b: Field[[IDim], float64],
-            c: Field[[IDim], float64],
-            d: Field[[IDim], float64],
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        c: Field[[IDim], float64],
+        d: Field[[IDim], float64],
     ):
         conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
 
@@ -630,7 +630,7 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     @field_operator
     def scalar_and_field_args(
-            inp: Field[[Edge], float64], factor: float64
+        inp: Field[[Edge], float64], factor: float64
     ) -> Field[[Edge], float64]:
         tmp = factor * inp
         return tmp(EdgeOffset[1])
@@ -681,7 +681,7 @@ def test_broadcast_two_fields(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
-            inp1: Field[[IDim], int64], inp2: Field[[JDim], int64]
+        inp1: Field[[IDim], int64], inp2: Field[[JDim], int64]
     ) -> Field[[IDim, JDim], int64]:
         a = broadcast(inp1, (IDim, JDim))
         b = broadcast(inp2, (IDim, JDim))
@@ -714,14 +714,14 @@ def test_broadcast_shifted(fieldview_backend):
 def test_conditional(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0: (size // 2)] = True
+    mask.array()[0 : (size // 2)] = True
     a = np_as_located_field(IDim)(np.ones((size,)))
     b = np_as_located_field(IDim)(2 * np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend=fieldview_backend)
     def conditional(
-            mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return where(mask, a, b)
 
@@ -733,13 +733,13 @@ def test_conditional(fieldview_backend):
 def test_conditional_promotion(fieldview_backend):
     size = 10
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    mask.array()[0: (size // 2)] = True
+    mask.array()[0 : (size // 2)] = True
     a = np_as_located_field(IDim)(np.ones((size,)))
     out = np_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(
-            mask: Field[[IDim], bool], a: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         return where(mask, a, 10.0)
 
@@ -774,17 +774,17 @@ def test_conditional_shifted(fieldview_backend):
 
     @field_operator()
     def conditional_shifted(
-            mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
+        mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
         tmp = where(mask, a, b)
         return tmp(Ioff[1])
 
     @program(backend=fieldview_backend)
     def conditional_program(
-            mask: Field[[IDim], bool],
-            a: Field[[IDim], float64],
-            b: Field[[IDim], float64],
-            out: Field[[IDim], float64],
+        mask: Field[[IDim], bool],
+        a: Field[[IDim], float64],
+        b: Field[[IDim], float64],
+        out: Field[[IDim], float64],
     ):
         conditional_shifted(mask, a, b, out=out[:-1])
 
@@ -801,7 +801,7 @@ def test_nested_tuple_return():
 
     @field_operator
     def pack_tuple(
-            a: Field[[IDim], float64], b: Field[[IDim], float64]
+        a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
         return (a, (a, b))
 
@@ -824,7 +824,7 @@ def test_tuple_return_2(reduction_setup):
 
     @field_operator
     def reduction_tuple(
-            a: Field[[Edge], int64], b: Field[[Edge], int64]
+        a: Field[[Edge], int64], b: Field[[Edge], int64]
     ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64]]:
         a = neighbor_sum(a(V2E), axis=V2EDim)
         b = neighbor_sum(b(V2E), axis=V2EDim)
@@ -861,7 +861,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
     @field_operator
     def reduce_tuple_element(
-            edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
+        edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
         tup = edge_field(V2E), vertex_field
         # the shift inside the reduction fails as tup is a tuple of iterators
@@ -891,7 +891,7 @@ def test_tuple_arg(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def unpack_tuple(
-            inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
+        inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
     ) -> Field[[IDim], float64]:
         return 3.0 * inp[0][0] + inp[0][1] + inp[1]
 
@@ -946,7 +946,7 @@ def test_solve_triag(fieldview_backend):
 
     @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
-            state: tuple[float, float], a: float, b: float, c: float, d: float
+        state: tuple[float, float], a: float, b: float, c: float, d: float
     ) -> tuple[float, float]:
         return (c / (b - a * state[0]), (d - a * state[1]) / (b - a * state[0]))
 
@@ -956,10 +956,10 @@ def test_solve_triag(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def solve_tridiag(
-            a: Field[[IDim, JDim, KDim], float],
-            b: Field[[IDim, JDim, KDim], float],
-            c: Field[[IDim, JDim, KDim], float],
-            d: Field[[IDim, JDim, KDim], float],
+        a: Field[[IDim, JDim, KDim], float],
+        b: Field[[IDim, JDim, KDim], float],
+        c: Field[[IDim, JDim, KDim], float],
+        d: Field[[IDim, JDim, KDim], float],
     ) -> Field[[IDim, JDim, KDim], float]:
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
@@ -981,7 +981,7 @@ def test_ternary_operator():
 
     @field_operator
     def ternary_field_op(
-            a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
+        a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> Field[[IDim], float]:
         return a if left < right else b
 
@@ -1010,19 +1010,19 @@ def test_ternary_operator_tuple():
 
     @field_operator
     def ternary_field_op(
-            a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
+        a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
     # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
     @program
     def ternary_field(
-            a: Field[[IDim], float],
-            b: Field[[IDim], float],
-            left: float,
-            right: float,
-            out_1: Field[[IDim], float],
-            out_2: Field[[IDim], float],
+        a: Field[[IDim], float],
+        b: Field[[IDim], float],
+        left: float,
+        right: float,
+        out_1: Field[[IDim], float],
+        out_2: Field[[IDim], float],
     ):
         ternary_field_op(a, b, left, right, out=(out_1, out_2))
 
@@ -1101,7 +1101,7 @@ def test_scan_tuple_output(fieldview_backend):
     #  for tuple outputs
     @program
     def simple_scan_operator_program(
-            x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
+        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
     ) -> None:
         simple_scan_operator(x, out=(out1, out2))
 
@@ -1165,16 +1165,16 @@ def test_domain_input_bounds(fieldview_backend):
 
     @program
     def program_domain(
-            a: Field[[IDim, JDim], float64],
-            lower_i: int64,
-            upper_i: int64,
-            lower_j: int64,
-            upper_j: int64,
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
     ):
         fieldop_domain(
             a,
             out=a,
-            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j ** 1, upper_j)},
+            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
         )
 
     program_domain(a, lower_i, upper_i, lower_j, upper_j, offset_provider={})
@@ -1199,11 +1199,11 @@ def test_domain_input_bounds_1(fieldview_backend):
 
     @program
     def program_domain(
-            a: Field[[IDim, JDim], float64],
-            lower_i: int64,
-            upper_i: int64,
-            lower_j: int64,
-            upper_j: int64,
+        a: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
     ):
         fieldop_domain(
             a,
@@ -1226,7 +1226,7 @@ def test_domain_tuple(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain_tuple(
-            a: Field[[IDim, JDim], float64]
+        a: Field[[IDim, JDim], float64]
     ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
         return (a + a, a)
 
@@ -1255,8 +1255,8 @@ def test_where_k_offset(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def fieldop_where_k_offset(
-            a: Field[[IDim, KDim], float64],
-            k_index: Field[[KDim], int64],
+        a: Field[[IDim, KDim], float64],
+        k_index: Field[[KDim], int64],
     ) -> Field[[IDim, KDim], float64]:
         return where(k_index > 0, a(Koff[-1]), 2.0)
 
@@ -1271,6 +1271,7 @@ def test_undefined_symbols():
     from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+
         @field_operator
         def return_undefined():
             return undefined_symbol
@@ -1286,24 +1287,23 @@ def test_tuple_unpacking(fieldview_backend):
 
     @field_operator
     def _unpack(
-            inp: Field[[IDim], float64],
+        inp: Field[[IDim], float64],
     ) -> tuple[
         Field[[IDim], float64],
         Field[[IDim], float64],
         Field[[IDim], float64],
         Field[[IDim], float64],
     ]:
-        a, b, c, d = (inp + 2., inp + 3., inp + 5., inp + 7.)
+        a, b, c, d = (inp + 2.0, inp + 3.0, inp + 5.0, inp + 7.0)
         return a, b, c, d
 
     @program(backend=fieldview_backend)
     def unpack(
-            inp: Field[[IDim], float64],
-            out1: Field[[IDim], float64],
-            out2: Field[[IDim], float64],
-            out3: Field[[IDim], float64],
-            out4: Field[[IDim], float64],
-
+        inp: Field[[IDim], float64],
+        out1: Field[[IDim], float64],
+        out2: Field[[IDim], float64],
+        out3: Field[[IDim], float64],
+        out4: Field[[IDim], float64],
     ):
         _unpack(inp, out=(out1, out2, out3, out4))
 
@@ -1311,10 +1311,10 @@ def test_tuple_unpacking(fieldview_backend):
 
     arr = inp.array()
 
-    assert np.allclose(out1, arr + 2.)
-    assert np.allclose(out2, arr + 3.)
-    assert np.allclose(out3, arr + 5.)
-    assert np.allclose(out4, arr + 7.)
+    assert np.allclose(out1, arr + 2.0)
+    assert np.allclose(out2, arr + 3.0)
+    assert np.allclose(out3, arr + 5.0)
+    assert np.allclose(out4, arr + 7.0)
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
@@ -1323,18 +1323,18 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
     inp = np_as_located_field(IDim)(np.ones((size)))
 
     out1 = np_as_located_field(IDim)(np.ones((size)))
-    out2 = np_as_located_field(IDim)(2*np.ones((size)))
-    out3 = np_as_located_field(IDim)(3*np.ones((size)))
-    out4 = np_as_located_field(IDim)(4*np.ones((size)))
-    out5 = np_as_located_field(IDim)(5*np.ones((size)))
-    out6 = np_as_located_field(IDim)(6*np.ones((size)))
-    out7 = np_as_located_field(IDim)(7*np.ones((size)))
-    out8 = np_as_located_field(IDim)(8*np.ones((size)))
-    out9 = np_as_located_field(IDim)(9*np.ones((size)))
+    out2 = np_as_located_field(IDim)(2 * np.ones((size)))
+    out3 = np_as_located_field(IDim)(3 * np.ones((size)))
+    out4 = np_as_located_field(IDim)(4 * np.ones((size)))
+    out5 = np_as_located_field(IDim)(5 * np.ones((size)))
+    out6 = np_as_located_field(IDim)(6 * np.ones((size)))
+    out7 = np_as_located_field(IDim)(7 * np.ones((size)))
+    out8 = np_as_located_field(IDim)(8 * np.ones((size)))
+    out9 = np_as_located_field(IDim)(9 * np.ones((size)))
 
     @field_operator
     def _unpack(
-            inp: Field[[IDim], float64],
+        inp: Field[[IDim], float64],
     ) -> tuple[
         Field[[IDim], float64],
         Field[[IDim], float64],
@@ -1344,11 +1344,11 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         Field[[IDim], float64],
         Field[[IDim], float64],
         Field[[IDim], float64],
-        Field[[IDim], float64]
+        Field[[IDim], float64],
     ]:
-        *a, a2, a3 = (inp, inp + 2., inp + 3., inp + 5.)
-        b1, *b, b3 = (inp + 7., inp + 11., inp + 13., inp + 17.)
-        c1, c2, *c = (inp + 19., inp + 23., inp + 29., inp + 31.)
+        *a, a2, a3 = (inp, inp + 2.0, inp + 3.0, inp + 5.0)
+        b1, *b, b3 = (inp + 7.0, inp + 11.0, inp + 13.0, inp + 17.0)
+        c1, c2, *c = (inp + 19.0, inp + 23.0, inp + 29.0, inp + 31.0)
 
         a_sum = a[0] + a[1]
         b_sum = b[0] + b[1]
@@ -1357,17 +1357,18 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         return a_sum, a2, a3, b1, b_sum, b3, c1, c2, c_sum
 
     @program(backend=fieldview_backend)
-    def unpack(inp: Field[[IDim], float64],
-               out1: Field[[IDim], float64],
-               out2: Field[[IDim], float64],
-               out3: Field[[IDim], float64],
-               out4: Field[[IDim], float64],
-               out5: Field[[IDim], float64],
-               out6: Field[[IDim], float64],
-               out7: Field[[IDim], float64],
-               out8: Field[[IDim], float64],
-               out9: Field[[IDim], float64],
-               ):
+    def unpack(
+        inp: Field[[IDim], float64],
+        out1: Field[[IDim], float64],
+        out2: Field[[IDim], float64],
+        out3: Field[[IDim], float64],
+        out4: Field[[IDim], float64],
+        out5: Field[[IDim], float64],
+        out6: Field[[IDim], float64],
+        out7: Field[[IDim], float64],
+        out8: Field[[IDim], float64],
+        out9: Field[[IDim], float64],
+    ):
         _unpack(inp, out=(out1, out2, out3, out4, out5, out6, out7, out8, out9))
 
     unpack(inp, out1, out2, out3, out4, out5, out6, out7, out8, out9, offset_provider={})
@@ -1388,18 +1389,27 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
-    with pytest.raises(FieldOperatorTypeDeductionError, match=(r"Could not deduce type: Too many values to unpack \(expected 3\)")):
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
+    ):
+
         @field_operator
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
 
+
 def test_tuple_unpacking_too_many_values(fieldview_backend):
-    with pytest.raises(FieldOperatorTypeDeductionError, match=(r"Could not deduce type: Too many values to unpack \(expected 3\)")):
+    with pytest.raises(
+        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
+    ):
+
         @field_operator
-        def _star_unpack() -> tuple[int, float64, int]:
+        def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
-            return a, b, c
+            return a
+
 
 def test_constant_closure_vars():
     from eve.utils import FrozenNamespace

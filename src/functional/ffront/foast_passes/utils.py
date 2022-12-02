@@ -1,12 +1,14 @@
+from typing import Union, List, Tuple, Optional
+
 from functional.ffront import field_operator_ast as foast
 
 
 def compute_assign_indices(
     targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred],
-    num_elts: int
-) -> list[int | tuple]:
+    num_elts: int,
+) -> List[Union[Tuple[int, Optional[int]], int]]:
     """
-    Computes a list of relative indices, mapping each target to its respective value(s).
+    Compute a list of relative indices, mapping each target to its respective value(s).
 
     This function is used when mapping a tuple of targets to a tuple of values, and also handles the
     case in which tuple unpacking is done using a Starred operator.
@@ -20,29 +22,28 @@ def compute_assign_indices(
     ..  code-block:: python
 
         # example pseudocode
-        a, *b, c = (1, 2, 3, 4)
-        (0, (1, -1), -1)
-
         *a, b, c = (1, 2, 3, 4)
-        [(0, -2), -2, -1]
+        [(0, 2), 2, 3]
+
+        a, *b, c = (1, 2, 3, 4)
+        (0, (1, 3), 3)
 
         a, b, *c = (1, 2, 3, 4)
-        [0, 1, (2, 5)]
+        [0, 1, (2, 4)]
     """
-    indices = list(range(len(targets)))
-
+    starred_lower, starred_upper = None, None
     for idx, elt in enumerate(targets):
         if isinstance(elt, foast.Starred):
+            starred_lower = idx
             break
-        indices[idx] = idx
-
-    for idx, elt in reversed(list(enumerate(targets))):
-        rel_idx = idx - len(targets)
+    for idx, elt in zip(reversed(range(num_elts)), reversed(targets)):
         if isinstance(elt, foast.Starred):
-            star_lower, star_upper = max(indices), min(indices)
-            if star_upper == 0:
-                star_upper = num_elts
-            indices[idx] = (star_lower, star_upper)
+            starred_upper = idx + 1
             break
-        indices[idx] = rel_idx
-    return indices
+    if starred_lower is not None:
+        return (
+            list(range(0, starred_lower))
+            + [(starred_lower, starred_upper)]
+            + list(range(starred_upper, num_elts))
+        )
+    return list(range(0, num_elts))  # no starred target

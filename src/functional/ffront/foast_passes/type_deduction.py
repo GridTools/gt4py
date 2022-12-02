@@ -258,42 +258,47 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
 
+        TargetType = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
+        if isinstance(values.type, TupleType):
+            num_elts: int = len(values.type.types)
+            targets: TargetType = node.targets
+            indices: tuple[tuple[int] | int] = compute_assign_indices(targets, num_elts)
 
-        num_elts = len(values.type.types)
-        targets = node.targets
-        indices = compute_assign_indices(targets, num_elts)
-
-        if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
-            raise FieldOperatorTypeDeductionError.from_foast_node(node, msg=f"Too many values to unpack (expected {len(indices)}).")
-
-        new_targets: list[foast.Starred | foast.Symbol] = []
-        for i, index in enumerate(indices):
-            old_target = targets[i]
-
-            if isinstance(index, tuple):
-                lower, upper = index[0], index[1]
-                new_type = TupleType(
-                    types=[t for t in values.type.types[lower:upper]]
+            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=f"Too many values to unpack (expected {len(indices)})."
                 )
-                new_target = foast.Starred(
-                    id=foast.DataSymbol(
-                        id=old_target.id.id, location=old_target.location, type=new_type
-                    ),
-                    type=new_type,
-                    location=old_target.location,
-                )
-            else:
-                new_type = values.type.types[index]
+
+            new_targets: TargetType = []
+            for i, index in enumerate(indices):
+                old_target = targets[i]
+
+                if isinstance(index, tuple):
+                    lower, upper = index
+                    new_type = TupleType(types=[t for t in values.type.types[lower:upper]])
+                    new_target = foast.Starred(
+                        id=foast.DataSymbol(
+                            id=old_target.id.id, location=old_target.location, type=new_type
+                        ),
+                        type=new_type,
+                        location=old_target.location,
+                    )
+                else:
+                    new_type = values.type.types[index]
+                    new_target = self.visit(
+                        old_target, refine_type=new_type, location=old_target.location, **kwargs
+                    )
+
                 new_target = self.visit(
-                    old_target, refine_type=new_type, location=old_target.location, **kwargs
+                    new_target, refine_type=new_type, location=old_target.location, **kwargs
                 )
-
-            new_target = self.visit(
-                new_target, refine_type=new_type, location=old_target.location, **kwargs
+                new_targets.append(new_target)
+        else:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Assignment value must be of type tuple! Got: {values}"
             )
-            new_targets.append(new_target)
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
 
