@@ -13,9 +13,8 @@ def compute_assign_indices(
 
     Examples
     --------
-    The below are examples of different types of unpacking and the
-    generated indices. Note that the indices in the tuple correspond
-    to the lower and upper slice indices of a Starred variable.
+    The below are examples of different types of unpacking and the generated indices. Note that the
+    indices in the tuple correspond to the lower and upper slice indices of a Starred variable.
 
     ..  code-block:: python
 

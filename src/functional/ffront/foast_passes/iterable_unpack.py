@@ -11,6 +11,14 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
     Example
     -------
+    # before pass
+    def foo():
+         a0 = 1
+         b0 = 2
+         a1, b1 = b0, a0
+         return a1, b1
+
+    # after pass
     def foo():
         a0, b0 = (1, 2)
         __tuple_tmp_0 = (1, 2)
@@ -63,7 +71,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     foast.Assign(target=tuple_symbol, value=node.value, location=node.location)
                 )
 
-                for (subtarget, index) in zip(targets, indices):
+                for (index, subtarget) in zip(indices, targets):
                     el_type = subtarget.type
                     tuple_name = foast.Name(
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
