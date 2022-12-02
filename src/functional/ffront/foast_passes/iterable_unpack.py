@@ -80,7 +80,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
                         new_tuple = foast.TupleExpr(
                             elts=tuple_slice,
-                            type=subtarget.type,
+                            type=el_type,
                             location=node.location,
                         )
                         new_assign = foast.Assign(
