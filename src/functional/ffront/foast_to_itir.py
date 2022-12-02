@@ -530,11 +530,6 @@ class InsideReductionLowering(FieldOperatorLowering):
         self.lambda_params[uid] = FieldOperatorLowering.apply(node)
         return im.ref(uid)
 
-    def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:  # type: ignore[override]
-        return self._lift_lambda(node)(
-            im.call_("astype_")(self.visit(node.args[0], **kwargs), node.args[1].id)
-        )
-
     def _sequential_id(self):
         return next(self.__counter)
 

@@ -605,34 +605,28 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
-        casted_obj = node.args[0]
-        dtype_obj = node.args[1]
-        if not isinstance(dtype_obj.type, ct.FunctionType) or not (
-            type_info.is_arithmetic(dtype_obj.type.returns)
-            or type_info.is_logical(dtype_obj.type.returns)
+        casted_obj_type = node.args[0].type
+        dtype_obj_type = node.args[1].type
+        if not isinstance(dtype_obj_type, ct.FunctionType) or not (
+            type_info.is_arithmetic(dtype_obj_type.returns)
+            or type_info.is_logical(dtype_obj_type.type.returns)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected an arithmetic or boolean dtype, but got {dtype_obj}.",
+                msg=f"Incompatible argument in call to `{node.func.id}`'s new dtype. "
+                f"Expected an arithmetic or boolean dtype, but got {dtype_obj_type}.",
             )
-        if not isinstance(casted_obj.type, ct.FieldType):
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected FieldType, but got {casted_obj}.",
-            )
-        elif not (
-            type_info.is_arithmetic(casted_obj.type) or type_info.is_logical(casted_obj.type)
+        if not isinstance(casted_obj_type, ct.FieldType) or not (
+            type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Incompatible argument in call to `{node.func.id}`. "
-                f"Expected an arithmetic or boolean FieldType, but got {casted_obj}.",
+                msg=f"Incompatible argument in call to `{node.func.id}`'s object. "
+                f"Expected arithmetic or boolean FieldType, but got {casted_obj_type}.",
             )
         return_type = ct.FieldType(
-            dims=casted_obj.type.dims,
-            dtype=dtype_obj.type.returns,
+            dims=casted_obj_type.dims,
+            dtype=dtype_obj_type.returns,
         )
         return foast.Call(
             func=node.func,
