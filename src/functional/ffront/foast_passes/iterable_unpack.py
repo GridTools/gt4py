@@ -54,7 +54,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     ) -> list[foast.Assign | foast.LocatedNode]:
         unrolled: list[foast.Assign | foast.LocatedNode] = []
 
-        for _, node in enumerate(body):
+        for node in body:
             if isinstance(node, foast.TupleTargetAssign):
                 num_elts, targets = len(node.value.type.types), node.targets  # type: ignore
                 indices = compute_assign_indices(targets, num_elts)
