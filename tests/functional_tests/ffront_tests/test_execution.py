@@ -1277,30 +1277,36 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-def test_zero_dims_fields():
+def test_zero_dims_fields(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Implicit broadcast are not supported yet.")
+
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
 
-    @field_operator
-    def implicit_boradcast_scalar(inp: Field[[], float]):
+    @field_operator(backend=fieldview_backend)
+    def implicit_broadcast_scalar(inp: Field[[], float]):
         return inp
 
-    implicit_boradcast_scalar(inp, out=out, offset_provider={})
+    implicit_broadcast_scalar(inp, out=out, offset_provider={})
     assert np.allclose(out, np.array(1.0))
 
 
-def test_implicit_broadcast_mixed_dims():
+def test_implicit_broadcast_mixed_dims(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Implicit broadcast are not supported yet.")
+
     input1 = np_as_located_field(IDim)(np.ones((10,)))
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field(IDim)(np.ones((10,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast(
         zero_dim_inp: Field[[], float], inp: Field[[IDim], float], scalar: float
     ) -> Field[[IDim], float]:
         return inp + zero_dim_inp * scalar
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast_2(inp: Field[[IDim], float]) -> Field[[IDim], float]:
         fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
         return fi

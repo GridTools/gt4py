@@ -188,7 +188,8 @@ def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     if not isinstance(symbol_type, ct.ScalarType):
         return False
-    # TODO: @nfarabullini re-factor is_arithmetic such it only checks for scalars and the emtpy field pass is in an another function
+    # TODO: @nfarabullini re-factor is_arithmetic such that
+    # it only checks for scalars and the emtpy field pass in an another function
     return is_arithmetic(symbol_type)
 
 
@@ -311,28 +312,23 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
     return isinstance(field, ct.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
 
 
-def is_zero_dim_field_broadcastable(a_arg: ct.SymbolType, b_arg: ct.SymbolType) -> bool:
-    """
-    Check if first argument is a zero-dimensional field and second is of ScalarType.
-
-    If arguments have the same dtype, the latter is broadcastable to a zero-dimensional field.
-    """
-    if is_number(b_arg) and extract_dtype(a_arg) == extract_dtype(b_arg):
-        return True
-    elif is_number(b_arg):
-        raise GTTypeError(f"{b_arg} is not compatible with {a_arg}")
-    return False
-
-
 def promote_zero_dims(
     args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
 ):
     """Cast arg types to zero dimensional fields if compatible and required by function signature."""
-    new_args = args
+    new_args = []
     for arg_i, arg in enumerate(args):
         def_type = function_type.definition.args[arg_i]
-        if _is_zero_dim_field(def_type) and is_zero_dim_field_broadcastable(def_type, arg):
-            new_args[arg_i] = def_type
+        if (
+            _is_zero_dim_field(def_type)
+            and is_number(arg)
+            and extract_dtype(def_type) == extract_dtype(arg)
+        ):
+            new_args.append(def_type)
+        elif _is_zero_dim_field(def_type) and is_number(def_type):
+            raise GTTypeError(f"{arg} is not compatible with {def_type}")
+        else:
+            new_args.append(arg)
     return new_args
 
 
