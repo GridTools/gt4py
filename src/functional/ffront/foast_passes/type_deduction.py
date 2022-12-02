@@ -297,7 +297,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 new_targets.append(new_target)
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Assignment value must be of type tuple! Got: {values}"
+                node, msg=f"Assignment value must be of type tuple! Got: {values.type}"
             )
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
