@@ -1,12 +1,10 @@
-from typing import List, Optional, Tuple, Union
-
 from functional.ffront import field_operator_ast as foast
 
 
 def compute_assign_indices(
     targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred],
     num_elts: int,
-) -> List[Union[Tuple[int, Optional[int]], int]]:
+) -> list[tuple[int, int] | int]:
     """
     Compute a list of relative indices, mapping each target to its respective value(s).
 
@@ -40,7 +38,7 @@ def compute_assign_indices(
         if isinstance(elt, foast.Starred):
             starred_upper = idx + 1
             break
-    if starred_lower is not None:
+    if starred_lower is not None and starred_upper is not None:
         return (
             list(range(0, starred_lower))
             + [(starred_lower, starred_upper)]

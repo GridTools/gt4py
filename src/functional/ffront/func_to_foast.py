@@ -197,7 +197,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         target = node.targets[0]  # there is only one element after assignment passes
 
         if isinstance(target, ast.Tuple):
-            new_targets: list[foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred] = []
+            new_targets: list[
+                foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred
+            ] = []
 
             for elt in target.elts:
                 if isinstance(elt, ast.Starred):

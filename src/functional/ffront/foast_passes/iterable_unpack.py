@@ -52,12 +52,11 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def _unroll_tuple_target_assign(
         self, body: list[foast.LocatedNode]
     ) -> list[foast.Assign | foast.LocatedNode]:
-
         unrolled: list[foast.Assign | foast.LocatedNode] = []
 
         for _, node in enumerate(body):
             if isinstance(node, foast.TupleTargetAssign):
-                num_elts, targets = len(node.value.type.types), node.targets
+                num_elts, targets = len(node.value.type.types), node.targets    # type: ignore
                 indices = compute_assign_indices(targets, num_elts)
                 tuple_symbol = self._unique_tuple_symbol(node)
                 unrolled.append(
