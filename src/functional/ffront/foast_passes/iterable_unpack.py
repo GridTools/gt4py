@@ -69,7 +69,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
                     )
                     if isinstance(index, tuple):  # handle starred target
-                        lower, upper = index[0], index[1]
+                        lower, upper = index
                         slice_indices = list(range(lower, upper))
                         tuple_slice = [
                             foast.Subscript(
