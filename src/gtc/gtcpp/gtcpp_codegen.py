@@ -16,28 +16,26 @@ from typing import Any, Collection, Dict, Union
 
 import numpy as np
 
-from eve import Node, codegen
+import eve
+from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
-from eve.traits import SymbolTableTrait
 from gtc import common
 from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
 from gtc.gtcpp import gtcpp
 
 
-def _offset_limit(root: Node) -> int:
+def _offset_limit(root: eve.Node) -> int:
     return (
-        root.iter_tree()
+        root.walk_values()
         .if_isinstance(gtcpp.GTLevel)
         .getattr("offset")
         .reduce(lambda state, cur: max(state, abs(cur)), init=0)
     ) + 1
 
 
-class GTCppCodegen(codegen.TemplatedGenerator):
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
+class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 

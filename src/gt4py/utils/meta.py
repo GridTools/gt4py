@@ -20,6 +20,7 @@ import inspect
 import operator
 import platform
 import textwrap
+from typing import Tuple
 
 from packaging import version
 
@@ -60,11 +61,13 @@ def get_source(func):
     return source
 
 
-def get_ast(func_or_source_or_ast):
+def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
-        func_or_source_or_ast = ast.parse(textwrap.dedent(func_or_source_or_ast))
+        func_or_source_or_ast = ast.parse(
+            textwrap.dedent(func_or_source_or_ast), feature_version=feature_version
+        )
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:
@@ -72,7 +75,13 @@ def get_ast(func_or_source_or_ast):
     return ast_root
 
 
-def ast_dump(definition, *, skip_annotations: bool = True, skip_decorators: bool = True) -> str:
+def ast_dump(
+    definition,
+    *,
+    skip_annotations: bool = True,
+    skip_decorators: bool = True,
+    feature_version: Tuple[int, int],
+) -> str:
     def _dump(node: ast.AST, excluded_names):
         if isinstance(node, ast.AST):
             if excluded_names:
@@ -109,7 +118,7 @@ def ast_dump(definition, *, skip_annotations: bool = True, skip_decorators: bool
     if skip_annotations:
         skip_node_names.add("annotation")
 
-    dumped_ast = _dump(get_ast(definition), skip_node_names)
+    dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
 
     return dumped_ast
 
@@ -209,10 +218,6 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
 class ASTPass:
     """Clone of the ast.NodeVisitor that supports forwarding kwargs."""
 
-    def __call__(self, func_or_source_or_ast):
-        ast_root = get_ast(func_or_source_or_ast)
-        return self.visit(ast_root)
-
     def visit(self, node, **kwargs):
         """Visit a node."""
         method = "visit_" + node.__class__.__name__
@@ -285,19 +290,17 @@ class ASTEvaluator(ASTPass):
     }
 
     @classmethod
-    def apply(cls, func_or_source_or_ast, context, default=None):
+    def apply(cls, ast_root, context, default=None):
+        assert isinstance(ast_root, ast.AST)
         try:
-            result = cls(context)(func_or_source_or_ast)
+            result = cls(context).visit(ast_root)
 
         except (KeyError, ValueError):
             result = default
         return result
 
     def __init__(self, context: dict):
-        self.context = context
-
-    def __call__(self, func_or_source_or_ast):
-        return super().__call__(func_or_source_or_ast)
+        self.context = copy.deepcopy(context)
 
     def visit_Name(self, node):
         return self.context[node.id]
@@ -350,42 +353,20 @@ class ASTEvaluator(ASTPass):
 ast_eval = ASTEvaluator.apply
 
 
-class FunctionDefCollector(ASTPass):
-    @classmethod
-    def apply(cls, func_or_source_or_ast, max_defs=None):
-        collector = cls(max_defs=max_defs)
-        return collector(func_or_source_or_ast)
-
-    def __init__(self, *, max_defs=None):
-        self.max_defs = max_defs
-        self.defs = None
-
-    def __call__(self, func_or_source_or_ast):
-        self.defs = []
-        super().__call__(func_or_source_or_ast)
-        return self.defs
-
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        if self.max_defs is None or len(self.defs) < self.max_defs:
-            self.defs.append(node)
-
-
-collect_function_defs = FunctionDefCollector.apply
-
-
 class AssignTargetsCollector(ASTPass):
     @classmethod
-    def apply(cls, func_or_source_or_ast, *, allow_multiple_targets=True):
+    def apply(cls, ast_root, *, allow_multiple_targets=True):
+        assert isinstance(ast_root, ast.AST)
         collector = cls(allow_multiple_targets=allow_multiple_targets)
-        return collector(func_or_source_or_ast)
+        return collector(ast_root)
 
     def __init__(self, *, allow_multiple_targets):
         self.assign_targets = []
         self.allow_multiple_targets = allow_multiple_targets
 
-    def __call__(self, func_or_source_or_ast):
+    def __call__(self, ast_root):
         self.defs = []
-        super().__call__(func_or_source_or_ast)
+        self.visit(ast_root)
         return self.assign_targets
 
     def visit_Assign(self, node: ast.Assign):
@@ -406,13 +387,12 @@ collect_assign_targets = AssignTargetsCollector.apply
 
 class QualifiedNameCollector(ASTPass):
     @classmethod
-    def apply(
-        cls, func_or_source_or_ast, prefixes=None, *, skip_decorators=True, skip_annotations=True
-    ):
+    def apply(cls, ast_root, prefixes=None, *, skip_decorators=True, skip_annotations=True):
+        assert isinstance(ast_root, ast.AST)
         collector = cls(
             prefixes=prefixes, skip_decorators=skip_decorators, skip_annotations=skip_annotations
         )
-        return collector(func_or_source_or_ast)
+        return collector(ast_root)
 
     def __init__(self, prefixes=None, *, skip_decorators=True, skip_annotations=True):
         self.prefixes = set(prefixes) if prefixes else None
@@ -420,9 +400,9 @@ class QualifiedNameCollector(ASTPass):
         self.skip_annotations = skip_annotations
         self.name_nodes = None
 
-    def __call__(self, func_or_source_or_ast):
+    def __call__(self, ast_root):
         self.name_nodes = {}
-        super().__call__(func_or_source_or_ast)
+        self.visit(ast_root)
         return self.name_nodes
 
     def generic_visit(self, node):
@@ -462,43 +442,23 @@ class QualifiedNameCollector(ASTPass):
 collect_names = QualifiedNameCollector.apply
 
 
-class ReturnCollector(ASTPass):
-    @classmethod
-    def apply(cls, func_or_source_or_ast):
-        collector = cls()
-        return collector(func_or_source_or_ast)
-
-    def __init__(self):
-        self.returns = None
-
-    def __call__(self, func_or_source_or_ast):
-        self.returns = []
-        super().__call__(func_or_source_or_ast)
-        return self.returns
-
-    def visit_Return(self, node: ast.Return):
-        self.returns.append(node)
-
-
-collect_return_stmts = ReturnCollector.apply
-
-
 class ImportsCollector(ASTPass):
     @classmethod
-    def apply(cls, func_or_source_or_ast):
+    def apply(cls, ast_root):
+        assert isinstance(ast_root, ast.AST)
         collector = cls()
-        return collector(func_or_source_or_ast)
+        return collector(ast_root)
 
     def __init__(self):
         self.bare_imports = None
         self.from_imports = None
         self.relative_imports = None
 
-    def __call__(self, func_or_source_or_ast):
+    def __call__(self, ast_root):
         self.bare_imports = {}
         self.from_imports = {}
         self.relative_imports = {}
-        super().__call__(func_or_source_or_ast)
+        self.visit(ast_root)
         return self.bare_imports, self.from_imports, self.relative_imports
 
     def visit_Import(self, node: ast.Import):
@@ -526,18 +486,19 @@ collect_imported_symbols = ImportsCollector.apply
 
 class SymbolsNameMapper(ASTTransformPass):
     @classmethod
-    def apply(cls, func_or_source_or_ast, mapping, template_fmt=None, skip_names=None):
+    def apply(cls, ast_root, mapping, template_fmt=None, skip_names=None):
+        assert isinstance(ast_root, ast.AST)
         collector = cls(mapping=mapping, template_fmt=template_fmt, skip_names=skip_names)
-        return collector(func_or_source_or_ast)
+        return collector(ast_root)
 
     def __init__(self, mapping, template_fmt, skip_names):
         self.mapping = mapping
         self.template_fmt = template_fmt
         self.skip_names = set(skip_names)
 
-    def __call__(self, func_or_source_or_ast):
+    def __call__(self, ast_root):
         self.returns = []
-        super().__call__(func_or_source_or_ast)
+        self.visit(ast_root)
         return self.returns
 
     def visit_Name(self, node: ast.Name):

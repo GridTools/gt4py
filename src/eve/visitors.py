@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,29 +20,11 @@
 from __future__ import annotations
 
 import collections.abc
-import contextlib
 import copy
-import operator
 
-from . import concepts, iterators, utils
-from .concepts import NOTHING
-from .typingx import (
-    Any,
-    Callable,
-    ClassVar,
-    Collection,
-    ContextManager,
-    Dict,
-    Iterable,
-    MutableSequence,
-    MutableSet,
-    Optional,
-    Tuple,
-    Union,
-)
-
-
-ContextCallable = Callable[["NodeVisitor", concepts.TreeNode, Dict[str, Any]], ContextManager[None]]
+from . import concepts, trees
+from .extended_typing import Any
+from .type_definitions import NOTHING
 
 
 class NodeVisitor:
@@ -69,10 +53,11 @@ class NodeVisitor:
         3. ``self.generic_visit()``.
 
     This dispatching mechanism is implemented in the main :meth:`visit`
-    method and can be overriden in subclasses. Additionally, a class can
-    define a list of context handlers to be applied before the actual visit
-    to customize the context. Each context receives the visitor instance,
-    the node instance, and the keywords arguments of the call.
+    method and can be overriden in subclasses. Therefore, a simple way to extend
+    the behavior of a visitor is by inheriting from lightweight `trait` classes
+    with a custom ``visit()`` method, which wraps the call to the superclass'
+    ``visit()`` and adds extra pre and post visit logic. Check :mod:`eve.traits`
+    for further information.
 
     Note that return values are not forwarded to the caller in the default
     :meth:`generic_visit` implementation. If you want to return a value from
@@ -110,35 +95,38 @@ class NodeVisitor:
 
     """
 
-    contexts: ClassVar[Optional[Tuple[ContextCallable, ...]]] = None
-
-    def visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         visitor = self.generic_visit
 
-        method_name = "visit_" + node.__class__.__name__
+        class_name = node.__class__.__name__
+        if "__" in class_name:
+            # For concretized data model classes, use the generic name
+            class_name = class_name[: class_name.find("__")]
+        method_name = "visit_" + class_name
+
         if hasattr(self, method_name):
             visitor = getattr(self, method_name)
-        elif isinstance(node, concepts.BaseNode):
+        elif isinstance(node, concepts.Node):
             for node_class in node.__class__.__mro__[1:]:
-                method_name = "visit_" + node_class.__name__
+                class_name = node_class.__name__
+                if "__" in class_name:
+                    class_name = class_name[: class_name.find("__")]
+                method_name = "visit_" + class_name
+
                 if hasattr(self, method_name):
                     visitor = getattr(self, method_name)
                     break
 
-                if node_class is concepts.BaseNode:
+                if node_class is concepts.Node:
                     break
 
-        if ctxs := type(self).contexts:
-            with contextlib.ExitStack() as stack:
-                for ctx in ctxs:
-                    stack.enter_context(ctx(self, node, kwargs))
-                return visitor(node, **kwargs)
-        else:
-            return visitor(node, **kwargs)
+        return visitor(node, **kwargs)
 
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        for child in iterators.generic_iter_children(node):
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        for child in trees.iter_children_values(node):
             self.visit(child, **kwargs)
+
+        return None
 
 
 class NodeTranslator(NodeVisitor):
@@ -165,138 +153,38 @@ class NodeTranslator(NodeVisitor):
 
     """
 
-    _memo_dict_: Dict[int, Any]
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
 
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        if isinstance(node, concepts.BaseNode):
-            return node.__class__(  # type: ignore
-                **{key: value for key, value in node.iter_impl_fields()},
+        memo = kwargs.get("__memo__", None)
+
+        if isinstance(node, concepts.Node):
+            new_node = node.__class__(  # type: ignore
                 **{
-                    key: processed_value
-                    for key, value in node.iter_children()
-                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING
+                    name: new_child
+                    for name, child in node.iter_children_items()
+                    if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
+            return new_node
 
-        elif isinstance(node, (list, tuple, set, collections.abc.Set)) or (
+        if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
             isinstance(node, collections.abc.Sequence) and not isinstance(node, (str, bytes))
         ):
             # Sequence or set: create a new container instance with the new values
             return node.__class__(  # type: ignore
-                processed_value
-                for value in node
-                if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
+                new_child
+                for child in trees.iter_children_values(node)
+                if (new_child := self.visit(child, **kwargs)) is not NOTHING
             )
 
-        elif isinstance(node, (dict, collections.abc.Mapping)):
+        if isinstance(node, (dict, collections.abc.Mapping)):
             # Mapping: create a new mapping instance with the new values
             return node.__class__(  # type: ignore[call-arg]
                 {
-                    key: processed_value
-                    for key, value in node.items()
-                    if (processed_value := self.visit(value, **kwargs)) is not NOTHING  # type: ignore[no-redef]
+                    name: new_child
+                    for name, child in trees.iter_children_items(node)
+                    if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 }
             )
 
-        else:
-            if not hasattr(self, "_memo_dict_"):
-                self._memo_dict_ = {}
-            result = copy.deepcopy(node, memo=self._memo_dict_)
-
-        return result
-
-
-class NodeMutator(NodeVisitor):
-    """Special `NodeVisitor` to modify nodes in place.
-
-    A NodeMutator instance will walk the tree exactly as a regular
-    :class:`NodeVisitor` and use the return value of the visitor
-    methods to replace or remove the old node. If the return value
-    is :data:`eve.NOTHING`, the node will be removed from its location,
-    otherwise it is replaced with the return value. The return value
-    may also be the original node, in which case no replacement takes place.
-
-    Keep in mind that if the node you're operating on has child nodes
-    you must either transform the child nodes yourself or call the
-    :meth:`generic_visit` method for the node first. In case a child node
-    is a mutable collection of elements, and one of this element is meant
-    to be deleted, it will deleted in place. If the collection is immutable,
-    a new immutable collection instance will be created without the removed
-    element.
-
-    Usually you use a NodeMutator like this::
-
-       YourMutator.apply(node)
-
-    Notes:
-        Check :class:`NodeVisitor` documentation for more details.
-
-    """
-
-    def generic_visit(self, node: concepts.TreeNode, **kwargs: Any) -> Any:
-        result: Any = node
-        if isinstance(
-            node, (concepts.BaseNode, collections.abc.Collection)
-        ) and utils.is_collection(node):
-            items: Iterable[Tuple[Any, Any]] = []
-            tmp_items: Collection[concepts.TreeNode] = []
-            set_op: Union[Callable[[Any, str, Any], None], Callable[[Any, int, Any], None]]
-            del_op: Union[Callable[[Any, str], None], Callable[[Any, int], None]]
-
-            if isinstance(node, concepts.Node):
-                items = list(node.iter_children())
-                set_op = setattr
-                del_op = delattr
-            elif isinstance(node, collections.abc.MutableSequence):
-                items = enumerate(node)
-                index_shift = 0
-
-                def set_op(container: MutableSequence, idx: int, value: concepts.TreeNode) -> None:
-                    container[idx - index_shift] = value
-
-                def del_op(container: MutableSequence, idx: int) -> None:
-                    nonlocal index_shift
-                    del container[idx - index_shift]
-                    index_shift += 1
-
-            elif isinstance(node, collections.abc.MutableSet):
-                items = list(enumerate(node))
-
-                def set_op(container: MutableSet, idx: Any, value: concepts.TreeNode) -> None:
-                    container.add(value)
-
-                def del_op(container: MutableSet, idx: int) -> None:
-                    container.remove(items[idx])  # type: ignore
-
-            elif isinstance(node, collections.abc.MutableMapping):
-                items = node.items()
-                set_op = operator.setitem
-                del_op = operator.delitem
-
-            elif isinstance(node, (collections.abc.Sequence, collections.abc.Set)):
-                # Inmutable sequence or set: create a new container instance with the new values
-                tmp_items = [self.visit(value, **kwargs) for value in node]
-                result = node.__class__(  # type: ignore
-                    [value for value in tmp_items if value is not concepts.NOTHING]
-                )
-
-            elif isinstance(node, collections.abc.Mapping):
-                # Inmutable mapping: create a new mapping instance with the new values
-                tmp_items = {key: self.visit(value, **kwargs) for key, value in node.items()}
-                result = node.__class__(  # type: ignore
-                    {
-                        key: value
-                        for key, value in tmp_items.items()
-                        if value is not concepts.NOTHING
-                    }
-                )
-
-            # Finally, in case current node object is mutable, process selected items (if any)
-            for key, value in items:
-                new_value = self.visit(value, **kwargs)
-                if new_value is concepts.NOTHING:
-                    del_op(result, key)
-                elif new_value != value:
-                    set_op(result, key, new_value)
-
-        return result
+        return copy.deepcopy(node, memo=memo)

@@ -14,24 +14,22 @@
 
 from typing import Any, Dict
 
-from eve import NodeTranslator, SymbolTableTrait
+import eve
 from gtc import gtir
 from gtc.common import DataType, GTCPostconditionError
 
 
-class _GTIRResolveAuto(NodeTranslator):
+class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """
     Replaces AUTO dtype by a concrete dtype.
 
     Note that currently only temporaries (FieldDecl/FieldAccess) can have AUTO type.
 
-    Precondition: All dtype are set (not None)
+    Precondition: All dtype are set, but some can be set to AUTO
     Postcondition: All dtypes are concrete (no AUTO)
     """
 
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
-
-    class _GTIRUpdateAutoDecl(NodeTranslator):
+    class _GTIRUpdateAutoDecl(eve.NodeTranslator):
         """Updates FieldDecls with resolved types."""
 
         def visit_FieldDecl(
@@ -69,25 +67,23 @@ class _GTIRResolveAuto(NodeTranslator):
         result = self._GTIRUpdateAutoDecl().visit(result, new_symbols=kwargs["symtable"])
 
         if not all(
-            result.iter_tree()
+            result.walk_values()
             .if_hasattr("dtype")
             .getattr("dtype")
-            .map(lambda x: x not in [None, DataType.AUTO, DataType.INVALID, DataType.DEFAULT])
+            .map(lambda x: x not in {DataType.AUTO, DataType.INVALID, DataType.DEFAULT})
         ):
             raise GTCPostconditionError(expected="No AUTO, INVALID or DEFAULT dtype in tree.")
 
         return result
 
 
-class _GTIRPropagateDtypeToAccess(NodeTranslator):
+class _GTIRPropagateDtypeToAccess(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     """
     Propagates dtype from Decl to Access.
 
     Precondition: Decls have dtype (not None), can be AUTO or DEFAULT
     Postcondition: All dtypes of Access are not None
     """
-
-    contexts = (SymbolTableTrait.symtable_merger,)  # type: ignore
 
     def visit_FieldAccess(self, node: gtir.FieldAccess, **kwargs: Any) -> gtir.FieldAccess:
         return gtir.FieldAccess(
@@ -102,18 +98,6 @@ class _GTIRPropagateDtypeToAccess(NodeTranslator):
         self, node: gtir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> gtir.ScalarAccess:
         return gtir.ScalarAccess(name=node.name, dtype=symtable[node.name].dtype, loc=node.loc)
-
-    def visit_Stencil(self, node: gtir.Stencil, **kwargs: Any) -> gtir.Stencil:
-        result: gtir.Stencil = self.generic_visit(node, **kwargs)
-
-        if not all(
-            result.iter_tree()
-            .if_isinstance(gtir.ScalarAccess, gtir.FieldAccess)
-            .getattr("dtype")
-            .map(lambda x: x is not None)
-        ):
-            raise GTCPostconditionError(expected="No None dtype in FieldAccess or ScalarAccess.")
-        return result
 
 
 def resolve_dtype(node: gtir.Stencil) -> gtir.Stencil:

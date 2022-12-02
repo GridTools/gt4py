@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import copy
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
 import dace
 import dace.data
@@ -25,12 +25,14 @@ import sympy
 from gtc import daceir as dcir
 from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
-from gtc.dace.nodes import StencilComputation
 
 from .utils import split_horizontal_executions_regions
 
 
-@dace.library.register_expansion(StencilComputation, "default")
+if TYPE_CHECKING:
+    from gtc.dace.nodes import StencilComputation
+
+
 class StencilComputationExpansion(dace.library.ExpandTransformation):
     environments: List = []
 

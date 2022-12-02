@@ -18,7 +18,8 @@ from typing import Any, Collection, Dict, List, Set, Union
 
 import numpy as np
 
-from eve import codegen, traits
+import eve
+from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from eve.concepts import LeafNode
@@ -26,9 +27,7 @@ from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, Un
 from gtc.cuir import cuir
 
 
-class CUIRCodegen(codegen.TemplatedGenerator):
-
-    contexts = (traits.SymbolTableTrait.symtable_merger,)  # type: ignore
+class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     LocalScalar = as_fmt("{dtype} {name};")
 
@@ -86,19 +85,23 @@ class CUIRCodegen(codegen.TemplatedGenerator):
     def visit_IJCacheAccess(
         self, node: cuir.IJCacheAccess, symtable: Dict[str, Any], **kwargs: Any
     ) -> str:
-        extent = symtable[node.name].extent
+        decl = symtable[node.name]
+        assert isinstance(decl, cuir.IJCacheDecl)
+        extent = decl.extent
+        assert extent is not None
+        offsets = node.offset.to_dict()
         if extent.i == extent.j == (0, 0):
             # cache is scalar
-            assert node.offset.i == node.offset.j == 0
+            assert offsets["i"] == offsets["j"] == 0
             return node.name
-        if node.offset.i == node.offset.j == 0:
+        if offsets["i"] == offsets["j"] == 0:
             return "*" + node.name
-        offsets = (
+        off = (
             f"{o} * {d}_stride_{node.name}"
-            for o, d in zip([node.offset.i, node.offset.j], "ij")
+            for o, d in zip((offsets["i"], offsets["j"]), "ij")
             if o != 0
         )
-        return node.name + "[" + " + ".join(offsets) + "]"
+        return node.name + "[" + " + ".join(off) + "]"
 
     KCacheAccess = as_mako("${_this_generator.k_cache_var(name, _this_node.offset.k)}")
 
@@ -300,7 +303,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         fields = {
             name: data_dims
-            for name, data_dims in node.iter_tree()
+            for name, data_dims in node.walk_values()
             .if_isinstance(cuir.FieldAccess)
             .getattr("name", "data_index")
             .map(lambda x: (x[0], len(x[1])))
@@ -427,7 +430,7 @@ class CUIRCodegen(codegen.TemplatedGenerator):
 
         def loop_fields(vertical_loop: cuir.VerticalLoop) -> Set[str]:
             return (
-                vertical_loop.iter_tree().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
+                vertical_loop.walk_values().if_isinstance(cuir.FieldAccess).getattr("name").to_set()
             )
 
         def ctype(symbol: str) -> str:
@@ -441,7 +444,8 @@ class CUIRCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             max_extent=self.visit(
-                cuir.IJExtent.zero().union(*node.iter_tree().if_isinstance(cuir.IJExtent)), **kwargs
+                cuir.IJExtent.zero().union(*node.walk_values().if_isinstance(cuir.IJExtent)),
+                **kwargs,
             ),
             loop_start=loop_start,
             loop_fields=loop_fields,

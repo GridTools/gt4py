@@ -21,7 +21,8 @@ import numbers
 import textwrap
 import time
 import types
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+import warnings
+from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 
@@ -43,6 +44,9 @@ from .exceptions import (
     GTScriptSyntaxError,
     GTScriptValueError,
 )
+
+
+PYTHON_AST_VERSION: Final = (3, 8)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -288,7 +292,9 @@ class ValueInliner(ast.NodeTransformer):
         qualified_name = gt_meta.get_qualified_name_from_node(name_or_attr_node)
         if qualified_name in self.context:
             value = self.context[qualified_name]
-            if value is None or isinstance(value, (bool, numbers.Number, gtscript.AxisIndex)):
+            if value is None or isinstance(
+                value, (bool, numbers.Number, gtscript.AxisIndex, gtscript.Axis)
+            ):
                 new_node = ast.Constant(value=value)
             elif hasattr(value, "_gtscript_"):
                 pass
@@ -416,18 +422,10 @@ class CallInliner(ast.NodeTransformer):
     ):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
+        node.args = [self.visit(arg) for arg in node.args]
         if call_name in gtscript.IGNORE_WHEN_INLINING:
-            # Not a function to inline. Visit arguments and return as-is.
-            node.args = [self.visit(arg) for arg in node.args]
+            # Not a function to inline, return as-is.
             return node
-        elif any(
-            isinstance(arg, ast.Call) and arg.func.id not in gtscript.MATH_BUILTINS
-            for arg in node.args
-        ):
-            raise GTScriptSyntaxError(
-                "Function calls are not supported in arguments to function calls",
-                loc=nodes.Location.from_ast_node(node),
-            )
         elif call_name not in self.context or not hasattr(self.context[call_name], "_gtscript_"):
             raise GTScriptSyntaxError("Unknown call", loc=nodes.Location.from_ast_node(node))
 
@@ -491,6 +489,15 @@ class CallInliner(ast.NodeTransformer):
 
         # Replace returns by assignments in subroutine
         if target_node is None:
+            if any(
+                isinstance(nd.value, ast.Tuple)
+                for nd in ast.walk(call_ast)
+                if isinstance(nd, ast.Return)
+            ):
+                raise GTScriptSyntaxError(
+                    "Only functions with a single return value can be used in expressions, including as call arguments. "
+                    "Please assign the function results to symbols first."
+                )
             target_node = ast.Name(
                 ctx=ast.Store(),
                 lineno=node.lineno,
@@ -498,7 +505,7 @@ class CallInliner(ast.NodeTransformer):
                 id=template_fmt.format(name="RETURN_VALUE"),
             )
 
-        assert isinstance(target_node, (ast.Name, ast.Tuple)) and isinstance(
+        assert isinstance(target_node, (ast.Name, ast.Tuple, ast.Subscript)) and isinstance(
             target_node.ctx, ast.Store
         )
 
@@ -534,12 +541,20 @@ class CallInliner(ast.NodeTransformer):
                 col_offset=target_node.col_offset,
                 id=target_node.id,
             )
-        else:
+        elif isinstance(target_node, ast.Tuple):
             result_node = ast.Tuple(
                 ctx=ast.Load(),
                 lineno=target_node.lineno,
                 col_offset=target_node.col_offset,
                 elts=target_node.elts,
+            )
+        else:
+            result_node = ast.Subscript(
+                ctx=ast.Load(),
+                lineno=target_node.lineno,
+                col_offset=target_node.col_offset,
+                value=target_node.value,
+                slice=target_node.slice,
             )
 
         # Add the temp_annotations and temp_init_values to the parent
@@ -562,15 +577,12 @@ class CallInliner(ast.NodeTransformer):
 
 class CompiledIfInliner(ast.NodeTransformer):
     @classmethod
-    def apply(cls, ast_object, context):
-        preprocessor = cls(context)
-        preprocessor(ast_object)
+    def apply(cls, ast_object: ast.AST, context: Dict[str, Any], stencil_name: str):
+        cls(context, stencil_name).visit(ast_object)
 
-    def __init__(self, context):
+    def __init__(self, context: Dict[str, Any], stencil_name: str):
         self.context = context
-
-    def __call__(self, ast_object):
-        self.visit(ast_object)
+        self.stencil_name = stencil_name
 
     def visit_If(self, node: ast.If):
         # Compile-time evaluation of "if" conditions
@@ -581,13 +593,17 @@ class CompiledIfInliner(ast.NodeTransformer):
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
         ):
+            warnings.warn(
+                f"stencil {self.stencil_name}, line {node.lineno}, column {node.col_offset}: compile-time if condition via __INLINED deprecated",
+                category=DeprecationWarning,
+            )
             eval_node = node.test.args[0]
             condition_value = gt_utils.meta.ast_eval(eval_node, self.context, default=NOTHING)
             if condition_value is not NOTHING:
                 node = node.body if condition_value else node.orelse
             else:
                 raise GTScriptSyntaxError(
-                    "Evaluation of compile-time 'IF' condition failed at the preprocessing step"
+                    "Evaluation of compile-time 'if' condition failed at the preprocessing step"
                 )
 
         return node if node else None
@@ -1016,19 +1032,78 @@ class IRMaker(ast.NodeVisitor):
         index = self.visit(node.value)
         return index
 
-    def _eval_index(self, node: ast.Subscript) -> Optional[List[int]]:
-        invalid_target = GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
+    def _eval_new_spatial_index(
+        self, index_nodes: Sequence[nodes.Expr], field_axes: Optional[Set[Literal["I", "J", "K"]]]
+    ) -> List[int]:
+        index_dict = {}
+        all_spatial_axes = ("I", "J", "K")
+        last_index = -1
+        axis_context = {axis: gtscript.ShiftedAxis(name=axis, shift=0) for axis in field_axes}
 
+        for index_node in index_nodes:
+            try:
+                value = gt_meta.ast_eval(index_node, axis_context)
+            except Exception:
+                raise GTScriptSyntaxError(
+                    message="Could not evaluate axis shift expression.", loc=index_node
+                )
+            if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
+                raise GTScriptSyntaxError(
+                    message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",
+                    loc=index_node,
+                )
+            else:
+                axis_index = all_spatial_axes.index(value.name)
+                if axis_index < 0:
+                    raise GTScriptSyntaxError(
+                        message=f"Unrecognized axis: {value.name}", loc=index_node
+                    )
+                elif axis_index < last_index:
+                    raise GTScriptSyntaxError(
+                        message=f"Axis {value.name} is specified out of order", loc=index_node
+                    )
+                elif axis_index == last_index:
+                    raise GTScriptSyntaxError(
+                        message=f"Duplicate axis found: {value.name}", loc=index_node
+                    )
+                last_index = axis_index
+
+                try:
+                    shift = value.shift
+                except AttributeError:
+                    shift = 0
+                index_dict[value.name] = shift
+
+        return [index_dict.get(axis, 0) for axis in ("I", "J", "K") if axis in field_axes]
+
+    def _eval_index(
+        self, node: ast.Subscript, field_axes: Optional[Set[Literal["I", "J", "K"]]] = None
+    ) -> Optional[List[int]]:
         tuple_or_expr = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
         index_nodes = gtc_utils.listify(
             tuple_or_expr.elts if isinstance(tuple_or_expr, ast.Tuple) else tuple_or_expr
         )
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
-            raise invalid_target
+            raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
         if any(isinstance(cn, ast.Ellipsis) for cn in index_nodes):
             return None
+
+        # Determine if we are using the new-style axis syntax, or the old style.
+        # If this is parsing a data index, this should be fine and will return False.
+        new_style_spatial_syntax = field_axes is not None and any(
+            (isinstance(node, ast.Name) and node.id in field_axes)
+            or (isinstance(node, ast.Constant) and isinstance(node.value, gtscript.Axis))
+            for index_node in index_nodes
+            for node in ast.walk(index_node)
+        )
+
+        if new_style_spatial_syntax:
+            # This is the new-style syntax for representing spatial axis offsets, e.g. [I+1]
+            return self._eval_new_spatial_index(index_nodes, field_axes)
+
         else:
+            # This is either the old-style syntax using all spatial axes (e.g. [1, 0, 0]), or a data index.
             index = []
             for index_node in index_nodes:
                 try:
@@ -1036,13 +1111,18 @@ class IRMaker(ast.NodeVisitor):
                     index.append(offset)
                 except Exception:
                     index.append(self.visit(index_node))
+
             return index
 
     def visit_Subscript(self, node: ast.Subscript):
         assert isinstance(node.ctx, (ast.Load, ast.Store))
 
-        index = self._eval_index(node)
         result = self.visit(node.value)
+        if isinstance(result, nodes.FieldRef):
+            axes = set(result.offset.keys())
+        else:
+            axes = None
+        index = self._eval_index(node, axes)
         if isinstance(result, nodes.VarRef):
             assert index is not None
             result.index = index[0]
@@ -1521,6 +1601,7 @@ class GTScriptParser(ast.NodeVisitor):
         types.FunctionType,
         type(None),
         gtscript.AxisIndex,
+        gtscript.Axis,
     )
 
     def __init__(self, definition, *, options, externals=None):
@@ -1528,7 +1609,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.definition = definition
         self.filename = inspect.getfile(definition)
         self.source, decorators_source = gt_meta.split_def_decorators(self.definition)
-        self.ast_root = ast.parse(self.source)
+        self.ast_root = ast.parse(self.source, feature_version=PYTHON_AST_VERSION)
         self.options = options
         self.build_info = options.build_info
         self.main_name = options.name
@@ -1599,8 +1680,8 @@ class GTScriptParser(ast.NodeVisitor):
                 api_annotations.append(dtype_annotation)
 
         nonlocal_symbols, imported_symbols = GTScriptParser.collect_external_symbols(definition)
-        ast_func_def = gt_meta.get_ast(definition).body[0]
-        canonical_ast = gt_meta.ast_dump(ast_func_def)
+        ast_func_def = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION).body[0]
+        canonical_ast = gt_meta.ast_dump(ast_func_def, feature_version=PYTHON_AST_VERSION)
 
         # resolve externals
         if externals is not None:
@@ -1659,7 +1740,11 @@ class GTScriptParser(ast.NodeVisitor):
 
     @staticmethod
     def collect_external_symbols(definition):
-        bare_imports, from_imports, relative_imports = gt_meta.collect_imported_symbols(definition)
+        gtscript_ast = gt_meta.get_ast(definition, feature_version=PYTHON_AST_VERSION)
+
+        bare_imports, from_imports, relative_imports = gt_meta.collect_imported_symbols(
+            gtscript_ast
+        )
         wrong_imports = list(bare_imports.keys()) + list(relative_imports.keys())
         imported_names = set()
         for key, value in from_imports.items():
@@ -1683,18 +1768,15 @@ class GTScriptParser(ast.NodeVisitor):
         if wrong_imports:
             raise GTScriptSyntaxError("Invalid 'import' statements ({})".format(wrong_imports))
 
-        imported_symbols = {name: {} for name in imported_names}
-
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=True, include_builtins=False
         )
 
-        gtscript_ast = ast.parse(gt_meta.get_ast(definition)).body[0]
+        imported_symbols = {name: {} for name in imported_names}
         local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
-
         nonlocal_symbols = {}
 
-        name_nodes = gt_meta.collect_names(definition, skip_annotations=False)
+        name_nodes = gt_meta.collect_names(gtscript_ast, skip_annotations=False)
         for collected_name in name_nodes.keys():
             if collected_name not in gtscript.builtins:
                 root_name = collected_name.split(".")[0]
@@ -1883,7 +1965,7 @@ class GTScriptParser(ast.NodeVisitor):
         for value in self.resolved_externals.values():
             if hasattr(value, "_gtscript_"):
                 assert callable(value)
-                func_node = ast.parse(gt_meta.get_ast(value)).body[0]
+                func_node = gt_meta.get_ast(value, feature_version=PYTHON_AST_VERSION).body[0]
                 local_context = self.resolve_external_symbols(
                     value._gtscript_["nonlocals"],
                     value._gtscript_["imported"],
@@ -1907,7 +1989,7 @@ class GTScriptParser(ast.NodeVisitor):
         CallInliner.apply(main_func_node, context=local_context)
 
         # Evaluate and inline compile-time conditionals
-        CompiledIfInliner.apply(main_func_node, context=local_context)
+        CompiledIfInliner.apply(main_func_node, context=local_context, stencil_name=self.main_name)
 
         AssertionChecker.apply(main_func_node, context=local_context, source=self.source)
 

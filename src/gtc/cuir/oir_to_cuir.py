@@ -47,7 +47,7 @@ def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Exp
         return cuir.Literal(value=str(bound.offset), dtype=common.DataType.INT32)
 
 
-class OIRToCUIR(eve.NodeTranslator):
+class OIRToCUIR(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @dataclass
     class Context:
         new_symbol_name: SymbolNameCreator
@@ -68,8 +68,6 @@ class OIRToCUIR(eve.NodeTranslator):
                 dtype=common.DataType.INT32,
             )
 
-    contexts = (eve.SymbolTableTrait.symtable_merger,)  # type: ignore
-
     def visit_Literal(self, node: oir.Literal, **kwargs: Any) -> cuir.Literal:
         return cuir.Literal(value=node.value, dtype=node.dtype)
 
@@ -78,8 +76,11 @@ class OIRToCUIR(eve.NodeTranslator):
             name=node.name, dtype=node.dtype, dimensions=node.dimensions, data_dims=node.data_dims
         )
 
-    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.FieldDecl:
+    def visit_ScalarDecl(self, node: oir.ScalarDecl, **kwargs: Any) -> cuir.ScalarDecl:
         return cuir.ScalarDecl(name=node.name, dtype=node.dtype)
+
+    def visit_LocalScalar(self, node: oir.LocalScalar, **kwargs: Any) -> cuir.LocalScalar:
+        return cuir.LocalScalar(name=node.name, dtype=node.dtype)
 
     def visit_UnaryOp(self, node: oir.UnaryOp, **kwargs: Any) -> cuir.UnaryOp:
         return cuir.UnaryOp(op=node.op, expr=self.visit(node.expr, **kwargs), dtype=node.dtype)
@@ -189,7 +190,7 @@ class OIRToCUIR(eve.NodeTranslator):
 
     def visit_ScalarAccess(
         self, node: oir.ScalarAccess, *, symtable: Dict[str, Any], **kwargs: Any
-    ) -> cuir.ScalarAccess:
+    ) -> Union[cuir.ScalarAccess, cuir.FieldAccess]:
         if isinstance(symtable.get(node.name, None), oir.ScalarDecl):
             return cuir.FieldAccess(
                 name=node.name, offset=common.CartesianOffset.zero(), dtype=node.dtype

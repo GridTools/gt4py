@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
@@ -22,14 +24,14 @@ import pytest
 import eve
 
 
-class Tree(eve.Node):
-    children: List[Union["Tree", int]]
+class SampleTree(eve.concepts.Node):
+    children: List[Union[SampleTree, int]]
 
 
 def _make_tree(values_list):
     children = [_make_tree(item) if isinstance(item, list) else item for item in values_list]
-    Tree.update_forward_refs()
-    return Tree(children=children)
+    SampleTree.update_forward_refs()
+    return SampleTree(children=children)
 
 
 def _collect_shallow_tree_nodes(nodes_list):
@@ -62,7 +64,7 @@ def bfs_ordered_tree():
 
 def test_iter_tree_pre(dfs_ordered_tree):
     values = [
-        value for value in eve.iterators.iter_tree_pre(dfs_ordered_tree) if isinstance(value, int)
+        value for value in eve.trees.pre_walk_values(dfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -77,7 +79,7 @@ def test_iter_tree_pre(dfs_ordered_tree):
 
 def test_iter_tree_post(dfs_ordered_tree):
     values = [
-        value for value in eve.iterators.iter_tree_post(dfs_ordered_tree) if isinstance(value, int)
+        value for value in eve.trees.post_walk_values(dfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -92,9 +94,7 @@ def test_iter_tree_post(dfs_ordered_tree):
 
 def test_iter_tree_levels(bfs_ordered_tree):
     values = [
-        value
-        for value in eve.iterators.iter_tree_levels(bfs_ordered_tree)
-        if isinstance(value, int)
+        value for value in eve.trees.bfs_walk_values(bfs_ordered_tree) if isinstance(value, int)
     ]
     assert values == list(sorted(values))
 
@@ -102,10 +102,10 @@ def test_iter_tree_levels(bfs_ordered_tree):
 @pytest.mark.parametrize("tree", [bfs_ordered_tree, dfs_ordered_tree])
 def test_iter_tree(tree):
     traversals = []
-    for order in eve.iterators.TraversalOrder:
-        values = [value for value in eve.iter_tree(tree, order, with_keys=True)]
+    for order in eve.trees.TraversalOrder:
+        values = [value for value in eve.trees.walk_items(tree, order)]
         assert all(isinstance(v, tuple) for v in values)
         traversals.append(values)
-        traversals.append([value for value in eve.iter_tree(tree, order)])
+        traversals.append([value for value in eve.trees.walk_values(tree, order)])
 
     assert all(len(traversals[0]) == len(t) for t in traversals)

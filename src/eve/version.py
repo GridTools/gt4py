@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,10 +16,13 @@
 
 """Version specification."""
 
+
+from __future__ import annotations
+
 import typing
 
 from packaging import version as pkg_version
 
 
-__version__: typing.Final = "0.1.1"
+__version__: typing.Final = "0.2.0"
 __version_info__: typing.Final = pkg_version.parse(__version__)

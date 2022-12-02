@@ -12,49 +12,36 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import enum
 import functools
 import typing
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
-import pydantic
 import scipy.special
-from pydantic import validator
-from pydantic.class_validators import root_validator
 
-from eve import (
-    GenericNode,
-    IntEnum,
-    Node,
-    NodeVisitor,
-    SourceLocation,
-    Str,
-    StrEnum,
-    SymbolTableTrait,
-)
-from eve import exceptions as eve_exceptions
-from eve import utils
-from eve.type_definitions import SymbolRef
-from eve.typingx import RootValidatorType, RootValidatorValuesType
+import eve
+from eve import datamodels
 from gtc.utils import dimension_flags_to_names, flatten_list
 
 
-class GTCPreconditionError(eve_exceptions.EveError, RuntimeError):
+class GTCPreconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
         super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
-class GTCPostconditionError(eve_exceptions.EveError, RuntimeError):
+class GTCPostconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
         super().__init__(expected=expected, **kwargs)  # type: ignore
 
 
-class AssignmentKind(StrEnum):
+class AssignmentKind(eve.StrEnum):
     """Kind of assignment: plain or combined with operations."""
 
     PLAIN = "="
@@ -65,7 +52,7 @@ class AssignmentKind(StrEnum):
 
 
 @enum.unique
-class UnaryOperator(StrEnum):
+class UnaryOperator(eve.StrEnum):
     """Unary operator indentifier."""
 
     POS = "+"
@@ -74,7 +61,7 @@ class UnaryOperator(StrEnum):
 
 
 @enum.unique
-class ArithmeticOperator(StrEnum):
+class ArithmeticOperator(eve.StrEnum):
     """Arithmetic operators."""
 
     ADD = "+"
@@ -85,7 +72,7 @@ class ArithmeticOperator(StrEnum):
 
 
 @enum.unique
-class ComparisonOperator(StrEnum):
+class ComparisonOperator(eve.StrEnum):
     """Comparison operators."""
 
     GT = ">"
@@ -97,7 +84,7 @@ class ComparisonOperator(StrEnum):
 
 
 @enum.unique
-class LogicalOperator(StrEnum):
+class LogicalOperator(eve.StrEnum):
     """Logical operators."""
 
     AND = "and"
@@ -105,7 +92,7 @@ class LogicalOperator(StrEnum):
 
 
 @enum.unique
-class DataType(IntEnum):
+class DataType(eve.IntEnum):
     """Data type identifier."""
 
     # IDs from gt4py
@@ -131,7 +118,7 @@ class DataType(IntEnum):
 
 
 @enum.unique
-class LoopOrder(StrEnum):
+class LoopOrder(eve.StrEnum):
     """Loop order identifier."""
 
     PARALLEL = "parallel"
@@ -140,7 +127,7 @@ class LoopOrder(StrEnum):
 
 
 @enum.unique
-class BuiltInLiteral(StrEnum):
+class BuiltInLiteral(eve.StrEnum):
     MAX_VALUE = "max"
     MIN_VALUE = "min"
     ZERO = "zero"
@@ -150,7 +137,7 @@ class BuiltInLiteral(StrEnum):
 
 
 @enum.unique
-class NativeFunction(StrEnum):
+class NativeFunction(eve.StrEnum):
     ABS = "abs"
     MIN = "min"
     MAX = "max"
@@ -226,22 +213,22 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
 
 
 @enum.unique
-class LevelMarker(StrEnum):
+class LevelMarker(eve.StrEnum):
     START = "start"
     END = "end"
 
 
 @enum.unique
-class ExprKind(IntEnum):
+class ExprKind(eve.IntEnum):
     SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
     FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
 
 
-class LocNode(Node):
-    loc: Optional[SourceLocation]
+class LocNode(eve.Node):
+    loc: Optional[eve.SourceLocation] = None
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Expr(LocNode):
     """
     Expression base class.
@@ -251,34 +238,34 @@ class Expr(LocNode):
     - an expression `kind` (scalar or field)
     """
 
-    kind: ExprKind
+    # Both kind and dtype are set to default here and root validators propagate the correct value after the __init__ is called.
+    kind: ExprKind = ExprKind.FIELD
     dtype: DataType = DataType.AUTO
 
 
-@utils.noninstantiable
+@eve.utils.noninstantiable
 class Stmt(LocNode):
     pass
 
 
-def verify_condition_is_boolean(parent_node_cls: Node, cond: Expr) -> Expr:
+def verify_condition_is_boolean(parent_node_cls: datamodels.DataModel, cond: Expr) -> None:
     if cond.dtype and cond.dtype is not DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(parent_node_cls.__name__))
-    return cond
+        raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
 
 
 def verify_and_get_common_dtype(
-    node_cls: Type[Node], values: List[Expr], *, strict: bool = True
+    node_cls: Type[datamodels.DataModel], exprs: List[Expr], *, strict: bool = True
 ) -> Optional[DataType]:
-    assert len(values) > 0
-    if all(v.dtype is not DataType.AUTO for v in values):
-        dtypes: List[DataType] = [v.dtype for v in values]  # type: ignore # guaranteed to be not None
+    assert len(exprs) > 0
+    if all(e.dtype is not DataType.AUTO for e in exprs):
+        dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
                 return dtype
             else:
                 raise ValueError(
-                    "Type mismatch in `{}`. Types are ".format(node_cls.__name__)
+                    f"Type mismatch in `{node_cls.__name__}`. Types are "
                     + ", ".join(dt.name for dt in dtypes)
                 )
         else:
@@ -288,17 +275,17 @@ def verify_and_get_common_dtype(
         return None
 
 
-def compute_kind(values: List[Expr]) -> ExprKind:
+def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
     else:
         return ExprKind.SCALAR
 
 
-class Literal(Node):
+class Literal(eve.Node):
     # TODO(havogt) reconsider if `str` is a good representation for value,
     # maybe it should be Union[float,int,str] etc?
-    value: Union[BuiltInLiteral, Str]
+    value: Union[BuiltInLiteral, str]
     dtype: DataType
     kind: ExprKind = ExprKind.SCALAR
 
@@ -309,7 +296,7 @@ TargetT = TypeVar("TargetT", bound=Expr)
 VariableKOffsetT = TypeVar("VariableKOffsetT")
 
 
-class CartesianOffset(Node):
+class CartesianOffset(eve.Node):
     i: int
     j: int
     k: int
@@ -322,48 +309,48 @@ class CartesianOffset(Node):
         return {"i": self.i, "j": self.j, "k": self.k}
 
 
-class VariableKOffset(GenericNode, Generic[ExprT]):
+class VariableKOffset(eve.GenericNode, Generic[ExprT]):
     k: ExprT
 
     def to_dict(self) -> Dict[str, Optional[int]]:
         return {"i": 0, "j": 0, "k": None}
 
-    @validator("k")
-    def offset_expr_is_int(cls, k: Expr) -> List[Expr]:
-        if k.dtype is not DataType.AUTO and not k.dtype.isinteger():
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, attribute: datamodels.Attribute, value: Any) -> None:
+        value = typing.cast(Expr, value)
+        if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
             raise ValueError("Variable vertical index must be an integer expression")
-        return k
 
 
 class ScalarAccess(LocNode):
-    name: SymbolRef
-    kind = ExprKind.SCALAR
+    name: eve.Coerced[eve.SymbolRef]
+    kind: ExprKind = ExprKind.SCALAR
 
 
-class FieldAccess(GenericNode, Generic[ExprT, VariableKOffsetT]):
-    name: SymbolRef
+class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
+    name: eve.Coerced[eve.SymbolRef]
     offset: Union[CartesianOffset, VariableKOffsetT]
-    data_index: List[ExprT] = []
-    kind = ExprKind.FIELD
+    data_index: List[ExprT] = eve.field(default_factory=list)
+    kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: SourceLocation = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: eve.SourceLocation = None) -> "FieldAccess":
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
-    @validator("data_index")
-    def data_index_exprs_are_int(cls, data_index: List[Expr]) -> List[Expr]:
-        if data_index and any(
-            index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in data_index
+    @datamodels.validator("data_index")
+    def data_index_exprs_are_int(self, attribute: datamodels.Attribute, value: Any) -> None:
+        value = typing.cast(List[Expr], value)
+        if value and any(
+            index.dtype is not DataType.AUTO and not index.dtype.isinteger() for index in value
         ):
             raise ValueError("Data indices must be integer expressions")
-        return data_index
 
 
-class BlockStmt(GenericNode, SymbolTableTrait, Generic[StmtT]):
+class BlockStmt(eve.GenericNode, eve.SymbolTableTrait, Generic[StmtT]):
     body: List[StmtT]
 
 
-class IfStmt(GenericNode, Generic[StmtT, ExprT]):
+class IfStmt(eve.GenericNode, Generic[StmtT, ExprT]):
     """
     Generic if statement.
 
@@ -372,14 +359,14 @@ class IfStmt(GenericNode, Generic[StmtT, ExprT]):
 
     cond: ExprT
     true_branch: StmtT
-    false_branch: Optional[StmtT]
+    false_branch: Optional[StmtT] = None
 
-    @validator("cond")
-    def condition_is_boolean(cls, cond: Expr) -> Expr:
-        return verify_condition_is_boolean(cls, cond)
+    @datamodels.validator("cond")
+    def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
+        verify_condition_is_boolean(self, value)
 
 
-class While(GenericNode, Generic[StmtT, ExprT]):
+class While(eve.GenericNode, Generic[StmtT, ExprT]):
     """
     Generic while loop.
 
@@ -389,27 +376,32 @@ class While(GenericNode, Generic[StmtT, ExprT]):
     cond: ExprT
     body: List[StmtT]
 
-    @validator("cond")
-    def condition_is_boolean(cls, cond: Expr) -> Expr:
-        return verify_condition_is_boolean(cls, cond)
+    @datamodels.validator("cond")
+    def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
+        verify_condition_is_boolean(self, value)
 
 
-class AssignStmt(GenericNode, Generic[TargetT, ExprT]):
+class AssignStmt(eve.GenericNode, Generic[TargetT, ExprT]):
     left: TargetT
     right: ExprT
 
 
-def assign_stmt_dtype_validation(*, strict: bool) -> RootValidatorType:
+def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValidator:
+    return datamodels.root_validator(typing.cast(datamodels.RootValidator, classmethod(impl)))
+
+
+def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
     def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        verify_and_get_common_dtype(cls, [values["left"], values["right"]], strict=strict)
-        return values
+        cls: Type[datamodels.DataModel],
+        instance: datamodels.DataModel,
+    ) -> None:
+        assert isinstance(instance, AssignStmt)
+        verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    return _make_root_validator(_impl)
 
 
-class UnaryOp(GenericNode, Generic[ExprT]):
+class UnaryOp(eve.GenericNode, Generic[ExprT]):
     """
     Generic unary operation with type propagation.
 
@@ -419,33 +411,31 @@ class UnaryOp(GenericNode, Generic[ExprT]):
     op: UnaryOperator
     expr: ExprT
 
-    @root_validator(skip_on_failure=True)
-    def dtype_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["dtype"] = values["expr"].dtype
-        return values
+    @datamodels.root_validator
+    @classmethod
+    def dtype_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+        instance.dtype = instance.expr.dtype  # type: ignore[attr-defined]
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["kind"] = values["expr"].kind
-        return values
+    @datamodels.root_validator
+    @classmethod
+    def kind_propagation(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+        instance.kind = instance.expr.kind  # type: ignore[attr-defined]
 
-    @root_validator(skip_on_failure=True)
-    def op_to_dtype_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["expr"].dtype:
-            if values["op"] == UnaryOperator.NOT:
-                if not values["expr"].dtype == DataType.BOOL:
+    @datamodels.root_validator
+    @classmethod
+    def op_to_dtype_check(cls: Type[UnaryOp], instance: UnaryOp) -> None:
+        if instance.expr.dtype:
+            if instance.op == UnaryOperator.NOT:
+                if not instance.expr.dtype == DataType.BOOL:
                     raise ValueError("Unary operator `NOT` only allowed with boolean expression.")
             else:
-                if values["expr"].dtype == DataType.BOOL:
+                if instance.expr.dtype == DataType.BOOL:
                     raise ValueError(
-                        "Unary operator `{}` not allowed with boolean expression.".format(
-                            values["op"].name
-                        )
+                        f"Unary operator `{instance.op.name}` not allowed with boolean expression."
                     )
-        return values
 
 
-class BinaryOp(GenericNode, Generic[ExprT]):
+class BinaryOp(eve.GenericNode, Generic[ExprT]):
     """Generic binary operation with type propagation.
 
     The generic BinaryOp already contains logic for
@@ -458,40 +448,36 @@ class BinaryOp(GenericNode, Generic[ExprT]):
     left: ExprT
     right: ExprT
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["kind"] = compute_kind([values["left"], values["right"]])
-        return values
+    @datamodels.root_validator
+    @classmethod
+    def kind_propagation(cls: Type[BinaryOp], instance: BinaryOp) -> None:
+        instance.kind = compute_kind(instance.left, instance.right)  # type: ignore[attr-defined]
 
 
-def binary_op_dtype_propagation(*, strict: bool) -> RootValidatorType:
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
+def binary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
+    def _impl(cls: Type[BinaryOp], instance: BinaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
-            cls, [values["left"], values["right"]], strict=strict
+            cls, [instance.left, instance.right], strict=strict
         )
 
         if common_dtype:
-            if isinstance(values["op"], ArithmeticOperator):
+            if isinstance(instance.op, ArithmeticOperator):
                 if common_dtype is not DataType.BOOL:
-                    values["dtype"] = common_dtype
+                    instance.dtype = common_dtype  # type: ignore[attr-defined]
                 else:
                     raise ValueError("Boolean expression is not allowed with arithmetic operation.")
-            elif isinstance(values["op"], LogicalOperator):
+            elif isinstance(instance.op, LogicalOperator):
                 if common_dtype is DataType.BOOL:
-                    values["dtype"] = DataType.BOOL
+                    instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
                 else:
                     raise ValueError("Arithmetic expression is not allowed in boolean operation.")
-            elif isinstance(values["op"], ComparisonOperator):
-                values["dtype"] = DataType.BOOL
+            elif isinstance(instance.op, ComparisonOperator):
+                instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
 
-        return values
-
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    return _make_root_validator(_impl)
 
 
-class TernaryOp(GenericNode, Generic[ExprT]):
+class TernaryOp(eve.GenericNode, Generic[ExprT]):
     """
     Generic ternary operation with type propagation.
 
@@ -506,84 +492,74 @@ class TernaryOp(GenericNode, Generic[ExprT]):
     true_expr: ExprT
     false_expr: ExprT
 
-    @validator("cond")
-    def condition_is_boolean(cls, cond: Expr) -> Expr:
-        return verify_condition_is_boolean(cls, cond)
+    @datamodels.validator("cond")
+    def condition_is_boolean(self, attribute: datamodels.Attribute, value: Expr) -> None:
+        return verify_condition_is_boolean(self, value)
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["kind"] = compute_kind([values["true_expr"], values["false_expr"]])
-        return values
+    @datamodels.root_validator
+    @classmethod
+    def kind_propagation(cls: Type[TernaryOp], instance: TernaryOp) -> None:
+        instance.kind = compute_kind(instance.true_expr, instance.false_expr)  # type: ignore[attr-defined]
 
 
-def ternary_op_dtype_propagation(*, strict: bool) -> RootValidatorType:
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
+def ternary_op_dtype_propagation(*, strict: bool) -> datamodels.RootValidator:
+    def _impl(cls: Type[TernaryOp], instance: TernaryOp) -> None:
         common_dtype = verify_and_get_common_dtype(
-            cls, [values["true_expr"], values["false_expr"]], strict=strict
+            cls, [instance.true_expr, instance.false_expr], strict=strict
         )
         if common_dtype:
-            values["dtype"] = common_dtype
-        return values
+            instance.dtype = common_dtype  # type: ignore[attr-defined]
 
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    return _make_root_validator(_impl)
 
 
-class Cast(GenericNode, Generic[ExprT]):
+class Cast(eve.GenericNode, Generic[ExprT]):
     dtype: DataType
     expr: ExprT
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["kind"] = compute_kind([values["expr"]])
-        return values
+    @datamodels.root_validator
+    @classmethod
+    def kind_propagation(cls: Type[Cast], instance: Cast) -> None:
+        instance.kind = compute_kind(instance.expr)  # type: ignore[attr-defined]
 
 
-class NativeFuncCall(GenericNode, Generic[ExprT]):
+class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
     func: NativeFunction
     args: List[ExprT]
 
-    @root_validator(skip_on_failure=True)
-    def arity_check(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["func"].arity != len(values["args"]):
+    @datamodels.root_validator
+    @classmethod
+    def arity_check(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+        if instance.func.arity != len(instance.args):
             raise ValueError(
-                "{} accepts {} arguments, {} where passed.".format(
-                    values["func"], values["func"].arity, len(values["args"])
-                )
+                f"{instance.func} accepts {instance.func.arity} arguments, {len(instance.args)} where passed."
             )
-        return values
 
-    @root_validator(pre=True)
-    def kind_propagation(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        values["kind"] = compute_kind(values["args"])
-        return values
-
-
-def native_func_call_dtype_propagation(*, strict: bool = True) -> RootValidatorType:
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        if values["func"] in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
-            values["dtype"] = DataType.BOOL
-            return values
-        # assumes all NativeFunction args have a common dtype
-        common_dtype = verify_and_get_common_dtype(cls, values["args"], strict=strict)
-        if common_dtype:
-            values["dtype"] = common_dtype
-        return values
-
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    @datamodels.root_validator
+    @classmethod
+    def kind_propagation(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+        instance.kind = compute_kind(*instance.args)  # type: ignore[attr-defined]
 
 
-def validate_dtype_is_set() -> RootValidatorType:
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        dtype_nodes: List[Node] = []
-        for v in flatten_list(values.values()):
-            if isinstance(v, Node):
-                dtype_nodes.extend(v.iter_tree().if_hasattr("dtype"))
+def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.RootValidator:
+    def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
+        if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+            instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        else:
+            # assumes all NativeFunction args have a common dtype
+            common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
+            if common_dtype:
+                instance.dtype = common_dtype  # type: ignore[attr-defined]
+
+    return _make_root_validator(_impl)
+
+
+def validate_dtype_is_set() -> datamodels.RootValidator:
+    def _impl(cls: Type[ExprT], instance: ExprT) -> None:
+        dtype_nodes: List[ExprT] = []
+        for v in flatten_list(datamodels.astuple(instance)):
+            if isinstance(v, eve.Node):
+                dtype_nodes.extend(v.walk_values().if_hasattr("dtype"))
 
         nodes_without_dtype = []
         for node in dtype_nodes:
@@ -592,53 +568,12 @@ def validate_dtype_is_set() -> RootValidatorType:
 
         if len(nodes_without_dtype) > 0:
             raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
-        return values
 
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
-
-
-def validate_symbol_refs() -> RootValidatorType:
-    """Validate that symbol refs are found in a symbol table valid at the current scope."""
-
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        class SymtableValidator(NodeVisitor):
-            def __init__(self) -> None:
-                self.missing_symbols: List[str] = []
-
-            def visit_Node(self, node: Node, *, symtable: Dict[str, Any], **kwargs: Any) -> None:
-                for name, metadata in node.__node_children__.items():
-                    if isinstance(metadata["definition"].type_, type) and issubclass(
-                        metadata["definition"].type_, SymbolRef
-                    ):
-                        if getattr(node, name) and getattr(node, name) not in symtable:
-                            self.missing_symbols.append(getattr(node, name))
-
-                if isinstance(node, SymbolTableTrait):
-                    symtable = {**symtable, **node.symtable_}
-                self.generic_visit(node, symtable=symtable, **kwargs)
-
-            @classmethod
-            def apply(cls, node: Node, *, symtable: Dict[str, Any]) -> List[str]:
-                instance = cls()
-                instance.visit(node, symtable=symtable)
-                return instance.missing_symbols
-
-        missing_symbols = []
-        for v in values.values():
-            missing_symbols.extend(SymtableValidator.apply(v, symtable=values["symtable_"]))
-
-        if len(missing_symbols) > 0:
-            raise ValueError("Symbols {} not found.".format(missing_symbols))
-
-        return values
-
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    return _make_root_validator(_impl)
 
 
-class _LvalueDimsValidator(NodeVisitor):
-    def __init__(self, vertical_loop_type: Type[Node], decl_type: Type[Node]) -> None:
+class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
+    def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
         if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
@@ -652,26 +587,14 @@ class _LvalueDimsValidator(NodeVisitor):
         self.decl_type = decl_type
 
     def visit_Node(
-        self,
-        node: Node,
-        *,
-        symtable: Dict[str, Any],
-        loop_order: Optional[LoopOrder] = None,
-        **kwargs: Any,
+        self, node: eve.Node, *, loop_order: Optional[LoopOrder] = None, **kwargs: Any
     ) -> None:
         if isinstance(node, self.vertical_loop_type):
-            loop_order = node.loop_order
-        if isinstance(node, SymbolTableTrait):
-            symtable = {**symtable, **node.symtable_}
-        self.generic_visit(node, symtable=symtable, loop_order=loop_order, **kwargs)
+            loop_order = node.loop_order  # type: ignore[attr-defined]  # cannot narrow based on `vertical_loop_type`
+        self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self,
-        node: AssignStmt,
-        *,
-        loop_order: LoopOrder,
-        symtable: Dict[str, Any],
-        **kwargs: Any,
+        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
@@ -680,7 +603,7 @@ class _LvalueDimsValidator(NodeVisitor):
             return None
 
         allowed_flags = self._allowed_flags(loop_order)
-        flags = decl.dimensions
+        flags = decl.dimensions  # type: ignore[attr-defined]  # Decls are defined on derived IRs, not common, so `dimensions` is unknown.
         if flags not in allowed_flags:
             dims = dimension_flags_to_names(flags)
             raise ValueError(
@@ -698,8 +621,8 @@ class _LvalueDimsValidator(NodeVisitor):
 # TODO(ricoh) consider making gtir.Decl & oir.Decl common and / or adding a VerticalLoop baseclass
 # TODO(ricoh) in common instead of passing type arguments
 def validate_lvalue_dims(
-    vertical_loop_type: Type[Node], decl_type: Type[Node]
-) -> RootValidatorType:
+    vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]
+) -> datamodels.RootValidator:
     """
     Validate lvalue dimensions using the root node symbol table.
 
@@ -726,36 +649,30 @@ def validate_lvalue_dims(
         `Tuple[bool, bool, bool]` in an attribute named `dimensions`.
     """
 
-    def _impl(
-        cls: Type[pydantic.BaseModel], values: RootValidatorValuesType
-    ) -> RootValidatorValuesType:
-        for _, children in values.items():
-            _LvalueDimsValidator(vertical_loop_type, decl_type).visit(
-                children, symtable=values["symtable_"]
-            )
-        return values
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
+        _LvalueDimsValidator(vertical_loop_type, decl_type).visit(instance)
 
-    return root_validator(allow_reuse=True, skip_on_failure=True)(_impl)
+    return _make_root_validator(_impl)
 
 
-class AxisBound(Node):
+class AxisBound(eve.Node):
     level: LevelMarker
     offset: int = 0
 
     @classmethod
-    def from_start(cls, offset: int) -> "AxisBound":
+    def from_start(cls, offset: int) -> AxisBound:
         return cls(level=LevelMarker.START, offset=offset)
 
     @classmethod
-    def from_end(cls, offset: int) -> "AxisBound":
+    def from_end(cls, offset: int) -> AxisBound:
         return cls(level=LevelMarker.END, offset=offset)
 
     @classmethod
-    def start(cls, offset: int = 0) -> "AxisBound":
+    def start(cls, offset: int = 0) -> AxisBound:
         return cls.from_start(offset)
 
     @classmethod
-    def end(cls, offset: int = 0) -> "AxisBound":
+    def end(cls, offset: int = 0) -> AxisBound:
         return cls.from_end(offset)
 
     def __eq__(self, other: object) -> bool:
@@ -763,30 +680,30 @@ class AxisBound(Node):
             return False
         return self.level == other.level and self.offset == other.offset
 
-    def __lt__(self, other: "AxisBound") -> bool:
+    def __lt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
             self.level == other.level and self.offset < other.offset
         )
 
-    def __le__(self, other: "AxisBound") -> bool:
+    def __le__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return self < other or self == other
 
-    def __gt__(self, other: "AxisBound") -> bool:
+    def __gt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other and not self == other
 
-    def __ge__(self, other: "AxisBound") -> bool:
+    def __ge__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
             return NotImplemented
         return not self < other
 
 
-class HorizontalInterval(Node):
+class HorizontalInterval(eve.Node):
     """Represents an interval of the index space in the horizontal.
 
     This is separate from `gtir.Interval` because the endpoints may
@@ -802,7 +719,7 @@ class HorizontalInterval(Node):
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
-    def full(cls) -> "HorizontalInterval":
+    def full(cls) -> HorizontalInterval:
         return cls(start=None, end=None)
 
     @classmethod
@@ -816,14 +733,13 @@ class HorizontalInterval(Node):
             end=AxisBound(level=level, offset=end_offset),
         )
 
-    @root_validator
-    def check_start_before_end(cls, values: RootValidatorValuesType) -> RootValidatorValuesType:
-        if values["start"] and values["end"] and not (values["start"] <= values["end"]):
+    @datamodels.root_validator
+    @classmethod
+    def check_start_before_end(cls: Type[HorizontalInterval], instance: HorizontalInterval) -> None:
+        if instance.start and instance.end and not (instance.start <= instance.end):
             raise ValueError(
-                f"End ({values['end']}) is not after or equal to start ({values['start']})"
+                f"End ({instance.end}) is not after or equal to start ({instance.start})"
             )
-
-        return values
 
     def is_single_index(self) -> bool:
         if self.start is None or self.end is None or self.start.level != self.end.level:
@@ -831,23 +747,26 @@ class HorizontalInterval(Node):
 
         return abs(self.end.offset - self.start.offset) == 1
 
-    def overlaps(self, other: "HorizontalInterval") -> bool:
+    def overlaps(self, other: HorizontalInterval) -> bool:
         if self.start is None and other.start is None:
             return True
-        elif self.start is None and other.start is not None:
+
+        if self.start is None and other.start is not None:
             left_interval = self
             right_interval = other
-        elif other.start is None or other.start < self.start:
+        elif other.start is None or (self.start is not None and other.start < self.start):
             left_interval = other
             right_interval = self
-        elif self.start < other.start:
+        elif self.start is not None and other.start is not None and self.start < other.start:
             left_interval = self
             right_interval = other
         else:
             assert self.start == other.start
             return True
 
-        if left_interval.end is None or right_interval.start < left_interval.end:
+        if left_interval.end is None or (
+            right_interval.start is not None and right_interval.start < left_interval.end
+        ):
             return True
 
         return False
@@ -864,7 +783,7 @@ class HorizontalMask(LocNode):
         return (self.i, self.j)
 
 
-class HorizontalRestriction(GenericNode, Generic[StmtT]):
+class HorizontalRestriction(eve.GenericNode, Generic[StmtT]):
     """A specialization of the horizontal space."""
 
     mask: HorizontalMask

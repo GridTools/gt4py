@@ -83,29 +83,29 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
         ndim=3,
     )
 
-    for decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
-        access = accesses[decl.name]
-        dtype = numpy.dtype(decl.dtype.name.lower())
+    for field_decl in (param for param in all_params if isinstance(param, gtir.FieldDecl)):
+        access = accesses[field_decl.name]
+        dtype = numpy.dtype(field_decl.dtype.name.lower())
 
         if access != AccessKind.NONE:
-            k_boundary = compute_k_boundary(node)[decl.name]
-            boundary = Boundary(*field_extents[decl.name].to_boundary()[0:2], k_boundary)
+            k_boundary = compute_k_boundary(node)[field_decl.name]
+            boundary = Boundary(*field_extents[field_decl.name].to_boundary()[0:2], k_boundary)
         else:
             boundary = Boundary.zeros(ndims=3)
 
-        data.field_info[decl.name] = FieldInfo(
+        data.field_info[str(field_decl.name)] = FieldInfo(
             access=access,
             boundary=boundary,
-            axes=tuple(dimension_flags_to_names(decl.dimensions).upper()),
-            data_dims=tuple(decl.data_dims),
+            axes=tuple(dimension_flags_to_names(field_decl.dimensions).upper()),
+            data_dims=tuple(field_decl.data_dims),
             dtype=dtype,
         )
 
-    for decl in (param for param in all_params if isinstance(param, gtir.ScalarDecl)):
-        access = cast(Literal[AccessKind.NONE, AccessKind.READ], accesses[decl.name])
+    for scalar_decl in (param for param in all_params if isinstance(param, gtir.ScalarDecl)):
+        access = cast(Literal[AccessKind.NONE, AccessKind.READ], accesses[scalar_decl.name])
         assert access in {AccessKind.NONE, AccessKind.READ}
-        dtype = numpy.dtype(decl.dtype.name.lower())
-        data.parameter_info[decl.name] = ParameterInfo(access=access, dtype=dtype)
+        dtype = numpy.dtype(scalar_decl.dtype.name.lower())
+        data.parameter_info[str(scalar_decl.name)] = ParameterInfo(access=access, dtype=dtype)
 
     data.unreferenced = [*sorted(name for name in accesses if accesses[name] == AccessKind.NONE)]
     _args_data_cache[pipeline.stencil_id] = data

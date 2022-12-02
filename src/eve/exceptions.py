@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2021, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,7 +19,7 @@
 
 from __future__ import annotations
 
-from .typingx import Any, Dict
+from .extended_typing import Any, Dict, Optional
 
 
 class EveError:
@@ -34,7 +36,7 @@ class EveError:
     message_template = "Generic Eve error [{info}]"
     info: Dict[str, Any]
 
-    def __init__(self, message: str = None, **kwargs: Any) -> None:
+    def __init__(self, message: Optional[str] = None, **kwargs: Any) -> None:
         self.info = kwargs
         super().__init__(  # type: ignore  # super() call works as expected when using multiple inheritance
             message

@@ -76,6 +76,7 @@ def allocation_strategy(draw):
         aligned_index_strats = aligned_index_strats + [
             hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
         ]
+
     aligned_index = draw(hyp_st.tuples(*aligned_index_strats))
     layout_order = draw(hyp_st.permutations(tuple(range(dimension))))
     return dict(
@@ -266,8 +267,11 @@ class TestNormalizeStorageSpec:
         assert dtype_out == dtype
         assert dimensions_out == dimensions
 
-        with pytest.raises(TypeError, match="aligned_index"):
-            normalize_storage_spec(None, shape, dtype, dimensions)
+        aligned_index_out, shape_out, dtype_out, dimensions_out = normalize_storage_spec(
+            None, shape, dtype, dimensions
+        )
+        assert aligned_index_out == (0, 0, 0)
+
         with pytest.raises(TypeError, match="aligned_index"):
             normalize_storage_spec(("1", "1", "1"), shape, dtype, dimensions)
         with pytest.raises(ValueError, match="aligned_index"):

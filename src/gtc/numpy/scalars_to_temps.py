@@ -32,7 +32,7 @@ class Temporary:
 
 def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
     all_declarations = utils.flatten_list(
-        stencil.iter_tree().if_isinstance(npir.HorizontalBlock).getattr("declarations").to_list()
+        stencil.walk_values().if_isinstance(npir.HorizontalBlock).getattr("declarations").to_list()
     )
 
     name_to_dtype: Dict[str, common.DataType] = {}

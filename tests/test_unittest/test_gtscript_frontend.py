@@ -25,6 +25,7 @@ from gt4py import gtscript
 from gt4py.frontend import gtscript_frontend as gt_frontend
 from gt4py.frontend import nodes
 from gt4py.gtscript import (
+    __INLINED,
     IJ,
     IJK,
     PARALLEL,
@@ -95,8 +96,6 @@ def add_external_const(a):
 class TestInlinedExternals:
     def test_all_legal_combinations(self):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = (
                     (
@@ -115,8 +114,6 @@ class TestInlinedExternals:
 
     def test_missing(self):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
 
@@ -126,8 +123,6 @@ class TestInlinedExternals:
             )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
 
@@ -193,8 +188,6 @@ class TestInlinedExternals:
         A = 1
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = some_function()
 
@@ -213,8 +206,6 @@ class TestInlinedExternals:
         WRONG_VALUE_CONSTANT = value_type()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
 
@@ -230,12 +221,191 @@ class TestFunction:
             return 1.0
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
-
             with computation(PARALLEL), interval(...):
                 inout_field = func()
 
         with pytest.raises(TypeError, match=r"func is not a gtscript function"):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_use_in_expr(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_as_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_in_expr_in_func_arg(self):
+        @gtscript.function
+        def func():
+            return 1.0
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func() + 1)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_use_in_expr_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func() + 1
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_use_in_call_arg_multiple_return(self):
+        @gtscript.function
+        def func():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        @gtscript.function
+        def func_outer(arg):
+            return arg + 1
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func_outer(func())
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Only functions with a single return value can be used in expressions, including as call arguments. "
+            "Please assign the function results to symbols first.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+
+class TestAxisSyntax:
+    def test_good_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[J - 1] + in_field[J]
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_good_syntax_external(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            from gt4py.__externals__ import AXIS
+
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[AXIS - 1]
+
+        parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            externals={"AXIS": gtscript.Axis("I")},
+        )
+
+    def test_good_syntax_external_value(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            from gt4py.__externals__ import VALUE
+
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[J - VALUE]
+
+        for value in range(2):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+                externals={"VALUE": value},
+            )
+
+    def test_bad_mul_syntax(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I * 1]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_bad_dup_add(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I + 1 + I]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_bad_dup_axis(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[I, I - 1]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+            )
+
+    def test_bad_out_of_order(self):
+        def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field[J, I - 1]
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
@@ -259,7 +429,6 @@ class TestImportedExternals:
                 NESTED_CONSTANTS,
                 VERY_NESTED_CONSTANTS,
             )
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = (
@@ -285,7 +454,6 @@ class TestImportedExternals:
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import MISSING_CONSTANT
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -297,7 +465,6 @@ class TestImportedExternals:
 
         def definition_func(inout_field: gtscript.Field[float]):
             from gt4py.__externals__ import NESTED_CONSTANTS
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing
@@ -652,27 +819,6 @@ class TestExternalsWithSubroutines:
             module=self.__class__.__name__,
         )
 
-    def test_no_nested_function_call(self):
-        @gtscript.function
-        def _lap(dx, phi):
-            return (phi[0, -1, 0] - 2.0 * phi[0, 0, 0] + phi[0, 1, 0]) / (dx * dx)
-
-        def definition_func(phi: gtscript.Field[np.float64], dx: float):
-            from gt4py.__externals__ import lap
-
-            with computation(PARALLEL), interval(...):
-                phi = lap(lap(phi, dx), dx)
-
-        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="in arguments to function calls"):
-            parse_definition(
-                definition_func,
-                name=inspect.stack()[0][3],
-                module=self.__class__.__name__,
-                externals={
-                    "lap": _lap,
-                },
-            )
-
 
 class TestFunctionReturn:
     def test_no_return(self):
@@ -737,6 +883,21 @@ class TestFunctionReturn:
         def definition_func(phi: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):
                 phi = test_conditional_return(phi)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_return_tuple(self):
+        @gtscript.function
+        def return_tuple():
+            tmp1 = 1
+            tmp2 = 2
+            return tmp1, tmp2
+
+        def definition_func(res1: gtscript.Field[np.float64], res2: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):
+                res1, res2 = return_tuple()
 
         parse_definition(
             definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
@@ -1132,19 +1293,52 @@ class TestAssignmentSyntax:
             module=self.__class__.__name__,
         )
 
-        with pytest.raises(gt_frontend.GTScriptSyntaxError):
-
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-                from gt4py.__externals__ import offset
-
-                with computation(PARALLEL), interval(...):
-                    out_field[0, 0, offset] = in_field
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Assignment to non-zero offsets is not supported.",
+        ):
 
             parse_definition(
                 func,
                 externals={"offset": 1},
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
+            )
+
+    def test_return_to_subscript(self):
+        @gtscript.function
+        def func(a):
+            return a
+
+        def definition_func(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field[0, 0, 0] = func(input_field)
+
+        parse_definition(
+            definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+        )
+
+    def test_return_to_nonzero_subscript(self):
+        @gtscript.function
+        def func(a):
+            return a
+
+        def definition_func(
+            input_field: gtscript.Field[gtscript.IJK, np.int32],
+            output_field: gtscript.Field[gtscript.IJK, np.int32],
+        ):
+            with computation(PARALLEL), interval(...):
+                output_field[0, 0, 1] = func(input_field)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match="Assignment to non-zero offsets is not supported.",
+        ):
+            parse_definition(
+                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
 
     def test_slice(self):
@@ -1286,6 +1480,25 @@ class TestNativeFunctions:
                 in_field = asin(in_field) + 1 if 1 < in_field else sin(in_field)
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+
+class TestWarnInlined:
+    def test_inlined_emits_warning(self):
+        def func(field: gtscript.Field[np.float_]):
+            from gt4py.__externals__ import SET_TO_ONE
+
+            with computation(PARALLEL), interval(...):
+                field = 0
+                if __INLINED(SET_TO_ONE):
+                    field = 1
+
+        with pytest.warns(DeprecationWarning, match="__INLINED deprecated"):
+            parse_definition(
+                func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+                externals={"SET_TO_ONE": True},
+            )
 
 
 class TestAnnotations:

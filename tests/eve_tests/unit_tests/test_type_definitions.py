@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Eve Toolchain - GT4Py Project - GridTools Framework
 #
 # Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
@@ -15,10 +17,24 @@
 
 from __future__ import annotations
 
-import pydantic
 import pytest
 
-import eve
+
+class TestFrozenList:
+    def test_immutability(self):
+        from eve.type_definitions import FrozenList
+
+        fl = FrozenList([0, 1, 2, 3, 4, 5])
+
+        with pytest.raises(TypeError, match="object does not support item assignment"):
+            fl[2] = -2
+
+    def test_instance_check(self):
+        from eve.type_definitions import FrozenList
+
+        assert isinstance(FrozenList([0, 1, 2, 3, 4, 5]), FrozenList)
+        assert isinstance((), FrozenList)
+        assert not isinstance([], FrozenList)
 
 
 def test_sentinel():
@@ -28,36 +44,3 @@ def test_sentinel():
 
     assert values.index(NOTHING) == 3
     assert values[values.index(NOTHING)] is NOTHING
-
-
-def test_symbol_types():
-    from eve.type_definitions import SymbolName
-
-    assert SymbolName("valid_name_01A") == "valid_name_01A"
-    assert SymbolName.from_string("valid_name_01A") == "valid_name_01A"
-    with pytest.raises(ValueError, match="string does not match regex"):
-        SymbolName.from_string("$name_01A")
-    with pytest.raises(ValueError, match="string does not match regex"):
-        SymbolName.from_string("0name_01A")
-    with pytest.raises(ValueError, match="string does not match regex"):
-        SymbolName.from_string("name_01A ")
-
-    LettersOnlySymbol = SymbolName.constrained(r"[a-zA-Z]+$")
-    assert LettersOnlySymbol.from_string("validNAME") == "validNAME"
-    with pytest.raises(ValueError, match="string does not match regex"):
-        LettersOnlySymbol.from_string("name_a")
-    with pytest.raises(ValueError, match="string does not match regex"):
-        LettersOnlySymbol.from_string("name01")
-
-
-class TestSourceLocation:
-    def test_valid_position(self):
-        eve.type_definitions.SourceLocation(line=1, column=1, source="source")
-
-    def test_invalid_position(self):
-        with pytest.raises(pydantic.ValidationError):
-            eve.type_definitions.SourceLocation(line=1, column=-1, source="source")
-
-    def test_str(self):
-        loc = eve.type_definitions.SourceLocation(line=1, column=1, source="source")
-        assert str(loc) == "<source: Line 1, Col 1>"
