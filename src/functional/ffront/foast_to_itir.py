@@ -302,9 +302,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]:
             return self._lift_if_field(node)(
-                im.call_(node.op.value)(to_value(node.operand)(self.visit(node.operand, **kwargs)))
+                im.call_("not_")(to_value(node.operand)(self.visit(node.operand, **kwargs)))
             )
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
@@ -467,20 +467,19 @@ class FieldOperatorLowering(NodeTranslator):
             return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ct.ScalarType) -> itir.Literal:
-        typename = type_.kind.name.lower()
-        return im.literal_(str(val), typename)
+    def _make_literal(self, val: Any, type_: ct.ScalarType | ct.TupleType) -> itir.Literal:
+        # TODO(tehrengruber): check constant of this type is supported in iterator ir
+        if isinstance(type_, ct.TupleType):
+            return im.make_tuple_(
+                *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
+            )
+        elif isinstance(type_, ct.ScalarType):
+            typename = type_.kind.name.lower()
+            return im.literal_(str(val), typename)
+        raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
-        # TODO: check constant is supported in iterator ir
-        if isinstance(node.type, ct.ScalarType) and not node.type.shape:
-            return self._make_literal(node.value, node.type)
-        elif isinstance(node.type, ct.TupleType):
-            assert all(isinstance(type_, ct.ScalarType) for type_ in node.type.types)
-            return im.make_tuple_(
-                *(self._make_literal(val, type_) for val, type_ in zip(node.value, node.type.types))
-            )
-        raise FieldOperatorLoweringError(f"Unsupported scalar type: {node.type}")
+        return self._make_literal(node.value, node.type)
 
 
 @dataclass
@@ -517,7 +516,7 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        if node.op is foast.UnaryOperator.NOT:
+        if node.op is ct.UnaryOperator.NOT:
             return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
 
         return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))

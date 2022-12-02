@@ -74,7 +74,7 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
     for name in func_st.get_locals():
         if (s := func_st.lookup(name)).is_imported():
             imported_names.add(name)
-        elif s.is_parameter:
+        elif s.is_parameter():
             param_names.add(name)
         else:
             local_names.add(name)

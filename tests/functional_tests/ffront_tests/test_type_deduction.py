@@ -75,13 +75,17 @@ def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:
     ]
 
 
-def accept_args_cases():
+def callable_type_info_cases():
     # reuse all the other test cases
     not_callable = [
-        (symbol_type, [], {}, [r"Expected a callable type, but got "])
+        (symbol_type, [], {}, [r"Expected a callable type, but got "], None)
         for symbol_type, attributes in type_info_cases()
         if not isinstance(symbol_type, ct.CallableType)
     ]
+
+    IDim = Dimension("I")
+    JDim = Dimension("J")
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
 
     bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
     float_type = ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
@@ -94,97 +98,148 @@ def accept_args_cases():
         definition=ct.FunctionType(args=[field_type, float_type], kwargs={}, returns=field_type)
     )
     scanop_type = ct.ScanOperatorType(
-        axis=Dimension("K", kind=DimensionKind.VERTICAL),
+        axis=KDim,
         definition=ct.FunctionType(
             args=[float_type, int_type, int_type], kwargs={}, returns=float_type
         ),
     )
+    tuple_scanop_type = ct.ScanOperatorType(
+        axis=KDim,
+        definition=ct.FunctionType(
+            args=[float_type, ct.TupleType(types=[int_type, int_type])],
+            kwargs={},
+            returns=float_type,
+        ),
+    )
 
     return [
-        # func_type, args, kwargs, expected incompatibilities
+        # func_type, args, kwargs, expected incompatibilities, return type
         *not_callable,
-        (nullary_func_type, [], {}, []),
+        (nullary_func_type, [], {}, [], ct.VoidType()),
         (
             nullary_func_type,
             [bool_type],
             {},
             [r"Function takes 0 argument\(s\), but 1 were given."],
+            None,
         ),
         (
             nullary_func_type,
             [],
             {"foo": bool_type},
             [r"Got unexpected keyword argument\(s\) `foo`."],
+            None,
         ),
-        (unary_func_type, [], {}, [r"Function takes 1 argument\(s\), but 0 were given."]),
-        (unary_func_type, [bool_type], {}, []),
+        (unary_func_type, [], {}, [r"Function takes 1 argument\(s\), but 0 were given."], None),
+        (unary_func_type, [bool_type], {}, [], ct.VoidType()),
         (
             unary_func_type,
             [float_type],
             {},
             [r"Expected 0-th argument to be of type bool, but got float64."],
+            None,
         ),
-        (kwarg_func_type, [], {}, [r"Missing required keyword argument\(s\) `foo`."]),
-        (kwarg_func_type, [], {"foo": bool_type}, []),
+        (kwarg_func_type, [], {}, [r"Missing required keyword argument\(s\) `foo`."], None),
+        (kwarg_func_type, [], {"foo": bool_type}, [], ct.VoidType()),
         (
             kwarg_func_type,
             [],
             {"foo": float_type},
             [r"Expected keyword argument foo to be of type bool, but got float64."],
+            None,
         ),
-        (kwarg_func_type, [], {"bar": bool_type}, [r"Got unexpected keyword argument\(s\) `bar`."]),
+        (
+            kwarg_func_type,
+            [],
+            {"bar": bool_type},
+            [r"Got unexpected keyword argument\(s\) `bar`."],
+            None,
+        ),
         # field operator
-        (fieldop_type, [field_type, float_type], {}, []),
+        (fieldop_type, [field_type, float_type], {}, [], field_type),
         # scan operator
-        (scanop_type, [], {}, [r"Scan operator takes 2 arguments, but 0 were given."]),
+        (
+            scanop_type,
+            [],
+            {},
+            [r"Scan operator takes 2 arguments, but 0 were given."],
+            ct.FieldType(dims=[KDim], dtype=float_type),
+        ),
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=float_type),
-                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=float_type),
+                ct.FieldType(dims=[KDim], dtype=float_type),
+                ct.FieldType(dims=[KDim], dtype=float_type),
             ],
             {},
             [
-                r"Expected 0-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
-                r"Expected 1-th argument to be of type Field\[\[K\], dtype=int64\], but got Field\[\[K\], dtype=float64\]",
+                r"Expected 0-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
+                r"Expected 1-th argument to be of type Field\[\[K\], int64\], but got Field\[\[K\], float64\]",
             ],
+            ct.FieldType(dims=[KDim], dtype=float_type),
         ),
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("I"), Dimension("J")], dtype=int_type),
-                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
+                ct.FieldType(dims=[IDim, JDim], dtype=int_type),
+                ct.FieldType(dims=[KDim], dtype=int_type),
             ],
             {},
             [
                 r"Dimensions can not be promoted. Could not determine order of the "
                 r"following dimensions: J, K."
             ],
+            ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
         (
             scanop_type,
             [
-                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
-                ct.FieldType(dims=[Dimension("K", kind=DimensionKind.VERTICAL)], dtype=int_type),
+                ct.FieldType(dims=[KDim], dtype=int_type),
+                ct.FieldType(dims=[KDim], dtype=int_type),
             ],
             {},
             [],
+            ct.FieldType(dims=[KDim], dtype=float_type),
         ),
         (
             scanop_type,
             [
-                ct.FieldType(
-                    dims=[
-                        Dimension("I"),
-                        Dimension("J"),
-                        Dimension("K", kind=DimensionKind.VERTICAL),
-                    ],
-                    dtype=int_type,
-                ),
-                ct.FieldType(dims=[Dimension("I"), Dimension("J")], dtype=int_type),
+                ct.FieldType(dims=[IDim, JDim, KDim], dtype=int_type),
+                ct.FieldType(dims=[IDim, JDim], dtype=int_type),
             ],
             {},
             [],
+            ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        (
+            tuple_scanop_type,
+            [
+                ct.TupleType(
+                    types=[
+                        ct.FieldType(dims=[IDim, JDim, KDim], dtype=int_type),
+                        ct.FieldType(dims=[IDim, JDim], dtype=int_type),
+                    ]
+                )
+            ],
+            {},
+            [],
+            ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        (
+            tuple_scanop_type,
+            [
+                ct.TupleType(
+                    types=[
+                        ct.FieldType(dims=[IDim, JDim, KDim], dtype=int_type),
+                    ]
+                )
+            ],
+            {},
+            [
+                r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], int64\], "
+                r"Field\[..., int64\]\], but got tuple\[Field\[\[I, J, K\], int64\]\]."
+            ],
+            ct.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
     ]
 
@@ -195,15 +250,16 @@ def test_type_info_basic(symbol_type, expected):
         assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
-@pytest.mark.parametrize("func_type,args,kwargs,expected", accept_args_cases())
+@pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
 def test_accept_args(
     func_type: ct.SymbolType,
     args: list[ct.SymbolType],
     kwargs: dict[str, ct.SymbolType],
     expected: list,
+    return_type: ct.SymbolType,
 ):
     accepts_args = len(expected) == 0
-    assert type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs) == accepts_args
+    assert accepts_args == type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs)
 
     if len(expected) > 0:
         with pytest.raises(
@@ -215,6 +271,19 @@ def test_accept_args(
 
         for expected_msg in expected:
             assert exc_info.match(expected_msg)
+
+
+@pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
+def test_return_type(
+    func_type: ct.SymbolType,
+    args: list[ct.SymbolType],
+    kwargs: dict[str, ct.SymbolType],
+    expected: list,
+    return_type: ct.SymbolType,
+):
+    accepts_args = type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs)
+    if accepts_args:
+        assert type_info.return_type(func_type, with_args=args, with_kwargs=kwargs) == return_type
 
 
 def test_unpack_assign():
@@ -310,7 +379,7 @@ def test_adding_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=bool\] can not be used in operator `\+`!"),
+        match=(r"Type Field\[\.\.\., bool\] can not be used in operator `\+`!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -326,7 +395,7 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(
-            r"Could not promote `Field\[\[X], dtype=float64\]` and `Field\[\[Y\], dtype=float64\]` to common type in call to +."
+            r"Could not promote `Field\[\[X], float64\]` and `Field\[\[Y\], float64\]` to common type in call to +."
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -338,7 +407,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Type Field\[\.\.\., dtype=float64\] can not be used in operator `\&`! "),
+        match=(r"Type Field\[\.\.\., float64\] can not be used in operator `\&`! "),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -349,7 +418,7 @@ def test_signing_bool():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator `\-`: `Field\[\.\.\., dtype=bool\]`!",
+        match=r"Incompatible type for unary operator `\-`: `Field\[\.\.\., bool\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
 
@@ -360,7 +429,7 @@ def test_notting_int():
 
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=r"Incompatible type for unary operator `not`: `Field\[\.\.\., dtype=int64\]`!",
+        match=r"Incompatible type for unary operator `not`: `Field\[\.\.\., int64\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
 

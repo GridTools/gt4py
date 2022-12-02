@@ -13,8 +13,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import dataclasses
 from collections import namedtuple
+from functools import reduce
 from typing import TypeVar
 
 import numpy as np
@@ -574,17 +574,7 @@ def test_conditional_nested_tuple():
     ]:
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
-    @program
-    def conditional_tuple_3_p(
-        mask: Field[[IDim], bool],
-        a: Field[[IDim], float64],
-        b: Field[[IDim], float64],
-        c: Field[[IDim], float64],
-        d: Field[[IDim], float64],
-    ):
-        conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)))
-
-    conditional_tuple_3_p(mask, a, b, c, d, offset_provider={})
+    conditional_tuple_3_field_op(mask, a, b, out=((c, d), (d, c)), offset_provider={})
 
     assert np.allclose(
         np.where(
@@ -901,10 +891,7 @@ def test_tuple_arg(fieldview_backend):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_simple_scan(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass.")
-
+def test_fieldop_from_scan(fieldview_backend, forward):
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
     init = 1.0
@@ -913,9 +900,13 @@ def test_simple_scan(fieldview_backend, forward):
     if not forward:
         expected = np.flip(expected)
 
+    @field_operator
+    def add(carry: float, foo: float) -> float:
+        return carry + foo
+
     @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float) -> float:
-        return carry + 1.0
+        return add(carry, 1.0)
 
     simple_scan_operator(out=out, offset_provider={})
 
@@ -1014,19 +1005,7 @@ def test_ternary_operator_tuple():
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
         return (a, b) if left < right else (b, a)
 
-    # TODO(tehrengruber): directly call field operator when the generated programs support `out` being a tuple
-    @program
-    def ternary_field(
-        a: Field[[IDim], float],
-        b: Field[[IDim], float],
-        left: float,
-        right: float,
-        out_1: Field[[IDim], float],
-        out_2: Field[[IDim], float],
-    ):
-        ternary_field_op(a, b, left, right, out=(out_1, out_2))
-
-    ternary_field(a, b, left, right, out_1, out_2, offset_provider={})
+    ternary_field_op(a, b, left, right, out=(out_1, out_2), offset_provider={})
 
     e, f = (np.asarray(a), np.asarray(b)) if left < right else (np.asarray(b), np.asarray(a))
     np.allclose(e, out_1)
@@ -1081,34 +1060,59 @@ def test_ternary_scan():
     assert np.allclose(expected, out)
 
 
-def test_scan_tuple_output(fieldview_backend):
+@pytest.mark.parametrize("forward", [True, False])
+def test_scan_nested_tuple_output(fieldview_backend, forward):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.xfail("gtfn does not yet support scan pass.")
+        pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
 
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     size = 10
-    init = (0.0, 1.0)
-    inp = np_as_located_field(KDim)(np.arange(0, size, 1.0))
-    out1 = np_as_located_field(KDim)(np.zeros((size,)))
-    out2 = np_as_located_field(KDim)(np.zeros((size,)))
-    expected = np.arange(init[1] + 1.0, init[1] + 1.0 + size, 1)
+    init = (1.0, (2.0, 3.0))
+    out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
+    expected = np.arange(1.0, 1.0 + size, 1)
+    if not forward:
+        expected = np.flip(expected)
 
-    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
-    def simple_scan_operator(carry: tuple[float, float], x: float) -> tuple[float, float]:
-        return (x, carry[1] + 1.0)
+    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    def simple_scan_operator(
+        carry: tuple[float, tuple[float, float]]
+    ) -> tuple[float, tuple[float, float]]:
+        return (carry[0] + 1.0, (carry[1][0] + 1.0, carry[1][1] + 1.0))
 
-    # TODO(tehrengruber): directly call scan operator when this is supported
-    #  for tuple outputs
-    @program
-    def simple_scan_operator_program(
-        x: Field[[KDim], float], out1: Field[[KDim], float], out2: Field[[KDim], float]
-    ) -> None:
-        simple_scan_operator(x, out=(out1, out2))
+    simple_scan_operator(out=(out1, (out2, out3)), offset_provider={})
 
-    simple_scan_operator_program(inp, out1, out2, offset_provider={})
+    assert np.allclose(expected + 1.0, out1)
+    assert np.allclose(expected + 2.0, out2)
+    assert np.allclose(expected + 3.0, out3)
 
-    assert np.allclose(inp, out1)
-    assert np.allclose(expected, out2)
+
+@pytest.mark.parametrize("forward", [True, False])
+def test_scan_nested_tuple_input(fieldview_backend, forward):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
+
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    size = 10
+    init = 1.0
+    inp1 = np_as_located_field(KDim)(np.ones(size))
+    inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
+    out = np_as_located_field(KDim)(np.zeros((size,)))
+
+    prev_levels_iterator = lambda i: range(i + 1) if forward else range(size - 1, i - 1, -1)
+    expected = np.asarray(
+        [
+            reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
+            for i in range(size)
+        ]
+    )
+
+    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
+        return carry + a[0] + a[1]
+
+    simple_scan_operator((inp1, inp2), out=out, offset_provider={})
+
+    assert np.allclose(expected, out)
 
 
 def test_docstring():
@@ -1322,70 +1326,37 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
     inp = np_as_located_field(IDim)(np.ones((size)))
 
-    out1 = np_as_located_field(IDim)(np.ones((size)))
-    out2 = np_as_located_field(IDim)(2 * np.ones((size)))
-    out3 = np_as_located_field(IDim)(3 * np.ones((size)))
-    out4 = np_as_located_field(IDim)(4 * np.ones((size)))
-    out5 = np_as_located_field(IDim)(5 * np.ones((size)))
-    out6 = np_as_located_field(IDim)(6 * np.ones((size)))
-    out7 = np_as_located_field(IDim)(7 * np.ones((size)))
-    out8 = np_as_located_field(IDim)(8 * np.ones((size)))
-    out9 = np_as_located_field(IDim)(9 * np.ones((size)))
+    out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
+
+    OutType = tuple[
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+    ]
 
     @field_operator
-    def _unpack(
-        inp: Field[[IDim], float64],
-    ) -> tuple[
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-        Field[[IDim], float64],
-    ]:
-        *a, a2, a3 = (inp, inp + 2.0, inp + 3.0, inp + 5.0)
-        b1, *b, b3 = (inp + 7.0, inp + 11.0, inp + 13.0, inp + 17.0)
-        c1, c2, *c = (inp + 19.0, inp + 23.0, inp + 29.0, inp + 31.0)
-
-        a_sum = a[0] + a[1]
-        b_sum = b[0] + b[1]
-        c_sum = c[0] + c[1]
-
-        return a_sum, a2, a3, b1, b_sum, b3, c1, c2, c_sum
-
-    @program(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
-        out1: Field[[IDim], float64],
-        out2: Field[[IDim], float64],
-        out3: Field[[IDim], float64],
-        out4: Field[[IDim], float64],
-        out5: Field[[IDim], float64],
-        out6: Field[[IDim], float64],
-        out7: Field[[IDim], float64],
-        out8: Field[[IDim], float64],
-        out9: Field[[IDim], float64],
-    ):
-        _unpack(inp, out=(out1, out2, out3, out4, out5, out6, out7, out8, out9))
+    ) -> OutType:
+        *a, a2, a3 = (inp, inp + 1.0, inp + 2.0, inp + 3.0)
+        b1, *b, b3 = (inp + 4.0, inp + 5.0, inp + 6.0, inp + 7.0)
+        c1, c2, *c = (inp + 8.0, inp + 9.0, inp + 10.0, inp + 11.0)
 
-    unpack(inp, out1, out2, out3, out4, out5, out6, out7, out8, out9, offset_provider={})
+        return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
 
-    arr = inp.array()
+    unpack(inp, out=out, offset_provider={})
 
-    assert np.allclose(out1, sum([arr, arr, 2]))
-    assert np.allclose(out2, sum([arr, 3]))
-    assert np.allclose(out3, sum([arr, 5]))
-
-    assert np.allclose(out4, sum([arr, 7]))
-    assert np.allclose(out5, sum([arr, 11, arr, 13]))
-    assert np.allclose(out6, sum([arr, 17]))
-
-    assert np.allclose(out7, sum([arr, 19]))
-    assert np.allclose(out8, sum([arr, 23]))
-    assert np.allclose(out9, sum([arr, 29, arr, 31]))
+    for i in range(3 * 4):
+        assert np.allclose(out[i], inp.array() + i)
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
