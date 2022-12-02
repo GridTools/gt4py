@@ -131,7 +131,7 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
             incomplete_nodes.append(node)
 
 
-class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait):
+class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
 
@@ -257,7 +257,10 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
+
         values = self.visit(node.value, **kwargs)
+
+
         num_elts = len(values.type.types)
         targets = node.targets
         indices = compute_assign_indices(targets, num_elts)
@@ -266,7 +269,7 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
             if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
                 raise FieldOperatorTypeDeductionError(f"Too many values to unpack (expected {len(indices)}).")
 
-        new_target_list = []
+        new_targets: list[foast.Starred | foast.Symbol] = []
         for i, index in enumerate(indices):
             old_target = targets[i]
 
@@ -291,9 +294,9 @@ class FieldOperatorTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTr
             new_target = self.visit(
                 new_target, refine_type=new_type, location=old_target.location, **kwargs
             )
-            new_target_list.append(new_target)
+            new_targets.append(new_target)
 
-        return foast.TupleTargetAssign(targets=new_target_list, value=values, location=node.location)
+        return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
 
     def visit_Symbol(
         self,

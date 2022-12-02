@@ -221,10 +221,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         )
                     )
 
-            tta = foast.TupleTargetAssign(
+            return foast.TupleTargetAssign(
                 targets=new_targets, value=self.visit(node.value), location=self._make_loc(node)
             )
-            return tta
 
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")

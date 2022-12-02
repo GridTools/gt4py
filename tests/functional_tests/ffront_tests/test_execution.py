@@ -44,7 +44,7 @@ from functional.program_processors.runners import gtfn_cpu, roundtrip
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1323,14 +1323,14 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
     inp = np_as_located_field(IDim)(np.ones((size)))
 
     out1 = np_as_located_field(IDim)(np.ones((size)))
-    out2 = np_as_located_field(IDim)(np.ones((size)))
-    out3 = np_as_located_field(IDim)(np.ones((size)))
-    out4 = np_as_located_field(IDim)(np.ones((size)))
-    out5 = np_as_located_field(IDim)(np.ones((size)))
-    out6 = np_as_located_field(IDim)(np.ones((size)))
-    out7 = np_as_located_field(IDim)(np.ones((size)))
-    out8 = np_as_located_field(IDim)(np.ones((size)))
-    out9 = np_as_located_field(IDim)(np.ones((size)))
+    out2 = np_as_located_field(IDim)(2*np.ones((size)))
+    out3 = np_as_located_field(IDim)(3*np.ones((size)))
+    out4 = np_as_located_field(IDim)(4*np.ones((size)))
+    out5 = np_as_located_field(IDim)(5*np.ones((size)))
+    out6 = np_as_located_field(IDim)(6*np.ones((size)))
+    out7 = np_as_located_field(IDim)(7*np.ones((size)))
+    out8 = np_as_located_field(IDim)(8*np.ones((size)))
+    out9 = np_as_located_field(IDim)(9*np.ones((size)))
 
     @field_operator
     def _unpack(
@@ -1388,12 +1388,18 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
-    with pytest.raises(FieldOperatorTypeDeductionError):
+    with pytest.raises(FieldOperatorTypeDeductionError, match=(r"Could not deduce type: Too many values to unpack \(expected 3\)")):
         @field_operator
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
 
+def test_tuple_unpacking_too_many_values(fieldview_backend):
+    with pytest.raises(FieldOperatorTypeDeductionError, match=(r"Could not deduce type: Too many values to unpack \(expected 3\)")):
+        @field_operator
+        def _star_unpack() -> tuple[int, float64, int]:
+            a, b, c = 1
+            return a, b, c
 
 def test_constant_closure_vars():
     from eve.utils import FrozenNamespace
