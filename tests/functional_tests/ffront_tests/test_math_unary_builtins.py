@@ -48,9 +48,9 @@ def test_arithmetic(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return (inp1 + inp2 / 3.0 - inp2) * 2.0
 
-    arithmetic(a_float, b_float, out=out_float, offset_provider={})
-    expected = (a_float.array() + b_float.array() / 3.0 - b_float.array()) * 2.0
-    assert np.allclose(expected, out_float)
+    arithmetic(a_I_float, b_I_float, out=out_I_float, offset_provider={})
+    expected = (a_I_float.array() + b_I_float.array() / 3.0 - b_I_float.array()) * 2.0
+    assert np.allclose(expected, out_I_float)
 
 
 def test_power(fieldview_backend):
@@ -58,8 +58,8 @@ def test_power(fieldview_backend):
     def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp1**2
 
-    pow(a_float, out=out_float, offset_provider={})
-    assert np.allclose(a_float.array() ** 2, out_float)
+    pow(a_I_float, out=out_I_float, offset_provider={})
+    assert np.allclose(a_I_float.array() ** 2, out_I_float)
 
 
 def test_floordiv(fieldview_backend):
@@ -70,8 +70,8 @@ def test_floordiv(fieldview_backend):
     def floorDiv(inp1: Field[[IDim], int64]) -> Field[[IDim], int64]:
         return inp1 // 2
 
-    floorDiv(a_int, out=out_int, offset_provider={})
-    assert np.allclose(a_int.array() // 2, out_int)
+    floorDiv(a_I_int, out=out_I_int, offset_provider={})
+    assert np.allclose(a_I_int.array() // 2, out_I_int)
 
 
 def test_mod(fieldview_backend):
@@ -82,8 +82,8 @@ def test_mod(fieldview_backend):
     def mod_fieldop(inp1: Field[[IDim], int64]) -> Field[[IDim], int64]:
         return inp1 % 2
 
-    mod_fieldop(a_int, out=out_int, offset_provider={})
-    assert np.allclose(a_int.array() % 2, out_int)
+    mod_fieldop(a_I_int, out=out_I_int, offset_provider={})
+    assert np.allclose(a_I_int.array() % 2, out_I_int)
 
 
 def test_bit_xor(fieldview_backend):
@@ -91,8 +91,8 @@ def test_bit_xor(fieldview_backend):
     def binary_xor(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 ^ inp2
 
-    binary_xor(a_bool, b_bool, out=out_bool, offset_provider={})
-    assert np.allclose(a_bool.array() ^ b_bool.array(), out_bool)
+    binary_xor(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
+    assert np.allclose(a_I_bool.array() ^ b_I_bool.array(), out_I_bool)
 
 
 def test_bit_and(fieldview_backend):
@@ -100,8 +100,8 @@ def test_bit_and(fieldview_backend):
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 & inp2 & True
 
-    bit_and(a_bool, b_bool, out=out_bool, offset_provider={})
-    assert np.allclose(a_bool.array() & b_bool.array(), out_bool)
+    bit_and(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
+    assert np.allclose(a_I_bool.array() & b_I_bool.array(), out_I_bool)
 
 
 def test_bit_or(fieldview_backend):
@@ -109,8 +109,8 @@ def test_bit_or(fieldview_backend):
     def bit_or(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return inp1 | inp2 | True
 
-    bit_or(a_bool, b_bool, out=out_bool, offset_provider={})
-    assert np.allclose(a_bool.array() | b_bool.array(), out_bool)
+    bit_or(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
+    assert np.allclose(a_I_bool.array() | b_I_bool.array(), out_I_bool)
 
 
 # Unary builtins
@@ -121,8 +121,8 @@ def test_unary_neg(fieldview_backend):
     def uneg(inp: Field[[IDim], int64]) -> Field[[IDim], int64]:
         return -inp
 
-    uneg(a_int, out=out_int, offset_provider={})
-    assert np.allclose(-a_int.array(), out_int)
+    uneg(a_I_int, out=out_I_int, offset_provider={})
+    assert np.allclose(-a_I_int.array(), out_I_int)
 
 
 def test_unary_invert(fieldview_backend):
@@ -130,8 +130,8 @@ def test_unary_invert(fieldview_backend):
     def tilde_fieldop(inp1: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return ~inp1
 
-    tilde_fieldop(a_bool, out=out_bool, offset_provider={})
-    assert np.allclose(~a_bool.array(), out_bool)
+    tilde_fieldop(a_I_bool, out=out_I_bool, offset_provider={})
+    assert np.allclose(~a_I_bool.array(), out_I_bool)
 
 
 def test_unary_not(fieldview_backend):
@@ -139,8 +139,8 @@ def test_unary_not(fieldview_backend):
     def not_fieldop(inp1: Field[[IDim], bool]) -> Field[[IDim], bool]:
         return not inp1
 
-    not_fieldop(a_bool, out=out_bool, offset_provider={})
-    assert np.allclose(~a_bool.array(), out_bool)
+    not_fieldop(a_I_bool, out=out_I_bool, offset_provider={})
+    assert np.allclose(~a_I_bool.array(), out_I_bool)
 
 
 # Trig builtins
@@ -153,12 +153,15 @@ def test_basic_trig(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return sin(cos(inp1)) - sinh(cosh(inp2)) + tan(inp1) - tanh(inp2)
 
-    basic_trig_fieldop(a_float, b_float, out=out_float, offset_provider={})
+    basic_trig_fieldop(a_I_float, b_I_float, out=out_I_float, offset_provider={})
 
     expected = (
-        np.sin(np.cos(a_float)) - np.sinh(np.cosh(b_float)) + np.tan(a_float) - np.tanh(b_float)
+        np.sin(np.cos(a_I_float))
+        - np.sinh(np.cosh(b_I_float))
+        + np.tan(a_I_float)
+        - np.tanh(b_I_float)
     )
-    assert np.allclose(expected, out_float)
+    assert np.allclose(expected, out_I_float)
 
 
 def test_exp_log(fieldview_backend):
@@ -170,10 +173,10 @@ def test_exp_log(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return log(inp1) - exp(inp2)
 
-    exp_log_fieldop(a_float, b_float, out=out_float, offset_provider={})
+    exp_log_fieldop(a_float, b_I_float, out=out_I_float, offset_provider={})
 
-    expected = np.log(a_float) - np.exp(b_float)
-    assert np.allclose(expected, out_float)
+    expected = np.log(a_float) - np.exp(b_I_float)
+    assert np.allclose(expected, out_I_float)
 
 
 def test_roots(fieldview_backend):
@@ -185,38 +188,38 @@ def test_roots(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return sqrt(inp1) - cbrt(inp2)
 
-    roots_fieldop(a_float, b_float, out=out_float, offset_provider={})
+    roots_fieldop(a_float, b_I_float, out=out_I_float, offset_provider={})
 
-    expected = np.sqrt(a_float) - np.cbrt(b_float)
-    assert np.allclose(expected, out_float)
+    expected = np.sqrt(a_float) - np.cbrt(b_I_float)
+    assert np.allclose(expected, out_I_float)
 
 
 def test_is_values(fieldview_backend):
-    out_bool_1 = out_bool
-    out_bool_2 = out_bool
+    out_bool_1 = out_I_bool
+    out_bool_2 = out_I_bool
 
     @field_operator(backend=fieldview_backend)
     def is_isinf_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
         return isinf(inp1)
 
-    is_isinf_fieldop(a_float, out=out_bool, offset_provider={})
-    expected = np.isinf(a_float)
-    assert np.allclose(expected, out_bool)
+    is_isinf_fieldop(a_I_float, out=out_I_bool, offset_provider={})
+    expected = np.isinf(a_I_float)
+    assert np.allclose(expected, out_I_bool)
 
     @field_operator(backend=fieldview_backend)
     def is_isnan_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
         return isnan(inp1)
 
-    is_isnan_fieldop(a_float, out=out_bool_1, offset_provider={})
-    expected = np.isnan(a_float)
+    is_isnan_fieldop(a_I_float, out=out_bool_1, offset_provider={})
+    expected = np.isnan(a_I_float)
     assert np.allclose(expected, out_bool_1)
 
     @field_operator(backend=fieldview_backend)
     def is_isfinite_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
         return isfinite(inp1)
 
-    is_isfinite_fieldop(a_float, out=out_bool_2, offset_provider={})
-    expected = np.isfinite(a_float)
+    is_isfinite_fieldop(a_I_float, out=out_bool_2, offset_provider={})
+    expected = np.isfinite(a_I_float)
     assert np.allclose(expected, out_bool_2)
 
 
@@ -227,7 +230,7 @@ def test_rounding_funs(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return floor(inp1) - ceil(inp2) + trunc(inp1)
 
-    rounding_funs_fieldop(a_float, b_float, out=out_float, offset_provider={})
+    rounding_funs_fieldop(a_I_float, b_I_float, out=out_I_float, offset_provider={})
 
-    expected = np.floor(a_float) - np.ceil(b_float) + np.trunc(a_float)
-    assert np.allclose(expected, out_float)
+    expected = np.floor(a_I_float) - np.ceil(b_I_float) + np.trunc(a_I_float)
+    assert np.allclose(expected, out_I_float)

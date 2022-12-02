@@ -26,9 +26,9 @@ def test_copy(fieldview_backend):
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp
 
-    copy(a_float, out=b_float, offset_provider={})
+    copy(a_I_float, out=b_I_float, offset_provider={})
 
-    assert np.allclose(a_float, b_float)
+    assert np.allclose(a_I_float, b_I_float)
 
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
@@ -39,13 +39,12 @@ def test_multicopy(fieldview_backend):
     ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
         return inp1, inp2
 
-    assert np.allclose(a_float, out_float)
-    assert np.allclose(b_float, out_float_1)
+    assert np.allclose(a_I_float, out_I_float)
+    assert np.allclose(b_I_float, out_I_float_1)
 
 
 def test_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
-    b = np_as_located_field(IDim)(np.zeros((size)))
 
     @field_operator
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -55,9 +54,9 @@ def test_shift(fieldview_backend):
     def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
         shift_by_one(inp, out=out)
 
-    fencil(a, b, offset_provider={"Ioff": IDim})
+    fencil(a, out_I_float, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(b.array(), np.arange(1, 11))
+    assert np.allclose(out_I_float.array(), np.arange(1, 11))
 
 
 def test_fold_shifts(fieldview_backend):
@@ -78,9 +77,9 @@ def test_fold_shifts(fieldview_backend):
     ) -> None:
         auto_lift(inp1, inp2, out=out)
 
-    fencil(a, b, out_float, offset_provider={"Ioff": IDim})
+    fencil(a, b, out_I_float, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(a[1:] + b[2:], out_float)
+    assert np.allclose(a[1:] + b[2:], out_I_float)
 
 
 def test_tuples(fieldview_backend):
@@ -101,9 +100,9 @@ def test_tuples(fieldview_backend):
     ) -> None:
         tuples(inp1, inp2, out=out)
 
-    fencil(a_float, b_float, out_float, offset_provider={})
+    fencil(a_I_float, b_I_float, out_I_float, offset_provider={})
 
-    assert np.allclose((a_float.array() * 1.3 + b_float.array() * 5.0) * 3.4, out_float)
+    assert np.allclose((a_I_float.array() * 1.3 + b_I_float.array() * 5.0) * 3.4, out_I_float)
 
 
 def test_scalar_arg(fieldview_backend):
@@ -182,9 +181,9 @@ def test_nested_tuple_return():
         packed = pack_tuple(a, b)
         return packed[0] + packed[1][0] + packed[1][1]
 
-    combine(a_float, b_float, out=out_float, offset_provider={})
+    combine(a_I_float, b_I_float, out=out_I_float, offset_provider={})
 
-    assert np.allclose(2 * a_float.array() + b_float.array(), out_float)
+    assert np.allclose(2 * a_I_float.array() + b_I_float.array(), out_I_float)
 
 
 def test_tuple_return_2(reduction_setup):
@@ -262,9 +261,9 @@ def test_tuple_arg(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return 3.0 * inp[0][0] + inp[0][1] + inp[1]
 
-    unpack_tuple(((a_float, b_float), a_float), out=out_float, offset_provider={})
+    unpack_tuple(((a_I_float, b_I_float), a_I_float), out=out_I_float, offset_provider={})
 
-    assert np.allclose(3 * a_float.array() + b_float.array() + a_float.array(), out_float)
+    assert np.allclose(3 * a_I_float.array() + b_I_float.array() + a_I_float.array(), out_I_float)
 
 
 @pytest.mark.parametrize("forward", [True, False])
@@ -346,17 +345,17 @@ def test_ternary_operator():
     ) -> Field[[IDim], float]:
         return a if left < right else b
 
-    ternary_field_op(a_float, b_float, left, right, out=out_float, offset_provider={})
-    e = np.asarray(a_float) if left < right else np.asarray(b_float)
-    np.allclose(e, out_float)
+    ternary_field_op(a_I_float, b_I_float, left, right, out=out_I_float, offset_provider={})
+    e = np.asarray(a_I_float) if left < right else np.asarray(b_I_float)
+    np.allclose(e, out_I_float)
 
     @field_operator
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
         return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
-    ternary_field_op_scalars(left, right, out=out_float, offset_provider={})
+    ternary_field_op_scalars(left, right, out=out_I_float, offset_provider={})
     e = np.full(e.shape, 3.0) if left > right else e
-    np.allclose(e, out_float)
+    np.allclose(e, out_I_float)
 
 
 def test_ternary_operator_tuple():
@@ -370,16 +369,16 @@ def test_ternary_operator_tuple():
         return (a, b) if left < right else (b, a)
 
     ternary_field_op(
-        a_float, b_float, left, right, out=(out_float, out_float_1), offset_provider={}
+        a_I_float, b_I_float, left, right, out=(out_I_float, out_I_float_1), offset_provider={}
     )
 
     e, f = (
-        (np.asarray(a_float), np.asarray(b_float))
+        (np.asarray(a_I_float), np.asarray(b_I_float))
         if left < right
-        else (np.asarray(b_float), np.asarray(a_float))
+        else (np.asarray(b_I_float), np.asarray(a_I_float))
     )
-    np.allclose(e, out_float)
-    np.allclose(f, out_float_1)
+    np.allclose(e, out_I_float)
+    np.allclose(f, out_I_float_1)
 
 
 def test_ternary_builtin_neighbor_sum(reduction_setup):
@@ -490,7 +489,7 @@ def test_docstring():
         """My docstring."""
         fieldop_with_docstring(a, out=a)
 
-    test_docstring(a_float, offset_provider={})
+    test_docstring(a_I_float, offset_provider={})
 
 
 def test_domain(fieldview_backend):
@@ -502,12 +501,12 @@ def test_domain(fieldview_backend):
     def program_domain(a: Field[[IDim, JDim], float64]):
         fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
 
-    program_domain(a2d_float, offset_provider={})
+    program_domain(a_IJ_float, offset_provider={})
 
-    expected = np.asarray(a2d_float)
+    expected = np.asarray(a_IJ_float)
     expected[1:9, 4:6] = 1 + 1
 
-    assert np.allclose(expected, a2d_float)
+    assert np.allclose(expected, a_IJ_float)
 
 
 def test_domain_input_bounds(fieldview_backend):
@@ -537,12 +536,12 @@ def test_domain_input_bounds(fieldview_backend):
             domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
         )
 
-    program_domain(a2d_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+    program_domain(a_IJ_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
-    expected = np.asarray(a2d_float)
+    expected = np.asarray(a_IJ_float)
     expected[1:9, 4:6] = 1 + 1
 
-    assert np.allclose(expected, a2d_float)
+    assert np.allclose(expected, a_IJ_float)
 
 
 def test_domain_input_bounds_1(fieldview_backend):
@@ -569,16 +568,16 @@ def test_domain_input_bounds_1(fieldview_backend):
             domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)},
         )
 
-    program_domain(a2d_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+    program_domain(a_IJ_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
-    expected = np.asarray(a2d_float)
+    expected = np.asarray(a_IJ_float)
     expected[1:9, 4:6] = 2 * 2
 
-    assert np.allclose(expected, a2d_float)
+    assert np.allclose(expected, a_IJ_float)
 
 
 def test_domain_tuple(fieldview_backend):
-    b2d_float = a2d_float
+    b2d_float = a_IJ_float
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain_tuple(
@@ -590,12 +589,12 @@ def test_domain_tuple(fieldview_backend):
     def program_domain_tuple(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
         fieldop_domain_tuple(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
 
-    program_domain_tuple(a2d_float, b2d_float, offset_provider={})
+    program_domain_tuple(a_IJ_float, b2d_float, offset_provider={})
 
-    expected = np.asarray(a2d_float)
+    expected = np.asarray(a_IJ_float)
     expected[1:9, 4:6] = 1 + 1
 
-    assert np.allclose(np.asarray(a2d_float), a2d_float)
+    assert np.allclose(np.asarray(a_IJ_float), a_IJ_float)
     assert np.allclose(expected, b2d_float)
 
 

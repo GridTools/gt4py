@@ -181,19 +181,19 @@ def test_conditional_nested_tuple():
 
     conditional_nested_tuple(
         mask,
-        a_float,
-        b_float,
-        out=((out_float, out_float_1), (out_float_1, out_float)),
+        a_I_float,
+        b_I_float,
+        out=((out_I_float, out_I_float_1), (out_I_float_1, out_I_float)),
         offset_provider={},
     )
 
     expected = np.where(
         mask,
-        ((a_float, b_float), (b_float, a_float)),
+        ((a_I_float, b_I_float), (b_I_float, a_I_float)),
         ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
     )
 
-    assert np.allclose(expected, ((out_float, out_float_1), (out_float_1, out_float)))
+    assert np.allclose(expected, ((out_I_float, out_I_float_1), (out_I_float_1, out_I_float)))
 
 
 def test_broadcast_simple(fieldview_backend):
@@ -201,9 +201,9 @@ def test_broadcast_simple(fieldview_backend):
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         return broadcast(inp, (IDim, JDim))
 
-    simple_broadcast(a_int, out=out2d_int, offset_provider={})
+    simple_broadcast(a_I_int, out=out_IJ_int, offset_provider={})
 
-    assert np.allclose(a_int.array()[:, np.newaxis], out2d_int)
+    assert np.allclose(a_I_int.array()[:, np.newaxis], out_IJ_int)
 
 
 def test_broadcast_scalar(fieldview_backend):
@@ -211,9 +211,9 @@ def test_broadcast_scalar(fieldview_backend):
     def scalar_broadcast() -> Field[[IDim], float64]:
         return broadcast(float(1.0), (IDim,))
 
-    scalar_broadcast(out=out_float, offset_provider={})
+    scalar_broadcast(out=out_I_float, offset_provider={})
 
-    assert np.allclose(1, out_float)
+    assert np.allclose(1, out_I_float)
 
 
 def test_broadcast_two_fields(fieldview_backend):
@@ -225,11 +225,11 @@ def test_broadcast_two_fields(fieldview_backend):
         b = broadcast(inp2, (IDim, JDim))
         return a + b
 
-    broadcast_two_fields(a_int, b_int, out=out2d_int, offset_provider={})
+    broadcast_two_fields(a_I_int, b_J_int, out=out_IJ_int, offset_provider={})
 
-    expected = a_int.array()[:, np.newaxis] + b_int.array()[np.newaxis, :]
+    expected = a_I_int.array()[:, np.newaxis] + b_J_int.array()[np.newaxis, :]
 
-    assert np.allclose(expected, out2d_int)
+    assert np.allclose(expected, out_IJ_int)
 
 
 def test_broadcast_shifted(fieldview_backend):
@@ -238,9 +238,9 @@ def test_broadcast_shifted(fieldview_backend):
         bcasted = broadcast(inp, (IDim, JDim))
         return bcasted(Joff[1])
 
-    simple_broadcast(a_int, out=out2d_int, offset_provider={"Joff": JDim})
+    simple_broadcast(a_I_int, out=out_IJ_int, offset_provider={"Joff": JDim})
 
-    assert np.allclose(a_int.array()[:, np.newaxis], out2d_int)
+    assert np.allclose(a_I_int.array()[:, np.newaxis], out_IJ_int)
 
 
 def test_conditional(fieldview_backend):
@@ -250,9 +250,9 @@ def test_conditional(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return where(mask, a, b)
 
-    conditional(mask, a_float, b_float, out=out_float, offset_provider={})
+    conditional(mask, a_I_float, b_I_float, out=out_I_float, offset_provider={})
 
-    assert np.allclose(np.where(mask, a_float, b_float), out_float)
+    assert np.allclose(np.where(mask, a_I_float, b_I_float), out_I_float)
 
 
 def test_conditional_promotion(fieldview_backend):
@@ -262,9 +262,9 @@ def test_conditional_promotion(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return where(mask, a, 10.0)
 
-    conditional_promotion(mask, a_float, out=out_float, offset_provider={})
+    conditional_promotion(mask, a_I_float, out=out_I_float, offset_provider={})
 
-    assert np.allclose(np.where(mask, a_float, 10), out_float)
+    assert np.allclose(np.where(mask, a_I_float, 10), out_I_float)
 
 
 def test_conditional_compareop(fieldview_backend):
@@ -272,9 +272,11 @@ def test_conditional_compareop(fieldview_backend):
     def conditional_promotion(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return where(a != a, a, 10.0)
 
-    conditional_promotion(a_float, out=out_float, offset_provider={})
+    conditional_promotion(a_I_float, out=out_I_float, offset_provider={})
 
-    assert np.allclose(np.where(np.asarray(a_float) != np.asarray(a_float), a_float, 10), out_float)
+    assert np.allclose(
+        np.where(np.asarray(a_I_float) != np.asarray(a_I_float), a_I_float, 10), out_I_float
+    )
 
 
 def test_conditional_shifted(fieldview_backend):
@@ -294,9 +296,9 @@ def test_conditional_shifted(fieldview_backend):
     ):
         conditional_shifted(mask, a, b, out=out[:-1])
 
-    conditional_program(mask, a_float, b_float, out_float, offset_provider={"Ioff": IDim})
+    conditional_program(mask, a_I_float, b_I_float, out_I_float, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(np.where(mask, a_float, b_float)[1:], out_float.array()[:-1])
+    assert np.allclose(np.where(mask, a_I_float, b_I_float)[1:], out_I_float.array()[:-1])
 
 
 def test_promotion(fieldview_backend):
