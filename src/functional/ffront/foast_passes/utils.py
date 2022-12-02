@@ -6,7 +6,7 @@ def compute_assign_indices(
     num_elts: int,
 ) -> list[tuple[int, int] | int]:
     """
-    Compute a list of relative indices, mapping each target to its respective value(s).
+    Compute a list of indices, mapping each target to its respective value(s).
 
     This function is used when mapping a tuple of targets to a tuple of values, and also handles the
     case in which tuple unpacking is done using a Starred operator.
