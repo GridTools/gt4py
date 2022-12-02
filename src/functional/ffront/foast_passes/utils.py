@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple, Optional
+from typing import List, Optional, Tuple, Union
 
 from functional.ffront import field_operator_ast as foast
 
