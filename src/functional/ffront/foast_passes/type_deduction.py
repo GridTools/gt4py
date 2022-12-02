@@ -609,7 +609,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         dtype_obj_type = node.args[1].type
         if not isinstance(dtype_obj_type, ct.FunctionType) or not (
             type_info.is_arithmetic(dtype_obj_type.returns)
-            or type_info.is_logical(dtype_obj_type.type.returns)
+            or type_info.is_logical(dtype_obj_type.returns)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
