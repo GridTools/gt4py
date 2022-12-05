@@ -1281,7 +1281,6 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-
 def test_zero_dims_fields(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("Implicit broadcast are not supported yet.")
@@ -1318,6 +1317,7 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
     fieldop_implicit_broadcast_2(input1, out=out, offset_provider={})
     assert np.allclose(out, np.asarray(inp) * 2)
+
 
 def test_tuple_unpacking(fieldview_backend):
     size = 10
