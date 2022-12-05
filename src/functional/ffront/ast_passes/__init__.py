@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from .simple_assign import SingleAssignTargetPass, UnpackedAssignPass
+from .simple_assign import SingleAssignTargetPass
 from .single_static_assign import SingleStaticAssignPass
 from .stringify_annotations import StringifyAnnotationsPass
 from .unchain_compares import UnchainComparesPass
@@ -23,6 +23,5 @@ __all__ = [
     "SingleAssignTargetPass",
     "SingleStaticAssignPass",
     "StringifyAnnotationsPass",
-    "UnpackedAssignPass",
     "UnchainComparesPass",
 ]
