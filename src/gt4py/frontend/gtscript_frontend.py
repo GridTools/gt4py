@@ -1599,7 +1599,6 @@ class GTScriptParser(ast.NodeVisitor):
     CONST_VALUE_TYPES = (
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
-        type(None),
         gtscript.AxisIndex,
         gtscript.Axis,
     )

@@ -18,7 +18,6 @@ from gt4py.definitions import StencilID
 from gtc import gtir
 from gtc.passes.gtir_definitive_assignment_analysis import check as check_assignments
 from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 from gtc.passes.gtir_upcaster import upcast
 
 
@@ -43,7 +42,7 @@ class GtirPipeline:
         return self._stencil_id
 
     def steps(self) -> Sequence[PASS_T]:
-        return [check_assignments, prune_unused_parameters, resolve_dtype, upcast]
+        return [check_assignments, resolve_dtype, upcast]
 
     def apply(self, steps: Sequence[PASS_T]) -> gtir.Stencil:
         result = self.gtir

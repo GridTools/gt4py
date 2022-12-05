@@ -142,85 +142,12 @@ def test_domain_selection():
     assert np.all(C == 21)
 
 
-def a_stencil(
-    arg1: Field[np.float64],
-    arg2: Field[np.float64],
-    arg3: Field[np.float64] = None,
-    *,
-    par1: np.float64,
-    par2: np.float64 = 7.0,
-    par3: np.float64 = None,
-):
-    from __externals__ import BRANCH
-
-    with computation(PARALLEL), interval(...):
-
-        if __INLINED(BRANCH):
-            arg1 = arg1 * par1 * par2
-        else:
-            arg1 = arg2 + arg3 * par1 * par2 * par3
-
-
 ## The following type ignores are there because mypy get's confused by gtscript
 def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):  # type: ignore
     with computation(PARALLEL), interval(...):  # type: ignore
         out_field = 0.25 * (
             +in_field[0, 1, 0] + in_field[0, -1, 0] + in_field[1, 0, 0] + in_field[-1, 0, 0]
         )
-
-
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
-def test_default_arguments(backend):
-    branch_true = gtscript.stencil(
-        backend=backend, definition=a_stencil, externals={"BRANCH": True}, rebuild=True
-    )
-    branch_false = gtscript.stencil(
-        backend=backend, definition=a_stencil, externals={"BRANCH": False}, rebuild=True
-    )
-
-    arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    tmp = np.asarray(arg3)
-    tmp *= 2
-
-    branch_true(arg1, None, arg3, par1=2.0)
-    np.testing.assert_equal(arg1, 14 * np.ones((3, 3, 3)))
-    branch_true(arg1, None, par1=2.0)
-    np.testing.assert_equal(arg1, 196 * np.ones((3, 3, 3)))
-    branch_false(arg1, arg2, arg3, par1=2.0, par3=2.0)
-    np.testing.assert_equal(arg1, 56 * np.ones((3, 3, 3)))
-
-    with pytest.raises((ValueError, AssertionError)):
-        branch_false(arg1, arg2, par1=2.0, par3=2.0)
-
-    arg1 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    arg2 = gt_storage.zeros(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    arg3 = gt_storage.ones(
-        backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
-    )
-    tmp = np.asarray(arg3)
-    tmp *= 2
-
-    branch_true(arg1, arg2=None, par1=2.0, par2=5.0, par3=3.0)
-    np.testing.assert_equal(arg1, 10 * np.ones((3, 3, 3)))
-    branch_true(arg1, arg2=None, par1=2.0, par2=5.0)
-    np.testing.assert_equal(arg1, 100 * np.ones((3, 3, 3)))
-    branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0, par3=3.0)
-    np.testing.assert_equal(arg1, 60 * np.ones((3, 3, 3)))
-
-    with pytest.raises((TypeError, AssertionError)):
-        branch_false(arg1, arg2, arg3, par1=2.0, par2=5.0)
 
 
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
