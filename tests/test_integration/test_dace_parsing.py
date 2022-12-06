@@ -243,54 +243,7 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == np.prod(domain) * 7.0
 
 
-def test_optional_arg_noprovide():
-
-    backend = "dace:cpu"
-
-    @gtscript.stencil(backend=backend)
-    def stencil(
-        inp: gtscript.Field[np.float64],
-        outp: gtscript.Field[np.float64],
-        unused_field: gtscript.Field[np.float64],
-        unused_par: float,
-    ):
-        with computation(PARALLEL), interval(...):
-            outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-    frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
-    )
-
-    inp = OriginWrapper(
-        array=gt_storage.full(
-            fill_value=7.0,
-            shape=(10, 10, 10),
-            dtype=np.float64,
-            aligned_index=(0, 0, 0),
-            backend=backend,
-        ),
-        origin=(0, 0, 0),
-    )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
-        ),
-        origin=(0, 0, 0),
-    )
-
-    @dace.program
-    def call_frozen_stencil():
-        frozen_stencil(inp=inp, outp=outp)
-
-    call_frozen_stencil()
-
-    assert np.allclose(inp, 7.0)
-    assert np.allclose(np.asarray(outp)[2:5, 2:5, :], 7.0)
-    assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
-
-
-def test_optional_arg_provide(decorator):
+def test_unused_args(decorator):
     backend = "dace:cpu"
 
     @decorator(backend=backend)
@@ -326,7 +279,7 @@ def test_optional_arg_provide(decorator):
         origin=(0, 0, 0),
     )
 
-    # @dace.program
+    @dace.program
     def call_stencil():
         stencil(
             inp=inp,
@@ -344,7 +297,7 @@ def test_optional_arg_provide(decorator):
     assert np.sum(np.asarray(outp), axis=(0, 1, 2)) == 90 * 7.0
 
 
-def test_optional_arg_provide_aot(decorator):
+def test_unused_args_aot(decorator):
     backend = "dace:cpu"
 
     @decorator(backend=backend)
