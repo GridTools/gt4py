@@ -45,9 +45,7 @@ class ITIRTypeKind(enum.Enum):
     ENCAPSULATED_ITERATOR = 2
 
 
-def iterator_type_kind(
-    symbol_type: ct.SymbolType
-) -> ITIRTypeKind:
+def iterator_type_kind(symbol_type: ct.SymbolType) -> ITIRTypeKind:
     """
     Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
 
