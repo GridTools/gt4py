@@ -278,7 +278,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 if isinstance(index, tuple):
                     lower, upper = index
                     new_type = ct.TupleType(types=[t for t in values.type.types[lower:upper]])
-                    # todo: possibly change definition of Starred node to not need nested id attribute.
+                    # TODO(samkellerhals): possibly change definition of Starred node to not need nested id attribute.
                     new_target = foast.Starred(
                         id=foast.DataSymbol(
                             id=old_target.id.id, location=old_target.location, type=new_type  # type: ignore
