@@ -389,7 +389,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 _ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)
+    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
 
     # `Any` is a class since Python 3.11
     if isinstance(_typing.Any, type):  # Python >= 3.11
@@ -413,12 +413,12 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     return isinstance(obj, type) and type(obj) not in _ArtefactTypes
 
 
-if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
+if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
     # When using Python < 3.11 and typing_extensions >= 4.4 there are
     # two different implementations of `Any`
 
     def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any or obj is _typing_extensions.Any
+        return obj is _typing.Any or obj is _typing_extensions.Any  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
 
 else:
 
