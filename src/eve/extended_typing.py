@@ -36,6 +36,7 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
+import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[misc]  # noqa: F403
 
 
@@ -386,23 +387,43 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
     return _decorator(maybe_cls) if maybe_cls is not None else _decorator
 
 
+_ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
+    _ArtefactTypes = (_types.GenericAlias,)
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
+    # `Any` is a class since Python 3.11
+    if isinstance(_typing.Any, type):  # Python >= 3.11
+        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
-        This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
-        """
-        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)  # type: ignore[attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
+# `Any` is a class since typing_extensions >= 4.4
+if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
+    typing_exts_any, type
+):
+    _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
+
+
+def is_actual_type(obj: Any) -> TypeGuard[Type]:
+    """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
+
+    This is needed because since Python 3.9:
+        ``isinstance(types.GenericAlias(),  type) is True``
+    and since Python 3.11:
+        ``isinstance(typing.Any,  type) is True``
+    """
+    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
+
+
+if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
+    # When using Python < 3.11 and typing_extensions >= 4.4 there are
+    # two different implementations of `Any`
+
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any or obj is _typing_extensions.Any
 
 else:
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
-
-        This is only needed for Python >= 3.9, where ``isinstance(types.GenericAlias(),  type) is True``.
-        """
-        return isinstance(obj, type)
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any
 
 
 def has_type_parameters(cls: Type) -> bool:
@@ -619,15 +640,15 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         dict[str, int]
 
         >>> infer_type({'a': 0, 'b': 'B'})
-        dict[str, typing.Any]
+        dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
-        Result: ...Callable[[typing.Any, typing.Any], typing.Any]
+        Result: ...Callable[[...Any, ...Any], ...Any]
 
         # Note that some patch versions of cpython3.9 show weird behaviors
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
-        Result: ...Callable[[...int..., typing.Any], int]
+        Result: ...Callable[[...int..., ...Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
