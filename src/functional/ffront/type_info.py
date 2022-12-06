@@ -314,7 +314,7 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
 
 def promote_zero_dims(
     args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
-):
+) -> list:
     """Cast arg types to zero dimensional fields if compatible and required by function signature."""
     new_args = args.copy()
     for arg_i, arg in enumerate(args):
