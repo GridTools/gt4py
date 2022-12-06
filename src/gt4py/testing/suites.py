@@ -28,7 +28,7 @@ import gtc.utils as gtc_utils
 from gt4py import gtscript
 from gt4py import storage as gt_storage
 from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
+from gt4py.definitions import Boundary, CartesianSpace, FieldInfo
 from gt4py.frontend.nodes import Index
 from gt4py.stencil_object import StencilObject
 from gt4py.storage import utils as storage_utils
@@ -466,8 +466,6 @@ class StencilTestSuite(metaclass=SuiteMeta):
         assert implementation.backend == test["backend"]
 
         for name, field_info in implementation.field_info.items():
-            if field_info.access == AccessKind.NONE:
-                continue
             for i, ax in enumerate("IJK"):
                 assert (
                     ax not in field_info.axes
@@ -505,12 +503,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
             Index(max_boundary.lower_indices) + Index(max_boundary.upper_indices)
         )
 
-        referenced_inputs = {
-            name: info for name, info in implementation.field_info.items() if info is not None
-        }
-        referenced_inputs.update(
-            {name: info for name, info in implementation.parameter_info.items() if info is not None}
-        )
+        referenced_inputs = {**implementation.field_info, **implementation.parameter_info}
 
         # set externals for validation method
         for k, v in implementation.constants.items():
