@@ -35,6 +35,7 @@ from functional.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
+from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -72,7 +73,10 @@ def test_copy(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp
+        field_tuple = (inp, inp)
+        field_0 = field_tuple[0]
+        field_1 = field_tuple[1]
+        return field_0
 
     copy(a, out=b, offset_provider={})
 
@@ -1277,36 +1281,141 @@ def test_undefined_symbols():
             return undefined_symbol
 
 
-def test_zero_dims_fields():
+def test_zero_dims_fields(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Implicit broadcast are not supported yet.")
+
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
 
-    @field_operator
-    def implicit_boradcast_scalar(inp: Field[[], float]):
+    @field_operator(backend=fieldview_backend)
+    def implicit_broadcast_scalar(inp: Field[[], float]):
         return inp
 
-    implicit_boradcast_scalar(inp, out=out, offset_provider={})
+    implicit_broadcast_scalar(inp, out=out, offset_provider={})
     assert np.allclose(out, np.array(1.0))
 
 
-def test_implicit_broadcast_mixed_dims():
+def test_implicit_broadcast_mixed_dims(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip("Implicit broadcast are not supported yet.")
+
     input1 = np_as_located_field(IDim)(np.ones((10,)))
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field(IDim)(np.ones((10,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast(
         zero_dim_inp: Field[[], float], inp: Field[[IDim], float], scalar: float
     ) -> Field[[IDim], float]:
         return inp + zero_dim_inp * scalar
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast_2(inp: Field[[IDim], float]) -> Field[[IDim], float]:
         fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
         return fi
 
     fieldop_implicit_broadcast_2(input1, out=out, offset_provider={})
     assert np.allclose(out, np.asarray(inp) * 2)
+
+
+def test_tuple_unpacking(fieldview_backend):
+    size = 10
+    inp = np_as_located_field(IDim)(np.ones((size)))
+    out1 = np_as_located_field(IDim)(np.ones((size)))
+    out2 = np_as_located_field(IDim)(np.ones((size)))
+    out3 = np_as_located_field(IDim)(np.ones((size)))
+    out4 = np_as_located_field(IDim)(np.ones((size)))
+
+    @field_operator
+    def _unpack(
+        inp: Field[[IDim], float64],
+    ) -> tuple[
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+    ]:
+        a, b, c, d = (inp + 2.0, inp + 3.0, inp + 5.0, inp + 7.0)
+        return a, b, c, d
+
+    @program(backend=fieldview_backend)
+    def unpack(
+        inp: Field[[IDim], float64],
+        out1: Field[[IDim], float64],
+        out2: Field[[IDim], float64],
+        out3: Field[[IDim], float64],
+        out4: Field[[IDim], float64],
+    ):
+        _unpack(inp, out=(out1, out2, out3, out4))
+
+    unpack(inp, out1, out2, out3, out4, offset_provider={})
+
+    arr = inp.array()
+
+    assert np.allclose(out1, arr + 2.0)
+    assert np.allclose(out2, arr + 3.0)
+    assert np.allclose(out3, arr + 5.0)
+    assert np.allclose(out4, arr + 7.0)
+
+
+def test_tuple_unpacking_star_multi(fieldview_backend):
+    size = 10
+    inp = np_as_located_field(IDim)(np.ones((size)))
+    out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
+
+    OutType = tuple[
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+        Field[[IDim], float64],
+    ]
+
+    @field_operator
+    def unpack(
+        inp: Field[[IDim], float64],
+    ) -> OutType:
+        *a, a2, a3 = (inp, inp + 1.0, inp + 2.0, inp + 3.0)
+        b1, *b, b3 = (inp + 4.0, inp + 5.0, inp + 6.0, inp + 7.0)
+        c1, c2, *c = (inp + 8.0, inp + 9.0, inp + 10.0, inp + 11.0)
+
+        return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
+
+    unpack(inp, out=out, offset_provider={})
+
+    for i in range(3 * 4):
+        assert np.allclose(out[i], inp.array() + i)
+
+
+def test_tuple_unpacking_too_many_values(fieldview_backend):
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
+    ):
+
+        @field_operator
+        def _star_unpack() -> tuple[int, float64, int]:
+            a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
+            return a, b, c
+
+
+def test_tuple_unpacking_too_many_values(fieldview_backend):
+    with pytest.raises(
+        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
+    ):
+
+        @field_operator
+        def _invalid_unpack() -> tuple[int, float64, int]:
+            a, b, c = 1
+            return a
 
 
 def test_constant_closure_vars():
