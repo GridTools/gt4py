@@ -20,7 +20,6 @@ from gt4py import testing as gt_testing
 from gt4py.gtscript import PARALLEL, Field, I, J, computation, horizontal, interval, region
 
 from ..definitions import ALL_BACKENDS
-from .stencil_definitions import optional_field, two_optional_fields
 
 
 # ---- Identity stencil ----
@@ -513,86 +512,6 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
 
     def validation(outfield, *, a, b, c, domain, origin, **kwargs):
         outfield[...] = 1 if a > 0 or b > 0 or c > 0 else 0
-
-
-class TestOptionalField(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
-    domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = ALL_BACKENDS
-    symbols = dict(
-        PHYS_TEND=gt_testing.global_name(one_of=(False, True)),
-        in_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        out_field=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        dyn_tend=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        phys_tend=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        dt=gt_testing.parameter(in_range=(0, 100)),
-    )
-
-    definition = optional_field
-
-    def validation(in_field, out_field, dyn_tend, phys_tend=None, *, dt, domain, origin, **kwargs):
-
-        out_field[...] = in_field + dt * dyn_tend
-        if PHYS_TEND:  # noqa: F821  # Undefined name
-            out_field += dt * phys_tend
-
-
-class TestNotSpecifiedOptionalField(TestOptionalField):
-    backends = ALL_BACKENDS
-    symbols = TestOptionalField.symbols.copy()
-    symbols["PHYS_TEND"] = gt_testing.global_name(one_of=(False,))
-    symbols["phys_tend"] = gt_testing.none()
-
-
-class TestTwoOptionalFields(gt_testing.StencilTestSuite):
-    dtypes = (np.float_,)
-    domain_range = [(1, 32), (1, 32), (1, 32)]
-    backends = ALL_BACKENDS
-    symbols = dict(
-        PHYS_TEND_A=gt_testing.global_name(one_of=(False, True)),
-        PHYS_TEND_B=gt_testing.global_name(one_of=(False, True)),
-        in_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        in_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        out_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        out_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        dyn_tend_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        dyn_tend_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        phys_tend_a=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        phys_tend_b=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]),
-        dt=gt_testing.parameter(in_range=(0, 100)),
-    )
-
-    definition = two_optional_fields
-
-    def validation(
-        in_a,
-        in_b,
-        out_a,
-        out_b,
-        dyn_tend_a,
-        dyn_tend_b,
-        phys_tend_a=None,
-        phys_tend_b=None,
-        *,
-        dt,
-        domain,
-        origin,
-        **kwargs,
-    ):
-
-        out_a[...] = in_a + dt * dyn_tend_a
-        out_b[...] = in_b + dt * dyn_tend_b
-        if PHYS_TEND_A:  # noqa: F821  # Undefined name
-            out_a += dt * phys_tend_a
-        if PHYS_TEND_B:  # noqa: F821  # Undefined name
-            out_b += dt * phys_tend_b
-
-
-class TestNotSpecifiedTwoOptionalFields(TestTwoOptionalFields):
-    backends = ALL_BACKENDS
-    symbols = TestTwoOptionalFields.symbols.copy()
-    symbols["PHYS_TEND_A"] = gt_testing.global_name(one_of=(False,))
-    symbols["phys_tend_a"] = gt_testing.none()
 
 
 class TestNon3DFields(gt_testing.StencilTestSuite):
