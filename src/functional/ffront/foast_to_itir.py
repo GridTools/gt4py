@@ -458,12 +458,12 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if isinstance(node.args[0], foast.Constant):
-            assert not isinstance(node.args[0].type, ct.SymbolType)
-            target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.kind.name.lower()]
+            node_kind = node.type.__str__()
+            target_type = fbuiltins.BUILTINS[node_kind]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[node_kind]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
+            return im.literal_(str(node.args[0].value), node_kind)
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def _make_literal(self, val: Any, type_: ct.SymbolType) -> itir.Literal:
