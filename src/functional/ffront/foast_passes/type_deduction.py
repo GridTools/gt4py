@@ -279,7 +279,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     lower, upper = index
                     new_type = ct.TupleType(types=[t for t in values.type.types[lower:upper]])
                     new_target = foast.Starred(
-                        starring=foast.DataSymbol(
+                        id=foast.DataSymbol(
                             id=old_target.id.id, location=old_target.location, type=new_type  # type: ignore
                         ),
                         type=new_type,
