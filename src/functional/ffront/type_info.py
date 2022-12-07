@@ -188,7 +188,7 @@ def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     if not isinstance(symbol_type, ct.ScalarType):
         return False
-    # TODO(nfarabullini) re-factor is_arithmetic such that it only checks for scalars
+    # TODO(nfarabullini): re-factor is_arithmetic such that it only checks for scalars
     #  and the emtpy field pass in an another function
     return is_arithmetic(symbol_type)
 
