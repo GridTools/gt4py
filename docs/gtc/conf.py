@@ -40,7 +40,7 @@ import gtc
 # -- Project information -----------------------------------------------------
 
 project = "GTC"
-copyright = "2014-2021, ETH Zurich"
+copyright = "2014-2022, ETH Zurich"
 author = "ETH Zurich"
 description = "Eve framework to develop DSL toolchains."
 

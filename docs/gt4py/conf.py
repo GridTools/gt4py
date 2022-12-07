@@ -40,7 +40,7 @@ import gt4py
 # -- Project information -----------------------------------------------------
 
 project = "GT4Py"
-copyright = "2014-2021, ETH Zurich"
+copyright = "2014-2022, ETH Zurich"
 author = "ETH Zurich"
 description = "Python API of the GridTools framework to develop performance portable applications for weather and climate."
 

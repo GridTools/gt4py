@@ -8,9 +8,8 @@ This document will guide you through the basic steps to get started with GT4Py.
 Installation
 ------------
 
-GT4Py contains a ``setup.py`` installation script and can be
-installed as usual with `pip`. Additional commands are provided to install
-and remove the GridTools C++ sources, which are not contained in the package.
+GT4Py contains a ``setup.py`` installation script and can be installed as usual with `pip`.
+Additional commands are provided to install and remove the GridTools C++ sources, which are not contained in the package.
 
 We strongly recommended to create a virtual environment for any new project:
 
@@ -18,27 +17,25 @@ We strongly recommended to create a virtual environment for any new project:
 
     python -m venv path_for_the_new_venv
     source path_for_the_new_venv/bin/activate
-    pip install --upgrade wheel
+    pip install --upgrade pip wheel setuptools
 
 
-Then clone the GT4Py repository and install the local copy or install it
-directly from GitHub with `pip`. For the CUDA backends add the
-`[cudaXXX]` optional dependency, where `XXX` takes the values `101`, `102`, ...
-depending on the CUDA version installed in your system (CUDA version 10.1,
-10.2, ...).
+Then clone the GT4Py repository and install the local copy or install it directly from GitHub with `pip`.
+For use with NVIDIA GPUs, add the `[cudaXXX]` optional dependency, where `XXX` takes the values
+`101`, `102`, ... depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, ...).
 
 .. code:: bash
 
     git clone https://github.com/GridTools/gt4py.git
     pip install ./gt4py
-    # pip install ./gt4py[cuda101]
+    # pip install ./gt4py[cuda115]
 
 Or
 
 .. code:: bash
 
     pip install git+https://github.com/gridtools/gt4py.git
-    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda101]
+    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda115]
 
 Finally, the last step to install the required GridTools C++ sources:
 
@@ -52,16 +49,17 @@ Introduction
 ------------
 
 In GT4Py, grid computations such as stencils are defined in a domain-specific language (DSL) called GTScript.
-GTScript is syntactically a subset of Python, but has different semantics. Computations defined in this DSL are
-translated by the GT4Py toolchain into code in Python based on `NumPy <http://www.numpy.org/>`_ or C++/CUDA based on
-the `GridTools <http://gridtools.github.io/>`_ library. To be able to achieve full performance with GridTools, data has
-to adhere to certain layout requirements, which are taken care of by storing the data in GT4Py storage containers.
+GTScript is syntactically a subset of Python, but has different semantics.
+Computations defined in this DSL are translated by the GT4Py toolchain into code in Python based on
+`NumPy <http://www.numpy.org/>`_ or C++/CUDA based on the `GridTools <http://gridtools.github.io/>`_ library.
+To be able to achieve full performance with GridTools, data has to adhere to certain layout requirements, which
+are taken care of by storing the data in GT4Py storage containers.
 
 A Simple Example
 ----------------
-Suppose we want to write a simple stencil computing a parameterized linear combination of multiple 3D fields. The stencil
-has two parameters to change the relative weights (``alpha`` and ``weight``) of the input fields (``field_a``, ``field_b``,
-and ``field_c``) to be combined:
+Suppose we want to write a stencil computing a parameterized linear combination of multiple 3D fields.
+The stencil has two parameters to change the relative weights (``alpha`` and ``weight``) of the input
+fields (``field_a``, ``field_b``, and ``field_c``) to be combined:
 
 .. code:: python
 
@@ -112,10 +110,9 @@ over 3 dimensions:
     # --> <StencilObject: __main__.stencil_example> [backend="numpy"] ...
 
 
-This definition basically expresses the operations (or *kernel*) performed at every point of the computation domain to
-generate the output values. The indices inside the brackets are interpreted as offsets relative to the
-current point in the iteration, and not as absolute positions in the data fields. For an explanation of the line
-``with computation(PARALLEL), interval(...):``, please refer to the section *Computations and Intervals*.
+This definition basically expresses the operations (or *kernel*) performed at every point of the computation domain to generate the output values.
+The indices inside the brackets are interpreted as offsets relative to the current point in the iteration, and not as absolute positions in the data fields.
+For an explanation of the line ``with computation(PARALLEL), interval(...):``, please refer to the section :ref:`Computations and Intervals`.
 
 .. note::
     While not required, it is recommended to specify *fields* as standard arguments and run-time *parameters* as
