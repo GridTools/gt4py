@@ -188,8 +188,8 @@ def is_number(symbol_type: ct.SymbolType) -> bool:
     """
     if not isinstance(symbol_type, ct.ScalarType):
         return False
-    # TODO: @nfarabullini re-factor is_arithmetic such that
-    # it only checks for scalars and the emtpy field pass in an another function
+    # TODO(nfarabullini): re-factor is_arithmetic such that it only checks for scalars
+    #  and the emtpy field pass in an another function
     return is_arithmetic(symbol_type)
 
 
@@ -314,21 +314,16 @@ def _is_zero_dim_field(field: ct.SymbolType) -> bool:
 
 def promote_zero_dims(
     args: list[ct.SymbolType], function_type: ct.FieldOperatorType | ct.ProgramType
-):
-    """Cast arg types to zero dimensional fields if compatible and required by function signature."""
+) -> list:
+    """Promote arg types to zero dimensional fields if compatible and required by function signature."""
     new_args = args.copy()
     for arg_i, arg in enumerate(args):
         def_type = function_type.definition.args[arg_i]
-        if (
-            _is_zero_dim_field(def_type)
-            and is_number(arg)
-            and extract_dtype(def_type) == extract_dtype(arg)
-        ):
-            new_args[arg_i] = def_type
-        elif _is_zero_dim_field(def_type) and is_number(def_type):
-            raise GTTypeError(f"{arg} is not compatible with {def_type}")
-        else:
-            new_args[arg_i] = arg
+        if _is_zero_dim_field(def_type) and is_number(arg):
+            if extract_dtype(def_type) == extract_dtype(arg):
+                new_args[arg_i] = def_type
+            else:
+                raise GTTypeError(f"{arg} is not compatible with {def_type}.")
     return new_args
 
 
