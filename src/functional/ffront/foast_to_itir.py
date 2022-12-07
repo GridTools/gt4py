@@ -458,7 +458,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if isinstance(node.args[0], foast.Constant):
-            node_kind = node.type.__str__().lower()
+            node_kind = self.visit(node.type).kind.name.lower()
             target_type = fbuiltins.BUILTINS[node_kind]
             source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
