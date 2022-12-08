@@ -92,7 +92,4 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             else:
                 unrolled.append(stmt)
 
-        return foast.BlockStmt(
-            stmts=unrolled,
-            location=node.location
-        )
+        return foast.BlockStmt(stmts=unrolled, location=node.location)

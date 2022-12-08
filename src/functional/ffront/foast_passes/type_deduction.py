@@ -186,7 +186,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_return_type(
         self, node: foast.BlockStmt, *, requires_unconditional_return=True, **kwargs
     ):
-        conditional_return_type: ct.DataType | None = None
+        conditional_return_type: ct.SymbolType | None = None
 
         for stmt in node.stmts:
             is_unconditional_return = False
@@ -206,8 +206,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     if return_types[0] == return_types[1]:
                         is_unconditional_return = True
                     else:
-                        # types must match
-                        raise AssertionError()
+                        raise FieldOperatorTypeDeductionError.from_foast_node(
+                            stmt,
+                            msg=f"If statement contains return statements with inconsistent types:"
+                            f"{return_types[0]} != {return_types[1]}",
+                        )
                 return_type = return_types[0] or return_types[1]
             elif isinstance(stmt, foast.BlockStmt):
                 # just forward to nested BlockStmt
@@ -217,11 +220,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
                 return_type = None
             else:
-                breakpoint()
-                raise AssertionError()
+                raise AssertionError(f"Nodes of type `{type(stmt).__name__}` not supported.")
 
             if conditional_return_type and return_type and return_type != conditional_return_type:
-                raise AssertionError()
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    stmt,
+                    msg=f"If statement contains return statements with inconsistent types:"
+                    f"{conditional_return_type} != {conditional_return_type}",
+                )
 
             if is_unconditional_return:  # found a statement that always returns
                 assert return_type
@@ -230,7 +236,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 conditional_return_type = return_type
 
         if requires_unconditional_return:
-            raise AssertionError()
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg="Return statement required."
+            )
 
         return None
 
@@ -353,7 +361,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
-
 
     def visit_IfStmt(self, node: foast.IfStmt, **kwargs):
         symtable = kwargs["symtable"]
