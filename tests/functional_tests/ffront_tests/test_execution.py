@@ -1686,6 +1686,7 @@ def test_if_without_else(fieldview_backend):
 
 def test_if_non_scalar_condition():
     with pytest.raises(FieldOperatorTypeDeductionError, match="Condition for `if` must be scalar."):
+
         @field_operator
         def if_non_scalar_condition(
             a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool

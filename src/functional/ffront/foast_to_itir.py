@@ -292,7 +292,9 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Stmt(self, node: foast.Stmt, **kwargs):
         raise AssertionError("Statements must always be visited in the context of a function.")
 
-    def visit_Return(self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_Return(
+        self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(
@@ -303,12 +305,16 @@ class FieldOperatorLowering(NodeTranslator):
         assert inner_expr
         return inner_expr
 
-    def visit_Assign(self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_Assign(
+        self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
             inner_expr
         )
 
-    def visit_IfStmt(self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_IfStmt(
+        self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
         cond = self.visit(node.condition, **kwargs)
 
         return_kind = deduce_return_kind(node)
