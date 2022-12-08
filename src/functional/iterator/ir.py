@@ -133,7 +133,7 @@ BUILTINS = {
     "less_equal",
     "not_eq",
     "if_",
-    "astype_",
+    "cast_",
     "not_",
     "and_",
     "or_",

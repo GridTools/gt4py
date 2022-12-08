@@ -226,7 +226,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val_BOOL_T1,
     ),
     "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "astype_": FunctionType(args=Tuple.from_elems(FDef_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "cast_": FunctionType(args=Tuple.from_elems(FDef_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1)
