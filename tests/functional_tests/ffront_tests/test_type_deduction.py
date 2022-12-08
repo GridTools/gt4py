@@ -16,7 +16,6 @@ from typing import Optional, Pattern
 import pytest
 
 from functional.common import DimensionKind, GTTypeError
-from functional.ffront import common_types as ct, type_info
 from functional.ffront.fbuiltins import (
     Dimension,
     Field,
@@ -30,6 +29,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser
+from functional.type_system import common_types as ct, type_info
 
 
 def type_info_cases() -> list[tuple[Optional[ct.SymbolType], dict]]:

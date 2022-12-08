@@ -24,7 +24,7 @@ import numpy.typing as npt
 
 from eve import extended_typing as xtyping
 from functional import common
-from functional.ffront import common_types as ct
+from functional.type_system import common_types as ct
 
 
 def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:

@@ -5,7 +5,7 @@ from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
-from functional.ffront import common_types as ct
+from functional.type_system import common_types as ct
 
 
 def is_concrete(symbol_type: ct.SymbolType) -> TypeGuard[ct.SymbolType]:

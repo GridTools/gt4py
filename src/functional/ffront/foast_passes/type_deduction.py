@@ -16,10 +16,11 @@ from typing import Optional, cast
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
-from functional.ffront import common_types as ct, fbuiltins, type_info
-from functional.ffront.common_types import TupleType
+from functional.ffront import fbuiltins
 from functional.ffront.foast_passes.utils import compute_assign_indices
-from functional.ffront.symbol_makers import make_symbol_type_from_value
+from functional.type_system import common_types as ct, type_info
+from functional.type_system.common_types import TupleType
+from functional.type_system.symbol_makers import make_symbol_type_from_value
 
 
 def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:

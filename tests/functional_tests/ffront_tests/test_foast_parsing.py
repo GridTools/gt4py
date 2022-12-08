@@ -27,11 +27,10 @@ import pytest
 
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types, field_operator_ast as foast
+from functional.ffront import field_operator_ast as foast
 from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -51,6 +50,8 @@ from functional.iterator.builtins import (
     tuple_get,
     xor_,
 )
+from functional.type_system import common_types
+from functional.type_system.symbol_makers import TypingError
 
 
 DEREF = itir.SymRef(id=deref.fun.__name__)

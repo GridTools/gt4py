@@ -6,7 +6,7 @@ from typing import Final, TypeAlias, Union
 
 import functional.ffront.field_operator_ast as foast
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
-from functional.ffront import common_types
+from functional.type_system import common_types
 
 
 PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]

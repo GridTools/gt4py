@@ -17,10 +17,11 @@ import ast
 from dataclasses import dataclass
 from typing import Any, cast
 
-from functional.ffront import common_types as ct, program_ast as past, symbol_makers
+from functional.ffront import program_ast as past
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.type_system import common_types as ct, symbol_makers
 
 
 class ProgramSyntaxError(DialectSyntaxError):

@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from numpy import float32, float64, int32, int64
 
 from functional.common import Dimension, DimensionKind, Field
-from functional.ffront import common_types as ct
 from functional.iterator import runtime
+from functional.type_system import common_types as ct
 
 
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]

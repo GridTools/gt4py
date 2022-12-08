@@ -15,7 +15,8 @@ from typing import Optional, cast
 
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
-from functional.ffront import common_types as ct, program_ast as past, type_info
+from functional.ffront import program_ast as past
+from functional.type_system import common_types as ct, type_info
 
 
 def _ensure_no_sliced_field(entry: past.Expr):

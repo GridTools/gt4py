@@ -16,7 +16,7 @@ from typing import Any, Generic, TypeVar, Union
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import common_types as ct
+from functional.type_system import common_types as ct
 from functional.utils import RecursionGuard
 
 

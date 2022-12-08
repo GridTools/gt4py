@@ -21,8 +21,8 @@ import pytest
 
 from eve import extended_typing as xtyping
 from functional import common
-from functional.ffront import common_types, field_operator_ast as foast, symbol_makers
-from functional.ffront.fbuiltins import Dimension, Field, float64
+from functional.ffront.fbuiltins import Dimension
+from functional.type_system import common_types, symbol_makers
 
 
 class CustomInt32DType:

@@ -17,7 +17,7 @@ from typing import Any, Generic, Literal, Optional, TypeVar, Union
 import eve
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from functional.ffront import common_types as ct
+from functional.type_system import common_types as ct
 
 
 class LocatedNode(Node):

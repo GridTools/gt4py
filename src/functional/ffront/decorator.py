@@ -34,13 +34,7 @@ from devtools import debug
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.ffront import (
-    common_types as ct,
-    field_operator_ast as foast,
-    program_ast as past,
-    symbol_makers,
-    type_info,
-)
+from functional.ffront import field_operator_ast as foast, program_ast as past
 from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
@@ -56,6 +50,7 @@ from functional.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
+from functional.type_system import common_types as ct, symbol_makers, type_info
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64

@@ -21,15 +21,10 @@ import numpy as np
 
 from eve import NodeTranslator
 from functional.common import DimensionKind
-from functional.ffront import (
-    common_types as ct,
-    fbuiltins,
-    field_operator_ast as foast,
-    itir_makers as im,
-    type_info,
-)
+from functional.ffront import fbuiltins, field_operator_ast as foast, itir_makers as im
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
+from functional.type_system import common_types as ct, type_info
 
 
 def is_local_kind(symbol_type: ct.FieldType) -> bool:

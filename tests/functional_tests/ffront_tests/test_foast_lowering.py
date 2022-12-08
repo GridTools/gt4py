@@ -16,7 +16,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from functional.common import DimensionKind, Field
-from functional.ffront import common_types as ct, itir_makers as im
+from functional.ffront import itir_makers as im
 from functional.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -28,7 +28,8 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.ffront.symbol_makers import make_symbol_type_from_typing
+from functional.type_system import common_types as ct
+from functional.type_system.symbol_makers import make_symbol_type_from_typing
 
 
 IDim = Dimension("IDim")
