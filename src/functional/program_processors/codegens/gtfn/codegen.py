@@ -57,6 +57,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
+        "float": "double",
+        "float32": "float",
+        "float64": "double",
+        "int": "long",
+        "int32": "std::int32_t",
+        "int64": "std::int64_t",
+        "bool": "bool",
     }
 
     Sym = as_fmt("{id}")
@@ -64,9 +71,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
-
-        if node.id in ["int64", "int32"]:
-            return node.id + "_t"
+        if node.id in self._builtins_mapping:
+            return self._builtins_mapping[node.id]
+        if node.id in gtfn_ir.GTFN_BUILTINS:
+            qualified_fun_name = f"gtfn::{node.id}"
+            return qualified_fun_name
 
         return node.id
 
@@ -115,11 +124,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
-            return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
-            qualified_fun_name = f"gtfn::{node.fun.id}"
-            return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
