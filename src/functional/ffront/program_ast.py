@@ -17,41 +17,41 @@ from typing import Any, Generic, Literal, Optional, TypeVar, Union
 import eve
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from functional.type_system import common_types as ct
+from functional.type_system import type_specifications as ts
 
 
 class LocatedNode(Node):
     location: SourceLocation
 
 
-SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ts.SymbolType)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, ct.DeferredSymbolType]  # noqa A003
-    namespace: ct.Namespace = ct.Namespace(ct.Namespace.LOCAL)
+    type: Union[SymbolT, ts.DeferredSymbolType]  # noqa A003
+    namespace: ts.Namespace = ts.Namespace(ts.Namespace.LOCAL)
 
 
-DataTypeT = TypeVar("DataTypeT", bound=ct.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=ct.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ts.FieldType)
 FieldSymbol = Symbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=ct.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ts.ScalarType)
 ScalarSymbol = Symbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=ct.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ts.TupleType)
 TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[ct.SymbolType] = None  # noqa A003
+    type: Optional[ts.SymbolType] = None  # noqa A003
 
 
 class BinOp(Expr):
-    op: ct.BinaryOperator
+    op: ts.BinaryOperator
     left: Expr
     right: Expr
 
@@ -96,7 +96,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ct.ProgramType, ct.DeferredSymbolType]  # noqa A003
+    type: Union[ts.ProgramType, ts.DeferredSymbolType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

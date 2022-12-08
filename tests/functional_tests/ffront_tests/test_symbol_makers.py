@@ -22,7 +22,7 @@ import pytest
 from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront.fbuiltins import Dimension
-from functional.type_system import common_types, symbol_makers
+from functional.type_system import symbol_makers, type_specifications as ts
 
 
 class CustomInt32DType:
@@ -38,11 +38,11 @@ JDim = Dimension("JDim")
 @pytest.mark.parametrize(
     "value,expected",
     [
-        ("float", common_types.ScalarKind.FLOAT64),
-        (float, common_types.ScalarKind.FLOAT64),
-        (np.float64, common_types.ScalarKind.FLOAT64),
-        (np.dtype(float), common_types.ScalarKind.FLOAT64),
-        (CustomInt32DType(), common_types.ScalarKind.INT32),
+        ("float", ts.ScalarKind.FLOAT64),
+        (float, ts.ScalarKind.FLOAT64),
+        (np.float64, ts.ScalarKind.FLOAT64),
+        (np.dtype(float), ts.ScalarKind.FLOAT64),
+        (CustomInt32DType(), ts.ScalarKind.INT32),
     ],
 )
 def test_valid_scalar_kind(value, expected):
@@ -57,28 +57,28 @@ def test_invalid_scalar_kind():
 @pytest.mark.parametrize(
     "value,expected",
     [
-        (bool, common_types.ScalarType(kind=common_types.ScalarKind.BOOL)),
-        (np.int32, common_types.ScalarType(kind=common_types.ScalarKind.INT32)),
-        (float, common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
-        ("float", common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+        (bool, ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+        (np.int32, ts.ScalarType(kind=ts.ScalarKind.INT32)),
+        (float, ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+        ("float", ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         (
             typing.Tuple[int, float],
-            common_types.TupleType(
+            ts.TupleType(
                 types=[
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
-                    common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                 ]
             ),
         ),
         (
             tuple[bool, typing.Tuple[int, float]],
-            common_types.TupleType(
+            ts.TupleType(
                 types=[
-                    common_types.ScalarType(kind=common_types.ScalarKind.BOOL),
-                    common_types.TupleType(
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.TupleType(
                         types=[
-                            common_types.ScalarType(kind=common_types.ScalarKind.INT),
-                            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+                            ts.ScalarType(kind=ts.ScalarKind.INT),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                         ]
                     ),
                 ]
@@ -86,42 +86,40 @@ def test_invalid_scalar_kind():
         ),
         (
             common.Field[..., float],
-            common_types.FieldType(
-                dims=..., dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)
-            ),
+            ts.FieldType(dims=..., dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
         (
             common.Field[[IDim, JDim], float],
-            common_types.FieldType(
+            ts.FieldType(
                 dims=[Dimension("IDim"), Dimension("JDim")],
-                dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ),
         (
             typing.Annotated[
                 typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
-            common_types.FunctionType(
+            ts.FunctionType(
                 args=[
-                    common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
-                    common_types.ScalarType(kind=common_types.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                    ts.ScalarType(kind=ts.ScalarKind.INT),
                 ],
                 kwargs={},
-                returns=common_types.ScalarType(kind=common_types.ScalarKind.INT),
+                returns=ts.ScalarType(kind=ts.ScalarKind.INT),
             ),
         ),
-        (typing.ForwardRef("float"), common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64)),
+        (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         (
             typing.Annotated[float, "foo"],
-            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
         ),
         (
             typing.Annotated["float", "foo", "bar"],
-            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
         ),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
-            common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64),
+            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
         ),
     ],
 )

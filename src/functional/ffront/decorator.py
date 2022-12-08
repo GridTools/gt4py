@@ -50,7 +50,7 @@ from functional.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
-from functional.type_system import common_types as ct, symbol_makers, type_info
+from functional.type_system import symbol_makers, type_info, type_specifications as ts
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -148,12 +148,12 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ct.FieldType | ct.ScalarType | ct.TupleType
+    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
 ) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
-    if isinstance(arg_type, ct.TupleType):
+    if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
             yield from _field_constituents_shape_and_dims(el, el_type)
-    elif isinstance(arg_type, ct.FieldType):
+    elif isinstance(arg_type, ts.FieldType):
         dims = type_info.extract_dims(arg_type)
         if hasattr(arg, "shape"):
             assert len(arg.shape) == len(dims)
@@ -334,7 +334,7 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, (ct.FieldType, ct.TupleType)):
+            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
                 shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
                 shape, dims = shapes_and_dims[0]
                 if not all(
@@ -356,7 +356,7 @@ class Program:
         for name, gt_callable in _filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
-            if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
+            if isinstance((type_ := gt_callable.__gt_type__()), ts.ScanOperatorType):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
         if len(scanops_per_axis.values()) == 0:
@@ -480,9 +480,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
         )
 
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type
-        assert isinstance(type_, ct.CallableType)
+        assert isinstance(type_, ts.CallableType)
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
@@ -507,7 +507,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return self.closure_vars
 
     def as_program(
-        self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
+        self, arg_types: list[ts.SymbolType], kwarg_types: dict[str, ts.SymbolType]
     ) -> Program:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
@@ -522,7 +522,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
-                namespace=ct.Namespace.LOCAL,
+                namespace=ts.Namespace.LOCAL,
                 location=loc,
             )
             for arg_type in arg_types
@@ -531,7 +531,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
             type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=ct.Namespace.LOCAL,
+            namespace=ts.Namespace.LOCAL,
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
@@ -542,15 +542,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         closure_symbols = [
             past.Symbol(
                 id=self.foast_node.id,
-                type=ct.DeferredSymbolType(constraint=None),
-                namespace=ct.Namespace.CLOSURE,
+                type=ts.DeferredSymbolType(constraint=None),
+                namespace=ts.Namespace.CLOSURE,
                 location=loc,
             ),
         ]
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
+            type=ts.DeferredSymbolType(constraint=ts.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(

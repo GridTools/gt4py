@@ -33,7 +33,7 @@ from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.type_system import common_types as ct, symbol_makers, type_info
+from functional.type_system import symbol_makers, type_info, type_specifications as ts
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -135,16 +135,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             result.append(
                 foast.Symbol(
                     id=name,
-                    type=ct.FunctionType(
+                    type=ts.FunctionType(
                         args=[
-                            ct.DeferredSymbolType(constraint=ct.ScalarType)
+                            ts.DeferredSymbolType(constraint=ts.ScalarType)
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
                         returns=cast(
-                            ct.DataType, symbol_makers.make_symbol_type_from_typing(value)
+                            ts.DataType, symbol_makers.make_symbol_type_from_typing(value)
                         ),
                     ),
-                    namespace=ct.Namespace.CLOSURE,
+                    namespace=ts.Namespace.CLOSURE,
                     location=location,
                 )
             )
@@ -161,8 +161,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=ct.DeferredSymbolType(constraint=None),
-                    namespace=ct.Namespace.CLOSURE,
+                    type=ts.DeferredSymbolType(constraint=None),
+                    namespace=ts.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
             )
@@ -182,7 +182,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
         new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, ct.DataType):
+        if not isinstance(new_type, ts.DataType):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
@@ -203,10 +203,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                             id=foast.DataSymbol(
                                 id=elt.value.id,
                                 location=self._make_loc(elt),
-                                type=ct.DeferredSymbolType(constraint=ct.DataType),
+                                type=ts.DeferredSymbolType(constraint=ts.DataType),
                             ),
                             location=self._make_loc(elt),
-                            type=ct.DeferredSymbolType(constraint=ct.DataType),
+                            type=ts.DeferredSymbolType(constraint=ts.DataType),
                         )
                     )
                 else:
@@ -214,7 +214,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         foast.DataSymbol(
                             id=elt.id,
                             location=self._make_loc(elt),
-                            type=ct.DeferredSymbolType(constraint=ct.DataType),
+                            type=ts.DeferredSymbolType(constraint=ts.DataType),
                         )
                     )
 
@@ -225,19 +225,19 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
-        constraint_type: Type[ct.DataType] = ct.DataType
+        constraint_type: Type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
-            constraint_type = ct.TupleType
+            constraint_type = ts.TupleType
         elif (
             type_info.is_concrete(new_value.type)
-            and type_info.type_class(new_value.type) is ct.ScalarType
+            and type_info.type_class(new_value.type) is ts.ScalarType
         ):
-            constraint_type = ct.ScalarType
+            constraint_type = ts.ScalarType
         return foast.Assign(
             target=foast.DataSymbol(
                 id=target.id,
                 location=self._make_loc(target),
-                type=ct.DeferredSymbolType(constraint=constraint_type),
+                type=ts.DeferredSymbolType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -255,10 +255,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             annotation = eval(node.annotation.value, context)
             target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=context)
         else:
-            target_type = ct.DeferredSymbolType()
+            target_type = ts.DeferredSymbolType()
 
         return foast.Assign(
-            target=foast.Symbol[ct.FieldType](
+            target=foast.Symbol[ts.FieldType](
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
@@ -329,17 +329,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ct.UnaryOperator:
-        return ct.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ts.UnaryOperator:
+        return ts.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> ct.UnaryOperator:
-        return ct.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> ts.UnaryOperator:
+        return ts.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> ct.UnaryOperator:
-        return ct.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> ts.UnaryOperator:
+        return ts.UnaryOperator.NOT
 
-    def visit_Invert(self, node: ast.Invert, **kwargs) -> ct.UnaryOperator:
-        return ct.UnaryOperator.INVERT
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> ts.UnaryOperator:
+        return ts.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(
@@ -349,35 +349,35 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.FLOOR_DIV
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.POW
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.MOD
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_AND
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_OR
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.BIT_OR
 
-    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_XOR
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ts.BinaryOperator:
+        return ts.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
@@ -388,7 +388,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             true_expr=self.visit(node.body),
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
-            type=ct.DeferredSymbolType(constraint=ct.DataType),
+            type=ts.DeferredSymbolType(constraint=ts.DataType),
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:

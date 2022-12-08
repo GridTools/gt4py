@@ -19,7 +19,7 @@ from numpy import float32, float64, int32, int64
 
 from functional.common import Dimension, DimensionKind, Field
 from functional.iterator import runtime
-from functional.type_system import common_types as ct
+from functional.type_system import type_specifications as ts
 
 
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
@@ -31,7 +31,7 @@ TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 @dataclass
 class BuiltInFunction:
-    __gt_type: ct.FunctionType
+    __gt_type: ts.FunctionType
 
     def __call__(self, *args, **kwargs):
         """Act as an empty place holder for the built in function."""
@@ -41,10 +41,10 @@ class BuiltInFunction:
 
 
 _reduction_like = BuiltInFunction(
-    ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=ct.FieldType)],
-        kwargs={"axis": ct.DeferredSymbolType(constraint=ct.DimensionType)},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+    ts.FunctionType(
+        args=[ts.DeferredSymbolType(constraint=ts.FieldType)],
+        kwargs={"axis": ts.DeferredSymbolType(constraint=ts.DimensionType)},
+        returns=ts.DeferredSymbolType(constraint=ts.FieldType),
     )
 )
 
@@ -53,33 +53,33 @@ max_over = _reduction_like
 min_over = _reduction_like
 
 broadcast = BuiltInFunction(
-    ct.FunctionType(
+    ts.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType)),
-            ct.DeferredSymbolType(constraint=ct.TupleType),
+            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType)),
+            ts.DeferredSymbolType(constraint=ts.TupleType),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=ct.FieldType),
+        returns=ts.DeferredSymbolType(constraint=ts.FieldType),
     )
 )
 
 where = BuiltInFunction(
-    ct.FunctionType(
+    ts.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=ct.FieldType),
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType, ct.TupleType)),
-            ct.DeferredSymbolType(constraint=(ct.FieldType, ct.ScalarType, ct.TupleType)),
+            ts.DeferredSymbolType(constraint=ts.FieldType),
+            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
+            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=(ct.FieldType, ct.TupleType)),
+        returns=ts.DeferredSymbolType(constraint=(ts.FieldType, ts.TupleType)),
     )
 )
 
 _unary_math_builtin = BuiltInFunction(
-    ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
+    ts.FunctionType(
+        args=[ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType))],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
@@ -135,10 +135,10 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 
 # unary math predicates (float) -> bool
 _unary_math_predicate_builtin = BuiltInFunction(
-    ct.FunctionType(
-        args=[ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType))],
+    ts.FunctionType(
+        args=[ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType))],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
@@ -150,13 +150,13 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 # binary math builtins (number, number) -> number
 _binary_math_builtin = BuiltInFunction(
-    ct.FunctionType(
+    ts.FunctionType(
         args=[
-            ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
-            ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+            ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
+            ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
         ],
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=(ct.ScalarType, ct.FieldType)),
+        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
@@ -203,4 +203,4 @@ class FieldOffset(runtime.Offset):
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):
-        return ct.OffsetType(source=self.source, target=self.target)
+        return ts.OffsetType(source=self.source, target=self.target)

@@ -5,69 +5,69 @@ from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
-from functional.type_system import common_types as ct
+from functional.type_system import type_specifications as ts
 
 
-def is_concrete(symbol_type: ct.SymbolType) -> TypeGuard[ct.SymbolType]:
+def is_concrete(symbol_type: ts.SymbolType) -> TypeGuard[ts.SymbolType]:
     """Figure out if the foast type is completely deduced."""
-    if isinstance(symbol_type, ct.DeferredSymbolType):
+    if isinstance(symbol_type, ts.DeferredSymbolType):
         return False
-    elif isinstance(symbol_type, ct.SymbolType):
+    elif isinstance(symbol_type, ts.SymbolType):
         return True
     return False
 
 
-def type_class(symbol_type: ct.SymbolType) -> Type[ct.SymbolType]:
+def type_class(symbol_type: ts.SymbolType) -> Type[ts.SymbolType]:
     """
     Determine which class should be used to create a compatible concrete type.
 
     Examples:
     ---------
-    >>> type_class(ct.DeferredSymbolType(constraint=ct.ScalarType)).__name__
+    >>> type_class(ts.DeferredSymbolType(constraint=ts.ScalarType)).__name__
     'ScalarType'
 
-    >>> type_class(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))).__name__
+    >>> type_class(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))).__name__
     'FieldType'
 
-    >>> type_class(ct.TupleType(types=[])).__name__
+    >>> type_class(ts.TupleType(types=[])).__name__
     'TupleType'
     """
     match symbol_type:
-        case ct.DeferredSymbolType(constraint):
+        case ts.DeferredSymbolType(constraint):
             if constraint is None:
                 raise GTTypeError(f"No type information available for {symbol_type}!")
             elif isinstance(constraint, tuple):
                 raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
             return constraint
-        case ct.SymbolType() as concrete_type:
+        case ts.SymbolType() as concrete_type:
             return concrete_type.__class__
     raise GTTypeError(
-        f"Invalid type for TypeInfo: requires {ct.SymbolType}, got {type(symbol_type)}!"
+        f"Invalid type for TypeInfo: requires {ts.SymbolType}, got {type(symbol_type)}!"
     )
 
 
 def primitive_constituents(
-    symbol_type: ct.SymbolType,
-) -> XIterable[ct.SymbolType]:
+    symbol_type: ts.SymbolType,
+) -> XIterable[ts.SymbolType]:
     """
     Return the primitive types contained in a composite type.
 
     >>> from functional.common import Dimension
     >>> I = Dimension(value="I")
-    >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
-    >>> field_type = ct.FieldType(dims=[I], dtype=int_type)
+    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
-    >>> tuple_type = ct.TupleType(types=[int_type, field_type])
+    >>> tuple_type = ts.TupleType(types=[int_type, field_type])
     >>> primitive_constituents(tuple_type).to_list()  # doctest: +ELLIPSIS
     [ScalarType(...), FieldType(...)]
 
-    >>> nested_tuple = ct.TupleType(types=[field_type, tuple_type])
+    >>> nested_tuple = ts.TupleType(types=[field_type, tuple_type])
     >>> primitive_constituents(nested_tuple).to_list()  # doctest: +ELLIPSIS
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ct.SymbolType):
-        if isinstance(symbol_type, ct.TupleType):
+    def constituents_yielder(symbol_type: ts.SymbolType):
+        if isinstance(symbol_type, ts.TupleType):
             for el_type in symbol_type.types:
                 yield from constituents_yielder(el_type)
         else:
@@ -77,22 +77,22 @@ def primitive_constituents(
 
 
 def apply_to_primitive_constituents(
-    symbol_type: ct.SymbolType,
-    fun: Callable[[ct.SymbolType], ct.SymbolType]
-    | Callable[[ct.SymbolType, tuple[int, ...]], ct.SymbolType],
+    symbol_type: ts.SymbolType,
+    fun: Callable[[ts.SymbolType], ts.SymbolType]
+    | Callable[[ts.SymbolType, tuple[int, ...]], ts.SymbolType],
     with_path_arg=False,
     _path=(),
 ):
     """
     Apply function to all primitive constituents of a type.
 
-    >>> int_type = ct.ScalarType(kind=ct.ScalarKind.INT)
-    >>> tuple_type = ct.TupleType(types=[int_type, int_type])
-    >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ct.FieldType(dims=[], dtype=primitive_type)))
+    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> tuple_type = ts.TupleType(types=[int_type, int_type])
+    >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)))
     tuple[Field[[], int64], Field[[], int64]]
     """
-    if isinstance(symbol_type, ct.TupleType):
-        return ct.TupleType(
+    if isinstance(symbol_type, ts.TupleType):
+        return ts.TupleType(
             types=[
                 apply_to_primitive_constituents(
                     el, fun, _path=(*_path, i), with_path_arg=with_path_arg
@@ -106,7 +106,7 @@ def apply_to_primitive_constituents(
         return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
 
 
-def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
+def extract_dtype(symbol_type: ts.SymbolType) -> ts.ScalarType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
@@ -114,104 +114,104 @@ def extract_dtype(symbol_type: ct.SymbolType) -> ct.ScalarType:
 
     Examples:
     ---------
-    >>> print(extract_dtype(ct.ScalarType(kind=ct.ScalarKind.FLOAT64)))
+    >>> print(extract_dtype(ts.ScalarType(kind=ts.ScalarKind.FLOAT64)))
     float64
 
-    >>> print(extract_dtype(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL))))
+    >>> print(extract_dtype(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))))
     bool
     """
     match symbol_type:
-        case ct.FieldType(dtype=dtype):
+        case ts.FieldType(dtype=dtype):
             return dtype
-        case ct.ScalarType() as dtype:
+        case ts.ScalarType() as dtype:
             return dtype
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
-def is_floating_point(symbol_type: ct.SymbolType) -> bool:
+def is_floating_point(symbol_type: ts.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
 
     Examples:
     ---------
-    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     True
-    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     True
-    >>> is_floating_point(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    >>> is_floating_point(ts.ScalarType(kind=ts.ScalarKind.INT32))
     False
-    >>> is_floating_point(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.FLOAT32)))
+    >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
     return extract_dtype(symbol_type).kind in [
-        ct.ScalarKind.FLOAT32,
-        ct.ScalarKind.FLOAT64,
+        ts.ScalarKind.FLOAT32,
+        ts.ScalarKind.FLOAT64,
     ]
 
 
-def is_integral(symbol_type: ct.SymbolType) -> bool:
+def is_integral(symbol_type: ts.SymbolType) -> bool:
     """
     Check if the dtype of ``symbol_type`` is an integral type.
 
     Examples:
     ---------
-    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT))
+    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT))
     True
-    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.INT32))
+    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT32))
     True
-    >>> is_integral(ct.ScalarType(kind=ct.ScalarKind.FLOAT32))
+    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     False
-    >>> is_integral(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT)))
+    >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT)))
     True
     """
     return extract_dtype(symbol_type).kind in [
-        ct.ScalarKind.INT,
-        ct.ScalarKind.INT32,
-        ct.ScalarKind.INT64,
+        ts.ScalarKind.INT,
+        ts.ScalarKind.INT32,
+        ts.ScalarKind.INT64,
     ]
 
 
-def is_logical(symbol_type: ct.SymbolType) -> bool:
-    return extract_dtype(symbol_type).kind is ct.ScalarKind.BOOL
+def is_logical(symbol_type: ts.SymbolType) -> bool:
+    return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
 
 
-def is_arithmetic(symbol_type: ct.SymbolType) -> bool:
+def is_arithmetic(symbol_type: ts.SymbolType) -> bool:
     """
     Check if ``symbol_type`` is compatible with arithmetic operations.
 
     Examples:
     ---------
-    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.FLOAT64))
+    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     True
-    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.BOOL))
+    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.BOOL))
     False
-    >>> is_arithmetic(ct.ScalarType(kind=ct.ScalarKind.STRING))
+    >>> is_arithmetic(ts.ScalarType(kind=ts.ScalarKind.STRING))
     False
-    >>> is_arithmetic(ct.FieldType(dims=[], dtype=ct.ScalarType(kind=ct.ScalarKind.INT32)))
+    >>> is_arithmetic(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_field_type_or_tuple_of_field_type(type_: ct.SymbolType) -> bool:
+def is_field_type_or_tuple_of_field_type(type_: ts.SymbolType) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
 
      Examples:
      ---------
-    >>> scalar_type = ct.ScalarType(kind=ct.ScalarKind.INT)
-    >>> field_type = ct.FieldType(dims=[], dtype=scalar_type)
+    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
      >>> is_field_type_or_tuple_of_field_type(field_type)
      True
-     >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[field_type, field_type]))
+     >>> is_field_type_or_tuple_of_field_type(ts.TupleType(types=[field_type, field_type]))
      True
-     >>> is_field_type_or_tuple_of_field_type(ct.TupleType(types=[field_type, scalar_type]))
+     >>> is_field_type_or_tuple_of_field_type(ts.TupleType(types=[field_type, scalar_type]))
      False
     """
-    return all(isinstance(t, ct.FieldType) for t in primitive_constituents(type_))
+    return all(isinstance(t, ts.FieldType) for t in primitive_constituents(type_))
 
 
-def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
+def extract_dims(symbol_type: ts.SymbolType) -> list[Dimension]:
     """
     Try to extract field dimensions if possible.
 
@@ -219,65 +219,65 @@ def extract_dims(symbol_type: ct.SymbolType) -> list[Dimension]:
 
     Examples:
     ---------
-    >>> extract_dims(ct.ScalarType(kind=ct.ScalarKind.INT64, shape=[3, 4]))
+    >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
     []
     >>> I = Dimension(value="I")
     >>> J = Dimension(value="J")
-    >>> extract_dims(ct.FieldType(dims=[I, J], dtype=ct.ScalarType(kind=ct.ScalarKind.INT64)))
+    >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
     match symbol_type:
-        case ct.ScalarType():
+        case ts.ScalarType():
             return []
-        case ct.FieldType(dims):
+        case ts.FieldType(dims):
             return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
-def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool:
+def is_concretizable(symbol_type: ts.SymbolType, to_type: ts.SymbolType) -> bool:
     """
     Check if ``symbol_type`` can be concretized to ``to_type``.
 
     Examples:
     ---------
     >>> is_concretizable(
-    ...     ct.ScalarType(kind=ct.ScalarKind.INT64),
-    ...     to_type=ct.ScalarType(kind=ct.ScalarKind.INT64)
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
     ... )
     True
 
     >>> is_concretizable(
-    ...     ct.ScalarType(kind=ct.ScalarKind.INT64),
-    ...     to_type=ct.ScalarType(kind=ct.ScalarKind.FLOAT64)
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     ... )
     False
 
     >>> is_concretizable(
-    ...     ct.DeferredSymbolType(constraint=None),
-    ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
+    ...     ts.DeferredSymbolType(constraint=None),
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     True
 
     >>> is_concretizable(
-    ...     ct.DeferredSymbolType(constraint=ct.DataType),
-    ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
+    ...     ts.DeferredSymbolType(constraint=ts.DataType),
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     True
 
     >>> is_concretizable(
-    ...     ct.DeferredSymbolType(constraint=ct.OffsetType),
-    ...     to_type=ct.FieldType(dtype=ct.ScalarType(kind=ct.ScalarKind.BOOL), dims=[])
+    ...     ts.DeferredSymbolType(constraint=ts.OffsetType),
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     False
 
     >>> is_concretizable(
-    ...     ct.DeferredSymbolType(constraint=ct.SymbolType),
-    ...     to_type=ct.DeferredSymbolType(constraint=ct.ScalarType)
+    ...     ts.DeferredSymbolType(constraint=ts.SymbolType),
+    ...     to_type=ts.DeferredSymbolType(constraint=ts.ScalarType)
     ... )
     True
 
     """
-    if isinstance(symbol_type, ct.DeferredSymbolType) and (
+    if isinstance(symbol_type, ts.DeferredSymbolType) and (
         symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
@@ -286,7 +286,7 @@ def is_concretizable(symbol_type: ct.SymbolType, to_type: ct.SymbolType) -> bool
     return False
 
 
-def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarType:
+def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 
@@ -294,35 +294,35 @@ def promote(*types: ct.FieldType | ct.ScalarType) -> ct.FieldType | ct.ScalarTyp
     the individual order of the dimensions of each argument (see
     :func:`promote_dims` for more details).
 
-    >>> dtype = ct.ScalarType(kind=ct.ScalarKind.INT64)
+    >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-    >>> promoted: ct.FieldType = promote(
-    ...     ct.FieldType(dims=[I, J], dtype=dtype),
-    ...     ct.FieldType(dims=[I, J, K], dtype=dtype),
+    >>> promoted: ts.FieldType = promote(
+    ...     ts.FieldType(dims=[I, J], dtype=dtype),
+    ...     ts.FieldType(dims=[I, J, K], dtype=dtype),
     ...     dtype
     ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
     >>> promote(
-    ...     ct.FieldType(dims=[I, J], dtype=dtype),
-    ...     ct.FieldType(dims=[K], dtype=dtype)
+    ...     ts.FieldType(dims=[I, J], dtype=dtype),
+    ...     ts.FieldType(dims=[K], dtype=dtype)
     ... ) # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     functional.common.GTTypeError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
     """
-    if all(isinstance(type_, ct.ScalarType) for type_ in types):
+    if all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
             raise GTTypeError("Could not promote scalars of different dtype (not implemented).")
         if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
-    elif all(isinstance(type_, (ct.ScalarType, ct.FieldType)) for type_ in types):
+    elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = promote_dims(*(extract_dims(type_) for type_ in types))
-        dtype = cast(ct.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
+        dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
 
-        return ct.FieldType(dims=dims, dtype=dtype)
+        return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a FieldType or ScalarType.")
 
 
@@ -409,10 +409,10 @@ def promote_dims(
 
 @functools.singledispatch
 def return_type(
-    callable_type: ct.CallableType,
+    callable_type: ts.CallableType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
 ):
     raise NotImplementedError(
         f"Return type deduction of type " f"{type(callable_type).__name__} not implemented."
@@ -421,20 +421,20 @@ def return_type(
 
 @return_type.register
 def return_type_func(
-    func_type: ct.FunctionType,
+    func_type: ts.FunctionType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
 ):
     return func_type.returns
 
 
 @return_type.register
 def return_type_fieldop(
-    fieldop_type: ct.FieldOperatorType,
+    fieldop_type: ts.FieldOperatorType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
 ):
     ret_type = return_type(fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs)
     return ret_type
@@ -442,10 +442,10 @@ def return_type_fieldop(
 
 @return_type.register
 def return_type_scanop(
-    callable_type: ct.ScanOperatorType,
+    callable_type: ts.ScanOperatorType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
 ):
     carry_dtype = callable_type.definition.returns
     promoted_dims = promote_dims(
@@ -455,24 +455,24 @@ def return_type_scanop(
         [callable_type.axis],
     )
     return apply_to_primitive_constituents(
-        carry_dtype, lambda arg: ct.FieldType(dims=promoted_dims, dtype=cast(ct.ScalarType, arg))
+        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
     )
 
 
 @return_type.register
 def return_type_field(
-    field_type: ct.FieldType,
+    field_type: ts.FieldType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
 ):
     try:
         accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
     except GTTypeError as ex:
         raise GTTypeError("Could not deduce return type of invalid remap operation.") from ex
 
-    if not isinstance(with_args[0], ct.OffsetType):
-        raise GTTypeError(f"First argument must be of type {ct.OffsetType}, got {with_args[0]}.")
+    if not isinstance(with_args[0], ts.OffsetType):
+        raise GTTypeError(f"First argument must be of type {ts.OffsetType}, got {with_args[0]}.")
 
     source_dim = with_args[0].source
     target_dims = with_args[0].target
@@ -482,12 +482,12 @@ def return_type_field(
             new_dims.append(d)
         else:
             new_dims.extend(target_dims)
-    return ct.FieldType(dims=new_dims, dtype=field_type.dtype)
+    return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
 @functools.singledispatch
 def function_signature_incompatibilities(
-    func_type: ct.CallableType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    func_type: ts.CallableType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
@@ -499,7 +499,7 @@ def function_signature_incompatibilities(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
-    func_type: ct.FunctionType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    func_type: ts.FunctionType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
 ) -> Iterator[str]:
 
     # check positional arguments
@@ -526,14 +526,14 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
-    fieldop_type: ct.FieldOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    fieldop_type: ts.FieldOperatorType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_scanop(
-    scanop_type: ct.ScanOperatorType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    scanop_type: ts.ScanOperatorType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
 ) -> Iterator[str]:
     if not all(is_field_type_or_tuple_of_field_type(arg) for arg in args):
         yield "Arguments to scan operator must be fields or tuples thereof."
@@ -555,15 +555,15 @@ def function_signature_incompatibilities_scanop(
         # pass return a field type with that dtype and the dimensions of the
         # corresponding field type in the requested `args` type. Defined here
         # as we capture `i`.
-        def _as_field(dtype: ct.ScalarType, path: tuple[int, ...]) -> ct.FieldType:
+        def _as_field(dtype: ts.ScalarType, path: tuple[int, ...]) -> ts.FieldType:
             try:
                 el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
-                return ct.FieldType(dims=extract_dims(el_type), dtype=dtype)
+                return ts.FieldType(dims=extract_dims(el_type), dtype=dtype)
             except (IndexError, AttributeError):
                 # The structure of the scan passes argument and the requested
                 # argument type differ. As such we can not extract the dimensions
                 # and just return a generic field shown in the error later on.
-                return ct.FieldType(dims=..., dtype=dtype)
+                return ts.FieldType(dims=..., dtype=dtype)
 
         promoted_args.append(
             apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
@@ -571,10 +571,10 @@ def function_signature_incompatibilities_scanop(
 
     # build a function type to leverage the already existing signature checking
     #  capabilities
-    function_type = ct.FunctionType(
+    function_type = ts.FunctionType(
         args=promoted_args,
         kwargs={},
-        returns=ct.DeferredSymbolType(constraint=None),
+        returns=ts.DeferredSymbolType(constraint=None),
     )
 
     yield from function_signature_incompatibilities(function_type, args, kwargs)
@@ -582,23 +582,23 @@ def function_signature_incompatibilities_scanop(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ct.ProgramType, args: list[ct.SymbolType], kwargs: dict[str, ct.SymbolType]
+    program_type: ts.ProgramType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ct.FieldType,
-    args: list[ct.SymbolType],
-    kwargs: dict[str, ct.SymbolType],
+    field_type: ts.FieldType,
+    args: list[ts.SymbolType],
+    kwargs: dict[str, ts.SymbolType],
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument(s), but {len(args)} were given."
         return
 
-    if not isinstance(args[0], ct.OffsetType):
-        yield f"Expected 0-th argument to be of type {ct.OffsetType}, but got {args[0]}."
+    if not isinstance(args[0], ts.OffsetType):
+        yield f"Expected 0-th argument to be of type {ts.OffsetType}, but got {args[0]}."
         return
 
     if kwargs:
@@ -612,10 +612,10 @@ def function_signature_incompatibilities_field(
 
 
 def accepts_args(
-    callable_type: ct.CallableType,
+    callable_type: ts.CallableType,
     *,
-    with_args: list[ct.SymbolType],
-    with_kwargs: dict[str, ct.SymbolType],
+    with_args: list[ts.SymbolType],
+    with_kwargs: dict[str, ts.SymbolType],
     raise_exception: bool = False,
 ) -> bool:
     """
@@ -627,18 +627,18 @@ def accepts_args(
     Note that all types must be concrete/complete.
 
     Examples:
-        >>> bool_type = ct.ScalarType(kind=ct.ScalarKind.BOOL)
-        >>> func_type = ct.FunctionType(
+        >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        >>> func_type = ts.FunctionType(
         ...     args=[bool_type],
         ...     kwargs={"foo": bool_type},
-        ...     returns=ct.VoidType()
+        ...     returns=ts.VoidType()
         ... )
         >>> accepts_args(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
         True
         >>> accepts_args(func_type, with_args=[], with_kwargs={})
         False
     """
-    if not isinstance(callable_type, ct.CallableType):
+    if not isinstance(callable_type, ts.CallableType):
         if raise_exception:
             raise GTTypeError(f"Expected a callable type, but got `{callable_type}`.")
         return False

@@ -16,7 +16,7 @@ from typing import Optional, cast
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import program_ast as past
-from functional.type_system import common_types as ct, type_info
+from functional.type_system import type_info, type_specifications as ts
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -36,7 +36,7 @@ def _ensure_no_sliced_field(entry: past.Expr):
 
 def _is_integral_scalar(expr: past.Expr) -> bool:
     """Check that expression is an integral scalar."""
-    return isinstance(expr.type, ct.ScalarType) and type_info.is_integral(expr.type)
+    return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
 
 
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
@@ -47,7 +47,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
 
     Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
     """
-    if not isinstance(new_func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+    if not isinstance(new_func.type, (ts.FieldOperatorType, ts.ScanOperatorType)):
         raise GTTypeError(
             f"Only calls `FieldOperator`s and `ScanOperators` "
             f"allowed in `Program`, but got `{new_func.type}`."
@@ -68,7 +68,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
             raise GTTypeError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ct.DimensionType):
+            if not isinstance(dim.type, ts.DimensionType):
                 raise GTTypeError(
                     f"Only Dimension allowed in domain dictionary keys, but got `{dim}` which is of type `{dim.type}`."
                 )
@@ -93,12 +93,12 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Program(self, node: past.Program, **kwargs):
         params = self.visit(node.params, **kwargs)
 
-        definition_type = ct.FunctionType(
-            args=[param.type for param in params], kwargs={}, returns=ct.VoidType()
+        definition_type = ts.FunctionType(
+            args=[param.type for param in params], kwargs={}, returns=ts.VoidType()
         )
         return past.Program(
             id=self.visit(node.id, **kwargs),
-            type=ct.ProgramType(definition=definition_type),
+            type=ts.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
             closure_vars=self.visit(node.closure_vars, **kwargs),
@@ -117,7 +117,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs):
         elts = self.visit(node.elts, **kwargs)
         return past.TupleExpr(
-            elts=elts, type=ct.TupleType(types=[el.type for el in elts]), location=node.location
+            elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
         )
 
     def _deduce_binop_type(
@@ -127,21 +127,21 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         left: past.Expr,
         right: past.Expr,
         **kwargs,
-    ) -> Optional[ct.SymbolType]:
-        logical_ops = {ct.BinaryOperator.BIT_AND, ct.BinaryOperator.BIT_OR}
+    ) -> Optional[ts.SymbolType]:
+        logical_ops = {ts.BinaryOperator.BIT_AND, ts.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
         for arg in (left, right):
-            if not isinstance(arg.type, ct.ScalarType) or not is_compatible(arg.type):
+            if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
                 raise ProgramTypeError.from_past_node(
                     arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
-        left_type = cast(ct.ScalarType, left.type)
-        right_type = cast(ct.ScalarType, right.type)
+        left_type = cast(ts.ScalarType, left.type)
+        right_type = cast(ts.ScalarType, right.type)
 
-        if node.op == ct.BinaryOperator.POW:
+        if node.op == ts.BinaryOperator.POW:
             return left_type
 
         try:
@@ -200,7 +200,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             func=new_func,
             args=new_args,
             kwargs=new_kwargs,
-            type=ct.VoidType(),
+            type=ts.VoidType(),
             location=node.location,
         )
 

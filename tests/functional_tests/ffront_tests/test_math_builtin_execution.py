@@ -10,7 +10,7 @@ from functional.ffront.fbuiltins import Dimension, Field, float64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners import roundtrip
-from functional.type_system import common_types as ct, symbol_makers
+from functional.type_system import symbol_makers, type_specifications as ts
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -60,7 +60,7 @@ def make_builtin_field_operator(builtin_name: str):
         foast.Symbol(
             id=name,
             type=symbol_makers.make_symbol_type_from_value(val),
-            namespace=ct.Namespace.CLOSURE,
+            namespace=ts.Namespace.CLOSURE,
             location=loc,
         )
         for name, val in closure_vars.items()

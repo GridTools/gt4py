@@ -50,7 +50,7 @@ from functional.iterator.builtins import (
     tuple_get,
     xor_,
 )
-from functional.type_system import common_types
+from functional.type_system import type_specifications as ts
 from functional.type_system.symbol_makers import TypingError
 
 
@@ -107,9 +107,9 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -147,9 +147,9 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.annex.symtable["tmp__0"].type == common_types.FieldType(
+    assert parsed.annex.symtable["tmp__0"].type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -168,9 +168,9 @@ def test_binary_pow():
 
     parsed = FieldOperatorParser.apply_to_function(power)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -180,9 +180,9 @@ def test_binary_mod():
 
     parsed = FieldOperatorParser.apply_to_function(modulo)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.INT64, shape=None),
     )
 
 
@@ -214,9 +214,9 @@ def test_bool_xor():
 
     parsed = FieldOperatorParser.apply_to_function(bool_xor)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
 
 
@@ -226,9 +226,9 @@ def test_unary_tilde():
 
     parsed = FieldOperatorParser.apply_to_function(unary_tilde)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.BOOL, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
 
 

@@ -19,7 +19,7 @@ from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront import program_ast as past
 from functional.iterator import ir as itir
-from functional.type_system import common_types, type_info
+from functional.type_system import type_info, type_specifications as ts
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
@@ -152,8 +152,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
             assert (
-                isinstance(slice_bound.type, common_types.ScalarType)
-                and slice_bound.type.kind == common_types.ScalarKind.INT
+                isinstance(slice_bound.type, ts.ScalarType)
+                and slice_bound.type.kind == ts.ScalarKind.INT
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -194,7 +194,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         if any(
-            not isinstance(out_field_type, common_types.FieldType)
+            not isinstance(out_field_type, ts.FieldType)
             or out_field_type.dims != out_field_types[0].dims
             for out_field_type in out_field_types
         ):
@@ -321,9 +321,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
-        if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
+        if isinstance(node.type, ts.ScalarType) and node.type.shape is None:
             match node.type.kind:
-                case common_types.ScalarKind.STRING:
+                case ts.ScalarKind.STRING:
                     raise NotImplementedError(
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )

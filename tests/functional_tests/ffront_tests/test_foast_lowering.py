@@ -28,7 +28,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.type_system import common_types as ct
+from functional.type_system import type_specifications as ts
 from functional.type_system.symbol_makers import make_symbol_type_from_typing
 
 
@@ -224,8 +224,8 @@ def test_call():
     #  using such heavy constructs for testing the lowering.
     field_type = make_symbol_type_from_typing(Field[..., float64])
     identity = SimpleNamespace(
-        __gt_type__=lambda: ct.FieldOperatorType(
-            definition=ct.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+        __gt_type__=lambda: ts.FieldOperatorType(
+            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
         )
     )
 

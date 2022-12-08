@@ -16,7 +16,7 @@ import typing
 from typing import Any, Optional
 
 from functional.iterator import ir as itir
-from functional.type_system import common_types as ct
+from functional.type_system import type_specifications as ts
 
 
 @typing.runtime_checkable
@@ -38,7 +38,7 @@ class GTCallable(typing.Protocol):
         return None
 
     @abc.abstractmethod
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         """
         Return symbol type, i.e. signature and return type.
 
