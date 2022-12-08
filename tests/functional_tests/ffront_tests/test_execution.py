@@ -1326,7 +1326,7 @@ def test_tuple_unpacking(fieldview_backend):
     out4 = np_as_located_field(IDim)(np.ones((size)))
 
     @field_operator
-    def _unpack(
+    def unpack(
         inp: Field[[IDim], float64],
     ) -> tuple[
         Field[[IDim], float64],
@@ -1337,17 +1337,7 @@ def test_tuple_unpacking(fieldview_backend):
         a, b, c, d = (inp + 2.0, inp + 3.0, inp + 5.0, inp + 7.0)
         return a, b, c, d
 
-    @program(backend=fieldview_backend)
-    def unpack(
-        inp: Field[[IDim], float64],
-        out1: Field[[IDim], float64],
-        out2: Field[[IDim], float64],
-        out3: Field[[IDim], float64],
-        out4: Field[[IDim], float64],
-    ):
-        _unpack(inp, out=(out1, out2, out3, out4))
-
-    unpack(inp, out1, out2, out3, out4, offset_provider={})
+    unpack(inp, out=(out1, out2, out3, out4), offset_provider={})
 
     arr = inp.array()
 
@@ -1696,7 +1686,6 @@ def test_if_without_else(fieldview_backend):
 
 def test_if_non_scalar_condition():
     with pytest.raises(FieldOperatorTypeDeductionError, match="Condition for `if` must be scalar."):
-
         @field_operator
         def if_non_scalar_condition(
             a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
@@ -1708,7 +1697,6 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-
     with pytest.raises(
         FieldOperatorTypeDeductionError, match="Condition for `if` must be of boolean type."
     ):

@@ -263,7 +263,7 @@ class FieldOperatorLowering(NodeTranslator):
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
-            expr=self.visit_BlockStmt(node.body, None, symtable=symtable),
+            expr=self.visit_BlockStmt(node.body, inner_expr=None, symtable=symtable),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
@@ -292,23 +292,23 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Stmt(self, node: foast.Stmt, **kwargs):
         raise AssertionError("Statements must always be visited in the context of a function.")
 
-    def visit_Return(self, node: foast.Return, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_Return(self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(
-        self, node: foast.BlockStmt, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.BlockStmt, *, inner_expr: itir.Expr | None, **kwargs
     ) -> itir.Expr:
         for stmt in reversed(node.stmts):
             inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
         assert inner_expr
         return inner_expr
 
-    def visit_Assign(self, node: foast.Assign, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_Assign(self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
             inner_expr
         )
 
-    def visit_IfStmt(self, node: foast.IfStmt, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
+    def visit_IfStmt(self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs) -> itir.Expr:
         cond = self.visit(node.condition, **kwargs)
 
         return_kind = deduce_return_kind(node)

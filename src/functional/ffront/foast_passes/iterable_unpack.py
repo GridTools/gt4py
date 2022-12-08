@@ -90,6 +90,6 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         )
                     unrolled.append(new_assign)
             else:
-                unrolled.append(stmt)
+                unrolled.append(self.generic_visit(stmt, **kwargs))
 
         return foast.BlockStmt(stmts=unrolled, location=node.location)
