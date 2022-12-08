@@ -16,7 +16,7 @@ from typing import Any
 
 import functional.ffront.program_ast as past
 from eve import NodeTranslator, traits
-from functional.type_system.type_translation import from_value
+from functional.ffront.type_translation import from_value
 
 
 @dataclass(frozen=True)

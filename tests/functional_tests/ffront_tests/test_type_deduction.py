@@ -15,6 +15,7 @@ from typing import Optional, Pattern
 
 import pytest
 
+import functional.ffront.type_specifications
 from functional.common import DimensionKind, GTTypeError
 from functional.ffront.fbuiltins import (
     Dimension,
@@ -94,16 +95,16 @@ def callable_type_info_cases():
     nullary_func_type = ts.FunctionType(args=[], kwargs={}, returns=ts.VoidType())
     unary_func_type = ts.FunctionType(args=[bool_type], kwargs={}, returns=ts.VoidType())
     kwarg_func_type = ts.FunctionType(args=[], kwargs={"foo": bool_type}, returns=ts.VoidType())
-    fieldop_type = ts.FieldOperatorType(
+    fieldop_type = functional.ffront.type_specifications.FieldOperatorType(
         definition=ts.FunctionType(args=[field_type, float_type], kwargs={}, returns=field_type)
     )
-    scanop_type = ts.ScanOperatorType(
+    scanop_type = functional.ffront.type_specifications.ScanOperatorType(
         axis=KDim,
         definition=ts.FunctionType(
             args=[float_type, int_type, int_type], kwargs={}, returns=float_type
         ),
     )
-    tuple_scanop_type = ts.ScanOperatorType(
+    tuple_scanop_type = functional.ffront.type_specifications.ScanOperatorType(
         axis=KDim,
         definition=ts.FunctionType(
             args=[float_type, ts.TupleType(types=[int_type, int_type])],

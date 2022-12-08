@@ -14,10 +14,10 @@
 from typing import Optional, cast
 
 import functional.ffront.dialect_ast_enums
+import functional.ffront.type_specifications
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
-from functional.ffront import program_ast as past
-from functional.type_system import type_info, type_specifications as ts
+from functional.ffront import program_ast as past, type_info, type_specifications as ts
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -48,7 +48,13 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
 
     Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
     """
-    if not isinstance(new_func.type, (ts.FieldOperatorType, ts.ScanOperatorType)):
+    if not isinstance(
+        new_func.type,
+        (
+            ts.FieldOperatorType,
+            ts.ScanOperatorType,
+        ),
+    ):
         raise GTTypeError(
             f"Only calls `FieldOperator`s and `ScanOperators` "
             f"allowed in `Program`, but got `{new_func.type}`."

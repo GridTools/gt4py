@@ -20,12 +20,18 @@ from typing import Any, Callable, Optional, cast
 import numpy as np
 
 import functional.ffront.dialect_ast_enums
+import functional.ffront.type_specifications
 from eve import NodeTranslator
 from functional.common import DimensionKind
-from functional.ffront import fbuiltins, field_operator_ast as foast, itir_makers as im
+from functional.ffront import (
+    fbuiltins,
+    field_operator_ast as foast,
+    itir_makers as im,
+    type_info,
+    type_specifications as ts,
+)
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
-from functional.type_system import type_info, type_specifications as ts
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
@@ -398,7 +404,13 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        elif isinstance(node.func.type, (ts.FieldOperatorType, ts.ScanOperatorType)):
+        elif isinstance(
+            node.func.type,
+            (
+                ts.FieldOperatorType,
+                ts.ScanOperatorType,
+            ),
+        ):
             # operators are lowered into stencils and only accept iterator
             #  arguments. As such transform all value arguments, e.g. scalars
             #  and tuples thereof, into iterators. See ADR-0002 for more

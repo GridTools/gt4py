@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from types import EllipsisType
 from typing import Literal, Optional
 
 import numpy as np
@@ -94,7 +95,7 @@ class TupleType(DataType):
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
+    dims: list[func_common.Dimension] | EllipsisType
     dtype: ScalarType
 
     def __str__(self):
@@ -113,19 +114,3 @@ class FunctionType(TypeSpec, CallableType):
         kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"
-
-
-@dataclass(frozen=True)
-class ScanOperatorType(TypeSpec, CallableType):
-    axis: func_common.Dimension
-    definition: FunctionType
-
-
-@dataclass(frozen=True)
-class FieldOperatorType(TypeSpec, CallableType):
-    definition: FunctionType
-
-
-@dataclass(frozen=True)
-class ProgramType(TypeSpec, CallableType):
-    definition: FunctionType

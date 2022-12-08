@@ -18,11 +18,11 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import functional.ffront.dialect_ast_enums
-from functional.ffront import program_ast as past
+import functional.ffront.type_specifications
+from functional.ffront import program_ast as past, type_specifications as ts, type_translation
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from functional.type_system import type_specifications as ts, type_translation
 
 
 class ProgramSyntaxError(DialectSyntaxError):

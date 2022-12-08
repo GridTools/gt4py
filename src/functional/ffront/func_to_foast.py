@@ -21,7 +21,13 @@ from typing import Any, Callable, Iterable, Mapping, Type, cast
 import eve
 import functional.ffront.dialect_ast_enums
 from functional import common
-from functional.ffront import fbuiltins, field_operator_ast as foast
+from functional.ffront import (
+    fbuiltins,
+    field_operator_ast as foast,
+    type_info,
+    type_specifications as ts,
+    type_translation,
+)
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -34,7 +40,6 @@ from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):

@@ -15,12 +15,12 @@ from typing import Optional, cast
 
 import functional.ffront.dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
+import functional.ffront.type_specifications
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
-from functional.ffront import fbuiltins
+from functional.ffront import fbuiltins, type_info, type_specifications as ts
 from functional.ffront.foast_passes.utils import compute_assign_indices
-from functional.type_system import type_info, type_specifications as ts
-from functional.type_system.type_translation import from_value
+from functional.ffront.type_translation import from_value
 
 
 def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:

@@ -14,10 +14,11 @@
 from typing import Any, Generic, TypeVar, Union
 
 import functional.ffront.dialect_ast_enums
+import functional.ffront.type_specifications
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.type_system import type_specifications as ts
+from functional.ffront import type_specifications as ts
 from functional.utils import RecursionGuard
 
 
