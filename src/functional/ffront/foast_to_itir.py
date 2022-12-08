@@ -313,7 +313,8 @@ class FieldOperatorLowering(NodeTranslator):
 
         return_kind = deduce_return_kind(node)
 
-        common_symbols: dict[str, foast.Symbol] = node.annex._common_symbols
+        common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
+
         if return_kind is StmtReturnKind.NO_RETURN:
             # pack the common symbols into a tuple
             common_symrefs = im.make_tuple_(*(im.ref(sym) for sym in common_symbols.keys()))
@@ -332,8 +333,8 @@ class FieldOperatorLowering(NodeTranslator):
             common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
             common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
 
-            # wrap the inner expression in a lambda function. note that this
-            # increases the operation count if both branches are evaluated.
+            # wrap the inner expression in a lambda function. note that this increases the
+            # operation count if both branches are evaluated.
             inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
             inner_expr_evaluator = im.lambda__(*common_syms)(inner_expr)
             inner_expr = im.call_(inner_expr_name)(*common_symrefs)

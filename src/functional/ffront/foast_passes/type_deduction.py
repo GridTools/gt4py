@@ -388,7 +388,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"But got `{new_node.condition.type}` instead.",
             )
 
-        for sym in node.annex._common_symbols.keys():
+        for sym in node.annex.propagated_symbols.keys():
             if (true_type := new_true_branch.annex.symtable[sym].type) != (
                 false_type := new_false_branch.annex.symtable[sym].type
             ):
@@ -398,7 +398,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Got types `{true_type}` and `{false_type}.",
                 )
             # TODO: properly patch symtable (new node?)
-            symtable[sym].type = new_node.annex._common_symbols[
+            symtable[sym].type = new_node.annex.propagated_symbols[
                 sym
             ].type = new_true_branch.annex.symtable[sym].type
 

@@ -187,7 +187,7 @@ class IfStmt(Stmt):
         common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(
             instance.false_branch.annex.symtable.keys()
         )
-        instance.annex._common_symbols = {
+        instance.annex.propagated_symbols = {
             sym_name: Symbol(
                 id=sym_name, type=ct.DeferredSymbolType(constraint=None), location=instance.location
             )
