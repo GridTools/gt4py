@@ -680,7 +680,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         return_type = ct.FieldType(
             dims=casted_obj_type.dims,
-            dtype=dtype_obj_type.returns,
+            dtype=self.visit(dtype_obj_type).returns,
         )
         return foast.Call(
             func=node.func,

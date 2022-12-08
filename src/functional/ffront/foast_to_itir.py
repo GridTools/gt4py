@@ -418,7 +418,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         obj = (to_value(node.args[0]))(self.visit(node.args[0], **kwargs))
-        dtype = node.args[1].id
+        dtype = self.visit(node.args[1]).id
         return self._lift_lambda(node)(im.call_("cast_")(obj, dtype))
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
