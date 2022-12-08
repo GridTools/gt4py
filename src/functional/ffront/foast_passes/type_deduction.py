@@ -110,6 +110,62 @@ def promote_to_mask_type(
         return input_type
 
 
+def deduce_return_type(node: foast.BlockStmt, *, requires_unconditional_return=True):
+    conditional_return_type: ct.SymbolType | None = None
+
+    for stmt in node.stmts:
+        is_unconditional_return = False
+
+        if isinstance(stmt, foast.Return):
+            is_unconditional_return = True
+            return_type = stmt.value.type
+        elif isinstance(stmt, foast.IfStmt):
+            return_types = (
+                deduce_return_type(stmt.true_branch, requires_unconditional_return=False),
+                deduce_return_type(stmt.false_branch, requires_unconditional_return=False),
+            )
+            # if both branches return
+            if return_types[0] and return_types[1]:
+                if return_types[0] == return_types[1]:
+                    is_unconditional_return = True
+                else:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        stmt,
+                        msg=f"If statement contains return statements with inconsistent types:"
+                        f"{return_types[0]} != {return_types[1]}",
+                    )
+            return_type = return_types[0] or return_types[1]
+        elif isinstance(stmt, foast.BlockStmt):
+            # just forward to nested BlockStmt
+            return_type = deduce_return_type(
+                stmt, requires_unconditional_return=requires_unconditional_return
+            )
+        elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
+            return_type = None
+        else:
+            raise AssertionError(f"Nodes of type `{type(stmt).__name__}` not supported.")
+
+        if conditional_return_type and return_type and return_type != conditional_return_type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                stmt,
+                msg=f"If statement contains return statements with inconsistent types:"
+                f"{conditional_return_type} != {conditional_return_type}",
+            )
+
+        if is_unconditional_return:  # found a statement that always returns
+            assert return_type
+            return return_type
+        elif return_type:
+            conditional_return_type = return_type
+
+    if requires_unconditional_return:
+        raise FieldOperatorTypeDeductionError.from_foast_node(
+            node, msg="Return statement required."
+        )
+
+    return None
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -170,7 +226,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        return_type = self._deduce_return_type(new_body, **kwargs)
+        return_type = deduce_return_type(new_body)
         new_type = ct.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
@@ -182,65 +238,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type=new_type,
             location=node.location,
         )
-
-    def _deduce_return_type(
-        self, node: foast.BlockStmt, *, requires_unconditional_return=True, **kwargs
-    ):
-        conditional_return_type: ct.SymbolType | None = None
-
-        for stmt in node.stmts:
-            is_unconditional_return = False
-
-            if isinstance(stmt, foast.Return):
-                is_unconditional_return = True
-                return_type = stmt.value.type
-            elif isinstance(stmt, foast.IfStmt):
-                return_types = (
-                    self._deduce_return_type(stmt.true_branch, requires_unconditional_return=False),
-                    self._deduce_return_type(
-                        stmt.false_branch, requires_unconditional_return=False
-                    ),
-                )
-                # if both branches return
-                if return_types[0] and return_types[1]:
-                    if return_types[0] == return_types[1]:
-                        is_unconditional_return = True
-                    else:
-                        raise FieldOperatorTypeDeductionError.from_foast_node(
-                            stmt,
-                            msg=f"If statement contains return statements with inconsistent types:"
-                            f"{return_types[0]} != {return_types[1]}",
-                        )
-                return_type = return_types[0] or return_types[1]
-            elif isinstance(stmt, foast.BlockStmt):
-                # just forward to nested BlockStmt
-                return_type = self._deduce_return_type(
-                    stmt, requires_unconditional_return=requires_unconditional_return
-                )
-            elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
-                return_type = None
-            else:
-                raise AssertionError(f"Nodes of type `{type(stmt).__name__}` not supported.")
-
-            if conditional_return_type and return_type and return_type != conditional_return_type:
-                raise FieldOperatorTypeDeductionError.from_foast_node(
-                    stmt,
-                    msg=f"If statement contains return statements with inconsistent types:"
-                    f"{conditional_return_type} != {conditional_return_type}",
-                )
-
-            if is_unconditional_return:  # found a statement that always returns
-                assert return_type
-                return return_type
-            elif return_type:
-                conditional_return_type = return_type
-
-        if requires_unconditional_return:
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg="Return statement required."
-            )
-
-        return None
 
     # TODO(tehrengruber): make sure all scalar arguments are lifted to 0-dim field args
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
