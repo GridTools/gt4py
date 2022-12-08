@@ -513,7 +513,7 @@ class GridSubset(Node):
         return GridSubset(intervals=res_intervals)
 
     def union(self, other):
-        assert list(self.axes()) == list(other.axes())
+        assert set(self.axes()) == set(other.axes())
         intervals = dict()
         for axis in self.axes():
             interval1 = self.intervals[axis]
