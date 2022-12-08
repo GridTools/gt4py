@@ -32,12 +32,12 @@ from functional.ffront.ast_passes import (
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
     UnchainComparesPass,
-    UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
+from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -90,8 +90,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         sta = StringifyAnnotationsPass.apply(definition_ast)
         ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
-        las = UnpackedAssignPass.apply(sat)
-        ucc = UnchainComparesPass.apply(las)
+        ucc = UnchainComparesPass.apply(sat)
         return ucc
 
     @classmethod
@@ -105,6 +104,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
         foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = UnpackedAssignPass.apply(foast_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -195,10 +195,38 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
         target = node.targets[0]  # there is only one element after assignment passes
+
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Unpacking not allowed, run a preprocessing pass!"
+            new_targets: list[
+                foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred
+            ] = []
+
+            for elt in target.elts:
+                if isinstance(elt, ast.Starred):
+                    new_targets.append(
+                        foast.Starred(
+                            id=foast.DataSymbol(
+                                id=elt.value.id,
+                                location=self._make_loc(elt),
+                                type=ct.DeferredSymbolType(constraint=ct.DataType),
+                            ),
+                            location=self._make_loc(elt),
+                            type=ct.DeferredSymbolType(constraint=ct.DataType),
+                        )
+                    )
+                else:
+                    new_targets.append(
+                        foast.DataSymbol(
+                            id=elt.id,
+                            location=self._make_loc(elt),
+                            type=ct.DeferredSymbolType(constraint=ct.DataType),
+                        )
+                    )
+
+            return foast.TupleTargetAssign(
+                targets=new_targets, value=self.visit(node.value), location=self._make_loc(node)
             )
+
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
@@ -295,6 +323,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return [self.visit(node, **kwargs) for node in nodes]
 
+    def visit_Expr(self, node: ast.Expr) -> foast.Expr:
+        return self.visit(node.value)
+
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 
@@ -303,17 +334,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.NOT
 
-    def visit_Invert(self, node: ast.Invert, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> ct.UnaryOperator:
+        return ct.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(

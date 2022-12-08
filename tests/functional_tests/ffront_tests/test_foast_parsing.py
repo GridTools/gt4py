@@ -338,3 +338,18 @@ def test_empty_dims_type():
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
+
+
+def test_zero_dims_ternary():
+    ADim = Dimension("ADim")
+
+    def zero_dims_ternary(
+        cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]
+    ):
+        return a if cond == 1 else b
+
+    msg = r"Could not deduce type"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+    assert re.search(msg, exc_info.value.args[0]) is not None
