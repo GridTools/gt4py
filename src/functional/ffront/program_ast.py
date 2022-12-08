@@ -29,7 +29,7 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, ts.DeferredSymbolType]  # noqa A003
+    type: Union[SymbolT, ts.DeferredType]  # noqa A003
     namespace: ts.Namespace = ts.Namespace(ts.Namespace.LOCAL)
 
 
@@ -96,7 +96,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ts.ProgramType, ts.DeferredSymbolType]  # noqa A003
+    type: Union[ts.ProgramType, ts.DeferredType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

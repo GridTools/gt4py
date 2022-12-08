@@ -135,7 +135,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     id=name,
                     type=ts.FunctionType(
                         args=[
-                            ts.DeferredSymbolType(constraint=ts.ScalarType)
+                            ts.DeferredType(constraint=ts.ScalarType)
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
                         returns=cast(ts.DataType, type_translation.from_type_hint(value)),
@@ -157,7 +157,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.DeferredSymbolType(constraint=None),
+                    type=ts.DeferredType(constraint=None),
                     namespace=ts.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
@@ -199,10 +199,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                             id=foast.DataSymbol(
                                 id=elt.value.id,
                                 location=self._make_loc(elt),
-                                type=ts.DeferredSymbolType(constraint=ts.DataType),
+                                type=ts.DeferredType(constraint=ts.DataType),
                             ),
                             location=self._make_loc(elt),
-                            type=ts.DeferredSymbolType(constraint=ts.DataType),
+                            type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
                 else:
@@ -210,7 +210,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         foast.DataSymbol(
                             id=elt.id,
                             location=self._make_loc(elt),
-                            type=ts.DeferredSymbolType(constraint=ts.DataType),
+                            type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
 
@@ -233,7 +233,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             target=foast.DataSymbol(
                 id=target.id,
                 location=self._make_loc(target),
-                type=ts.DeferredSymbolType(constraint=constraint_type),
+                type=ts.DeferredType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -251,7 +251,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             annotation = eval(node.annotation.value, context)
             target_type = type_translation.from_type_hint(annotation, globalns=context)
         else:
-            target_type = ts.DeferredSymbolType()
+            target_type = ts.DeferredType()
 
         return foast.Assign(
             target=foast.Symbol[ts.FieldType](
@@ -384,7 +384,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             true_expr=self.visit(node.body),
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
-            type=ts.DeferredSymbolType(constraint=ts.DataType),
+            type=ts.DeferredType(constraint=ts.DataType),
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:

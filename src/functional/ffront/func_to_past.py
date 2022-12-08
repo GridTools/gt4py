@@ -54,7 +54,7 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
-            type=ts.DeferredSymbolType(constraint=ts.ProgramType),
+            type=ts.DeferredType(constraint=ts.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             closure_vars=closure_symbols,
@@ -148,7 +148,7 @@ class ProgramParser(DialectParser[past.Program]):
         return past.TupleExpr(
             elts=[self.visit(item) for item in node.elts],
             location=self._make_loc(node),
-            type=ts.DeferredSymbolType(constraint=ts.TupleType),
+            type=ts.DeferredType(constraint=ts.TupleType),
         )
 
     def visit_Slice(self, node: ast.Slice) -> past.Slice:

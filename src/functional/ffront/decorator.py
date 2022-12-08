@@ -540,7 +540,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         closure_symbols = [
             past.Symbol(
                 id=self.foast_node.id,
-                type=ts.DeferredSymbolType(constraint=None),
+                type=ts.DeferredType(constraint=None),
                 namespace=ts.Namespace.CLOSURE,
                 location=loc,
             ),
@@ -548,7 +548,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ts.DeferredSymbolType(constraint=ts.ProgramType),
+            type=ts.DeferredType(constraint=ts.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(

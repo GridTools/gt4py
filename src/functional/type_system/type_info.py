@@ -10,7 +10,7 @@ from functional.type_system import type_specifications as ts
 
 def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     """Figure out if the foast type is completely deduced."""
-    if isinstance(symbol_type, ts.DeferredSymbolType):
+    if isinstance(symbol_type, ts.DeferredType):
         return False
     elif isinstance(symbol_type, ts.TypeSpec):
         return True
@@ -23,7 +23,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
     Examples:
     ---------
-    >>> type_class(ts.DeferredSymbolType(constraint=ts.ScalarType)).__name__
+    >>> type_class(ts.DeferredType(constraint=ts.ScalarType)).__name__
     'ScalarType'
 
     >>> type_class(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))).__name__
@@ -33,7 +33,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     'TupleType'
     """
     match symbol_type:
-        case ts.DeferredSymbolType(constraint):
+        case ts.DeferredType(constraint):
             if constraint is None:
                 raise GTTypeError(f"No type information available for {symbol_type}!")
             elif isinstance(constraint, tuple):
@@ -253,31 +253,31 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     False
 
     >>> is_concretizable(
-    ...     ts.DeferredSymbolType(constraint=None),
+    ...     ts.DeferredType(constraint=None),
     ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     True
 
     >>> is_concretizable(
-    ...     ts.DeferredSymbolType(constraint=ts.DataType),
+    ...     ts.DeferredType(constraint=ts.DataType),
     ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     True
 
     >>> is_concretizable(
-    ...     ts.DeferredSymbolType(constraint=ts.OffsetType),
+    ...     ts.DeferredType(constraint=ts.OffsetType),
     ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
     ... )
     False
 
     >>> is_concretizable(
-    ...     ts.DeferredSymbolType(constraint=ts.TypeSpec),
-    ...     to_type=ts.DeferredSymbolType(constraint=ts.ScalarType)
+    ...     ts.DeferredType(constraint=ts.TypeSpec),
+    ...     to_type=ts.DeferredType(constraint=ts.ScalarType)
     ... )
     True
 
     """
-    if isinstance(symbol_type, ts.DeferredSymbolType) and (
+    if isinstance(symbol_type, ts.DeferredType) and (
         symbol_type.constraint is None or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
@@ -574,7 +574,7 @@ def function_signature_incompatibilities_scanop(
     function_type = ts.FunctionType(
         args=promoted_args,
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=None),
+        returns=ts.DeferredType(constraint=None),
     )
 
     yield from function_signature_incompatibilities(function_type, args, kwargs)

@@ -72,16 +72,28 @@ class TypeSpec:
 
 
 @dataclass(frozen=True)
-class DeferredSymbolType(TypeSpec):
-    """Dummy used to represent a type not yet inferred."""
+class DataType(TypeSpec):
+    """
+    A base type for all types that represent data storage.
 
-    constraint: Optional[type[TypeSpec] | tuple[type[TypeSpec], ...]]
+    Derive floating point, integral or field types from this class.
+    """
+
+
+class CallableType:
+    """
+    A base type for all types are callable.
+
+    Derive other callable types, such as FunctionType or FieldOperatorType from
+    this class.
+    """
 
 
 @dataclass(frozen=True)
-class SymbolTypeVariable(TypeSpec):
-    id: str  # noqa A003
-    bound: type[TypeSpec]
+class DeferredType(TypeSpec):
+    """Dummy used to represent a type not yet inferred."""
+
+    constraint: Optional[type[TypeSpec] | tuple[type[TypeSpec], ...]]
 
 
 @dataclass(frozen=True)
@@ -105,11 +117,6 @@ class OffsetType(TypeSpec):
 
     def __str__(self):
         return f"Offset[{self.source}, {self.target}]"
-
-
-@dataclass(frozen=True)
-class DataType(TypeSpec):
-    ...
 
 
 class ScalarKind(IntEnum):
@@ -145,12 +152,6 @@ class TupleType(DataType):
         return f"tuple[{', '.join(map(str, self.types))}]"
 
 
-class CallableType:
-    """Base class of all callable types."""
-
-    pass
-
-
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
     dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
@@ -163,9 +164,9 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
-    args: list[DataType | DeferredSymbolType]
-    kwargs: dict[str, DataType | DeferredSymbolType]
-    returns: DataType | DeferredSymbolType | VoidType
+    args: list[DataType | DeferredType]
+    kwargs: dict[str, DataType | DeferredType]
+    returns: DataType | DeferredType | VoidType
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]

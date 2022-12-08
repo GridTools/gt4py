@@ -48,7 +48,7 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, ts.DeferredSymbolType]  # noqa A003
+    type: Union[SymbolT, ts.DeferredType]  # noqa A003
     namespace: ts.Namespace = ts.Namespace(ts.Namespace.LOCAL)
 
 
@@ -69,7 +69,7 @@ DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ts.TypeSpec = ts.DeferredSymbolType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -174,7 +174,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Union[ts.FunctionType, ts.DeferredSymbolType] = ts.DeferredSymbolType(  # noqa: A003
+    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
         constraint=ts.FunctionType
     )
 
@@ -182,7 +182,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Union[ts.FieldOperatorType, ts.DeferredSymbolType] = ts.DeferredSymbolType(  # noqa: A003
+    type: Union[ts.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
         constraint=ts.FieldOperatorType
     )
 
@@ -193,6 +193,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ts.ScanOperatorType, ts.DeferredSymbolType] = ts.DeferredSymbolType(  # noqa: A003
+    type: Union[ts.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
         constraint=ts.ScanOperatorType
     )

@@ -35,20 +35,20 @@ from functional.type_system import type_info, type_specifications as ts
 def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
     return [
         (
-            ts.DeferredSymbolType(constraint=None),
+            ts.DeferredType(constraint=None),
             {
                 "is_concrete": False,
             },
         ),
         (
-            ts.DeferredSymbolType(constraint=ts.ScalarType),
+            ts.DeferredType(constraint=ts.ScalarType),
             {
                 "is_concrete": False,
                 "type_class": ts.ScalarType,
             },
         ),
         (
-            ts.DeferredSymbolType(constraint=ts.FieldType),
+            ts.DeferredType(constraint=ts.FieldType),
             {
                 "is_concrete": False,
                 "type_class": ts.FieldType,

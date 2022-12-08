@@ -70,7 +70,7 @@ def iterator_type_kind(
     | (1, (local_field, regular_field))  | ENCAPSULATED_ITERATOR  |
     +------------------------------------+------------------------+
     """
-    assert not isinstance(symbol_type, ts.DeferredSymbolType)
+    assert not isinstance(symbol_type, ts.DeferredType)
     if isinstance(symbol_type, ts.FieldType):
         return ITIRTypeKind.ITERATOR
     elif any(type_info.primitive_constituents(symbol_type).if_isinstance(ts.FieldType)):

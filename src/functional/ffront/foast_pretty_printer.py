@@ -151,14 +151,14 @@ class _PrettyPrinter(TemplatedGenerator):
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         params = self.visit(node.params)
         types = [
-            str(param.type) if not isinstance(param.type, ts.DeferredSymbolType) else None
+            str(param.type) if not isinstance(param.type, ts.DeferredType) else None
             for param in node.params
         ]
         params_annotated = [
             f"{param}: {type_}" if type_ else param for param, type_ in zip(params, types)
         ]
         return_type = (
-            f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredSymbolType) else ""
+            f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredType) else ""
         )
         return self.generic_visit(node, params_annotated=params_annotated, return_type=return_type)
 

@@ -42,9 +42,9 @@ class BuiltInFunction:
 
 _reduction_like = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredSymbolType(constraint=ts.FieldType)],
-        kwargs={"axis": ts.DeferredSymbolType(constraint=ts.DimensionType)},
-        returns=ts.DeferredSymbolType(constraint=ts.FieldType),
+        args=[ts.DeferredType(constraint=ts.FieldType)],
+        kwargs={"axis": ts.DeferredType(constraint=ts.DimensionType)},
+        returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
 
@@ -55,31 +55,31 @@ min_over = _reduction_like
 broadcast = BuiltInFunction(
     ts.FunctionType(
         args=[
-            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType)),
-            ts.DeferredSymbolType(constraint=ts.TupleType),
+            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType)),
+            ts.DeferredType(constraint=ts.TupleType),
         ],
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=ts.FieldType),
+        returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
 
 where = BuiltInFunction(
     ts.FunctionType(
         args=[
-            ts.DeferredSymbolType(constraint=ts.FieldType),
-            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
-            ts.DeferredSymbolType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
+            ts.DeferredType(constraint=ts.FieldType),
+            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
+            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
         ],
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=(ts.FieldType, ts.TupleType)),
+        returns=ts.DeferredType(constraint=(ts.FieldType, ts.TupleType)),
     )
 )
 
 _unary_math_builtin = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType))],
+        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
+        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
@@ -136,9 +136,9 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 # unary math predicates (float) -> bool
 _unary_math_predicate_builtin = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType))],
+        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
+        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
@@ -152,11 +152,11 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 _binary_math_builtin = BuiltInFunction(
     ts.FunctionType(
         args=[
-            ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
-            ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
+            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
+            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
         ],
         kwargs={},
-        returns=ts.DeferredSymbolType(constraint=(ts.ScalarType, ts.FieldType)),
+        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
 
