@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.1
+    jupytext_version: 1.14.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -727,6 +727,10 @@ When implementing the scheme, keep the following caveats in mind:
 
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
 def _graupel_toy_scan(state_kMinus1: tuple[float, float, float], qc_in: float, qr_in: float):
+    
+    # Local config (GT4Py does not yet support optional arguments)
+    autoconversion_rate = 0.1
+    sedimentaion_constant = 0.05
     
     # unpack state of previous iteration
     _, _, sedimentation_flux_kMinus1 = state_kMinus1
