@@ -154,8 +154,17 @@ class Stmt(LocatedNode):
     ...
 
 
+class Starred(Expr):
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
+
+
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
+    value: Expr
+
+
+class TupleTargetAssign(Stmt):
+    targets: list[FieldSymbol | TupleSymbol | ScalarSymbol | Starred]
     value: Expr
 
 

@@ -46,9 +46,7 @@ class ITIRTypeKind(enum.Enum):
     ENCAPSULATED_ITERATOR = 2
 
 
-def iterator_type_kind(
-    symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
-) -> ITIRTypeKind:
+def iterator_type_kind(symbol_type: ct.SymbolType) -> ITIRTypeKind:
     """
     Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
 
@@ -76,6 +74,7 @@ def iterator_type_kind(
     | (1, (local_field, regular_field))  | ENCAPSULATED_ITERATOR  |
     +------------------------------------+------------------------+
     """
+    assert not isinstance(symbol_type, ct.DeferredSymbolType)
     if isinstance(symbol_type, ct.FieldType):
         return ITIRTypeKind.ITERATOR
     elif any(type_info.primitive_constituents(symbol_type).if_isinstance(ct.FieldType)):
@@ -162,7 +161,7 @@ def deduce_return_kind(node: foast.Stmt) -> StmtReturnKind:
         raise AssertionError(f"Statements of type `{type(node).__name__} not understood.`")
 
 
-def to_value(node_or_type: foast.LocatedNode | ct.DataType) -> Callable[[itir.Expr], itir.Expr]:
+def to_value(node_or_type: foast.Expr | ct.DataType) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
 
@@ -403,7 +402,7 @@ class FieldOperatorLowering(NodeTranslator):
             return im.make_tuple_(*elts)
         raise AssertionError("Unexpected `IteratorTypeKind`.")
 
-    def _lift_if_field(self, node: foast.LocatedNode) -> Callable[[itir.Expr], itir.Expr]:
+    def _lift_if_field(self, node: foast.Expr) -> Callable[[itir.FunCall], itir.FunCall]:
         if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
             return lambda x: x
         elif iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
@@ -561,23 +560,24 @@ class FieldOperatorLowering(NodeTranslator):
 
         return lowered_arg
 
-    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.Expr:
+    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
         args = tuple(to_value(arg)(self.visit(arg, **kwargs)) for arg in node.args)
         return self._lift_if_field(node)(im.call_(self.visit(node.func, **kwargs))(*args))
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if isinstance(node.args[0], foast.Constant):
-            target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.kind.name.lower()]
+            node_kind = self.visit(node.type).kind.name.lower()
+            target_type = fbuiltins.BUILTINS[node_kind]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
+            return im.literal_(str(node.args[0].value), node_kind)
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ct.ScalarType | ct.TupleType) -> itir.Literal:
+    def _make_literal(self, val: Any, type_: ct.SymbolType) -> itir.Literal:
         # TODO(tehrengruber): check constant of this type is supported in iterator ir
         if isinstance(type_, ct.TupleType):
             return im.make_tuple_(
