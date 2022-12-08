@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
+import functional.ffront.dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
@@ -440,9 +441,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
-            ts.BinaryOperator.BIT_AND,
-            ts.BinaryOperator.BIT_OR,
-            ts.BinaryOperator.BIT_XOR,
+            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_AND,
+            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_OR,
+            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_XOR,
         }
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
@@ -456,7 +457,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ts.FieldType | ts.ScalarType, left.type)
         right_type = cast(ts.FieldType | ts.ScalarType, right.type)
 
-        if node.op == ts.BinaryOperator.POW:
+        if node.op == functional.ffront.dialect_ast_enums.BinaryOperator.POW:
             return left_type
 
         try:
@@ -482,7 +483,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_operand = self.visit(node.operand, **kwargs)
         is_compatible = (
             type_info.is_logical
-            if node.op in [ts.UnaryOperator.NOT, ts.UnaryOperator.INVERT]
+            if node.op
+            in [
+                functional.ffront.dialect_ast_enums.UnaryOperator.NOT,
+                functional.ffront.dialect_ast_enums.UnaryOperator.INVERT,
+            ]
             else type_info.is_arithmetic
         )
         if not is_compatible(new_operand.type):

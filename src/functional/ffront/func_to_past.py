@@ -17,6 +17,7 @@ import ast
 from dataclasses import dataclass
 from typing import Any, cast
 
+import functional.ffront.dialect_ast_enums
 from functional.ffront import program_ast as past
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
@@ -46,7 +47,7 @@ class ProgramParser(DialectParser[past.Program]):
             past.Symbol(
                 id=name,
                 type=type_translation.from_value(val),
-                namespace=ts.Namespace.CLOSURE,
+                namespace=functional.ffront.dialect_ast_enums.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
             for name, val in self.closure_vars.items()
@@ -77,35 +78,55 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.ADD
+    def visit_Add(
+        self, node: ast.Add, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.SUB
+    def visit_Sub(
+        self, node: ast.Sub, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.MULT
+    def visit_Mult(
+        self, node: ast.Mult, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.DIV
+    def visit_Div(
+        self, node: ast.Div, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.FLOOR_DIV
+    def visit_FloorDiv(
+        self, node: ast.FloorDiv, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.POW
+    def visit_Pow(
+        self, node: ast.Pow, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.MOD
+    def visit_Mod(
+        self, node: ast.Mod, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.BIT_AND
+    def visit_BitAnd(
+        self, node: ast.BitAnd, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.BIT_OR
+    def visit_BitOr(
+        self, node: ast.BitOr, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_OR
 
-    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ts.BinaryOperator:
-        return ts.BinaryOperator.BIT_XOR
+    def visit_BitXor(
+        self, node: ast.BitXor, **kwargs
+    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
+        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
         return past.BinOp(

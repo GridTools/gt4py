@@ -15,6 +15,7 @@
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import eve
+import functional.ffront.dialect_ast_enums
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from functional.type_system import type_specifications as ts
@@ -30,7 +31,11 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
     type: Union[SymbolT, ts.DeferredType]  # noqa A003
-    namespace: ts.Namespace = ts.Namespace(ts.Namespace.LOCAL)
+    namespace: functional.ffront.dialect_ast_enums.Namespace = (
+        functional.ffront.dialect_ast_enums.Namespace(
+            functional.ffront.dialect_ast_enums.Namespace.LOCAL
+        )
+    )
 
 
 DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
@@ -51,7 +56,7 @@ class Expr(LocatedNode):
 
 
 class BinOp(Expr):
-    op: ts.BinaryOperator
+    op: functional.ffront.dialect_ast_enums.BinaryOperator
     left: Expr
     right: Expr
 

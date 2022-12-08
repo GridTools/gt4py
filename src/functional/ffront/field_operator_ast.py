@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Any, Generic, TypeVar, Union
 
+import functional.ffront.dialect_ast_enums
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
@@ -49,7 +50,11 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     type: Union[SymbolT, ts.DeferredType]  # noqa A003
-    namespace: ts.Namespace = ts.Namespace(ts.Namespace.LOCAL)
+    namespace: functional.ffront.dialect_ast_enums.Namespace = (
+        functional.ffront.dialect_ast_enums.Namespace(
+            functional.ffront.dialect_ast_enums.Namespace.LOCAL
+        )
+    )
 
 
 DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
@@ -95,12 +100,12 @@ class TupleExpr(Expr):
 
 
 class UnaryOp(Expr):
-    op: ts.UnaryOperator
+    op: functional.ffront.dialect_ast_enums.UnaryOperator
     operand: Expr
 
 
 class BinOp(Expr):
-    op: ts.BinaryOperator
+    op: functional.ffront.dialect_ast_enums.BinaryOperator
     left: Expr
     right: Expr
 

@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
+import functional.ffront.dialect_ast_enums
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import program_ast as past
@@ -128,7 +129,10 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         right: past.Expr,
         **kwargs,
     ) -> Optional[ts.TypeSpec]:
-        logical_ops = {ts.BinaryOperator.BIT_AND, ts.BinaryOperator.BIT_OR}
+        logical_ops = {
+            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_AND,
+            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_OR,
+        }
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
         # check both types compatible
@@ -141,7 +145,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         left_type = cast(ts.ScalarType, left.type)
         right_type = cast(ts.ScalarType, right.type)
 
-        if node.op == ts.BinaryOperator.POW:
+        if node.op == functional.ffront.dialect_ast_enums.BinaryOperator.POW:
             return left_type
 
         try:
