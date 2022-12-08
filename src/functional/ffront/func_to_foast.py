@@ -33,7 +33,7 @@ from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.type_system import symbol_makers, type_info, type_specifications as ts
+from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -103,7 +103,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         # check deduced matches annotated return type
         if "return" in annotations:
-            annotated_return_type = symbol_makers.make_symbol_type_from_typing(
+            annotated_return_type = type_translation.make_symbol_type_from_typing(
                 annotations["return"]
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
@@ -141,7 +141,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
                         returns=cast(
-                            ts.DataType, symbol_makers.make_symbol_type_from_typing(value)
+                            ts.DataType, type_translation.make_symbol_type_from_typing(value)
                         ),
                     ),
                     namespace=ts.Namespace.CLOSURE,
@@ -181,7 +181,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
-        new_type = symbol_makers.make_symbol_type_from_typing(annotation)
+        new_type = type_translation.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, ts.DataType):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
@@ -253,7 +253,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
-            target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=context)
+            target_type = type_translation.make_symbol_type_from_typing(
+                annotation, globalns=context
+            )
         else:
             target_type = ts.DeferredSymbolType()
 
@@ -478,7 +480,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
         try:
-            type_ = symbol_makers.make_symbol_type_from_value(node.value)
+            type_ = type_translation.make_symbol_type_from_value(node.value)
         except common.GTTypeError as e:
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg=f"Constants of type {type(node.value)} are not permitted."

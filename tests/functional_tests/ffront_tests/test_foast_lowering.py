@@ -29,7 +29,7 @@ from functional.ffront.fbuiltins import (
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.type_system import type_specifications as ts
-from functional.type_system.symbol_makers import make_symbol_type_from_typing
+from functional.type_system.type_translation import make_symbol_type_from_typing
 
 
 IDim = Dimension("IDim")

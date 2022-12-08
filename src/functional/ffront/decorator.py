@@ -50,7 +50,7 @@ from functional.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
-from functional.type_system import symbol_makers, type_info, type_specifications as ts
+from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -305,8 +305,10 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword-only arguments are not supported yet.")
 
-        arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
-        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+        arg_types = [type_translation.make_symbol_type_from_value(arg) for arg in args]
+        kwarg_types = {
+            k: type_translation.make_symbol_type_from_value(v) for k, v in kwargs.items()
+        }
 
         try:
             type_info.accepts_args(
@@ -462,7 +464,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         loc = foast_definition_node.location
         operator_attribute_nodes = {
             key: foast.Constant(
-                value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
+                value=value, type=type_translation.make_symbol_type_from_value(value), location=loc
             )
             for key, value in operator_attributes.items()
         }
@@ -584,10 +586,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # deduce argument types
         arg_types = []
         for arg in args:
-            arg_types.append(symbol_makers.make_symbol_type_from_value(arg))
+            arg_types.append(type_translation.make_symbol_type_from_value(arg))
         kwarg_types = {}
         for name, arg in kwargs.items():
-            kwarg_types[name] = symbol_makers.make_symbol_type_from_value(arg)
+            kwarg_types[name] = type_translation.make_symbol_type_from_value(arg)
 
         return self.as_program(arg_types, kwarg_types)(
             *args, out, offset_provider=offset_provider, **kwargs

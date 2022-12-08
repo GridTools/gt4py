@@ -51,7 +51,7 @@ from functional.iterator.builtins import (
     xor_,
 )
 from functional.type_system import type_specifications as ts
-from functional.type_system.symbol_makers import TypingError
+from functional.type_system.type_translation import TypingError
 
 
 DEREF = itir.SymRef(id=deref.fun.__name__)

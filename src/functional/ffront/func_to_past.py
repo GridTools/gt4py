@@ -21,7 +21,7 @@ from functional.ffront import program_ast as past
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from functional.type_system import symbol_makers, type_specifications as ts
+from functional.type_system import type_specifications as ts, type_translation
 
 
 class ProgramSyntaxError(DialectSyntaxError):
@@ -45,7 +45,7 @@ class ProgramParser(DialectParser[past.Program]):
         closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
+                type=type_translation.make_symbol_type_from_value(val),
                 namespace=ts.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
@@ -67,7 +67,7 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
-        new_type = symbol_makers.make_symbol_type_from_typing(annotation)
+        new_type = type_translation.make_symbol_type_from_typing(annotation)
         if not isinstance(new_type, ts.DataType):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
@@ -161,12 +161,12 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
-            symbol_type = symbol_makers.make_symbol_type_from_value(node.operand.value)
+            symbol_type = type_translation.make_symbol_type_from_value(node.operand.value)
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
             )
         raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
-        symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
+        symbol_type = type_translation.make_symbol_type_from_value(node.value)
         return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))

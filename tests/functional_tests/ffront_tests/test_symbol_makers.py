@@ -22,7 +22,7 @@ import pytest
 from eve import extended_typing as xtyping
 from functional import common
 from functional.ffront.fbuiltins import Dimension
-from functional.type_system import symbol_makers, type_specifications as ts
+from functional.type_system import type_specifications as ts, type_translation
 
 
 class CustomInt32DType:
@@ -46,12 +46,12 @@ JDim = Dimension("JDim")
     ],
 )
 def test_valid_scalar_kind(value, expected):
-    assert symbol_makers.make_scalar_kind(value) == expected
+    assert type_translation.make_scalar_kind(value) == expected
 
 
 def test_invalid_scalar_kind():
     with pytest.raises(common.GTTypeError, match="Non-trivial dtypes"):
-        symbol_makers.make_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
+        type_translation.make_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
 
 
 @pytest.mark.parametrize(
@@ -124,47 +124,47 @@ def test_invalid_scalar_kind():
     ],
 )
 def test_make_symbol_type_from_typing(value, expected):
-    assert symbol_makers.make_symbol_type_from_typing(value) == expected
+    assert type_translation.make_symbol_type_from_typing(value) == expected
 
 
 def test_invalid_symbol_types():
     # Forward references
-    with pytest.raises(symbol_makers.TypingError, match="undefined forward references"):
-        symbol_makers.make_symbol_type_from_typing("foo")
+    with pytest.raises(type_translation.TypingError, match="undefined forward references"):
+        type_translation.make_symbol_type_from_typing("foo")
 
     # Tuples
-    with pytest.raises(symbol_makers.TypingError, match="least one argument"):
-        symbol_makers.make_symbol_type_from_typing(typing.Tuple)
-    with pytest.raises(symbol_makers.TypingError, match="least one argument"):
-        symbol_makers.make_symbol_type_from_typing(tuple)
+    with pytest.raises(type_translation.TypingError, match="least one argument"):
+        type_translation.make_symbol_type_from_typing(typing.Tuple)
+    with pytest.raises(type_translation.TypingError, match="least one argument"):
+        type_translation.make_symbol_type_from_typing(tuple)
 
-    with pytest.raises(symbol_makers.TypingError, match="Unbound tuples"):
-        symbol_makers.make_symbol_type_from_typing(tuple[int, ...])
-    with pytest.raises(symbol_makers.TypingError, match="Unbound tuples"):
-        symbol_makers.make_symbol_type_from_typing(typing.Tuple["float", ...])
+    with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
+        type_translation.make_symbol_type_from_typing(tuple[int, ...])
+    with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
+        type_translation.make_symbol_type_from_typing(typing.Tuple["float", ...])
 
     # Fields
-    with pytest.raises(symbol_makers.TypingError, match="Field type requires two arguments"):
-        symbol_makers.make_symbol_type_from_typing(common.Field)
-    with pytest.raises(symbol_makers.TypingError, match="Invalid field dimensions"):
-        symbol_makers.make_symbol_type_from_typing(common.Field[int, int])
-    with pytest.raises(symbol_makers.TypingError, match="Invalid field dimension"):
-        symbol_makers.make_symbol_type_from_typing(common.Field[[int, int], int])
+    with pytest.raises(type_translation.TypingError, match="Field type requires two arguments"):
+        type_translation.make_symbol_type_from_typing(common.Field)
+    with pytest.raises(type_translation.TypingError, match="Invalid field dimensions"):
+        type_translation.make_symbol_type_from_typing(common.Field[int, int])
+    with pytest.raises(type_translation.TypingError, match="Invalid field dimension"):
+        type_translation.make_symbol_type_from_typing(common.Field[[int, int], int])
 
-    with pytest.raises(symbol_makers.TypingError, match="Field dtype argument"):
-        symbol_makers.make_symbol_type_from_typing(common.Field[..., str])
-    with pytest.raises(symbol_makers.TypingError, match="Field dtype argument"):
-        symbol_makers.make_symbol_type_from_typing(common.Field[..., None])
+    with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
+        type_translation.make_symbol_type_from_typing(common.Field[..., str])
+    with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
+        type_translation.make_symbol_type_from_typing(common.Field[..., None])
 
     # Functions
     with pytest.raises(
-        symbol_makers.TypingError, match="Not annotated functions are not supported"
+        type_translation.TypingError, match="Not annotated functions are not supported"
     ):
-        symbol_makers.make_symbol_type_from_typing(typing.Callable)
+        type_translation.make_symbol_type_from_typing(typing.Callable)
 
-    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
-        symbol_makers.make_symbol_type_from_typing(typing.Callable[..., float])
-    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
-        symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], str])
-    with pytest.raises(symbol_makers.TypingError, match="Invalid callable annotations"):
-        symbol_makers.make_symbol_type_from_typing(typing.Callable[[int], float])
+    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+        type_translation.make_symbol_type_from_typing(typing.Callable[..., float])
+    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+        type_translation.make_symbol_type_from_typing(typing.Callable[[int], str])
+    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+        type_translation.make_symbol_type_from_typing(typing.Callable[[int], float])

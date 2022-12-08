@@ -16,7 +16,7 @@ from typing import Any
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.type_system.symbol_makers import make_symbol_type_from_value
+from functional.type_system.type_translation import make_symbol_type_from_value
 
 
 @dataclass(frozen=True)
