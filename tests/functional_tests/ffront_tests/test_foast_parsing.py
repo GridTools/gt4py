@@ -35,7 +35,7 @@ from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
-    astype_,
+    cast_,
     deref,
     divides,
     eq,
@@ -70,7 +70,7 @@ AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
 XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
-ASTYPE = itir.SymRef(id=astype_.fun.__name__)
+CAST = itir.SymRef(id=cast_.fun.__name__)
 
 
 # --- Parsing ---
