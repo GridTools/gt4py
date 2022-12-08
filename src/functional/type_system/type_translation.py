@@ -27,7 +27,7 @@ from functional import common
 from functional.type_system import type_specifications as ts
 
 
-def make_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
+def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
     # make int & float precision platform independent.
     if dtype is builtins.int:
         dt = np.dtype("int64")
@@ -59,15 +59,13 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         raise common.GTTypeError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
 
 
-def make_symbol_type_from_typing(
+def from_type_hint(
     type_hint: Any,
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> ts.SymbolType:
-    recursive_make_symbol = functools.partial(
-        make_symbol_type_from_typing, globalns=globalns, localns=localns
-    )
+) -> ts.TypeSpec:
+    recursive_make_symbol = functools.partial(from_type_hint, globalns=globalns, localns=localns)
     extra_args = ()
 
     # ForwardRef
@@ -96,7 +94,7 @@ def make_symbol_type_from_typing(
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
-            return ts.ScalarType(kind=make_scalar_kind(type_hint))
+            return ts.ScalarType(kind=get_scalar_kind(type_hint))
 
         case builtins.tuple:
             if not args:
@@ -157,7 +155,7 @@ def make_symbol_type_from_typing(
     raise TypingError(f"'{type_hint}' type is not supported")
 
 
-def make_symbol_type_from_value(value: Any) -> ts.SymbolType:
+def from_value(value: Any) -> ts.TypeSpec:
     # TODO(tehrengruber): use protocol from functional.common when available
     #  instead of importing from the embedded implementation
     from functional.iterator.embedded import LocatedField
@@ -171,17 +169,17 @@ def make_symbol_type_from_value(value: Any) -> ts.SymbolType:
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
         dims = list(value.axes)
-        dtype = make_symbol_type_from_typing(value.dtype.type)
+        dtype = from_type_hint(value.dtype.type)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
     elif isinstance(value, tuple):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
         # manually here. If we get rid of all the special cases this is
         # not needed anymore.
-        return ts.TupleType(types=[make_symbol_type_from_value(el) for el in value])
+        return ts.TupleType(types=[from_value(el) for el in value])
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
-        symbol_type = make_symbol_type_from_typing(type_)
+        symbol_type = from_type_hint(type_)
 
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type

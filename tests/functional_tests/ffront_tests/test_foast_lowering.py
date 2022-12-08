@@ -29,7 +29,7 @@ from functional.ffront.fbuiltins import (
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.type_system import type_specifications as ts
-from functional.type_system.type_translation import make_symbol_type_from_typing
+from functional.type_system.type_translation import from_type_hint
 
 
 IDim = Dimension("IDim")
@@ -222,7 +222,7 @@ def test_call():
     # create something that appears to the lowering like a field operator.
     #  we could also create an actual field operator, but we want to avoid
     #  using such heavy constructs for testing the lowering.
-    field_type = make_symbol_type_from_typing(Field[..., float64])
+    field_type = from_type_hint(Field[..., float64])
     identity = SimpleNamespace(
         __gt_type__=lambda: ts.FieldOperatorType(
             definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)

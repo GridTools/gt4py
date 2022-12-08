@@ -16,7 +16,7 @@ from typing import Any
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, traits
-from functional.type_system.type_translation import make_symbol_type_from_value
+from functional.type_system.type_translation import from_value
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait
                 new_symbol: foast.Symbol = foast.Symbol(
                     id=sym.id,
                     location=sym.location,
-                    type=make_symbol_type_from_value(self.closure_vars[sym.id]),
+                    type=from_value(self.closure_vars[sym.id]),
                 )
                 new_closure_vars.append(new_symbol)
             else:

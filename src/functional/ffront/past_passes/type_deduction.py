@@ -127,7 +127,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         left: past.Expr,
         right: past.Expr,
         **kwargs,
-    ) -> Optional[ts.SymbolType]:
+    ) -> Optional[ts.TypeSpec]:
         logical_ops = {ts.BinaryOperator.BIT_AND, ts.BinaryOperator.BIT_OR}
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 

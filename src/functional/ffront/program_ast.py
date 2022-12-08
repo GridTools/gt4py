@@ -24,7 +24,7 @@ class LocatedNode(Node):
     location: SourceLocation
 
 
-SymbolT = TypeVar("SymbolT", bound=ts.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
@@ -47,7 +47,7 @@ TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[ts.SymbolType] = None  # noqa A003
+    type: Optional[ts.TypeSpec] = None  # noqa A003
 
 
 class BinOp(Expr):

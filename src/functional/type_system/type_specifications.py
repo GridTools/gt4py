@@ -7,19 +7,6 @@ from eve.type_definitions import IntEnum, StrEnum
 from functional import common as func_common
 
 
-class ScalarKind(IntEnum):
-    BOOL = 1
-    INT32 = 32
-    INT64 = 64
-    # Python's "int" type in the Python AST should be mapped to ScalarKind.INT in our ASTs. The size, as
-    # determined by numpy, varies by platform. (Size is the same as C's "long" type.)
-    INT = INT32 if np.int_ == np.int32 else INT64
-    FLOAT32 = 1032
-    FLOAT64 = 1064
-    DIMENSION = 2001
-    STRING = 3001
-
-
 class Namespace(StrEnum):
     LOCAL = "local"
     CLOSURE = "closure"
@@ -80,25 +67,25 @@ class UnaryOperator(StrEnum):
         return "Unknown UnaryOperator"
 
 
-class SymbolType:
+class TypeSpec:
     pass
 
 
 @dataclass(frozen=True)
-class DeferredSymbolType(SymbolType):
+class DeferredSymbolType(TypeSpec):
     """Dummy used to represent a type not yet inferred."""
 
-    constraint: Optional[type[SymbolType] | tuple[type[SymbolType], ...]]
+    constraint: Optional[type[TypeSpec] | tuple[type[TypeSpec], ...]]
 
 
 @dataclass(frozen=True)
-class SymbolTypeVariable(SymbolType):
+class SymbolTypeVariable(TypeSpec):
     id: str  # noqa A003
-    bound: type[SymbolType]
+    bound: type[TypeSpec]
 
 
 @dataclass(frozen=True)
-class VoidType(SymbolType):
+class VoidType(TypeSpec):
     """
     Return type of a function without return values.
 
@@ -107,12 +94,12 @@ class VoidType(SymbolType):
 
 
 @dataclass(frozen=True)
-class DimensionType(SymbolType):
+class DimensionType(TypeSpec):
     dim: func_common.Dimension
 
 
 @dataclass(frozen=True)
-class OffsetType(SymbolType):
+class OffsetType(TypeSpec):
     source: func_common.Dimension
     target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 
@@ -121,8 +108,21 @@ class OffsetType(SymbolType):
 
 
 @dataclass(frozen=True)
-class DataType(SymbolType):
+class DataType(TypeSpec):
     ...
+
+
+class ScalarKind(IntEnum):
+    BOOL = 1
+    INT32 = 32
+    INT64 = 64
+    # Python's "int" type in the Python AST should be mapped to ScalarKind.INT in our ASTs. The size, as
+    # determined by numpy, varies by platform. (Size is the same as C's "long" type.)
+    INT = INT32 if np.int_ == np.int32 else INT64
+    FLOAT32 = 1032
+    FLOAT64 = 1064
+    DIMENSION = 2001
+    STRING = 3001
 
 
 @dataclass(frozen=True)
@@ -162,7 +162,7 @@ class FieldType(DataType, CallableType):
 
 
 @dataclass(frozen=True)
-class FunctionType(SymbolType, CallableType):
+class FunctionType(TypeSpec, CallableType):
     args: list[DataType | DeferredSymbolType]
     kwargs: dict[str, DataType | DeferredSymbolType]
     returns: DataType | DeferredSymbolType | VoidType
@@ -175,16 +175,16 @@ class FunctionType(SymbolType, CallableType):
 
 
 @dataclass(frozen=True)
-class ScanOperatorType(SymbolType, CallableType):
+class ScanOperatorType(TypeSpec, CallableType):
     axis: func_common.Dimension
     definition: FunctionType
 
 
 @dataclass(frozen=True)
-class FieldOperatorType(SymbolType, CallableType):
+class FieldOperatorType(TypeSpec, CallableType):
     definition: FunctionType
 
 
 @dataclass(frozen=True)
-class ProgramType(SymbolType, CallableType):
+class ProgramType(TypeSpec, CallableType):
     definition: FunctionType

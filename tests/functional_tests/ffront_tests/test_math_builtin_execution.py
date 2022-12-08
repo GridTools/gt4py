@@ -50,7 +50,7 @@ def make_builtin_field_operator(builtin_name: str):
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
     params = [
-        foast.Symbol(id=k, type=type_translation.make_symbol_type_from_typing(type), location=loc)
+        foast.Symbol(id=k, type=type_translation.from_type_hint(type), location=loc)
         for k, type in annotations.items()
         if k != "return"
     ]
@@ -59,7 +59,7 @@ def make_builtin_field_operator(builtin_name: str):
     closure_var_symbols = [
         foast.Symbol(
             id=name,
-            type=type_translation.make_symbol_type_from_value(val),
+            type=type_translation.from_value(val),
             namespace=ts.Namespace.CLOSURE,
             location=loc,
         )

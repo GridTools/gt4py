@@ -8,16 +8,16 @@ from functional.common import Dimension, GTTypeError
 from functional.type_system import type_specifications as ts
 
 
-def is_concrete(symbol_type: ts.SymbolType) -> TypeGuard[ts.SymbolType]:
+def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     """Figure out if the foast type is completely deduced."""
     if isinstance(symbol_type, ts.DeferredSymbolType):
         return False
-    elif isinstance(symbol_type, ts.SymbolType):
+    elif isinstance(symbol_type, ts.TypeSpec):
         return True
     return False
 
 
-def type_class(symbol_type: ts.SymbolType) -> Type[ts.SymbolType]:
+def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     """
     Determine which class should be used to create a compatible concrete type.
 
@@ -39,16 +39,16 @@ def type_class(symbol_type: ts.SymbolType) -> Type[ts.SymbolType]:
             elif isinstance(constraint, tuple):
                 raise GTTypeError(f"Not sufficient type information available for {symbol_type}!")
             return constraint
-        case ts.SymbolType() as concrete_type:
+        case ts.TypeSpec() as concrete_type:
             return concrete_type.__class__
     raise GTTypeError(
-        f"Invalid type for TypeInfo: requires {ts.SymbolType}, got {type(symbol_type)}!"
+        f"Invalid type for TypeInfo: requires {ts.TypeSpec}, got {type(symbol_type)}!"
     )
 
 
 def primitive_constituents(
-    symbol_type: ts.SymbolType,
-) -> XIterable[ts.SymbolType]:
+    symbol_type: ts.TypeSpec,
+) -> XIterable[ts.TypeSpec]:
     """
     Return the primitive types contained in a composite type.
 
@@ -66,7 +66,7 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.SymbolType):
+    def constituents_yielder(symbol_type: ts.TypeSpec):
         if isinstance(symbol_type, ts.TupleType):
             for el_type in symbol_type.types:
                 yield from constituents_yielder(el_type)
@@ -77,9 +77,9 @@ def primitive_constituents(
 
 
 def apply_to_primitive_constituents(
-    symbol_type: ts.SymbolType,
-    fun: Callable[[ts.SymbolType], ts.SymbolType]
-    | Callable[[ts.SymbolType, tuple[int, ...]], ts.SymbolType],
+    symbol_type: ts.TypeSpec,
+    fun: Callable[[ts.TypeSpec], ts.TypeSpec]
+    | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec],
     with_path_arg=False,
     _path=(),
 ):
@@ -106,7 +106,7 @@ def apply_to_primitive_constituents(
         return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
 
 
-def extract_dtype(symbol_type: ts.SymbolType) -> ts.ScalarType:
+def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
     """
     Extract the data type from ``symbol_type`` if it is either `FieldType` or `ScalarType`.
 
@@ -128,7 +128,7 @@ def extract_dtype(symbol_type: ts.SymbolType) -> ts.ScalarType:
     raise GTTypeError(f"Can not unambiguosly extract data type from {symbol_type}!")
 
 
-def is_floating_point(symbol_type: ts.SymbolType) -> bool:
+def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if the dtype of ``symbol_type`` is a floating point type.
 
@@ -149,7 +149,7 @@ def is_floating_point(symbol_type: ts.SymbolType) -> bool:
     ]
 
 
-def is_integral(symbol_type: ts.SymbolType) -> bool:
+def is_integral(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if the dtype of ``symbol_type`` is an integral type.
 
@@ -171,11 +171,11 @@ def is_integral(symbol_type: ts.SymbolType) -> bool:
     ]
 
 
-def is_logical(symbol_type: ts.SymbolType) -> bool:
+def is_logical(symbol_type: ts.TypeSpec) -> bool:
     return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
 
 
-def is_arithmetic(symbol_type: ts.SymbolType) -> bool:
+def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if ``symbol_type`` is compatible with arithmetic operations.
 
@@ -193,7 +193,7 @@ def is_arithmetic(symbol_type: ts.SymbolType) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_field_type_or_tuple_of_field_type(type_: ts.SymbolType) -> bool:
+def is_field_type_or_tuple_of_field_type(type_: ts.TypeSpec) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
 
@@ -211,7 +211,7 @@ def is_field_type_or_tuple_of_field_type(type_: ts.SymbolType) -> bool:
     return all(isinstance(t, ts.FieldType) for t in primitive_constituents(type_))
 
 
-def extract_dims(symbol_type: ts.SymbolType) -> list[Dimension]:
+def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
     """
     Try to extract field dimensions if possible.
 
@@ -234,7 +234,7 @@ def extract_dims(symbol_type: ts.SymbolType) -> list[Dimension]:
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
-def is_concretizable(symbol_type: ts.SymbolType, to_type: ts.SymbolType) -> bool:
+def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     """
     Check if ``symbol_type`` can be concretized to ``to_type``.
 
@@ -271,7 +271,7 @@ def is_concretizable(symbol_type: ts.SymbolType, to_type: ts.SymbolType) -> bool
     False
 
     >>> is_concretizable(
-    ...     ts.DeferredSymbolType(constraint=ts.SymbolType),
+    ...     ts.DeferredSymbolType(constraint=ts.TypeSpec),
     ...     to_type=ts.DeferredSymbolType(constraint=ts.ScalarType)
     ... )
     True
@@ -411,8 +411,8 @@ def promote_dims(
 def return_type(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ):
     raise NotImplementedError(
         f"Return type deduction of type " f"{type(callable_type).__name__} not implemented."
@@ -423,8 +423,8 @@ def return_type(
 def return_type_func(
     func_type: ts.FunctionType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ):
     return func_type.returns
 
@@ -433,8 +433,8 @@ def return_type_func(
 def return_type_fieldop(
     fieldop_type: ts.FieldOperatorType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ):
     ret_type = return_type(fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs)
     return ret_type
@@ -444,8 +444,8 @@ def return_type_fieldop(
 def return_type_scanop(
     callable_type: ts.ScanOperatorType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ):
     carry_dtype = callable_type.definition.returns
     promoted_dims = promote_dims(
@@ -463,8 +463,8 @@ def return_type_scanop(
 def return_type_field(
     field_type: ts.FieldType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
 ):
     try:
         accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
@@ -487,7 +487,7 @@ def return_type_field(
 
 @functools.singledispatch
 def function_signature_incompatibilities(
-    func_type: ts.CallableType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
+    func_type: ts.CallableType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     """
     Return incompatibilities for a call to ``func_type`` with given arguments.
@@ -499,7 +499,7 @@ def function_signature_incompatibilities(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_func(
-    func_type: ts.FunctionType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
+    func_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
 
     # check positional arguments
@@ -526,14 +526,14 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
-    fieldop_type: ts.FieldOperatorType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
+    fieldop_type: ts.FieldOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
 
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_scanop(
-    scanop_type: ts.ScanOperatorType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
+    scanop_type: ts.ScanOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     if not all(is_field_type_or_tuple_of_field_type(arg) for arg in args):
         yield "Arguments to scan operator must be fields or tuples thereof."
@@ -582,7 +582,7 @@ def function_signature_incompatibilities_scanop(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ts.ProgramType, args: list[ts.SymbolType], kwargs: dict[str, ts.SymbolType]
+    program_type: ts.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
 
@@ -590,8 +590,8 @@ def function_signature_incompatibilities_program(
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
     field_type: ts.FieldType,
-    args: list[ts.SymbolType],
-    kwargs: dict[str, ts.SymbolType],
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument(s), but {len(args)} were given."
@@ -614,8 +614,8 @@ def function_signature_incompatibilities_field(
 def accepts_args(
     callable_type: ts.CallableType,
     *,
-    with_args: list[ts.SymbolType],
-    with_kwargs: dict[str, ts.SymbolType],
+    with_args: list[ts.TypeSpec],
+    with_kwargs: dict[str, ts.TypeSpec],
     raise_exception: bool = False,
 ) -> bool:
     """

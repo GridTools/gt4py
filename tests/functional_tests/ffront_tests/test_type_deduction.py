@@ -32,7 +32,7 @@ from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.type_system import type_info, type_specifications as ts
 
 
-def type_info_cases() -> list[tuple[Optional[ts.SymbolType], dict]]:
+def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
     return [
         (
             ts.DeferredSymbolType(constraint=None),
@@ -252,11 +252,11 @@ def test_type_info_basic(symbol_type, expected):
 
 @pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
 def test_accept_args(
-    func_type: ts.SymbolType,
-    args: list[ts.SymbolType],
-    kwargs: dict[str, ts.SymbolType],
+    func_type: ts.TypeSpec,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
     expected: list,
-    return_type: ts.SymbolType,
+    return_type: ts.TypeSpec,
 ):
     accepts_args = len(expected) == 0
     assert accepts_args == type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs)
@@ -275,11 +275,11 @@ def test_accept_args(
 
 @pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
 def test_return_type(
-    func_type: ts.SymbolType,
-    args: list[ts.SymbolType],
-    kwargs: dict[str, ts.SymbolType],
+    func_type: ts.TypeSpec,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
     expected: list,
-    return_type: ts.SymbolType,
+    return_type: ts.TypeSpec,
 ):
     accepts_args = type_info.accepts_args(func_type, with_args=args, with_kwargs=kwargs)
     if accepts_args:

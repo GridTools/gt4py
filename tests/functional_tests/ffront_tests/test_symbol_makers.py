@@ -46,12 +46,12 @@ JDim = Dimension("JDim")
     ],
 )
 def test_valid_scalar_kind(value, expected):
-    assert type_translation.make_scalar_kind(value) == expected
+    assert type_translation.get_scalar_kind(value) == expected
 
 
 def test_invalid_scalar_kind():
     with pytest.raises(common.GTTypeError, match="Non-trivial dtypes"):
-        type_translation.make_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
+        type_translation.get_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
 
 
 @pytest.mark.parametrize(
@@ -124,47 +124,47 @@ def test_invalid_scalar_kind():
     ],
 )
 def test_make_symbol_type_from_typing(value, expected):
-    assert type_translation.make_symbol_type_from_typing(value) == expected
+    assert type_translation.from_type_hint(value) == expected
 
 
 def test_invalid_symbol_types():
     # Forward references
     with pytest.raises(type_translation.TypingError, match="undefined forward references"):
-        type_translation.make_symbol_type_from_typing("foo")
+        type_translation.from_type_hint("foo")
 
     # Tuples
     with pytest.raises(type_translation.TypingError, match="least one argument"):
-        type_translation.make_symbol_type_from_typing(typing.Tuple)
+        type_translation.from_type_hint(typing.Tuple)
     with pytest.raises(type_translation.TypingError, match="least one argument"):
-        type_translation.make_symbol_type_from_typing(tuple)
+        type_translation.from_type_hint(tuple)
 
     with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
-        type_translation.make_symbol_type_from_typing(tuple[int, ...])
+        type_translation.from_type_hint(tuple[int, ...])
     with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
-        type_translation.make_symbol_type_from_typing(typing.Tuple["float", ...])
+        type_translation.from_type_hint(typing.Tuple["float", ...])
 
     # Fields
     with pytest.raises(type_translation.TypingError, match="Field type requires two arguments"):
-        type_translation.make_symbol_type_from_typing(common.Field)
+        type_translation.from_type_hint(common.Field)
     with pytest.raises(type_translation.TypingError, match="Invalid field dimensions"):
-        type_translation.make_symbol_type_from_typing(common.Field[int, int])
+        type_translation.from_type_hint(common.Field[int, int])
     with pytest.raises(type_translation.TypingError, match="Invalid field dimension"):
-        type_translation.make_symbol_type_from_typing(common.Field[[int, int], int])
+        type_translation.from_type_hint(common.Field[[int, int], int])
 
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.make_symbol_type_from_typing(common.Field[..., str])
+        type_translation.from_type_hint(common.Field[..., str])
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.make_symbol_type_from_typing(common.Field[..., None])
+        type_translation.from_type_hint(common.Field[..., None])
 
     # Functions
     with pytest.raises(
         type_translation.TypingError, match="Not annotated functions are not supported"
     ):
-        type_translation.make_symbol_type_from_typing(typing.Callable)
+        type_translation.from_type_hint(typing.Callable)
 
     with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
-        type_translation.make_symbol_type_from_typing(typing.Callable[..., float])
+        type_translation.from_type_hint(typing.Callable[..., float])
     with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
-        type_translation.make_symbol_type_from_typing(typing.Callable[[int], str])
+        type_translation.from_type_hint(typing.Callable[[int], str])
     with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
-        type_translation.make_symbol_type_from_typing(typing.Callable[[int], float])
+        type_translation.from_type_hint(typing.Callable[[int], float])

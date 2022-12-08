@@ -19,10 +19,10 @@ from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import fbuiltins
 from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.type_system import type_info, type_specifications as ts
-from functional.type_system.type_translation import make_symbol_type_from_value
+from functional.type_system.type_translation import from_value
 
 
-def boolified_type(symbol_type: ts.SymbolType) -> ts.ScalarType | ts.FieldType:
+def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
     """
     Create a new symbol type from a symbol type, replacing the data type with ``bool``.
 
@@ -327,7 +327,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         new_value = self.visit(node.value, **kwargs)
-        new_type: Optional[ts.SymbolType] = None
+        new_type: Optional[ts.TypeSpec] = None
         match new_value.type:
             case ts.TupleType(types=types):
                 new_type = types[node.index]
@@ -386,7 +386,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         condition: foast.Expr,
         true_expr: foast.Expr,
         false_expr: foast.Expr,
-    ) -> Optional[ts.SymbolType]:
+    ) -> Optional[ts.TypeSpec]:
         if condition.type != ts.ScalarType(kind=ts.ScalarKind.BOOL):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 condition,
@@ -410,7 +410,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _deduce_compare_type(
         self, node: foast.Compare, *, left: foast.Expr, right: foast.Expr, **kwargs
-    ) -> Optional[ts.SymbolType]:
+    ) -> Optional[ts.TypeSpec]:
         # check both types compatible
         for arg in (left, right):
             if not type_info.is_arithmetic(arg.type):
@@ -438,7 +438,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left: foast.Expr,
         right: foast.Expr,
         **kwargs,
-    ) -> Optional[ts.SymbolType]:
+    ) -> Optional[ts.TypeSpec]:
         logical_ops = {
             ts.BinaryOperator.BIT_AND,
             ts.BinaryOperator.BIT_OR,
@@ -737,7 +737,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
         try:
-            type_ = make_symbol_type_from_value(node.value)
+            type_ = from_value(node.value)
         except GTTypeError as e:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg="Could not deduce type of constant."

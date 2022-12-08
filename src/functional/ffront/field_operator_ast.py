@@ -39,7 +39,7 @@ class LocatedNode(Node):
             return super().__str__()
 
 
-SymbolT = TypeVar("SymbolT", bound=ts.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 # TODO(egparedes): this should be an actual generic datamodel but it is not fully working
@@ -69,7 +69,7 @@ DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ts.SymbolType = ts.DeferredSymbolType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredSymbolType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
