@@ -113,9 +113,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != foast_node.type.returns:  # type: ignore
+            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                     f", but got `{annotated_return_type}`."
                 )
         return foast_node
