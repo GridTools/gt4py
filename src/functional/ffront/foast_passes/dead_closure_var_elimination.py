@@ -23,7 +23,7 @@ class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTra
     _referenced_symbols: list[foast.Symbol]
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
+    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
         return cls().visit(node)
 
     def visit_Name(self, node: foast.Name, symtable, **kwargs: Any) -> foast.Name:

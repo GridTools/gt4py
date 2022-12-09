@@ -96,10 +96,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     @classmethod
     def _postprocess_dialect_ast(
         cls,
-        foast_node: foast.FieldOperator,
+        foast_node: foast.FunctionDefinition | foast.FieldOperator,
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
-    ) -> foast.FieldOperator:
+    ) -> foast.FunctionDefinition:
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
