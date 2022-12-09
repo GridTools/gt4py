@@ -96,10 +96,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     @classmethod
     def _postprocess_dialect_ast(
         cls,
-        foast_node: foast.FieldOperator,
+        foast_node: foast.FunctionDefinition | foast.FieldOperator,
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
-    ) -> foast.FieldOperator:
+    ) -> foast.FunctionDefinition:
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
@@ -113,9 +113,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != foast_node.type.returns:
+            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                     f", but got `{annotated_return_type}`."
                 )
         return foast_node
@@ -193,7 +193,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
-    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
 
         if isinstance(target, ast.Tuple):
@@ -206,7 +206,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     new_targets.append(
                         foast.Starred(
                             id=foast.DataSymbol(
-                                id=elt.value.id,
+                                id=self.visit(elt.value).id,
                                 location=self._make_loc(elt),
                                 type=ct.DeferredSymbolType(constraint=ct.DataType),
                             ),
@@ -217,7 +217,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 else:
                     new_targets.append(
                         foast.DataSymbol(
-                            id=elt.id,
+                            id=self.visit(elt).id,
                             location=self._make_loc(elt),
                             type=ct.DeferredSymbolType(constraint=ct.DataType),
                         )
