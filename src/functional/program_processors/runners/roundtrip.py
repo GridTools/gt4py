@@ -56,12 +56,6 @@ def ${id}(${','.join(params)}):
     """
     )
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        if isinstance(node.fun, itir.SymRef) and node.fun.id == "if_":
-            cond, true_branch, false_branch = (self.visit(arg, **kwargs) for arg in node.args)
-            return f"(({true_branch}) if ({cond}) else ({false_branch}))"
-        return self.generic_visit(node, **kwargs)
-
     # extension required by global_tmps
     def visit_FencilWithTemporaries(self, node, **kwargs):
         params = self.visit(node.params)
