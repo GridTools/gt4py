@@ -87,15 +87,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 import gridtools_cpp
 
                 return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()})"
-                #  return textwrap.dedent(
-                #      """\
-                #      FetchContent_Declare(GridTools
-                #          GIT_REPOSITORY https://github.com/GridTools/gridtools.git
-                #          GIT_TAG        master
-                #      )
-                #      FetchContent_MakeAvailable(GridTools)\
-                #      """
-                #  )
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
