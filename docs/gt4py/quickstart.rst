@@ -324,6 +324,13 @@ the ``return`` statement. In the above example, ``v`` is not modified. However, 
 Functions can be used only for code inside of computation/interval blocks. There is no overhead attached
 to function calls since they are inlined in the generated code.
 
+-------------
+Offset syntax
+-------------
+
+Offsets can be specified either as a list of offsets on all spatial axes, e.g. ``field[0, 0, 1]``, or as offsets on the
+axes present by specifying the axis ``field[K+1]``.
+
 -------------------------
 Compile-time conditionals
 -------------------------
