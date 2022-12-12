@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#  import textwrap
 from typing import Sequence
 
 import eve
