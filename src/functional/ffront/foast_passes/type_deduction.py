@@ -17,6 +17,7 @@ import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import common_types as ct, fbuiltins, type_info
+from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.symbol_makers import make_symbol_type_from_value
 
 
@@ -48,8 +49,8 @@ def boolified_type(symbol_type: ct.SymbolType) -> ct.ScalarType | ct.FieldType:
 
 
 def construct_tuple_type(
-    true_branch_types: list[ct.TupleType],
-    false_branch_types: list[ct.TupleType],
+    true_branch_types: list,
+    false_branch_types: list,
     mask_type: ct.FieldType,
 ) -> list:
     """
@@ -78,7 +79,7 @@ def construct_tuple_type(
 
 
 def promote_to_mask_type(
-    mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType | ct.TupleType
+    mask_type: ct.FieldType, input_type: ct.FieldType | ct.ScalarType
 ) -> ct.FieldType:
     """
     Promote mask type with the input type.
@@ -104,7 +105,7 @@ def promote_to_mask_type(
         item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ct.FieldType) else input_type
-        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))
+        return type_info.promote(input_type, ct.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
     else:
         return input_type
 
@@ -158,7 +159,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     """
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
+    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
         typed_foast_node = cls().visit(node)
 
         FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
@@ -251,6 +252,57 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             new_value = self.visit(node.value, **kwargs)
         new_target = self.visit(node.target, refine_type=new_value.type, **kwargs)
         return foast.Assign(target=new_target, value=new_value, location=node.location)
+
+    def visit_TupleTargetAssign(
+        self, node: foast.TupleTargetAssign, **kwargs
+    ) -> foast.TupleTargetAssign:
+
+        TargetType = list[foast.Starred | foast.Symbol]
+        values = self.visit(node.value, **kwargs)
+
+        if isinstance(values.type, ct.TupleType):
+            num_elts: int = len(values.type.types)
+            targets: TargetType = node.targets
+            indices: list[tuple[int, int] | int] = compute_assign_indices(targets, num_elts)
+
+            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=f"Too many values to unpack (expected {len(indices)})."
+                )
+
+            new_targets: TargetType = []
+            new_type: ct.TupleType | ct.DataType
+            for i, index in enumerate(indices):
+                old_target = targets[i]
+
+                if isinstance(index, tuple):
+                    lower, upper = index
+                    new_type = ct.TupleType(types=[t for t in values.type.types[lower:upper]])
+                    new_target = foast.Starred(
+                        id=foast.DataSymbol(
+                            id=self.visit(old_target.id).id,
+                            location=old_target.location,
+                            type=new_type,
+                        ),
+                        type=new_type,
+                        location=old_target.location,
+                    )
+                else:
+                    new_type = values.type.types[index]
+                    new_target = self.visit(
+                        old_target, refine_type=new_type, location=old_target.location, **kwargs
+                    )
+
+                new_target = self.visit(
+                    new_target, refine_type=new_type, location=old_target.location, **kwargs
+                )
+                new_targets.append(new_target)
+        else:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node, msg=f"Assignment value must be of type tuple! Got: {values.type}"
+            )
+
+        return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
 
     def visit_Symbol(
         self,
@@ -608,8 +660,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)
-        true_branch_type = cast(ct.FieldType, node.args[1].type)
-        false_branch_type = cast(ct.FieldType, node.args[2].type)
+        true_branch_type = node.args[1].type
+        false_branch_type = node.args[2].type
+        return_type: ct.TupleType | ct.FieldType
         if not type_info.is_logical(mask_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -621,10 +674,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if isinstance(true_branch_type, ct.TupleType) and isinstance(
                 false_branch_type, ct.TupleType
             ):
-                true_branch_types = node.args[1].type.types
-                false_branch_types = node.args[2].type.types
                 return_type = ct.TupleType(
-                    types=construct_tuple_type(true_branch_types, false_branch_types, mask_type)
+                    types=construct_tuple_type(
+                        true_branch_type.types, false_branch_type.types, mask_type
+                    )
                 )
             elif isinstance(true_branch_type, ct.TupleType) or isinstance(
                 false_branch_type, ct.TupleType
@@ -635,7 +688,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"{node.args[1].type} and {node.args[2].type}",
                 )
             else:
-                promoted_type = type_info.promote(true_branch_type, false_branch_type)
+                true_branch_fieldtype = cast(ct.FieldType, true_branch_type)
+                false_branch_fieldtype = cast(ct.FieldType, false_branch_type)
+                promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
                 return_type = promote_to_mask_type(mask_type, promoted_type)
 
         except GTTypeError as ex:
