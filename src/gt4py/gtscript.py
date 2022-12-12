@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Optional, Type
 
 import numpy as np
 
@@ -521,6 +521,29 @@ class AxisInterval:
         return self.end - self.start
 
 
+class ShiftedAxis:
+    def __init__(self, name: str, shift: int):
+        assert name
+        self.name = name
+        self.shift = shift
+
+    def __repr__(self):
+        return f"ShiftedAxis(name={self.name}, shift={self.shift})"
+
+    def __str__(self):
+        return f"{self.name}+{self.shift}"
+
+    def __add__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only add type int, got {type(shift)}")
+        return ShiftedAxis(self.name, self.shift + shift)
+
+    def __sub__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only subtract type int, got {type(shift)}")
+        return ShiftedAxis(self.name, self.shift - shift)
+
+
 # GTScript builtins: domain axes
 class Axis:
     def __init__(self, name: str):
@@ -540,6 +563,16 @@ class Axis:
             return AxisIndex(self.name, interval)
         else:
             raise TypeError("Unrecognized index type")
+
+    def __add__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only add type int, got {type(shift)}")
+        return ShiftedAxis(self.name, shift)
+
+    def __sub__(self, shift):
+        if not isinstance(shift, int):
+            raise TypeError(f"Can only subtract type int, got {type(shift)}")
+        return ShiftedAxis(self.name, -shift)
 
 
 I = Axis("I")

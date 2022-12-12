@@ -360,6 +360,9 @@ def test_input_order(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets(backend):
+    if backend == "dace:cpu":
+        pytest.skip("Internal compiler error in GitHub action container")
+
     @gtscript.stencil(backend=backend)
     def stencil_ij(
         in_field: gtscript.Field[np.float_],
@@ -382,6 +385,9 @@ def test_variable_offsets(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_variable_offsets_and_while_loop(backend):
+    if backend == "dace:cpu":
+        pytest.skip("Internal compiler error in GitHub action container")
+
     @gtscript.stencil(backend=backend)
     def stencil(
         pe1: gtscript.Field[np.float_],
