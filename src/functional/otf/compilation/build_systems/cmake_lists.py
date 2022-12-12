@@ -83,7 +83,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()})"
             case "gridtools":
-                import gridtools_cpp
+                import gridtools_cpp  # type: ignore
 
                 return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()})"
             case _:
