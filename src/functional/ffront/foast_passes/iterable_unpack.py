@@ -30,7 +30,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     unique_tuple_symbol_id: int = 0
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
+    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
         node = cls().visit(node)
         return node
 
