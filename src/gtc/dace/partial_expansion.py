@@ -867,7 +867,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                         nsdfg_access_infos[name], access_info, data_dims=data_dims
                     )
                     new_subset.replace({ax.domain_dace_symbol(): v for ax, v in domain.items()})
-                    edge.data.subset.ranges = tuple(
+                    edge.data.subset.ranges = list(
                         new_rng if ax in domain else old_rng
                         for ax, new_rng, old_rng in zip(
                             nsdfg_access_infos[name].axes(),
