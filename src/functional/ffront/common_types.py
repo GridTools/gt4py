@@ -153,7 +153,7 @@ class CallableType:
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
+    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
     dtype: ScalarType
 
     def __str__(self):
@@ -165,7 +165,7 @@ class FieldType(DataType, CallableType):
 class FunctionType(SymbolType, CallableType):
     args: list[DataType | DeferredSymbolType]
     kwargs: dict[str, DataType | DeferredSymbolType]
-    returns: DataType | DeferredSymbolType | VoidType
+    returns: DataType | DeferredSymbolType | VoidType | SymbolType
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]

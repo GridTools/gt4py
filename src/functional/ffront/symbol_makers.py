@@ -170,9 +170,8 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     elif isinstance(value, common.Dimension):
         symbol_type = ct.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
-        dims = list(value.axes)
         dtype = make_symbol_type_from_typing(value.dtype.type)
-        symbol_type = ct.FieldType(dims=dims, dtype=dtype)
+        symbol_type = ct.FieldType(dims=list(value.axes), dtype=dtype)
     elif isinstance(value, tuple):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
