@@ -35,7 +35,6 @@ from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
-    cast_,
     deref,
     divides,
     eq,
@@ -70,7 +69,6 @@ AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
 XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
-CAST = itir.SymRef(id=cast_.fun.__name__)
 
 
 # --- Parsing ---
@@ -269,7 +267,7 @@ def test_conditional_wrong_arg_type():
 
 
 def test_astype():
-    def astype_fieldop(a: Field[..., "int64"]):
+    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
         return astype(a, float64)
 
     parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
