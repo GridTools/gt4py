@@ -726,6 +726,15 @@ def test_astype(fieldview_backend):
     b = np_as_located_field(IDim)(np.ones(size))
     c = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    out_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int))
+
+    @field_operator(backend=fieldview_backend)
+    def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int]:
+        d = astype(b, int)
+        return d
+
+    astype_fieldop_int(b, out=out_int, offset_provider={})
+    assert np.allclose(c, out_int)
 
     @field_operator(backend=fieldview_backend)
     def astype_fieldop_bool(b: Field[[IDim], float64]) -> Field[[IDim], bool]:
