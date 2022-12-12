@@ -15,6 +15,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functools import reduce
 
+import pytest as pytest
+
 from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import (
     Dimension,
