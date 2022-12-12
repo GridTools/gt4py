@@ -357,17 +357,17 @@ class CallInliner(ast.NodeTransformer):
     def apply(
         cls, func_node: ast.FunctionDef, context: dict, *, call_stack: Optional[Set[str]] = None
     ):
-        inliner = cls(context)
-        inliner(func_node, call_stack=call_stack or set())
+        inliner = cls(context, call_stack=call_stack or set())
+        inliner(func_node)
         return inliner.all_skip_names
 
-    def __init__(self, context: dict):
+    def __init__(self, context: dict, call_stack: Optional[Set[str]] = None):
         self.context = context
         self.current_block = None
+        self.call_stack = call_stack
         self.all_skip_names = set(gtscript.builtins) | {"gt4py", "gtscript"}
 
-    def __call__(self, func_node: ast.FunctionDef, *, call_stack: Set[str]):
-        self.call_stack = call_stack
+    def __call__(self, func_node: ast.FunctionDef):
         self.current_name = func_node.name
         self.visit(func_node)
 
@@ -1859,7 +1859,7 @@ class GTScriptParser(ast.NodeVisitor):
                 resolved_imports[imported_name] = imported_value
 
         # Collect all imported and inlined values recursively through all the external symbols
-        last_resolved_symbols = set()
+        last_resolved_values = set()
         while resolved_imports or resolved_values_list:
             new_imports = {}
             for name, accesses in resolved_imports.items():
@@ -1897,12 +1897,12 @@ class GTScriptParser(ast.NodeVisitor):
                                 new_imports[imported_name][attr_name].extend(attr_nodes)
 
             # Check that we aren't recursively importing the same function
-            current_resolved_symbols = dict(resolved_values_list).keys()
-            if last_resolved_symbols == current_resolved_symbols:
+            current_resolved_values = dict(resolved_values_list).keys()
+            if last_resolved_values == current_resolved_values:
                 raise GTScriptSyntaxError(
-                    message=f"Found recursive imports {', '.join(last_resolved_symbols)}"
+                    message=f"Found recursive imports {', '.join(last_resolved_values)}"
                 )
-            last_resolved_symbols = current_resolved_symbols
+            last_resolved_values = current_resolved_values
 
             result.update(dict(resolved_values_list))
             resolved_imports = new_imports
