@@ -16,7 +16,6 @@
 from functools import reduce
 
 from functional.ffront.decorator import field_operator, program, scan_operator
-
 from functional.ffront.fbuiltins import (
     Dimension,
     Field,
@@ -52,6 +51,7 @@ def debug_itir(tree):
     from functional.program_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
+
 
 from .test_ffront_utils import *
 
