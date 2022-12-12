@@ -192,9 +192,6 @@ It_T0_T1 = Val(kind=Iterator(), dtype=T0, size=T1)
 Val_T0_T1 = Val(kind=Value(), dtype=T0, size=T1)
 Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
 Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
-FDef_T0_T1 = FunctionType(
-    args=Val(kind=Value(), dtype=T0, size=T1), ret=Val(kind=Value(), dtype=T0, size=T1)
-)
 
 BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "deref": FunctionType(
@@ -226,7 +223,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val_BOOL_T1,
     ),
     "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "cast_": FunctionType(args=Tuple.from_elems(FDef_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "cast_": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1)
@@ -296,7 +293,7 @@ class _TypeInferrer(eve.NodeTranslator):
             raise TypeError(
                 f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
             )
-        if node.id in ir.BUILTINS:
+        if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
             raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()

@@ -4,13 +4,16 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from functional.iterator import builtins as it_builtins
 from functional.iterator.builtins import (
     and_,
     can_deref,
     cartesian_domain,
+    cast_,
     deref,
     divides,
     eq,
+    float64,
     greater,
     if_,
     less,
@@ -90,6 +93,21 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
+def fencil_cast(builtin, out, *inps, processor, as_column=False):
+    column_axis = IDim if as_column else None
+    arg1 = inps[1][0]
+
+    @fundef
+    def sten_cast(arg0):
+        return builtin(deref(arg0), arg1)
+
+    @fendef(offset_provider={}, column_axis=column_axis)
+    def fenimpl_cast(size, arg0, out):
+        closure(cartesian_domain(named_range(IDim, 0, size)), sten_cast, out, [arg0])
+
+    return run_processor(fenimpl_cast, processor, out.shape[0], *inps[0], out)
+
+
 @pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize(
     "builtin, inputs, expected",
@@ -135,10 +153,28 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 
 
 @pytest.mark.parametrize("as_column", [False, True])
+@pytest.mark.parametrize("builtin, inputs, expected", [(cast_, [[1], [float64]], [1.0])])
+def test_cast(program_processor, builtin, inputs, expected, as_column):
+    program_processor, validate = program_processor
+
+    inps = [asfield(*asarray(inputs[0])), inputs[1]]
+    out = asfield((np.zeros_like(*asarray(expected))))[0]
+
+    fencil_cast(
+        getattr(it_builtins, builtin.__name__),
+        out,
+        *inps,
+        processor=program_processor,
+        as_column=as_column,
+    )
+
+    if validate:
+        assert np.allclose(np.asarray(out), expected)
+
+
+@pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
-    from functional.iterator import builtins as it_builtins
-
     program_processor, validate = program_processor
 
     if program_processor == type_check.check:
