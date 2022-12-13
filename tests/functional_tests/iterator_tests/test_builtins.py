@@ -7,15 +7,19 @@ import pytest
 from functional.iterator import builtins as it_builtins
 from functional.iterator.builtins import (
     and_,
+    bool,
     can_deref,
     cartesian_domain,
     cast_,
     deref,
     divides,
     eq,
+    float32,
     float64,
     greater,
     if_,
+    int32,
+    int64,
     less,
     lift,
     minus,
@@ -153,15 +157,16 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 
 
 @pytest.mark.parametrize("as_column", [False, True])
-@pytest.mark.parametrize("builtin, inputs, expected", [(cast_, [[1], [float64]], [1.0])])
-def test_cast(program_processor, builtin, inputs, expected, as_column):
+def test_cast(program_processor, as_column):
+    inputs = [[1, int32(1), int32(1), float64(1)], [float64, int64, bool, float32]]
+    expected = [1.0, int64(1), True, float32(1)]
     program_processor, validate = program_processor
 
     inps = [asfield(*asarray(inputs[0])), inputs[1]]
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
     fencil_cast(
-        getattr(it_builtins, builtin.__name__),
+        getattr(it_builtins, "cast_"),
         out,
         *inps,
         processor=program_processor,
