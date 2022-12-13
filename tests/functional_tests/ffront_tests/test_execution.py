@@ -44,7 +44,7 @@ from functional.iterator.embedded import (
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor])
 def fieldview_backend(request):
     yield request.param
 
@@ -1423,8 +1423,8 @@ def test_constant_closure_vars():
     consume_constants(input, out=output, offset_provider={})
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
 
-
-def test_simple_if(fieldview_backend):
+@pytest.mark.parametrize("condition", [True, False])
+def test_simple_if(condition, fieldview_backend):
     size = 10
     a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
     b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
@@ -1436,13 +1436,35 @@ def test_simple_if(fieldview_backend):
     ):
         if condition:
             result = a
-            result2 = a + 1.0
+            result2 = a+1.
         else:
             result = b
-            result2 = b + 1.0
+            result2 = b+1.
         return result
 
-    simple_if(a, b, True, out=out, offset_provider={})
+    simple_if(a, b, condition, out=out, offset_provider={})
+    assert np.allclose(out, a if condition else b)
+
+@pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
+def test_simple_if_conditional(condition1, condition2, fieldview_backend):
+    size = 10
+    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    b = np_as_located_field(IDim, JDim)(2 * np.ones((size, size)))
+    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+
+    @field_operator(backend=fieldview_backend)
+    def simple_if(
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition_1: bool, condition_2: bool
+    ):
+        if condition_1:
+            result_a = a
+            result_b = a + 1.0
+        else:
+            result_a = b
+            result_b = b + 1.0
+        return result_a if condition_2 else result_b
+
+    simple_if(a, b, True, True, out=out, offset_provider={})
     assert np.allclose(out, a)
 
     simple_if(a, b, False, out=out, offset_provider={})
