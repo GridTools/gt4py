@@ -84,16 +84,29 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 
 def _get_expansion_priority_cpu(node: StencilComputation):
     expansion_priority = []
-    if node.has_splittable_regions():
-        expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
-    expansion_priority.extend(
-        [
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-        ]
-    )
+    if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+        expansion_priority.extend(
+            [
+                ["TileK", "K", "Sections", "J", "I", "Stages"],
+                ["TileK", "K", "Sections", "Stages", "I", "J"],
+                #
+                # ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+                # ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+                # ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+                # ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+            ]
+        )
+    else:
+        if node.has_splittable_regions():
+            expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
+        expansion_priority.extend(
+            [
+                ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+                ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+                ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+                ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+            ]
+        )
     return expansion_priority
 
 
@@ -119,15 +132,15 @@ def _set_expansion_orders(sdfg: dace.SDFG):
             expansion_priority = _get_expansion_priority_cpu(node)
         is_set = False
         for exp in expansion_priority:
-            try:
-                node.expansion_specification = exp
-                is_set = True
-            except ValueError:
-                continue
-            else:
-                break
-        if not is_set:
-            raise ValueError("No expansion compatible")
+            # try:
+            node.expansion_specification = exp
+            is_set = True
+            # except ValueError:
+            #     continue
+            # else:
+            #     break
+        # if not is_set:
+        #     raise ValueError("No expansion compatible")
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
@@ -392,9 +405,8 @@ class SDFGManager:
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
 
-        partially_expand(sdfg, dims="IJ")
+        # partially_expand(sdfg)
         sdfg.expand_library_nodes()
-
         _post_expand_trafos(sdfg)
         return sdfg
 
@@ -557,6 +569,7 @@ class DaCeComputationCodegen:
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            sdfg.validate()
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 

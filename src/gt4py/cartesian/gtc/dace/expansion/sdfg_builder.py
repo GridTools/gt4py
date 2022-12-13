@@ -19,6 +19,7 @@ from typing import Any, ChainMap, Dict, List, Optional, Set, Tuple
 import dace
 import dace.data
 import dace.library
+import dace.properties
 import dace.subsets
 
 from gt4py import eve
@@ -86,7 +87,43 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             self.state = loop_state
             return self
 
-        def pop_loop(self):
+        def add_subdomain_branch(self, grid_subset: dcir.GridSubset):
+            scope_state = self.sdfg.add_state()
+            exit_state = self.sdfg.add_state()
+            for edge in self.sdfg.out_edges(self.state):
+                self.sdfg.remove_edge(edge)
+                self.sdfg.add_edge(
+                    exit_state,
+                    edge.dst,
+                    edge.data,
+                )
+            condition = grid_subset.to_mask_expr()
+            self.sdfg.add_edge(
+                self.state,
+                exit_state,
+                dace.InterstateEdge(condition=dace.properties.CodeBlock(f"not ({condition})")),
+            )
+            self.sdfg.add_edge(
+                self.state,
+                scope_state,
+                dace.InterstateEdge(condition=dace.properties.CodeBlock(condition)),
+            )
+            self.sdfg.add_edge(scope_state, exit_state, dace.InterstateEdge())
+
+            self.state_stack.append(exit_state)
+            self.state = scope_state
+
+            # for sym in grid_subset.free_symbols:
+            # if sym not in self.sdfg.symbols:
+            #     from gtc.dace.utils import get_dace_symbol
+            #     self.sdfg.add_symbol(get_dace_symbol(sym), stype=dace.int32)
+            # for axis in grid_subset.intervals.keys():
+            #     if axis.iteration_symbol() not in self.sdfg.symbols:
+            #         self.sdfg.add_symbol(axis.iteration_dace_symbol(), stype=dace.int32)
+
+            return self
+
+        def pop_scope(self):
             self.state = self.state_stack[-1]
             del self.state_stack[-1]
 
@@ -251,6 +288,18 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             map_entry, map_exit, sdfg_ctx=sdfg_ctx, node_ctx=node_ctx
         )
 
+    def visit_SubdomainPredicate(
+        self,
+        node: dcir.SubdomainPredicate,
+        *,
+        sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
+        **kwargs,
+    ) -> None:
+        for grid_subset, scope_nodes in node.branches:
+            sdfg_ctx = sdfg_ctx.add_subdomain_branch(grid_subset)
+            self.visit(scope_nodes, sdfg_ctx=sdfg_ctx, **kwargs)
+            sdfg_ctx.pop_scope()
+
     def visit_DomainLoop(
         self,
         node: dcir.DomainLoop,
@@ -260,7 +309,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
     ) -> None:
         sdfg_ctx = sdfg_ctx.add_loop(node.index_range)
         self.visit(node.loop_states, sdfg_ctx=sdfg_ctx, **kwargs)
-        sdfg_ctx.pop_loop()
+        sdfg_ctx.pop_scope()
 
     def visit_ComputationState(
         self,

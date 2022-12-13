@@ -122,14 +122,6 @@ def get_expansion_order_index(expansion_order, axis):
 
 
 def _is_expansion_order_implemented(expansion_specification):
-    for item in expansion_specification:
-        if isinstance(item, Sections):
-            break
-        if isinstance(item, Iteration) and item.axis == dcir.Axis.K:
-            return False
-        if isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations):
-            return False
-
     return True
 
 
@@ -509,7 +501,7 @@ def _k_inside_stages(node: "StencilComputation"):
 
 @_register_validity_check
 def _sequential_as_loops(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    *, node: "StencilComputation", expansion_specification: List[ExpansionItem]
 ) -> bool:
     # K can't be Map if not parallel
     if node.oir_node.loop_order != common.LoopOrder.PARALLEL and any(
@@ -521,7 +513,7 @@ def _sequential_as_loops(
 
 
 @_register_validity_check
-def _stages_inside_sections(expansion_specification: List[ExpansionItem], **kwargs) -> bool:
+def _stages_inside_sections(*, expansion_specification: List[ExpansionItem], **kwargs) -> bool:
     # Oir defines that HorizontalExecutions have to be applied per VerticalLoopSection. A meaningful inversion of this
     # is not possible.
     sections_idx = next(
@@ -537,7 +529,7 @@ def _stages_inside_sections(expansion_specification: List[ExpansionItem], **kwar
 
 @_register_validity_check
 def _k_inside_ij_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    *, node: "StencilComputation", expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that horizontal maps go inside vertical K loop (i.e. all grid points are updated in a
     # HorizontalExecution before the computation of the next one is executed.).  Under certain conditions the semantics
@@ -554,7 +546,7 @@ def _k_inside_ij_valid(
 
 @_register_validity_check
 def _k_inside_stages_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    *, node: "StencilComputation", expansion_specification: List[ExpansionItem]
 ) -> bool:
     # OIR defines that all horizontal executions of a VerticalLoopSection are run per level. Under certain conditions
     # the semantics remain unchanged even if the k loop is run per horizontal execution. See `_k_inside_stages` for
@@ -571,7 +563,7 @@ def _k_inside_stages_valid(
 
 @_register_validity_check
 def _ij_outside_sections_valid(
-    node: "StencilComputation", expansion_specification: List[ExpansionItem]
+    *, node: "StencilComputation", expansion_specification: List[ExpansionItem]
 ) -> bool:
     # If there are multiple horizontal executions in any section, IJ iteration must go inside sections.
     # TODO: do mergeability checks on a per-axis basis.
@@ -604,7 +596,7 @@ def _ij_outside_sections_valid(
 
 
 @_register_validity_check
-def _iterates_domain(expansion_specification: List[ExpansionItem], **kwargs) -> bool:
+def _iterates_domain(*, expansion_specification: List[ExpansionItem], **kwargs) -> bool:
     # There must be exactly one iteration per dimension, except for tiled dimensions, where a Tiling has to go outside
     # and the corresponding contiguous iteration inside.
     tiled_axes = set()
@@ -622,6 +614,26 @@ def _iterates_domain(expansion_specification: List[ExpansionItem], **kwargs) -> 
                     contiguous_axes.add(it.axis)
     if not all(axis in contiguous_axes for axis in dcir.Axis.dims_3d()):
         return False
+    return True
+
+
+@_register_validity_check
+def _k_outside_sections_valid(
+    *, node: "StencilComputation", expansion_specification: List[ExpansionItem], **kwargs
+) -> bool:
+    # K outside sections is valid iff loop_order is PARALLEL (implemented as conditional switch)
+
+    if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
+        return True
+
+    for item in expansion_specification:
+        if isinstance(item, Sections):
+            break
+        if isinstance(item, Iteration) and item.axis == dcir.Axis.K:
+            return False
+        if isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations):
+            return False
+
     return True
 
 

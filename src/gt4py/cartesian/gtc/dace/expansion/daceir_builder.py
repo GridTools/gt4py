@@ -502,13 +502,22 @@ class DaCeIRBuilder(eve.NodeTranslator):
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)
             if isinstance(item, (Sections, Stages))
         ]
+
+        k_idx = next(
+            idx
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            if (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
+            or (isinstance(item, Loop) and item.axis == dcir.Axis.K)
+        )
+
         expansion_items = global_ctx.library_node.expansion_specification[
             sections_idx + 1 : stages_idx
         ]
 
-        iteration_ctx = iteration_ctx.push_interval(
-            dcir.Axis.K, node.interval
-        ).push_expansion_items(expansion_items)
+        if k_idx > sections_idx:
+            # implement k index as predicate
+            iteration_ctx = iteration_ctx.push_interval(dcir.Axis.K, node.interval)
+        iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
         dcir_nodes = self.generic_visit(
             node.horizontal_executions,
@@ -536,8 +545,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 global_ctx=global_ctx,
                 symbol_collector=symbol_collector,
             )
-        # pop off interval
-        iteration_ctx.pop()
+        if k_idx > sections_idx:
+            # pop off iteration_ctx.push_interval from above
+            iteration_ctx.pop()
+
         return dcir_nodes
 
     def to_dataflow(
@@ -550,7 +561,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
-        elif not all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
+        elif not all(
+            isinstance(n, (dcir.ComputationState, dcir.DomainLoop, dcir.SubdomainPredicate))
+            for n in nodes
+        ):
             raise ValueError("Can't mix dataflow and state nodes on same level.")
 
         read_memlets, write_memlets, field_memlets = union_inout_memlets(nodes)
@@ -582,7 +596,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
 
     def to_state(self, nodes, *, grid_subset: dcir.GridSubset):
         nodes = flatten_list(nodes)
-        if all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
+        if all(
+            isinstance(n, (dcir.ComputationState, dcir.DomainLoop, dcir.SubdomainPredicate))
+            for n in nodes
+        ):
             return nodes
         elif all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return [dcir.ComputationState(computations=nodes, grid_subset=grid_subset)]
@@ -780,7 +797,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: "DaCeIRBuilder.GlobalContext",
         **kwargs,
     ):
-        start, end = (node.sections[0].interval.start, node.sections[0].interval.end)
+        start, end = (node.sections[0].interval.start, node.sections[-1].interval.end)
 
         overall_interval = dcir.DomainInterval(
             start=dcir.AxisBound(axis=dcir.Axis.K, level=start.level, offset=start.offset),
@@ -806,24 +823,59 @@ class DaCeIRBuilder(eve.NodeTranslator):
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)
             if isinstance(item, Sections)
         )
+        k_idx = next(
+            idx
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            if (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
+            or (isinstance(item, Loop) and item.axis == dcir.Axis.K)
+        )
+
         expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
         symbol_collector = DaCeIRBuilder.SymbolCollector()
-        sections = flatten_list(
-            self.generic_visit(
-                node.sections,
-                loop_order=node.loop_order,
-                global_ctx=global_ctx,
-                iteration_ctx=iteration_ctx,
-                symbol_collector=symbol_collector,
-                var_offset_fields=var_offset_fields,
-                **kwargs,
-            )
+        sections = self.generic_visit(
+            node.sections,
+            loop_order=node.loop_order,
+            global_ctx=global_ctx,
+            iteration_ctx=iteration_ctx,
+            symbol_collector=symbol_collector,
+            var_offset_fields=var_offset_fields,
+            **kwargs,
         )
         if node.loop_order != common.LoopOrder.PARALLEL:
             sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
-        computations = sections
+
+        if k_idx < sections_idx:
+            assert len(sections) == len(node.sections)
+            sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
+            predicated_branches = []
+            read_memlets, write_memlets, _ = union_inout_memlets(sections)
+
+            for oir_section, dcir_section in zip(node.sections, sections):
+                oir_interval = oir_section.interval
+                dcir_interval = dcir.DomainInterval(
+                    start=dcir.AxisBound.from_common(dcir.Axis.K, oir_interval.start),
+                    end=dcir.AxisBound.from_common(dcir.Axis.K, oir_interval.end),
+                )
+                predicated_branches.append(
+                    (dcir.GridSubset(intervals={dcir.Axis.K: dcir_interval}), dcir_section)
+                )
+
+                for sym in dcir_interval.free_symbols:
+                    symbol_collector.add_symbol(sym, common.DataType.INT32)
+                symbol_collector.add_symbol(dcir.Axis.K.iteration_symbol(), common.DataType.INT32)
+
+            computations = [
+                dcir.SubdomainPredicate(
+                    grid_subset=iteration_ctx.grid_subset,
+                    read_memlets=read_memlets,
+                    write_memlets=write_memlets,
+                    branches=predicated_branches,
+                )
+            ]
+        else:
+            computations = flatten_list(sections)
         for item in reversed(expansion_items):
             iteration_ctx = iteration_ctx.pop()
             computations = self._process_iteration_item(
