@@ -550,6 +550,10 @@ class Axis:
         assert name
         self.name = name
 
+    @property
+    def __gt_axis_name__(self) -> str:
+        return self.name
+
     def __repr__(self):
         return f"Axis(name={self.name})"
 

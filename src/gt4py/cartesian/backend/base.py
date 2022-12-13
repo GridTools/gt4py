@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol,
 from gt4py.cartesian import definitions as gt_definitions
 from gt4py.cartesian import utils as gt_utils
 
+from gt4py.storage import storage as gt_storage
+
 from . import pyext_builder
 from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
 
@@ -43,6 +45,7 @@ def register(backend_cls: Type["Backend"]) -> None:
     assert issubclass(backend_cls, Backend) and backend_cls.name is not None
 
     if isinstance(backend_cls.name, str):
+        gt_storage.register(backend_cls.name, backend_cls.storage_info)
         return REGISTRY.register(backend_cls.name, backend_cls)
 
     else:

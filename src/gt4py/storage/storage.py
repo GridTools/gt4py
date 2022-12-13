@@ -13,11 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from numbers import Number
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Literal, Optional, Sequence, Tuple, TypedDict, Union
 
 import numpy as np
-
-from gt4py import cartesian as gt4pyc
 
 
 try:
@@ -39,9 +37,30 @@ else:
 from . import utils as storage_utils
 
 
+class StorageInfo(TypedDict):
+    alignment: int  # measured in bytes
+    device: Literal["cpu", "gpu"]
+    layout_map: Callable[[Tuple[str, ...]], Tuple[Optional[int], ...]]
+    is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
+
+
+REGISTRY: Dict[str, StorageInfo] = {}
+
+
+def from_name(name: str) -> Optional[StorageInfo]:
+    return REGISTRY.get(name, None)
+
+
+def register(name: str, info: StorageInfo) -> None:
+    assert isinstance(name, str)
+    assert isinstance(info, dict)
+
+    REGISTRY[name] = info
+
+
 def _error_on_invalid_backend(backend):
-    if backend not in gt4pyc.backend.REGISTRY:
-        raise RuntimeError(f"Backend '{backend}' is not registered.")
+    if backend not in REGISTRY:
+        raise RuntimeError(f"Storage preset '{backend}' is not registered.")
 
 
 def empty(
@@ -86,9 +105,9 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_backend(backend)
-    backend_cls = gt4pyc.backend.from_name(backend)
-    assert backend_cls is not None
-    if backend_cls.storage_info["device"] == "gpu":
+    storage_info = from_name(backend)
+    assert storage_info is not None
+    if storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
     else:
         allocate_f = storage_utils.allocate_cpu
@@ -99,8 +118,8 @@ def empty(
 
     _error_on_invalid_backend(backend)
 
-    alignment = backend_cls.storage_info["alignment"]
-    layout_map = backend_cls.storage_info["layout_map"](dimensions)
+    alignment = storage_info["alignment"]
+    layout_map = storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
     _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
@@ -309,10 +328,9 @@ def from_array(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
-    import gt4py.storage.utils  # prevent circular import
 
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
-    asarray = gt4py.storage.utils.as_cupy if is_cupy_array else gt4py.storage.utils.as_numpy
+    asarray = storage_utils.as_cupy if is_cupy_array else storage_utils.as_numpy
     shape = asarray(data).shape
     if dtype is None:
         dtype = asarray(data).dtype
@@ -330,9 +348,9 @@ def from_array(
     )
 
     if cp is not None and isinstance(storage, cp.ndarray):
-        storage[...] = gt4py.storage.utils.as_cupy(data)
+        storage[...] = storage_utils.as_cupy(data)
     else:
-        storage[...] = gt4py.storage.utils.as_numpy(data)
+        storage[...] = storage_utils.as_numpy(data)
 
     return storage
 
