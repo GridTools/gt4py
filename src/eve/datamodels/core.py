@@ -884,7 +884,7 @@ def _get_attribute_from_bases(
 def _substitute_typevars(
     type_hint: Type, type_params_map: Mapping[TypeVar, Union[Type, TypeVar]]
 ) -> Tuple[Union[Type, TypeVar], bool]:
-    if isinstance(type_hint, xtyping.TypeVar):
+    if isinstance(type_hint, typing.TypeVar):
         assert type_hint in type_params_map
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
