@@ -37,6 +37,7 @@ from functional.ffront.fbuiltins import (
     where,
 )
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+from functional.iterator.builtins import float32
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -723,26 +724,27 @@ def test_conditional(fieldview_backend):
 
 def test_astype(fieldview_backend):
     size = 10
-    b = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
-    c = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
+    b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
+    c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
+    c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    out_int = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
+    out_int_64 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
 
     @field_operator(backend=fieldview_backend)
     def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int64]:
         d = astype(b, int64)
         return d
 
-    astype_fieldop_int(b, out=out_int, offset_provider={})
-    assert np.allclose(c, out_int)
+    astype_fieldop_int(b_float_64, out=out_int_64, offset_provider={})
+    assert np.allclose(c_int64.array(), out_int_64)
 
     @field_operator(backend=fieldview_backend)
     def astype_fieldop_bool(b: Field[[IDim], float64]) -> Field[[IDim], bool]:
         d = astype(b, bool)
         return d
 
-    astype_fieldop_bool(b, out=out_bool, offset_provider={})
-    assert np.allclose(c, out_bool)
+    astype_fieldop_bool(b_float_64, out=out_bool, offset_provider={})
+    assert np.allclose(c_bool, out_bool)
 
 
 def test_conditional_promotion(fieldview_backend):
