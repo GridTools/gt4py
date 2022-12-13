@@ -15,7 +15,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import Field, broadcast, max_over, min_over, neighbor_sum, where
+from functional.ffront.fbuiltins import (
+    Field,
+    broadcast,
+    float64,
+    int64,
+    max_over,
+    min_over,
+    neighbor_sum,
+    where,
+)
 
 from .test_ffront_utils import *
 
