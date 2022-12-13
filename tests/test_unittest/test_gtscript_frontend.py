@@ -330,6 +330,52 @@ class TestFunction:
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
             )
 
+    def test_recursive_function_call_two_externals(self):
+        @gtscript.function
+        def func1(arg):
+            from __externals__ import func2
+
+            return func2(arg)
+
+        @gtscript.function
+        def func2(arg):
+            from __externals__ import func1
+
+            return func1(arg)
+
+        def definition_func(inout_field: gtscript.Field[float]):
+            from gt4py.__gtscript__ import PARALLEL, computation, interval
+
+            with computation(PARALLEL), interval(...):
+                inout_field = func2(inout_field)
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="recursive function call"):
+            parse_definition(
+                definition_func,
+                name="testf",
+                module=__name__,
+                externals={"func1": func1, "func2": func2},
+            )
+
+    def test_recursive_function_calls_external_self(self):
+        @gtscript.function
+        def recursive_fcn(arg):
+            from gt4py.__externals__ import func
+
+            return func(arg + 1)
+
+        def definition_func(phi: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):
+                phi = recursive_fcn(phi)
+
+        with pytest.raises(gt_frontend.GTScriptSyntaxError, match="recursive imports"):
+            parse_definition(
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
+                externals={"func": recursive_fcn},
+            )
+
 
 class TestAxisSyntax:
     def test_good_syntax(self):
