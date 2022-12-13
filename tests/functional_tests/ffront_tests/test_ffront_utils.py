@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from functional.common import DimensionKind
-from functional.ffront.fbuiltins import Dimension, FieldOffset, float64, int64
+from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -60,21 +60,6 @@ Edge = Dimension("Edge")
 EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 size = 10
-mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-mask.array()[size // 2] = True
-a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-b_J_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
-out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
-out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
-a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
-out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-out_I_float_1 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-out_IJ_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
-a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-b_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
 
 @pytest.fixture

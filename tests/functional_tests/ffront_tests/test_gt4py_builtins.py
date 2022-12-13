@@ -170,6 +170,12 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple():
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float_1 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
     @field_operator
     def conditional_nested_tuple(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
@@ -197,6 +203,9 @@ def test_conditional_nested_tuple():
 
 
 def test_broadcast_simple(fieldview_backend):
+    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         return broadcast(inp, (IDim, JDim))
@@ -207,6 +216,8 @@ def test_broadcast_simple(fieldview_backend):
 
 
 def test_broadcast_scalar(fieldview_backend):
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+
     @field_operator(backend=fieldview_backend)
     def scalar_broadcast() -> Field[[IDim], float64]:
         return broadcast(float(1.0), (IDim,))
@@ -217,6 +228,10 @@ def test_broadcast_scalar(fieldview_backend):
 
 
 def test_broadcast_two_fields(fieldview_backend):
+    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    b_J_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+
     @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
         inp1: Field[[IDim], int64], inp2: Field[[JDim], int64]
@@ -233,6 +248,9 @@ def test_broadcast_two_fields(fieldview_backend):
 
 
 def test_broadcast_shifted(fieldview_backend):
+    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
         bcasted = broadcast(inp, (IDim, JDim))
@@ -244,6 +262,11 @@ def test_broadcast_shifted(fieldview_backend):
 
 
 def test_conditional(fieldview_backend):
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
     @field_operator(backend=fieldview_backend)
     def conditional(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
@@ -256,6 +279,10 @@ def test_conditional(fieldview_backend):
 
 
 def test_conditional_promotion(fieldview_backend):
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(
         mask: Field[[IDim], bool], a: Field[[IDim], float64]
@@ -268,6 +295,9 @@ def test_conditional_promotion(fieldview_backend):
 
 
 def test_conditional_compareop(fieldview_backend):
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return where(a != a, a, 10.0)
@@ -280,6 +310,11 @@ def test_conditional_compareop(fieldview_backend):
 
 
 def test_conditional_shifted(fieldview_backend):
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+
     @field_operator()
     def conditional_shifted(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
