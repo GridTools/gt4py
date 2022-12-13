@@ -17,7 +17,7 @@ from typing import Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past, type_info
+from functional.ffront import common_types as ct, program_ast as past, type_info
 from functional.iterator import ir as itir
 
 
@@ -26,7 +26,7 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
 
 
 def _flatten_tuple_expr(
-    node: past.Name | past.Subscript | past.TupleExpr,
+    node: past.Name | past.Subscript | past.TupleExpr | past.Expr,
 ) -> list[past.Name | past.Subscript]:
     if isinstance(node, (past.Name, past.Subscript)):
         return [node]
@@ -134,7 +134,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         domain = node.kwargs.get("domain", None)
         output, lowered_domain = self._visit_stencil_call_out_arg(
-            node.kwargs["out"], domain, **kwargs
+            node.kwargs["out"], domain, **kwargs  # type: ignore
         )
 
         return itir.StencilClosure(
@@ -146,13 +146,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _visit_slice_bound(
         self, slice_bound: past.Constant, default_value: itir.Expr, dim_size: itir.Expr, **kwargs
-    ) -> itir.Expr:
+    ) -> itir.SymRef | itir.Literal | itir.FunCall:
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
             assert (
-                isinstance(slice_bound.type, common_types.ScalarType)
-                and slice_bound.type.kind == common_types.ScalarKind.INT
+                isinstance(slice_bound.type, ct.ScalarType)
+                and slice_bound.type.kind == ct.ScalarKind.INT
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -166,7 +166,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return lowered_bound
 
     def _construct_itir_out_arg(
-        self, node: past.TupleExpr | past.Name | past.Subscript
+        self, node: past.TupleExpr | past.Name | past.Subscript | past.Expr
     ) -> itir.Expr:
         if isinstance(node, past.Name):
             return itir.SymRef(id=node.id)
@@ -185,39 +185,41 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name,
+        out_field: past.Name | past.Constant,
         node_domain: Optional[past.Dict],
         slices: Optional[list[past.Slice]] = None,
-    ):
+    ) -> itir.FunCall:
         domain_args = []
 
-        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
+        out_field_type = self.visit(out_field.type)
+        out_field_types = type_info.primitive_constituents(out_field_type).to_list()
+        out_field_types0 = self.visit(out_field_types[0])
         if any(
-            not isinstance(out_field_type, common_types.FieldType)
-            or out_field_type.dims != out_field_types[0].dims
+            not isinstance(out_field_type, ct.FieldType)
+            or out_field_type.dims != out_field_types0.dims
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of `{out_field.id}` argument to be"
+                f"Expected constituents of `{self.visit(out_field).id}` argument to be"
                 f" fields defined on the same dimensions. This error should be "
                 f" caught in type deduction already."
             )
-        dims = out_field_types[0].dims
+        dims = out_field_types0.dims
 
         for dim_i, dim in enumerate(dims):
             # an expression for the size of a dimension
-            dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
+            dim_size = itir.SymRef(id=_size_arg_from_field(self.visit(out_field).id, dim_i))
             # bounds
             if node_domain is not None:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,
+                    slices[dim_i].lower if slices else None,  # type: ignore
                     itir.Literal(value="0", type="int"),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                    slices[dim_i].upper if slices else None, dim_size, dim_size  # type: ignore
                 )
 
             if dim.kind == DimensionKind.LOCAL:
@@ -244,29 +246,32 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim: Dimension,
         node_domain: past.Dict,
     ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
-        if node_domain.keys_[dim_i].type.dim == dim:
-            assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
+        keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
+        values_dims_elts = node_domain.values_[dim_i].elts
+        if keys_dims_types == dim:
+            assert len(values_dims_elts) == 2
+            return (bound for bound in values_dims_elts)  # type:ignore
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
-                f"Expected {dim}, but got {node_domain.keys_[dim_i].type.dim} "
+                f"Expected {dim}, but got {keys_dims_types} "
             )
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
         out_field_name: past.Name = node.value
+        out_field_slice_: list[past.Slice] | list[past.Expr]
         if isinstance(node.slice_, past.TupleExpr) and all(
             isinstance(el, past.Slice) for el in node.slice_.elts
         ):
-            out_field_slice_: list[past.Slice] = node.slice_.elts
+            out_field_slice_ = node.slice_.elts
         elif isinstance(node.slice_, past.Slice):
-            out_field_slice_: list[past.Slice] = [node.slice_]
+            out_field_slice_ = [node.slice_]
         else:
             raise AssertionError(
                 "Unexpected `out` argument. Must be tuple of slices or slice expression."
             )
-        if len(out_field_slice_) != len(node.type.dims):
+        if isinstance(node.type, ct.FieldType) and len(out_field_slice_) != len(node.type.dims):
             raise GTTypeError(
                 f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
@@ -275,11 +280,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _visit_stencil_call_out_arg(
         self, out_arg: past.Expr, domain_arg: past.Dict | None, **kwargs
-    ) -> tuple[itir.SymRef, itir.FunCall]:
+    ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
-            out_field_name: past.Name = out_arg.value
+            out_field_name: past.Name | past.Constant = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
                 self._construct_itir_domain_arg(
@@ -296,7 +301,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
             first_field = flattened[0]
             assert all(
-                field.type.dims == first_field.type.dims for field in flattened
+                self.visit(field.type).dims == self.visit(first_field.type).dims
+                for field in flattened
             ), "Incompatible fields in tuple: all fields must have the same dimensions."
 
             field_slice = None
@@ -305,7 +311,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     isinstance(field, past.Subscript) for field in flattened
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
                 assert all(
-                    concepts.eq_nonlocated(first_field.slice_, field.slice_) for field in flattened
+                    concepts.eq_nonlocated(first_field.slice_, self.visit(field).slice_)
+                    for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
@@ -320,9 +327,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
-        if isinstance(node.type, common_types.ScalarType) and node.type.shape is None:
+        if isinstance(node.type, ct.ScalarType) and node.type.shape is None:
             match node.type.kind:
-                case common_types.ScalarKind.STRING:
+                case ct.ScalarKind.STRING:
                     raise NotImplementedError(
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
