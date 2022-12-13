@@ -51,6 +51,10 @@ def _is_shift_lift(node: ir.Expr):
     )
 
 
+def _is_scan(node: ir.FunCall):
+    return node.fun == ir.SymRef(id="scan")
+
+
 def _transform_and_extract_lift_args(
     node: ir.FunCall,
     symtable: dict[eve.SymbolName, ir.Sym],
@@ -93,17 +97,23 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Optionally a predicate function can be passed which can enable or disable inlining of specific function nodes.
     """
 
-    def __init__(self, predicate: Optional[Callable[[ir.Expr], bool]] = None) -> None:
+    def __init__(self, predicate: Optional[Callable[[ir.Expr, bool], bool]] = None) -> None:
         super().__init__()
         if predicate is None:
-            self.predicate = lambda x: True
+            self.predicate = lambda _1, _2: True
         else:
             self.predicate = predicate
 
-    def visit_FunCall(self, node: ir.FunCall, *, recurse=True, **kwargs):
+    def visit_FunCall(
+        self, node: ir.FunCall, *, is_scan_pass_context=False, recurse=True, **kwargs
+    ):
         symtable = kwargs["symtable"]
 
-        node = self.generic_visit(node, **kwargs) if recurse else node
+        node = (
+            self.generic_visit(node, is_scan_pass_context=_is_scan(node), **kwargs)
+            if recurse
+            else node
+        )
 
         if _is_shift_lift(node):
             # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
@@ -118,7 +128,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return self.visit(result, recurse=False, **kwargs)
         elif node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
-            if _is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
+            if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):  # type: ignore[attr-defined]
                 # deref(lift(f)(args...)) -> f(args...)
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].fun, ir.FunCall)
@@ -133,7 +143,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions,
             #  this need to be changed to be 100% compliant
             assert len(node.args) == 1
-            if _is_lift(node.args[0]) and self.predicate(node.args[0].fun):  # type: ignore[attr-defined]
+            if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):  # type: ignore[attr-defined]
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
                 assert isinstance(node.args[0], ir.FunCall)
                 assert isinstance(node.args[0].fun, ir.FunCall)
@@ -149,7 +159,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
                     )
                 return res
-        elif _is_lift(node) and len(node.args) > 0:
+        elif _is_lift(node) and len(node.args) > 0 and self.predicate(node, is_scan_pass_context):
             # Inline arguments to lifted stencil calls, e.g.:
             #  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
             # is transformed into:
@@ -161,16 +171,18 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # Due to it's complexity we might want to remove this branch at some point again,
             # when we see that it is not required.
             stencil = node.fun.args[0]
-            lifted_args = [_is_lift(arg) for arg in node.args]
+            eligible_lifted_args = [
+                _is_lift(arg) and self.predicate(arg, is_scan_pass_context) for arg in node.args
+            ]
 
-            if isinstance(stencil, ir.Lambda) and any(lifted_args):
+            if isinstance(stencil, ir.Lambda) and any(eligible_lifted_args):
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
                 #  actually want is to inline whenever the argument is not shifted. This is
                 #  currently beyond the capabilities of the inliner and the shift tracer.
                 new_args = {}
                 inlined_args = []
-                for i, (arg, is_lifted) in enumerate(zip(node.args, lifted_args)):
-                    if is_lifted:
+                for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
+                    if eligible:
                         inlined_arg, _ = _transform_and_extract_lift_args(arg, symtable, new_args)
                         inlined_args.append(inlined_arg)
                     else:

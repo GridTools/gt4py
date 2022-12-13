@@ -4,6 +4,20 @@ from functional.iterator.transforms.count_symbol_refs import CountSymbolRefs
 
 
 class MergeLet(eve.NodeTranslator):
+    """
+    Merge let-like statements.
+
+    For example transforms::
+
+        (λ(a) → (λ(b) → a+b)(arg1))(arg2)
+
+    into::
+
+        (λ(a, b) → a+b)(arg1, arg2)
+
+    This can significantly reduce the depth of the tree and its readability.
+    """
+
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
         if (
@@ -38,9 +52,3 @@ class MergeLet(eve.NodeTranslator):
                 args=outer_lambda_args + inner_lambda_args,
             )
         return node
-
-    def visit_FencilDefinition(self, node: itir.FencilDefinition):
-        new_node = self.generic_visit(node)
-        # update symbol table
-        #new_node._collect_symbol_names(new_node)
-        return new_node

@@ -1,6 +1,7 @@
 import enum
 
 from functional.iterator import ir
+from functional.iterator.transforms import simple_inline_heuristic
 from functional.iterator.transforms.cse import CommonSubexpressionElimination
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
@@ -9,7 +10,6 @@ from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.merge_let import MergeLet
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
-from functional.iterator.transforms.simple_inline_heuristic import heuristic
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -24,8 +24,7 @@ def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
     if lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        predicate = heuristic(ir)
-        return InlineLifts(predicate).visit(ir)
+        return InlineLifts(simple_inline_heuristic.is_eligable_for_inlining).visit(ir)
     assert lift_mode == LiftMode.FORCE_TEMPORARIES
     return ir
 
@@ -58,7 +57,7 @@ def apply_common_transforms(
         else:
             raise RuntimeError("Inlining lift and lambdas did not converge.")
     else:
-        ir = InlineLambdas.apply(ir, opcount_preserving=True)
+        ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lift=force_inline_lift)
 
     ir = NormalizeShifts().visit(ir)
 
@@ -84,6 +83,6 @@ def apply_common_transforms(
         ir = CommonSubexpressionElimination().visit(ir)
         ir = MergeLet().visit(ir)
 
-    ir = InlineLambdas.apply(ir, opcount_preserving=True, force_inline_lift=force_inline_lift)
+    ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
     return ir
