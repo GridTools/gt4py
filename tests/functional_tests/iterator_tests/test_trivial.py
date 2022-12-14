@@ -74,7 +74,7 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
         pytest.xfail("origin not yet supported in gtfn")
 
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
-        pytest.xfail("shifted input arguments not supported for lift_moe != LiftMode.FORCE_INLINE")
+        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))

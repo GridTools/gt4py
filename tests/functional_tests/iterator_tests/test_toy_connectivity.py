@@ -454,7 +454,7 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
 
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
-        pytest.xfail("shifted input arguments not supported for lift_moe != LiftMode.FORCE_INLINE")
+        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))

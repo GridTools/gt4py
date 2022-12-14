@@ -323,7 +323,7 @@ def lift(stencil):
 
             @property
             def incomplete_offsets(self):
-                incomplete_offsets = None
+                incomplete_offsets = []
                 for arg in self.args:
                     if arg.incomplete_offsets:
                         assert (
