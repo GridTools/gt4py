@@ -649,6 +649,7 @@ def test_where_mixed_dims():
     )
 
 
+
 def test_astype_dtype():
     ADim = Dimension("ADim")
 
@@ -674,3 +675,21 @@ def test_astype_wrong_input():
         match=msg,
     ):
         _ = FieldOperatorParser.apply_to_function(bad_input_astype)
+
+def test_mod_floats():
+    def modulo_floats(inp: Field[..., float]):
+        return inp % 3.0
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=r"Type float64 can not be used in operator `%`",
+    ):
+        _ = FieldOperatorParser.apply_to_function(modulo_floats)
+
+
+def test_undefined_symbols():
+    def return_undefined():
+        return undefined_symbol
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+        _ = FieldOperatorParser.apply_to_function(return_undefined)
