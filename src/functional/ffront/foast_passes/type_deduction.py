@@ -662,9 +662,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         casted_obj_type = node.args[0].type
         dtype_obj_type = node.args[1].type
         dtype_obj_id = node.args[1].id  # type: ignore[attr-defined] # node.args[1].id is always added dynamically
+        dtype_obj_type_returns: ct.ScalarType = dtype_obj_type.returns  # type: ignore[attr-defined] # node.args[1].id is always added dynamically
         if dtype_obj_id not in fbuiltins.TYPE_BUILTIN_NAMES or not (
-            type_info.is_arithmetic(dtype_obj_type.returns)  # type: ignore[attr-defined] # dtype_obj_type.returns is always added dynamically
-            or type_info.is_logical(dtype_obj_type.returns)  # type: ignore[attr-defined] # dtype_obj_type.returns is always added dynamically
+            type_info.is_arithmetic(dtype_obj_type_returns)
+            or type_info.is_logical(dtype_obj_type_returns)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
