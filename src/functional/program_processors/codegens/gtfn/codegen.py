@@ -201,6 +201,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     FencilDefinition = as_mako(
         """
     #include <cmath>
+    #include <cstdint>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
