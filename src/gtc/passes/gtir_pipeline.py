@@ -14,12 +14,14 @@
 
 from typing import Callable, Dict, Optional, Sequence, Tuple
 
-from gt4py.definitions import StencilID
-from gtc import gtir
-from gtc.passes.gtir_definitive_assignment_analysis import check as check_assignments
-from gtc.passes.gtir_dtype_resolver import resolve_dtype
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
-from gtc.passes.gtir_upcaster import upcast
+from gt4py.cartesian.definitions import StencilID
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.passes.gtir_definitive_assignment_analysis import (
+    check as check_assignments,
+)
+from gt4py.cartesian.gtc.passes.gtir_dtype_resolver import resolve_dtype
+from gt4py.cartesian.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
+from gt4py.cartesian.gtc.passes.gtir_upcaster import upcast
 
 
 PASS_T = Callable[[gtir.Stencil], gtir.Stencil]

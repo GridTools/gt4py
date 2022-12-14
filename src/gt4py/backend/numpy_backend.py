@@ -15,24 +15,24 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
-from eve.codegen import format_source
-from gt4py.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
-from gtc.gtir_to_oir import GTIRToOIR
-from gtc.numpy import npir
-from gtc.numpy.npir_codegen import NpirCodegen
-from gtc.numpy.oir_to_npir import OirToNpir
-from gtc.numpy.scalars_to_temps import ScalarsToTemporaries
-from gtc.passes.oir_optimizations.caches import (
+from gt4py.cartesian.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
+from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
+from gt4py.cartesian.gtc.numpy.oir_to_npir import OirToNpir
+from gt4py.cartesian.gtc.numpy.scalars_to_temps import ScalarsToTemporaries
+from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
+from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
+from gt4py.eve.codegen import format_source
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 class ModuleGenerator(BaseModuleGenerator):
@@ -44,7 +44,7 @@ class ModuleGenerator(BaseModuleGenerator):
             [
                 *super().generate_imports().splitlines(),
                 "import pathlib",
-                "from gt4py.utils import make_module_from_file",
+                "from gt4py.cartesian.utils import make_module_from_file",
                 f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
             ]
         )

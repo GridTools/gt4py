@@ -20,7 +20,7 @@ definitions for the keywords of the DSL.
 
 import sys
 
-from gt4py.gtscript import *
+from gt4py.cartesian.gtscript import *
 
 
 sys.modules["__gtscript__"] = sys.modules["gt4py.__gtscript__"]

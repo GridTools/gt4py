@@ -80,7 +80,7 @@ over 3 dimensions:
 
     import numpy as np
 
-    import gt4py.gtscript as gtscript
+    import gt4py.cartesian.gtscript as gtscript
 
     backend = "numpy"
 
@@ -136,7 +136,7 @@ regular function call receiving the definition function:
 
 .. code:: python
 
-    import gt4py.gtscript as gtscript
+    import gt4py.cartesian.gtscript as gtscript
 
     def stencil_example(
         field_a: gtscript.Field[np.float64],
@@ -237,7 +237,7 @@ forward and a backward loop with specialized computations at the beginning of ea
 
 .. code:: python
 
-    import gt4py.gtscript as gtscript
+    import gt4py.cartesian.gtscript as gtscript
 
     @gtscript.stencil
     def tridiagonal_solver(

@@ -17,9 +17,9 @@ import copy
 import numpy as np
 import pytest
 
-import gt4py.gtscript as gtscript
+import gt4py.cartesian.gtscript as gtscript
 import gt4py.storage as gt_storage
-from gt4py.gtscript import Field, K
+from gt4py.cartesian.gtscript import Field, K
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from ..storage_test_utils import DimensionsWrapper, OriginWrapper

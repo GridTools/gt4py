@@ -15,9 +15,9 @@
 import numpy as np
 import pytest
 
-from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import (
+from gt4py.cartesian import gtscript
+from gt4py.cartesian.gtscript import (
     __INLINED,
     BACKWARD,
     FORWARD,

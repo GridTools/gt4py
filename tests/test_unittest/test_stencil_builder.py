@@ -15,9 +15,9 @@
 import numpy as np
 import pytest
 
-from gt4py.gtscript import PARALLEL, Field, computation, interval
-from gt4py.stencil_builder import StencilBuilder
-from gt4py.stencil_object import StencilObject
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
+from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.stencil_object import StencilObject
 
 
 # type ignores in stencils are because mypy does not yet

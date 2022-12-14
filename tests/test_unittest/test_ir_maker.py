@@ -14,8 +14,8 @@
 
 import ast
 
-from gt4py.frontend.gtscript_frontend import PYTHON_AST_VERSION, IRMaker
-from gt4py.frontend.nodes import BinaryOperator, BinOpExpr
+from gt4py.cartesian.frontend.gtscript_frontend import PYTHON_AST_VERSION, IRMaker
+from gt4py.cartesian.frontend.nodes import BinaryOperator, BinOpExpr
 
 
 def test_AugAssign():

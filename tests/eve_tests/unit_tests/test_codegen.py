@@ -18,24 +18,24 @@ from typing import Callable, Optional, Set, Type
 
 import pytest
 
-import eve
-import eve.codegen
+import gt4py.eve.codegen
+from gt4py import eve
 
 from .test_utils import name_with_cases  # noqa: F401
 
 
 # -- Name tests --
 def test_name(name_with_cases):  # noqa: F811  # pytest fixture not detected
-    name = eve.codegen.Name(name_with_cases.pop("words"))
+    name = gt4py.eve.codegen.Name(name_with_cases.pop("words"))
     for case, cased_string in name_with_cases.items():
         assert name.as_case(case) == cased_string
         for other_case, other_cased_string in name_with_cases.items():
-            if other_case == eve.utils.CaseStyleConverter.CASE_STYLE.CONCATENATED:
+            if other_case == gt4py.eve.utils.CaseStyleConverter.CASE_STYLE.CONCATENATED:
                 with pytest.raises(ValueError, match="split a simply concatenated"):
-                    other_name = eve.codegen.Name.from_string(other_cased_string, other_case)
+                    other_name = gt4py.eve.codegen.Name.from_string(other_cased_string, other_case)
                     assert other_name.as_case(case) == cased_string
             else:
-                other_name = eve.codegen.Name.from_string(other_cased_string, other_case)
+                other_name = gt4py.eve.codegen.Name.from_string(other_cased_string, other_case)
                 assert other_name.as_case(case) == cased_string
 
 
@@ -43,7 +43,7 @@ def test_name(name_with_cases):  # noqa: F811  # pytest fixture not detected
 def fmt_tpl_maker(skeleton, keys, valid=True):
     if valid:
         transformed_keys = {k: "{{{key}}}".format(key=k) for k in keys}
-        return eve.codegen.FormatTemplate(skeleton.format(**transformed_keys))
+        return gt4py.eve.codegen.FormatTemplate(skeleton.format(**transformed_keys))
     else:
         return None
 
@@ -51,7 +51,7 @@ def fmt_tpl_maker(skeleton, keys, valid=True):
 def string_tpl_maker(skeleton, keys, valid=True):
     if valid:
         transformed_keys = {k: "${}".format(k) for k in keys}
-        return eve.codegen.StringTemplate(skeleton.format(**transformed_keys))
+        return gt4py.eve.codegen.StringTemplate(skeleton.format(**transformed_keys))
     else:
         return None
 
@@ -61,7 +61,7 @@ def jinja_tpl_maker(skeleton, keys, valid=True):
         transformed_keys = {k: "{{{{ {} }}}}".format(k) for k in keys}
     else:
         transformed_keys = {k: "{{{{ --%{} }}}}".format(k) for k in keys}
-    return eve.codegen.JinjaTemplate(skeleton.format(**transformed_keys))
+    return gt4py.eve.codegen.JinjaTemplate(skeleton.format(**transformed_keys))
 
 
 def mako_tpl_maker(skeleton, keys, valid=True):
@@ -69,11 +69,13 @@ def mako_tpl_maker(skeleton, keys, valid=True):
         transformed_keys = {k: "${{{}}}".format(k) for k in keys}
     else:
         transformed_keys = {k: "${{$<%$${}}}".format(k) for k in keys}
-    return eve.codegen.MakoTemplate(skeleton.format(**transformed_keys))
+    return gt4py.eve.codegen.MakoTemplate(skeleton.format(**transformed_keys))
 
 
 @pytest.fixture(params=[fmt_tpl_maker, string_tpl_maker, jinja_tpl_maker, mako_tpl_maker])
-def template_maker(request) -> Callable[[str, Set[str], bool], Optional[eve.codegen.Template]]:
+def template_maker(
+    request,
+) -> Callable[[str, Set[str], bool], Optional[gt4py.eve.codegen.Template]]:
     return request.param
 
 
@@ -82,11 +84,11 @@ def test_template_definition(template_maker):
     data = {"s": "STRING", "i": 1}
 
     template_maker(skeleton, data.keys())
-    with pytest.raises(eve.codegen.TemplateDefinitionError):
+    with pytest.raises(gt4py.eve.codegen.TemplateDefinitionError):
         t = template_maker(skeleton, data.keys(), False)
         if t is None:
             # Some template engines do not check templates at definition
-            raise eve.codegen.TemplateDefinitionError
+            raise gt4py.eve.codegen.TemplateDefinitionError
 
 
 def test_template_rendering(template_maker):
@@ -96,12 +98,12 @@ def test_template_rendering(template_maker):
     assert template.render(**data) == "aaa STRING bbbb 1 cccc"
     assert template.render(data, i=2) == "aaa STRING bbbb 2 cccc"
 
-    with pytest.raises(eve.codegen.TemplateRenderingError):
+    with pytest.raises(gt4py.eve.codegen.TemplateRenderingError):
         template.render()
 
 
 # -- TemplatedGenerator tests --
-class _BaseTestGenerator(eve.codegen.TemplatedGenerator):
+class _BaseTestGenerator(gt4py.eve.codegen.TemplatedGenerator):
     KEYWORDS = ("BASE", "ONE")
 
     def visit_IntKind(self, node, **kwargs):
@@ -110,9 +112,9 @@ class _BaseTestGenerator(eve.codegen.TemplatedGenerator):
     def visit_SourceLocation(self, node, **kwargs):
         return f"SourceLocation<line:{node.line}, column:{node.column}, source: {node.source}>"
 
-    LocationNode = eve.codegen.FormatTemplate("LocationNode {{{loc}}}")
+    LocationNode = gt4py.eve.codegen.FormatTemplate("LocationNode {{{loc}}}")
 
-    SimpleNode = eve.codegen.JinjaTemplate(
+    SimpleNode = gt4py.eve.codegen.JinjaTemplate(
         "|{{ bool_value }}, {{ int_value }}, {{ float_value }}, {{ str_value }}, {{ bytes_value }}, "
         "{{ int_kind }}, {{ _this_node.str_kind.__class__.__name__ }}|"
     )
@@ -120,7 +122,7 @@ class _BaseTestGenerator(eve.codegen.TemplatedGenerator):
     def visit_SimpleNode(self, node, **kwargs):
         return f"SimpleNode {{{self.generic_visit(node, **kwargs)}}}"
 
-    CompoundNode = eve.codegen.MakoTemplate(
+    CompoundNode = gt4py.eve.codegen.MakoTemplate(
         """
 ----CompoundNode [BASE]----
     - location: ${location}
@@ -140,7 +142,7 @@ class _InheritedTestGenerator(_BaseTestGenerator):
     def visit_IntKind(self, node, **kwargs):
         return f"OTHER INTKIND({node.value})"
 
-    CompoundNode = eve.codegen.MakoTemplate(
+    CompoundNode = gt4py.eve.codegen.MakoTemplate(
         """
 ----CompoundNode [INHERITED]----
     - location: ${location}
@@ -151,24 +153,24 @@ class _InheritedTestGenerator(_BaseTestGenerator):
     )
 
 
-class _FaultyTestGenerator1(eve.codegen.TemplatedGenerator):
-    CompoundNode = eve.codegen.FormatTemplate(
+class _FaultyTestGenerator1(gt4py.eve.codegen.TemplatedGenerator):
+    CompoundNode = gt4py.eve.codegen.FormatTemplate(
         """
 Line
 Another {MISSING_loc}"""
     )
 
 
-class _FaultyTestGenerator2(eve.codegen.TemplatedGenerator):
-    CompoundNode = eve.codegen.StringTemplate(
+class _FaultyTestGenerator2(gt4py.eve.codegen.TemplatedGenerator):
+    CompoundNode = gt4py.eve.codegen.StringTemplate(
         """
 Line
 Another $f{ffloc"""
     )
 
 
-class _FaultyTestGenerator3(eve.codegen.TemplatedGenerator):
-    CompoundNode = eve.codegen.JinjaTemplate(
+class _FaultyTestGenerator3(gt4py.eve.codegen.TemplatedGenerator):
+    CompoundNode = gt4py.eve.codegen.JinjaTemplate(
         """
 |{{ bool_value }}, {{ MISSING_int_value }}, {{ float_value }}, {{ str_value }}, {{ bytes_value }},
         {{ int_kind }}, {{ _this_node.str_kind.__class__.WRONG__name__ }}|
@@ -176,8 +178,8 @@ class _FaultyTestGenerator3(eve.codegen.TemplatedGenerator):
     )
 
 
-class _FaultyTestGenerator4(eve.codegen.TemplatedGenerator):
-    CompoundNode = eve.codegen.MakoTemplate(
+class _FaultyTestGenerator4(gt4py.eve.codegen.TemplatedGenerator):
+    CompoundNode = gt4py.eve.codegen.MakoTemplate(
         """
 ----CompoundNode [BASE]----
     - location: ${location}
@@ -189,7 +191,7 @@ class _FaultyTestGenerator4(eve.codegen.TemplatedGenerator):
 
 
 @pytest.fixture(params=[_BaseTestGenerator, _InheritedTestGenerator])
-def templated_generator(request) -> Type[eve.codegen.TemplatedGenerator]:
+def templated_generator(request) -> Type[gt4py.eve.codegen.TemplatedGenerator]:
     return request.param
 
 
@@ -201,7 +203,7 @@ def templated_generator(request) -> Type[eve.codegen.TemplatedGenerator]:
         _FaultyTestGenerator4,
     ]
 )
-def faulty_templated_generator(request) -> Type[eve.codegen.TemplatedGenerator]:
+def faulty_templated_generator(request) -> Type[gt4py.eve.codegen.TemplatedGenerator]:
     return request.param
 
 
@@ -219,5 +221,5 @@ def test_templated_generator(templated_generator, fixed_compound_node):
 
 
 def test_templated_generator_exceptions(faulty_templated_generator, fixed_compound_node):
-    with pytest.raises(eve.codegen.TemplateRenderingError, match="when rendering node"):
+    with pytest.raises(gt4py.eve.codegen.TemplateRenderingError, match="when rendering node"):
         faulty_templated_generator.apply(fixed_compound_node)

@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.common import LoopOrder
-from gtc.cuir import kernel_fusion
+from gt4py.cartesian.gtc.common import LoopOrder
+from gt4py.cartesian.gtc.cuir import kernel_fusion
 
 from .cuir_utils import (
     AssignStmtFactory,

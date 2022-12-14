@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
 
-from gtc.common import DataType, LoopOrder
-from gtc.oir import AxisBound, Interval
+from gt4py.cartesian.gtc.common import DataType, LoopOrder
+from gt4py.cartesian.gtc.oir import AxisBound, Interval
 
 from .oir_utils import (
     AssignStmtFactory,

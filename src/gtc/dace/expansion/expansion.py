@@ -22,15 +22,15 @@ import dace.library
 import dace.subsets
 import sympy
 
-from gtc import daceir as dcir
-from gtc.dace.expansion.daceir_builder import DaCeIRBuilder
-from gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
+from gt4py.cartesian.gtc.dace.expansion.sdfg_builder import StencilComputationSDFGBuilder
 
 from .utils import split_horizontal_executions_regions
 
 
 if TYPE_CHECKING:
-    from gtc.dace.nodes import StencilComputation
+    from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
 
 class StencilComputationExpansion(dace.library.ExpandTransformation):

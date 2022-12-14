@@ -12,8 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.common import HorizontalInterval, HorizontalMask, LevelMarker
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
+from gt4py.cartesian.gtc.common import HorizontalInterval, HorizontalMask, LevelMarker
+from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import (
+    NoFieldAccessPruning,
+    UnreachableStmtPruning,
+)
 
 from ...oir_utils import (
     AssignStmtFactory,

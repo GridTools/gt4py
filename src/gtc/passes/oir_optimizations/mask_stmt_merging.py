@@ -14,8 +14,8 @@
 
 from typing import List
 
-from eve import NodeTranslator
-from gtc import oir
+from gt4py.cartesian.gtc import oir
+from gt4py.eve import NodeTranslator
 
 from .utils import AccessCollector
 

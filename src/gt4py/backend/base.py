@@ -21,16 +21,16 @@ import time
 import warnings
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
 
-from gt4py import definitions as gt_definitions
-from gt4py import utils as gt_utils
+from gt4py.cartesian import definitions as gt_definitions
+from gt4py.cartesian import utils as gt_utils
 
 from . import pyext_builder
 from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_object import StencilObject
 
 REGISTRY = gt_utils.Registry()
 

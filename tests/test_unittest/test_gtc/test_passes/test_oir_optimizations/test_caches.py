@@ -12,9 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.common import AxisBound, LevelMarker, LoopOrder
-from gtc.oir import IJCache, KCache
-from gtc.passes.oir_optimizations.caches import (
+from gt4py.cartesian.gtc.common import AxisBound, LevelMarker, LoopOrder
+from gt4py.cartesian.gtc.oir import IJCache, KCache
+from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     FillFlushToLocalKCaches,
     IJCacheDetection,
     KCacheDetection,

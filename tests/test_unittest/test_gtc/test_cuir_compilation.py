@@ -18,9 +18,9 @@ import gridtools_cpp
 import pytest
 import setuptools
 
-from gt4py.backend import pyext_builder
-from gtc.cuir import cuir
-from gtc.cuir.cuir_codegen import CUIRCodegen
+from gt4py.cartesian.backend import pyext_builder
+from gt4py.cartesian.gtc.cuir import cuir
+from gt4py.cartesian.gtc.cuir.cuir_codegen import CUIRCodegen
 
 from .cuir_utils import KernelFactory, ProgramFactory
 from .utils import match

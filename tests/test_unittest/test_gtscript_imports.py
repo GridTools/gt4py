@@ -16,7 +16,7 @@ import sys
 
 import pytest
 
-from gt4py import gtscript_imports
+from gt4py.cartesian import gtscript_imports
 
 
 @pytest.fixture(scope="function")

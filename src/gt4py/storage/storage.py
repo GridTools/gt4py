@@ -17,7 +17,7 @@ from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 
-import gt4py.backend
+from gt4py import cartesian as gt4pyc
 
 
 try:
@@ -40,7 +40,7 @@ from . import utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
-    if backend not in gt4py.backend.REGISTRY:
+    if backend not in gt4pyc.backend.REGISTRY:
         raise RuntimeError(f"Backend '{backend}' is not registered.")
 
 
@@ -86,7 +86,7 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_backend(backend)
-    backend_cls = gt4py.backend.from_name(backend)
+    backend_cls = gt4pyc.backend.from_name(backend)
     assert backend_cls is not None
     if backend_cls.storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
@@ -384,7 +384,7 @@ if dace is not None:
             aligned_index, shape, dtype, dimensions
         )
         itemsize = dtype.itemsize
-        backend_cls = gt4py.backend.from_name(backend)
+        backend_cls = gt4pyc.backend.from_name(backend)
         assert backend_cls is not None
         layout_map = backend_cls.storage_info["layout_map"](dimensions)
 

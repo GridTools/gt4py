@@ -16,9 +16,9 @@ from typing import List, Optional, Tuple, Union, cast
 
 import factory
 
-from gtc import common
-from gtc.definitions import Extent
-from gtc.numpy import npir
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.numpy import npir
 
 from .common_utils import identifier, undefined_symbol_list
 

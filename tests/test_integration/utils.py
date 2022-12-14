@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import gt4py.definitions as gt_definitions
-import gt4py.gtscript as gtscript
+import gt4py.cartesian.definitions as gt_definitions
+import gt4py.cartesian.gtscript as gtscript
 
 from ..definitions import id_version
 from .stencil_definitions import EXTERNALS_REGISTRY

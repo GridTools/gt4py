@@ -13,9 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from gtc import common
-from gtc.numpy.npir import LocalScalarDecl
-from gtc.numpy.scalars_to_temps import ScalarsToTemporaries
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.numpy.npir import LocalScalarDecl
+from gt4py.cartesian.gtc.numpy.scalars_to_temps import ScalarsToTemporaries
 from tests.test_unittest.test_gtc.npir_utils import (
     ComputationFactory,
     FieldSliceFactory,

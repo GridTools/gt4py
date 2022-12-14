@@ -40,12 +40,12 @@ with the line
    # [GT] using-dsl: gtscript 
    
 All other content must be valid Python under the assumption that the first line has been replaced
-by :code:`from gt4py.gtscript import *`.
+by :code:`from gt4py.cartesian.gtscript import *`.
 
 In support of this, two more features are proposed:
 
 * A mechanism to allow GTScript files as if they were Python modules.  The usage will be
-  :code:`from gt4py import gtpy_import; gtpy_import.install()`.
+  :code:`from gt4py.cartesian import gtpy_import; gtpy_import.install()`.
 
 * A lazy variant or replacement of the ``stencil`` decorator, returning an object that supports
   manual stepwise compilation.
@@ -251,7 +251,7 @@ be imported as Python modules:
 
 .. code-block:: python
 
-   from gt4py import gtpy_import; gtpy_import.install()
+   from gt4py.cartesian import gtpy_import; gtpy_import.install()
 
 Backward compatibility
 ----------------------
@@ -293,7 +293,7 @@ trouble for some tools or in some environments an additional fallback is accepta
 to allow many more extensions, however the potential confusion outweighs the benefits of being more
 permissive.
 
-Enabling all of GTScript without importing from gt4py
+Enabling all of GTScript without importing from gt4py.cartesian
 +++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The currently chosen route for this is to require a comment at the very start of the file::
@@ -301,7 +301,7 @@ The currently chosen route for this is to require a comment at the very start of
    # [GT] using-dsl: gtscript
 
 This will serve two purposes, first it will mark the file as being written in GTScript.  Any name
-that in Python can be accessed by :code:`from gt4py.gtscript import *` will work when compiling with
+that in Python can be accessed by :code:`from gt4py.cartesian.gtscript import *` will work when compiling with
 ``gtpyc`` but will be deemed undefined by the Python interpreter.  It is not planned to provide any
 means of informing Python syntax checkers to consider these names as defined.  Secondly ``gtpyc`` can
 replace this line with an actual :code:`import` line without changing line numbers for error messages.

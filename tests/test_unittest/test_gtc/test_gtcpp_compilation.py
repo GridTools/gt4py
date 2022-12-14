@@ -18,10 +18,10 @@ import gridtools_cpp
 import pytest
 import setuptools
 
-from gt4py import config  # TODO required for getting boost path
-from gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
-from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
-from gtc.gtcpp.oir_to_gtcpp import _extract_accessors
+from gt4py.cartesian import config  # TODO required for getting boost path
+from gt4py.cartesian.gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
+from gt4py.cartesian.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
+from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
 
 from .gtcpp_utils import (
     ArgFactory,

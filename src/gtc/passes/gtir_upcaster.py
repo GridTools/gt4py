@@ -17,11 +17,11 @@ from typing import Any, Callable, Dict, Iterator, List, TypeVar
 
 import numpy as np
 
-import eve
-from eve import datamodels
-from gtc import gtir
-from gtc.common import DataType, op_to_ufunc, typestr_to_data_type
-from gtc.gtir import Expr
+from gt4py import eve
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.common import DataType, op_to_ufunc, typestr_to_data_type
+from gt4py.cartesian.gtc.gtir import Expr
+from gt4py.eve import datamodels
 
 
 def _upcast_node(target_dtype: DataType, node: Expr) -> Expr:

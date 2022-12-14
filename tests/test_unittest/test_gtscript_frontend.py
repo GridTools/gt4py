@@ -20,11 +20,11 @@ from typing import Any, Callable, Dict, Optional, Type
 import numpy as np
 import pytest
 
-import gt4py.definitions as gt_definitions
-from gt4py import gtscript
-from gt4py.frontend import gtscript_frontend as gt_frontend
-from gt4py.frontend import nodes
-from gt4py.gtscript import (
+import gt4py.cartesian.definitions as gt_definitions
+from gt4py.cartesian import gtscript
+from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
+from gt4py.cartesian.frontend import nodes
+from gt4py.cartesian.gtscript import (
     __INLINED,
     IJ,
     IJK,
@@ -136,24 +136,24 @@ class TestInlinedExternals:
     def test_recursive_function_imports(self):
         @gtscript.function
         def func_deeply_nested():
-            from gt4py.__externals__ import another_const
+            from gt4py.cartesian.__externals__ import another_const
 
             return another_const
 
         @gtscript.function
         def func_nested():
-            from gt4py.__externals__ import const
+            from gt4py.cartesian.__externals__ import const
 
             return const + func_deeply_nested()
 
         @gtscript.function
         def func():
-            from gt4py.__externals__ import other_call
+            from gt4py.cartesian.__externals__ import other_call
 
             return other_call()
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import some_call
+            from gt4py.cartesian.__externals__ import some_call
 
             with computation(PARALLEL), interval(...):
                 inout_field = func() + some_call()
@@ -235,7 +235,7 @@ class TestFunction:
             return 1.0
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func() + 1
@@ -254,7 +254,7 @@ class TestFunction:
             return arg + 1
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func_outer(func())
@@ -273,7 +273,7 @@ class TestFunction:
             return arg + 1
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func_outer(func() + 1)
@@ -290,7 +290,7 @@ class TestFunction:
             return tmp1, tmp2
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func() + 1
@@ -316,7 +316,7 @@ class TestFunction:
             return arg + 1
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func_outer(func())
@@ -344,7 +344,7 @@ class TestFunction:
             return func1(arg)
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__gtscript__ import PARALLEL, computation, interval
+            from gt4py.cartesian.__gtscript__ import PARALLEL, computation, interval
 
             with computation(PARALLEL), interval(...):
                 inout_field = func2(inout_field)
@@ -360,7 +360,7 @@ class TestFunction:
     def test_recursive_function_calls_external_self(self):
         @gtscript.function
         def recursive_fcn(arg):
-            from gt4py.__externals__ import func
+            from gt4py.cartesian.__externals__ import func
 
             return func(arg + 1)
 
@@ -389,7 +389,7 @@ class TestAxisSyntax:
 
     def test_good_syntax_external(self):
         def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
-            from gt4py.__externals__ import AXIS
+            from gt4py.cartesian.__externals__ import AXIS
 
             with computation(PARALLEL), interval(...):
                 out_field = in_field[AXIS - 1]
@@ -403,7 +403,7 @@ class TestAxisSyntax:
 
     def test_good_syntax_external_value(self):
         def definition_func(in_field: gtscript.Field[float], out_field: gtscript.Field[float]):
-            from gt4py.__externals__ import VALUE
+            from gt4py.cartesian.__externals__ import VALUE
 
             with computation(PARALLEL), interval(...):
                 out_field = in_field[J - VALUE]
@@ -469,7 +469,7 @@ class TestImportedExternals:
         )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import (
+            from gt4py.cartesian.__externals__ import (
                 BOOL_CONSTANT,
                 CONSTANT,
                 NESTED_CONSTANTS,
@@ -499,7 +499,7 @@ class TestImportedExternals:
         externals = dict(CONSTANT=-2.0, NESTED_CONSTANTS=types.SimpleNamespace(A=-100, B=-200))
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import MISSING_CONSTANT
+            from gt4py.cartesian.__externals__ import MISSING_CONSTANT
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + MISSING_CONSTANT
@@ -510,7 +510,7 @@ class TestImportedExternals:
             )
 
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import NESTED_CONSTANTS
+            from gt4py.cartesian.__externals__ import NESTED_CONSTANTS
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + NESTED_CONSTANTS.missing
@@ -528,7 +528,7 @@ class TestImportedExternals:
     @pytest.mark.parametrize("value_type", [str, dict, list])
     def test_wrong_value(self, value_type):
         def definition_func(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import WRONG_VALUE_CONSTANT
+            from gt4py.cartesian.__externals__ import WRONG_VALUE_CONSTANT
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + WRONG_VALUE_CONSTANT
@@ -579,7 +579,7 @@ class TestIntervalSyntax:
 
     def test_externals(self):
         def definition_func(field: gtscript.Field[float]):
-            from gt4py.__externals__ import kstart
+            from gt4py.cartesian.__externals__ import kstart
 
             with computation(PARALLEL), interval(kstart, -1):
                 field = 0
@@ -720,7 +720,7 @@ class TestRegions:
 
     def test_from_external(self):
         def stencil(in_f: gtscript.Field[np.float_]):
-            from gt4py.__externals__ import i1
+            from gt4py.cartesian.__externals__ import i1
 
             with computation(PARALLEL), interval(...), horizontal(region[i1, :]):
                 in_f = 1.0
@@ -756,7 +756,7 @@ class TestRegions:
     def test_inside_function(self):
         @gtscript.function
         def region_func():
-            from gt4py.__externals__ import ie
+            from gt4py.cartesian.__externals__ import ie
 
             field = 0.0
             with horizontal(region[ie, :]):
@@ -777,7 +777,7 @@ class TestRegions:
 
     def test_error_undefined(self):
         def stencil(in_f: gtscript.Field[np.float_]):
-            from gt4py.__externals__ import i0  # forget to add 'ia'
+            from gt4py.cartesian.__externals__ import i0  # forget to add 'ia'
 
             with computation(PARALLEL), interval(...):
                 in_f = in_f + 1.0
@@ -817,7 +817,7 @@ class TestExternalsWithSubroutines:
 
         @gtscript.function
         def _stage_laplacian(dx, dy, phi):
-            from gt4py.__externals__ import stage_laplacian_x, stage_laplacian_y
+            from gt4py.cartesian.__externals__ import stage_laplacian_x, stage_laplacian_y
 
             lap_x = stage_laplacian_x(dx=dx, phi=phi)
             lap_y = stage_laplacian_y(dy=dy, phi=phi)
@@ -838,8 +838,18 @@ class TestExternalsWithSubroutines:
             dx: float,
             dy: float,
         ):
-            from gt4py.__externals__ import stage_laplacian, stage_laplacian_x, stage_laplacian_y
-            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
+            from gt4py.cartesian.__externals__ import (
+                stage_laplacian,
+                stage_laplacian_x,
+                stage_laplacian_y,
+            )
+            from gt4py.cartesian.__gtscript__ import (
+                BACKWARD,
+                FORWARD,
+                PARALLEL,
+                computation,
+                interval,
+            )
 
             with computation(PARALLEL), interval(...):
                 lap = stage_laplacian(dx=dx, dy=dy, phi=in_phi) + GLOBAL_CONSTANT
@@ -953,7 +963,7 @@ class TestFunctionReturn:
 class TestCompileTimeAssertions:
     def test_nomsg(self):
         def definition(inout_field: gtscript.Field[float]):
-            from gt4py.__externals__ import EXTERNAL
+            from gt4py.cartesian.__externals__ import EXTERNAL
 
             with computation(PARALLEL), interval(...):
                 compile_assert(EXTERNAL < 1)
@@ -1171,8 +1181,14 @@ class TestImports:
         def definition_func(inout_field: gtscript.Field[float]):
             from __externals__ import EXTERNAL
             from __gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
-            from gt4py.__externals__ import EXTERNAL
-            from gt4py.__gtscript__ import BACKWARD, FORWARD, PARALLEL, computation, interval
+            from gt4py.cartesian.__externals__ import EXTERNAL
+            from gt4py.cartesian.__gtscript__ import (
+                BACKWARD,
+                FORWARD,
+                PARALLEL,
+                computation,
+                interval,
+            )
 
             with computation(PARALLEL), interval(...):
                 inout_field = inout_field[0, 0, 0] + EXTERNAL
@@ -1191,10 +1207,10 @@ class TestImports:
                 [
                     "import gt4py",
                     "from externals import EXTERNAL",
-                    "from gt4py import __gtscript__",
-                    "from gt4py import __externals__",
-                    "from gt4py.gtscript import computation",
-                    "from gt4py.externals import EXTERNAL",
+                    "from gt4py.cartesian import __gtscript__",
+                    "from gt4py.cartesian import __externals__",
+                    "from gt4py.cartesian.gtscript import computation",
+                    "from gt4py.cartesian.externals import EXTERNAL",
                 ]
             )
         ),
@@ -1327,7 +1343,7 @@ class TestAssignmentSyntax:
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
         def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
-            from gt4py.__externals__ import offset
+            from gt4py.cartesian.__externals__ import offset
 
             with computation(PARALLEL), interval(...):
                 out_field[0, 0, offset] = in_field
@@ -1430,7 +1446,7 @@ class TestNestedWithSyntax:
         def definition_fw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
-            from gt4py.__gtscript__ import FORWARD, computation, interval
+            from gt4py.cartesian.__gtscript__ import FORWARD, computation, interval
 
             with computation(FORWARD):
                 with interval(1, 2):
@@ -1441,7 +1457,7 @@ class TestNestedWithSyntax:
         def definition_bw(
             in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]
         ):
-            from gt4py.__gtscript__ import FORWARD, computation, interval
+            from gt4py.cartesian.__gtscript__ import FORWARD, computation, interval
 
             with computation(BACKWARD):
                 with interval(0, 1):
@@ -1531,7 +1547,7 @@ class TestNativeFunctions:
 class TestWarnInlined:
     def test_inlined_emits_warning(self):
         def func(field: gtscript.Field[np.float_]):
-            from gt4py.__externals__ import SET_TO_ONE
+            from gt4py.cartesian.__externals__ import SET_TO_ONE
 
             with computation(PARALLEL), interval(...):
                 field = 0

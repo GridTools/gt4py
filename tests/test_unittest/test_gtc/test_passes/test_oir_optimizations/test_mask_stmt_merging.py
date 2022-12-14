@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import common
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
 
 from ...oir_utils import (
     AssignStmtFactory,

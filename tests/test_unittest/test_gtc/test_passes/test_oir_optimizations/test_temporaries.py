@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import oir
-from gtc.passes.oir_optimizations.temporaries import (
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
 )

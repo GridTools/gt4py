@@ -20,7 +20,7 @@ import pathlib
 import shutil
 from typing import List, Optional, Sequence
 
-from gt4py import config as gt_config
+from gt4py.cartesian import config as gt_config
 
 
 def _get_root() -> str:

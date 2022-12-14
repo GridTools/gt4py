@@ -22,7 +22,7 @@ from tempfile import mkdtemp
 import hypothesis as hyp
 import pytest
 
-from gt4py import config as gt_config
+from gt4py.cartesian import config as gt_config
 
 from .definition_setup import (
     TAssign,

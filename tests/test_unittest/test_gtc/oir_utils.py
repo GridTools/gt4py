@@ -16,7 +16,7 @@ from typing import List
 
 import factory
 
-from gtc import common, oir
+from gt4py.cartesian.gtc import common, oir
 
 from .common_utils import (
     CartesianOffsetFactory,

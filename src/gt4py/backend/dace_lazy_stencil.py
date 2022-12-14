@@ -3,14 +3,14 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set, Tuple
 import dace
 from dace.frontend.python.common import SDFGConvertible
 
-from gt4py.backend.dace_backend import SDFGManager
-from gt4py.backend.dace_stencil_object import DaCeStencilObject, add_optional_fields
-from gt4py.backend.module_generator import make_args_data_from_gtir
-from gt4py.lazy_stencil import LazyStencil
+from gt4py.cartesian.backend.dace_backend import SDFGManager
+from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject, add_optional_fields
+from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
+from gt4py.cartesian.lazy_stencil import LazyStencil
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 class DaCeLazyStencil(LazyStencil, SDFGConvertible):

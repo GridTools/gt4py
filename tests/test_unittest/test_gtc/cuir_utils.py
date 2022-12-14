@@ -16,7 +16,7 @@ from typing import List
 
 import factory
 
-from gtc.cuir import cuir
+from gt4py.cartesian.gtc.cuir import cuir
 
 from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 

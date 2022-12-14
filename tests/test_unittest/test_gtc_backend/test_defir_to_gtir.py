@@ -14,8 +14,8 @@
 
 import pytest
 
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR
-from gt4py.frontend.nodes import (
+from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR
+from gt4py.cartesian.frontend.nodes import (
     AxisBound,
     AxisInterval,
     BinaryOperator,
@@ -25,7 +25,7 @@ from gt4py.frontend.nodes import (
     LevelMarker,
     ScalarLiteral,
 )
-from gtc import common, gtir
+from gt4py.cartesian.gtc import common, gtir
 from tests.definition_setup import ijk_domain  # noqa: F401
 from tests.definition_setup import (
     BlockStmt,

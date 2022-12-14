@@ -16,22 +16,23 @@
 
 
 import gt4py
+from gt4py import cartesian as gt4pyc
 
 
 def test_version():
-    assert isinstance(gt4py.version.__version__, str)
-    assert len(gt4py.version.__version__) and all(
-        len(p) for p in gt4py.version.__version__.split(".")
+    assert isinstance(gt4pyc.version.__version__, str)
+    assert len(gt4pyc.version.__version__) and all(
+        len(p) for p in gt4pyc.version.__version__.split(".")
     )
-    assert gt4py.version.__version__ == gt4py.__version__
+    assert gt4pyc.version.__version__ == gt4pyc.__version__
 
 
 def test_version_info():
     from packaging.version import Version
 
-    assert isinstance(gt4py.version.__version_info__, Version)
-    assert gt4py.version.__version_info__.release == tuple(
-        int(p) for p in gt4py.version.__version__.split(".")
+    assert isinstance(gt4pyc.version.__version_info__, Version)
+    assert gt4pyc.version.__version_info__.release == tuple(
+        int(p) for p in gt4pyc.version.__version__.split(".")
     )
-    assert (0, 1) <= gt4py.version.__version_info__.release < (0, 2)
-    assert gt4py.version.__version_info__ == gt4py.__version_info__
+    assert (0, 1) <= gt4pyc.version.__version_info__.release < (0, 2)
+    assert gt4pyc.version.__version_info__ == gt4pyc.__version_info__

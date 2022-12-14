@@ -20,7 +20,7 @@ import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-from eve.concepts import (
+from gt4py.eve.concepts import (
     AnySourceLocation,
     FrozenNode,
     Node,
@@ -29,10 +29,10 @@ from eve.concepts import (
     SymbolName,
     VType,
 )
-from eve.datamodels import Coerced
-from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import IntEnum, StrEnum
-from eve.utils import CaseStyleConverter
+from gt4py.eve.datamodels import Coerced
+from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
+from gt4py.eve.type_definitions import IntEnum, StrEnum
+from gt4py.eve.utils import CaseStyleConverter
 
 
 T = TypeVar("T")

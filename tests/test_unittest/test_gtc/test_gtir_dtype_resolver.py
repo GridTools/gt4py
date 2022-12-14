@@ -14,10 +14,13 @@
 
 from typing import Dict
 
-from gtc import common
-from gtc.common import DataType
-from gtc.gtir import FieldDecl, Stencil
-from gtc.passes.gtir_dtype_resolver import _GTIRPropagateDtypeToAccess, resolve_dtype
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import DataType
+from gt4py.cartesian.gtc.gtir import FieldDecl, Stencil
+from gt4py.cartesian.gtc.passes.gtir_dtype_resolver import (
+    _GTIRPropagateDtypeToAccess,
+    resolve_dtype,
+)
 
 from .gtir_utils import (
     FieldAccessFactory,

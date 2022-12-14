@@ -15,10 +15,10 @@
 import abc
 from typing import Any, Dict, Optional, Type, Union
 
-from gt4py import utils as gt_utils
-from gt4py.definitions import BuildOptions, StencilID
-from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
-from gtc import gtir
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.definitions import BuildOptions, StencilID
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 REGISTRY = gt_utils.Registry()

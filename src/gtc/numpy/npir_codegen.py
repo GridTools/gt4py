@@ -17,12 +17,12 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Collection, List, Optional, Set, Tuple, Union, cast
 
-import eve
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import JinjaTemplate as as_jinja
-from gtc import common
-from gtc.numpy import npir
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.eve.codegen import JinjaTemplate as as_jinja
 
 
 __all__ = ["NpirCodegen"]

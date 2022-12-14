@@ -17,7 +17,7 @@ from typing import Any, Iterator, List, Set, Tuple, Union
 
 import pytest
 
-from gt4py.frontend.nodes import (
+from gt4py.cartesian.frontend.nodes import (
     ArgumentInfo,
     Assign,
     Axis,

@@ -14,9 +14,15 @@
 
 from typing import List
 
-from gtc.common import ArithmeticOperator, ComparisonOperator, DataType, ExprKind, NativeFunction
-from gtc.gtir import BinaryOp, Cast, Expr, NativeFuncCall, ParAssignStmt, TernaryOp
-from gtc.passes.gtir_upcaster import _GTIRUpcasting
+from gt4py.cartesian.gtc.common import (
+    ArithmeticOperator,
+    ComparisonOperator,
+    DataType,
+    ExprKind,
+    NativeFunction,
+)
+from gt4py.cartesian.gtc.gtir import BinaryOp, Cast, Expr, NativeFuncCall, ParAssignStmt, TernaryOp
+from gt4py.cartesian.gtc.passes.gtir_upcaster import _GTIRUpcasting
 
 from .gtir_utils import FieldAccessFactory, LiteralFactory
 

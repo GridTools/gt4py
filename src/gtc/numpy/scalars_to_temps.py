@@ -17,10 +17,10 @@
 from dataclasses import dataclass
 from typing import Dict
 
-from eve import NodeTranslator
-from gtc import common, utils
-from gtc.definitions import Extent
-from gtc.numpy import npir
+from gt4py.cartesian.gtc import common, utils
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.eve import NodeTranslator
 
 
 @dataclass

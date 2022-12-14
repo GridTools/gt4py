@@ -14,9 +14,9 @@
 
 from typing import Any, Dict
 
-import eve
-from gtc import gtir
-from gtc.common import DataType, GTCPostconditionError
+from gt4py import eve
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.common import DataType, GTCPostconditionError
 
 
 class _GTIRResolveAuto(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):

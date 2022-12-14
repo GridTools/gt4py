@@ -15,19 +15,18 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
-import gt4py.caching
-import gt4py.frontend
-from gt4py.definitions import BuildOptions, StencilID
-from gt4py.type_hints import AnnotatedStencilFunc, StencilFunc
-from gtc import gtir
-from gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py import cartesian as gt4pyc
+from gt4py.cartesian.definitions import BuildOptions, StencilID
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 if TYPE_CHECKING:
-    from gt4py.backend.base import Backend as BackendType
-    from gt4py.backend.base import CLIBackendMixin
-    from gt4py.frontend.base import Frontend as FrontendType
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.backend.base import Backend as BackendType
+    from gt4py.cartesian.backend.base import CLIBackendMixin
+    from gt4py.cartesian.frontend.base import Frontend as FrontendType
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 class StencilBuilder:
@@ -69,11 +68,11 @@ class StencilBuilder:
             **self.default_options_dict(definition_func)
         )
         backend = backend or "numpy"
-        backend = gt4py.backend.from_name(backend) if isinstance(backend, str) else backend
+        backend = gt4pyc.backend.from_name(backend) if isinstance(backend, str) else backend
         if backend is None:
             raise RuntimeError(f"Unknown backend: {backend}")
 
-        frontend = frontend or gt4py.frontend.from_name("gtscript")
+        frontend = frontend or gt4pyc.frontend.from_name("gtscript")
         if frontend is None:
             raise RuntimeError(f"Unknown frontend: {frontend}")
 
@@ -125,7 +124,7 @@ class StencilBuilder:
         """
         self._build_data: Dict[str, Any] = {}
         kwargs = {**self.options.cache_settings, **kwargs}
-        self.caching = gt4py.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
+        self.caching = gt4pyc.caching.strategy_factory(caching_strategy_name, self, *args, **kwargs)
         return self
 
     def with_options(
@@ -174,7 +173,7 @@ class StencilBuilder:
 
         """
         self._build_data = {}
-        backend = gt4py.backend.from_name(backend_name)
+        backend = gt4pyc.backend.from_name(backend_name)
         assert backend is not None
         self.backend = backend(self)
         return self
@@ -246,7 +245,7 @@ class StencilBuilder:
     @property
     def root_pkg_name(self) -> str:
         return self._build_data.setdefault(
-            "root_pkg_name", gt4py.config.code_settings["root_package_name"]
+            "root_pkg_name", gt4pyc.config.code_settings["root_package_name"]
         )
 
     def with_root_pkg_name(self: "StencilBuilder", name: str) -> "StencilBuilder":
@@ -316,7 +315,7 @@ class StencilBuilder:
 
     @property
     def cli_backend(self) -> "CLIBackendMixin":
-        from gt4py.backend.base import CLIBackendMixin
+        from gt4py.cartesian.backend.base import CLIBackendMixin
 
         if not isinstance(self.backend, CLIBackendMixin):
             raise RuntimeError("backend of StencilBuilder instance is not CLI enabled.")

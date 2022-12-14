@@ -20,18 +20,18 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.config
-from gt4py import gtscript
+from gt4py import cartesian as gt4pyc
 from gt4py import storage as gt_storage
-from gt4py.gtscript import PARALLEL, computation, interval
-from gt4py.stencil_builder import StencilBuilder
+from gt4py.cartesian import gtscript
+from gt4py.cartesian.gtscript import PARALLEL, computation, interval
+from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.storage import utils as storage_utils
 
 from ..storage_test_utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")
-from gt4py.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
+from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 (needs to be guarded by above importorskip)
     DaCeLazyStencil,
 )
 
@@ -42,8 +42,8 @@ pytestmark = pytest.mark.usefixtures("dace_env")
 @pytest.fixture(scope="module")
 def dace_env():
     gt_cache_path = (
-        pathlib.Path(gt4py.config.cache_settings["root_path"])
-        / gt4py.config.cache_settings["dir_name"]
+        pathlib.Path(gt4pyc.config.cache_settings["root_path"])
+        / gt4pyc.config.cache_settings["dir_name"]
         / "dacecache"
     )
     with dace.config.temporary_config():

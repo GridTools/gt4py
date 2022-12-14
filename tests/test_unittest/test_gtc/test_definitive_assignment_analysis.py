@@ -18,10 +18,10 @@ from typing import Callable, List, Tuple, TypedDict
 
 import pytest
 
-from gt4py.backend import from_name
-from gt4py.gtscript import PARALLEL, Field, computation, interval, stencil
-from gt4py.stencil_builder import StencilBuilder
-from gtc.passes import gtir_definitive_assignment_analysis as daa
+from gt4py.cartesian.backend import from_name
+from gt4py.cartesian.gtc.passes import gtir_definitive_assignment_analysis as daa
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval, stencil
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 # A list of dictionaries containing a stencil definition and the expected test case outputs
@@ -39,8 +39,8 @@ def register_test_case(*, valid):
 
 @pytest.fixture
 def clear_gtir_caches():
-    from gt4py.backend import module_generator
-    from gtc.passes.gtir_pipeline import GtirPipeline
+    from gt4py.cartesian.backend import module_generator
+    from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 
     GtirPipeline._cache.clear()
     module_generator._args_data_cache.clear()

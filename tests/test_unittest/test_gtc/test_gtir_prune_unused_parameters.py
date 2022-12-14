@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
+from gt4py.cartesian.gtc.passes.gtir_prune_unused_parameters import prune_unused_parameters
 
 from .gtir_utils import FieldDeclFactory, ParAssignStmtFactory, ScalarDeclFactory, StencilFactory
 

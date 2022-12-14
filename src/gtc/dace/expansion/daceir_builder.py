@@ -23,12 +23,12 @@ import dace.data
 import dace.library
 import dace.subsets
 
-import eve
-from gtc import common
-from gtc import daceir as dcir
-from gtc import oir
-from gtc.dace.expansion_specification import Loop, Map, Sections, Stages
-from gtc.dace.utils import (
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Stages
+from gt4py.cartesian.gtc.dace.utils import (
     compute_dcir_access_infos,
     flatten_list,
     get_tasklet_symbol,
@@ -36,13 +36,13 @@ from gtc.dace.utils import (
     union_node_grid_subsets,
     untile_memlets,
 )
-from gtc.definitions import Extent
+from gt4py.cartesian.gtc.definitions import Extent
 
 from .utils import remove_horizontal_region
 
 
 if TYPE_CHECKING:
-    from gtc.dace.nodes import StencilComputation
+    from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
 
 def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):

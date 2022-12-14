@@ -24,10 +24,8 @@ import dace.data
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
-from eve import codegen
-from eve.codegen import MakoTemplate as as_mako
-from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_common import (
+from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     BaseGTBackend,
     CUDAPyExtModuleGenerator,
@@ -35,29 +33,31 @@ from gt4py.backend.gtc_common import (
     bindings_main_template,
     pybuffer_to_sid,
 )
-from gt4py.backend.module_generator import make_args_data_from_gtir
-from gt4py.utils import shash
-from gt4py.utils.layout import layout_checker_factory
-from gtc import common, gtir
-from gtc.dace.nodes import StencilComputation
-from gtc.dace.oir_to_dace import OirSDFGBuilder
-from gtc.dace.transformations import (
+from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
+from gt4py.cartesian.gtc import common, gtir
+from gt4py.cartesian.gtc.dace.nodes import StencilComputation
+from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
+from gt4py.cartesian.gtc.dace.transformations import (
     InlineThreadLocalTransients,
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
-from gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
-from gtc.gtir_to_oir import GTIRToOIR
-from gtc.passes.gtir_k_boundary import compute_k_boundary
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.inlining import MaskInlining
-from gtc.passes.oir_optimizations.utils import compute_fields_extents
-from gtc.passes.oir_pipeline import DefaultPipeline
+from gt4py.cartesian.gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
+from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
+from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
+from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
+from gt4py.cartesian.utils import shash
+from gt4py.cartesian.utils.layout import layout_checker_factory
+from gt4py.eve import codegen
+from gt4py.eve.codegen import MakoTemplate as as_mako
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 def _serialize_sdfg(sdfg: dace.SDFG):
@@ -130,7 +130,7 @@ def _set_expansion_orders(sdfg: dace.SDFG):
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
-    import gtc.daceir as dcir  # avoid circular import
+    import gt4py.cartesian.gtc.daceir as dcir  # avoid circular import
 
     for node, _ in filter(
         lambda n: isinstance(n[0], StencilComputation), sdfg.all_nodes_recursive()
@@ -741,7 +741,7 @@ class DaCePyExtModuleGenerator(PyExtModuleGenerator):
                 *super().generate_imports().splitlines(),
                 "import dace",
                 "import copy",
-                "from gt4py.backend.dace_stencil_object import DaCeStencilObject",
+                "from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject",
             ]
         )
 
@@ -803,7 +803,7 @@ class DaceCPUBackend(BaseDaceBackend):
 
 @register
 class DaceGPUBackend(BaseDaceBackend):
-    """DaCe python backend using gtc."""
+    """DaCe python backend using gt4py.cartesian.gtc."""
 
     name = "dace:gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}

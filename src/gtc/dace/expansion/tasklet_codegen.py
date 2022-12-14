@@ -20,12 +20,12 @@ import dace.data
 import dace.library
 import dace.subsets
 
-import eve
-import gtc.common as common
-from eve.codegen import FormatTemplate as as_fmt
-from gtc import daceir as dcir
-from gtc.dace.symbol_utils import get_axis_bound_str
-from gtc.dace.utils import make_dace_subset
+import gt4py.cartesian.gtc.common as common
+from gt4py import eve
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace.symbol_utils import get_axis_bound_str
+from gt4py.cartesian.gtc.dace.utils import make_dace_subset
+from gt4py.eve.codegen import FormatTemplate as as_fmt
 
 
 class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):

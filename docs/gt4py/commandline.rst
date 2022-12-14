@@ -98,6 +98,6 @@ is equivalent to writing
 
 .. code-block:: python
 
-   from gt4py.gtscript import *
+   from gt4py.cartesian.gtscript import *
 
 in a python module. It makes all symbols from the `gt4py.gtscript` module available.

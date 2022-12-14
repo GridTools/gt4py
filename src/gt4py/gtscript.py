@@ -26,12 +26,12 @@ from typing import Callable, Dict, Optional, Type
 
 import numpy as np
 
-from gt4py import definitions as gt_definitions
-from gt4py.lazy_stencil import LazyStencil
+from gt4py.cartesian import definitions as gt_definitions
+from gt4py.cartesian.lazy_stencil import LazyStencil
 
 
 try:
-    from gt4py.backend.dace_lazy_stencil import DaCeLazyStencil
+    from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
 except ImportError:
     DaCeLazyStencil = LazyStencil  # type: ignore
 
@@ -146,7 +146,7 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
 
 def function(func):
     """Mark a GTScript function."""
-    from gt4py.frontend import gtscript_frontend as gt_frontend
+    from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
 
     gt_frontend.GTScriptParser.annotate_definition(func)
     return func
@@ -239,7 +239,7 @@ def stencil(
 
     """
 
-    from gt4py import loader as gt_loader
+    from gt4py.cartesian import loader as gt_loader
 
     if build_info is not None and not isinstance(build_info, dict):
         raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")
@@ -386,7 +386,7 @@ def lazy_stencil(
             Defers the generation step until the last moment and allows syntax checking independently.
             Also gives access to a more fine grained generate / build process.
     """
-    from gt4py.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_builder import StencilBuilder
 
     if build_info is not None and not isinstance(build_info, dict):
         raise ValueError(f"Invalid 'build_info' dictionary ('{build_info}')")

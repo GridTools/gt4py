@@ -26,7 +26,7 @@ import sys
 import time
 import types
 
-from gt4py import config as gt_config
+from gt4py.cartesian import config as gt_config
 
 
 NOTHING = object()

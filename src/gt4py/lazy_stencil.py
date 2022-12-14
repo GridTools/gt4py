@@ -19,9 +19,9 @@ from cached_property import cached_property
 
 
 if TYPE_CHECKING:
-    from gt4py.backend.base import Backend
-    from gt4py.stencil_builder import StencilBuilder
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.backend.base import Backend
+    from gt4py.cartesian.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 class LazyStencil:

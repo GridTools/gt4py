@@ -24,12 +24,12 @@ import dace.subsets
 import numpy as np
 from dace import library
 
-from gtc import common
-from gtc import daceir as dcir
-from gtc import oir
-from gtc.dace.expansion.expansion import StencilComputationExpansion
-from gtc.definitions import Extent
-from gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
 from .expansion.utils import HorizontalExecutionSplitter, get_dace_debuginfo
 from .expansion_specification import ExpansionItem, make_expansion_order
@@ -125,7 +125,7 @@ class StencilComputation(library.LibraryNode):
     ):
         super().__init__(name=name, *args, **kwargs)
 
-        from gtc.dace.utils import compute_dcir_access_infos
+        from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
 
         if oir_node is not None:
             assert extents is not None

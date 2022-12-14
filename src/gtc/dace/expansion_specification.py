@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Set, Union
 
 import dace
 
-from gtc import common
-from gtc import daceir as dcir
-from gtc import oir
-from gtc.definitions import Extent
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.definitions import Extent
 
 
 if TYPE_CHECKING:

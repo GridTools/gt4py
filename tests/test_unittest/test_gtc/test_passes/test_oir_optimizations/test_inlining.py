@@ -14,9 +14,9 @@
 
 import pytest
 
-from gtc.common import ComparisonOperator, DataType, LoopOrder
-from gtc.oir import BinaryOp, FieldAccess
-from gtc.passes.oir_optimizations.inlining import MaskInlining
+from gt4py.cartesian.gtc.common import ComparisonOperator, DataType, LoopOrder
+from gt4py.cartesian.gtc.oir import BinaryOp, FieldAccess
+from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 
 from ...oir_utils import (
     AssignStmtFactory,

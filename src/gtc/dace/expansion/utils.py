@@ -19,15 +19,15 @@ import dace.data
 import dace.library
 import dace.subsets
 
-import eve
-from gtc import common
-from gtc import daceir as dcir
-from gtc import oir
-from gtc.definitions import Extent
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.definitions import Extent
 
 
 if TYPE_CHECKING:
-    from gtc.dace.nodes import StencilComputation
+    from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 
 
 def get_dace_debuginfo(node: common.LocNode):

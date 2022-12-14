@@ -22,9 +22,9 @@ from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, Ty
 import numpy as np
 import scipy.special
 
-import eve
-from eve import datamodels
-from gtc.utils import dimension_flags_to_names, flatten_list
+from gt4py import eve
+from gt4py.cartesian.gtc.utils import dimension_flags_to_names, flatten_list
+from gt4py.eve import datamodels
 
 
 class GTCPreconditionError(eve.exceptions.EveError, RuntimeError):
@@ -95,7 +95,7 @@ class LogicalOperator(eve.StrEnum):
 class DataType(eve.IntEnum):
     """Data type identifier."""
 
-    # IDs from gt4py
+    # IDs from gt4py.cartesian
     INVALID = -1
     AUTO = 0
     DEFAULT = 1

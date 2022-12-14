@@ -15,26 +15,29 @@
 from abc import abstractmethod
 from typing import Callable, Optional, Protocol, Sequence, Type, Union
 
-from eve.visitors import NodeVisitor
-from gtc import oir
-from gtc.passes.oir_optimizations.caches import (
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
     IJCacheDetection,
     KCacheDetection,
     PruneKCacheFills,
     PruneKCacheFlushes,
 )
-from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+from gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging import (
     HorizontalExecutionMerging,
     OnTheFlyMerging,
 )
-from gtc.passes.oir_optimizations.inlining import MaskInlining
-from gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning, UnreachableStmtPruning
-from gtc.passes.oir_optimizations.temporaries import (
+from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
+from gt4py.cartesian.gtc.passes.oir_optimizations.mask_stmt_merging import MaskStmtMerging
+from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import (
+    NoFieldAccessPruning,
+    UnreachableStmtPruning,
+)
+from gt4py.cartesian.gtc.passes.oir_optimizations.temporaries import (
     LocalTemporariesToScalars,
     WriteBeforeReadTemporariesToScalars,
 )
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gt4py.cartesian.gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gt4py.eve.visitors import NodeVisitor
 
 
 PassT = Union[Callable[[oir.Stencil], oir.Stencil], Type[NodeVisitor]]

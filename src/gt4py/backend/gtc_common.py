@@ -19,28 +19,28 @@ import textwrap
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
-import gtc.utils
-import gtc.utils as gtc_utils
-from eve.codegen import MakoTemplate as as_mako
-from gt4py import backend as gt_backend
-from gt4py import utils as gt_utils
-from gt4py.backend import Backend
-from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData
-from gtc import gtir
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_pipeline import OirPipeline
+import gt4py.cartesian.gtc.utils
+import gt4py.cartesian.gtc.utils as gtc_utils
+from gt4py.cartesian import backend as gt_backend
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.backend import Backend
+from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
+from gt4py.eve.codegen import MakoTemplate as as_mako
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 def _get_unit_stride_dim(backend, domain_dim_flags, data_ndim):
     make_layout_map = backend.storage_info["layout_map"]
-    dimensions = list(gtc.utils.dimension_flags_to_names(domain_dim_flags).upper()) + [
-        str(d) for d in range(data_ndim)
-    ]
+    dimensions = list(
+        gt4py.cartesian.gtc.utils.dimension_flags_to_names(domain_dim_flags).upper()
+    ) + [str(d) for d in range(data_ndim)]
     layout_map = [x for x in make_layout_map(dimensions) if x is not None]
     return layout_map.index(max(layout_map))
 
@@ -162,7 +162,10 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         return gtir_is_not_empty(self.builder.gtir_pipeline)
 
     def generate_imports(self) -> str:
-        source = [*super().generate_imports().splitlines(), "from gt4py import utils as gt_utils"]
+        source = [
+            *super().generate_imports().splitlines(),
+            "from gt4py.cartesian import utils as gt_utils",
+        ]
         if self._is_not_empty():
             assert self.pyext_file_path is not None
             file_path = 'f"{{pathlib.Path(__file__).parent.resolve()}}/{}"'.format(

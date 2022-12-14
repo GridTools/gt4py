@@ -15,7 +15,7 @@
 from collections import defaultdict
 from typing import Any, Dict
 
-from eve import NodeTranslator
+from gt4py.eve import NodeTranslator
 
 from . import cuir
 

@@ -21,10 +21,10 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 
 from typing import Any, List, Optional, Tuple, Type, Union
 
-import eve
-from eve import datamodels
-from gtc import common
-from gtc.common import AxisBound, LocNode
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import AxisBound, LocNode
+from gt4py.eve import datamodels
 
 
 @eve.utils.noninstantiable

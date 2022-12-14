@@ -20,8 +20,8 @@ import sys
 import pytest
 from click.testing import CliRunner
 
-from gt4py import backend, cli
-from gt4py.backend.base import CLIBackendMixin
+from gt4py.cartesian import backend, cli
+from gt4py.cartesian.backend.base import CLIBackendMixin
 
 from ..definitions import ALL_BACKENDS
 

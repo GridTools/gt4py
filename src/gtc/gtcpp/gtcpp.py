@@ -16,10 +16,10 @@
 import enum
 from typing import Any, List, Tuple, Union
 
-import eve
-from eve import datamodels
-from gtc import common
-from gtc.common import LocNode
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import LocNode
+from gt4py.eve import datamodels
 
 
 @eve.utils.noninstantiable

@@ -12,9 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
-from gtc.passes.oir_pipeline import DefaultPipeline
+from gt4py.cartesian.gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gt4py.cartesian.gtc.passes.oir_optimizations.vertical_loop_merging import AdjacentLoopMerging
+from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 
 from .oir_utils import StencilFactory
 

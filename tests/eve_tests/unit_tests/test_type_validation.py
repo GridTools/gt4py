@@ -23,10 +23,10 @@ import typing
 
 import pytest
 
-from eve import extended_typing as xtyping
-from eve import type_definitions as type_def
-from eve import type_validation as type_val
-from eve.extended_typing import (
+from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import type_definitions as type_def
+from gt4py.eve import type_validation as type_val
+from gt4py.eve.extended_typing import (
     Any,
     Dict,
     Final,

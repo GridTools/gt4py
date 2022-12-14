@@ -14,10 +14,10 @@
 
 from typing import Any, List, Optional, Tuple, Union
 
-import eve
-from eve import datamodels
-from gtc import common
-from gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
+from gt4py.eve import datamodels
 
 
 @eve.utils.noninstantiable

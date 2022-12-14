@@ -26,14 +26,14 @@ from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tup
 
 import numpy as np
 
-from gt4py import definitions as gt_definitions
-from gt4py import gtscript
-from gt4py import utils as gt_utils
-from gt4py.frontend import node_util, nodes
-from gt4py.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
-from gt4py.utils import NOTHING
-from gt4py.utils import meta as gt_meta
-from gtc import utils as gtc_utils
+from gt4py.cartesian import definitions as gt_definitions
+from gt4py.cartesian import gtscript
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.frontend import node_util, nodes
+from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
+from gt4py.cartesian.gtc import utils as gtc_utils
+from gt4py.cartesian.utils import NOTHING
+from gt4py.cartesian.utils import meta as gt_meta
 
 from .base import Frontend, register
 from .exceptions import (

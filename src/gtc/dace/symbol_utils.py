@@ -4,12 +4,12 @@ from typing import TYPE_CHECKING
 import dace
 import numpy as np
 
-import eve
-from gtc import common
+from gt4py import eve
+from gt4py.cartesian.gtc import common
 
 
 if TYPE_CHECKING:
-    import gtc.daceir as dcir
+    import gt4py.cartesian.gtc.daceir as dcir
 
 
 def data_type_to_dace_typeclass(data_type):
@@ -18,7 +18,7 @@ def data_type_to_dace_typeclass(data_type):
 
 
 def get_axis_bound_str(axis_bound, var_name):
-    from gtc.common import LevelMarker
+    from gt4py.cartesian.gtc.common import LevelMarker
 
     if axis_bound is None:
         return ""
@@ -29,7 +29,7 @@ def get_axis_bound_str(axis_bound, var_name):
 
 
 def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
-    from gtc.common import LevelMarker
+    from gt4py.cartesian.gtc.common import LevelMarker
 
     if axis_bound is None:
         return

@@ -1,4 +1,4 @@
-from gt4py import definitions as gt_definitions
+from gt4py.cartesian import definitions as gt_definitions
 
 from . import gtscript_frontend
 

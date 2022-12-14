@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 import factory
 
-from gtc import common, gtir
+from gt4py.cartesian.gtc import common, gtir
 
 from .common_utils import (
     CartesianOffsetFactory,

@@ -14,8 +14,8 @@
 
 import pytest
 
-from gtc.common import ArithmeticOperator, ComparisonOperator, DataType
-from gtc.gtir import Decl, Expr, Stmt
+from gt4py.cartesian.gtc.common import ArithmeticOperator, ComparisonOperator, DataType
+from gt4py.cartesian.gtc.gtir import Decl, Expr, Stmt
 
 from .gtir_utils import (
     BinaryOpFactory,

@@ -16,9 +16,9 @@ from typing import Type
 
 import pytest
 
-from eve import Node
-from gtc import oir
-from gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.eve import Node
 
 from .gtir_utils import (
     FieldDeclFactory,

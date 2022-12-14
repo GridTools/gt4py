@@ -12,10 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc.common import HorizontalInterval, HorizontalMask, LevelMarker, LoopOrder
-from gtc.gtcpp import gtcpp
-from gtc.gtcpp.gtcpp_codegen import GTCppCodegen
-from gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
+from gt4py.cartesian.gtc.common import HorizontalInterval, HorizontalMask, LevelMarker, LoopOrder
+from gt4py.cartesian.gtc.gtcpp import gtcpp
+from gt4py.cartesian.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
+from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 
 from .oir_utils import (
     AssignStmtFactory,

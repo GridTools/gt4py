@@ -21,19 +21,19 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
 import jinja2
 import numpy
 
-from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo, StencilID
-from gtc import gtir, gtir_to_oir
-from gtc.definitions import Boundary
-from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_access_kinds import compute_access_kinds
-from gtc.passes.oir_optimizations.utils import compute_fields_extents
-from gtc.utils import dimension_flags_to_names
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo, StencilID
+from gt4py.cartesian.gtc import gtir, gtir_to_oir
+from gt4py.cartesian.gtc.definitions import Boundary
+from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
+from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.gtc.passes.oir_access_kinds import compute_access_kinds
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
+from gt4py.cartesian.gtc.utils import dimension_flags_to_names
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 @dataclass
@@ -200,7 +200,7 @@ class BaseModuleGenerator(abc.ABC):
 
     def generate_imports(self) -> str:
         """Generate import statements and related code for the stencil class module."""
-        return "from gt4py.stencil_object import StencilObject"
+        return "from gt4py.cartesian.stencil_object import StencilObject"
 
     def generate_class_name(self) -> str:
         """

@@ -19,9 +19,9 @@ from typing import Iterator, Optional, Set
 import numpy as np
 import pytest
 
-from gtc import common
-from gtc.numpy import npir
-from gtc.numpy.npir_codegen import NpirCodegen
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
 
 from .npir_utils import (
     ComputationFactory,

@@ -17,10 +17,11 @@
 import pytest
 
 import gt4py
-from gt4py.frontend.gtscript_frontend import GTScriptDefinitionError
-from gt4py.gtscript import PARALLEL, Field, computation, interval
-from gt4py.lazy_stencil import LazyStencil
-from gt4py.stencil_builder import StencilBuilder
+from gt4py import cartesian as gt4pyc
+from gt4py.cartesian.frontend.gtscript_frontend import GTScriptDefinitionError
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
+from gt4py.cartesian.lazy_stencil import LazyStencil
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 from ..definitions import ALL_BACKENDS
 
@@ -41,7 +42,7 @@ def wrong_syntax_stencil_definition(out_f: Field[float], in_f: Field[float]):  #
 
 @pytest.fixture(params=["gtscript"])
 def frontend(request):
-    yield gt4py.frontend.from_name(request.param)
+    yield gt4pyc.frontend.from_name(request.param)
 
 
 @pytest.fixture(params=ALL_BACKENDS)
@@ -51,7 +52,7 @@ def backend_name(request):
 
 @pytest.fixture
 def backend(backend_name):
-    yield gt4py.backend.from_name(backend_name)
+    yield gt4pyc.backend.from_name(backend_name)
 
 
 def test_lazy_stencil():

@@ -15,8 +15,8 @@
 import collections
 from typing import Any, Callable, Dict, Set, Union
 
-import eve
-from gtc import oir
+from gt4py import eve
+from gt4py.cartesian.gtc import oir
 
 from .utils import AccessCollector, collect_symbol_names, symbol_name_creator
 

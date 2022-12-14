@@ -16,9 +16,9 @@ from typing import Any, Callable, Set
 
 import factory
 
-import eve
-from eve import datamodels
-from gtc import common
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.eve import datamodels
 
 
 def undefined_symbol_list(

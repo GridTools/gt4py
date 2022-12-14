@@ -14,11 +14,11 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import eve
-from gtc import common, oir, utils
-from gtc.definitions import Extent
-from gtc.passes.horizontal_masks import compute_relative_mask
-from gtc.passes.oir_optimizations.utils import compute_extents
+from gt4py import eve
+from gt4py.cartesian.gtc import common, oir, utils
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.passes.horizontal_masks import compute_relative_mask
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_extents
 
 from . import npir
 

@@ -19,14 +19,17 @@ import dace
 import dace.properties
 import dace.subsets
 
-import eve
-import gtc.oir as oir
-from gtc import daceir as dcir
-from gtc.dace.nodes import StencilComputation
-from gtc.dace.symbol_utils import data_type_to_dace_typeclass
-from gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
-from gtc.definitions import Extent
-from gtc.passes.oir_optimizations.utils import AccessCollector, compute_horizontal_block_extents
+import gt4py.cartesian.gtc.oir as oir
+from gt4py import eve
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc.dace.nodes import StencilComputation
+from gt4py.cartesian.gtc.dace.symbol_utils import data_type_to_dace_typeclass
+from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos, make_dace_subset
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
+    AccessCollector,
+    compute_horizontal_block_extents,
+)
 
 
 class OirSDFGBuilder(eve.NodeVisitor):

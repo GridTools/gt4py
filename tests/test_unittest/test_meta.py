@@ -14,8 +14,8 @@
 
 import ast
 
-import gt4py.utils as gt_util
-from gt4py.frontend.gtscript_frontend import PYTHON_AST_VERSION
+import gt4py.cartesian.utils as gt_util
+from gt4py.cartesian.frontend.gtscript_frontend import PYTHON_AST_VERSION
 
 
 class TestGetQualifiedName:

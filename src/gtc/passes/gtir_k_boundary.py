@@ -16,9 +16,9 @@ import math
 import typing
 from typing import Any, Dict, Tuple, Union
 
-import eve
-from gtc import gtir
-from gtc.common import LevelMarker
+from gt4py import eve
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.common import LevelMarker
 
 
 def _iter_field_names(

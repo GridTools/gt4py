@@ -24,9 +24,9 @@ try:
 except ImportError:
     cp = None
 
-import gt4py.backend as gt_backend
-import gt4py.storage
-from gt4py import gtscript
+import gt4py.cartesian.backend as gt_backend
+from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import gtscript
 from gt4py.storage.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 from ..definitions import CPU_BACKENDS, GPU_BACKENDS

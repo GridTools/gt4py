@@ -18,7 +18,7 @@ import types
 
 import numpy as np
 
-import gt4py.utils as gt_utils
+import gt4py.cartesian.utils as gt_utils
 
 
 def copy_func(f, name=None):

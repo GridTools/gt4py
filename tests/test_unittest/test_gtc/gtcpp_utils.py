@@ -16,8 +16,8 @@ from typing import List
 
 import factory
 
-from gtc import common
-from gtc.gtcpp import gtcpp
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.gtcpp import gtcpp
 
 from .common_utils import CartesianOffsetFactory, identifier, undefined_symbol_list
 

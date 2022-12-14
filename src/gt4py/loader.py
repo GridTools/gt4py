@@ -21,15 +21,15 @@ a high-level stencil function definition using a specific code generating backen
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
 
-from gt4py import backend as gt_backend
-from gt4py import frontend as gt_frontend
-from gt4py.stencil_builder import StencilBuilder
-from gt4py.type_hints import StencilFunc
+from gt4py.cartesian import backend as gt_backend
+from gt4py.cartesian import frontend as gt_frontend
+from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.type_hints import StencilFunc
 
 
 if TYPE_CHECKING:
-    from gt4py.definitions import BuildOptions
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.definitions import BuildOptions
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 def load_stencil(

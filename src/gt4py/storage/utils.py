@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Uni
 
 import numpy as np
 
-import gt4py.utils as gt_util
+import gt4py.cartesian.utils as gt_util
 
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
@@ -70,7 +70,7 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-    from gt4py.gtscript import Axis  # prevent circular import
+    from gt4py.cartesian.gtscript import Axis  # prevent circular import
 
     if dimensions is None:
         dimensions = (

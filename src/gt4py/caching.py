@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from cached_property import cached_property
 
-from gt4py import config as gt_config
-from gt4py import utils as gt_utils
-from gt4py.definitions import StencilID
+from gt4py.cartesian import config as gt_config
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.definitions import StencilID
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_builder import StencilBuilder
+    from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 class CachingStrategy(abc.ABC):

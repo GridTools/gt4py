@@ -18,10 +18,10 @@ from typing import Any, Dict, List, Set, Union, cast
 
 from typing_extensions import Protocol
 
-import eve
-from gtc import common, oir
-from gtc.cuir import cuir
-from gtc.passes.oir_optimizations.utils import (
+from gt4py import eve
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.cuir import cuir
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
     collect_symbol_names,
     compute_horizontal_block_extents,
     symbol_name_creator,

@@ -15,10 +15,10 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Set, Union
 
-import eve
-from gtc import common, gtir, oir, utils
-from gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
-from gtc.passes.oir_optimizations.utils import compute_fields_extents
+from gt4py import eve
+from gt4py.cartesian.gtc import common, gtir, oir, utils
+from gt4py.cartesian.gtc.common import CartesianOffset, DataType, LogicalOperator, UnaryOperator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 
 
 def validate_stencil_memory_accesses(node: oir.Stencil) -> oir.Stencil:

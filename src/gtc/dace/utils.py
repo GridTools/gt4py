@@ -20,12 +20,12 @@ import dace
 import dace.data
 import numpy as np
 
-import eve
-from gtc import common
-from gtc import daceir as dcir
-from gtc import oir
-from gtc.common import CartesianOffset
-from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc import daceir as dcir
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.common import CartesianOffset
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 def array_dimensions(array: dace.data.Array):

@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.definitions import AccessKind
-from gtc.passes.oir_access_kinds import compute_access_kinds
+from gt4py.cartesian.definitions import AccessKind
+from gt4py.cartesian.gtc.passes.oir_access_kinds import compute_access_kinds
 
 from .oir_utils import AssignStmtFactory, StencilFactory
 

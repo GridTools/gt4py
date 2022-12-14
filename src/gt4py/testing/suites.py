@@ -22,17 +22,17 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py as gt
-import gt4py.backend
-import gtc.utils as gtc_utils
-from gt4py import gtscript
+import gt4py.cartesian.gtc.utils as gtc_utils
+from gt4py import cartesian as gt
+from gt4py import cartesian as gt4pyc
 from gt4py import storage as gt_storage
-from gt4py import utils as gt_utils
-from gt4py.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
-from gt4py.frontend.nodes import Index
-from gt4py.stencil_object import StencilObject
+from gt4py.cartesian import gtscript
+from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
+from gt4py.cartesian.frontend.nodes import Index
+from gt4py.cartesian.gtc.definitions import Shape
+from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.storage import utils as storage_utils
-from gtc.definitions import Shape
 
 from .input_strategies import (
     SymbolKind,
@@ -210,7 +210,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -239,7 +239,7 @@ class SuiteMeta(type):
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
                 marks = test["marks"]
-                if gt4py.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
                     marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
@@ -333,7 +333,7 @@ class SuiteMeta(type):
         cls_dict["backends"] = [
             backend
             for backend in cls_dict["backends"]
-            if gt4py.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            if gt4pyc.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
             is not None
         ]
 

@@ -19,13 +19,13 @@ from typing import Callable, List, Tuple, TypedDict
 import numpy as np
 import pytest
 
-import gt4py.storage
-from gt4py import gtscript as gs
-from gt4py.backend import from_name
-from gt4py.gtscript import PARALLEL, computation, interval, stencil
-from gt4py.stencil_builder import StencilBuilder
-from gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
-from gtc.passes.gtir_pipeline import prune_unused_parameters
+from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import gtscript as gs
+from gt4py.cartesian.backend import from_name
+from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary, compute_min_k_size
+from gt4py.cartesian.gtc.passes.gtir_pipeline import prune_unused_parameters
+from gt4py.cartesian.gtscript import PARALLEL, computation, interval, stencil
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 class TestData(TypedDict):

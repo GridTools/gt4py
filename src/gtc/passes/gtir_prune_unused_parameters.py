@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gtc import gtir
+from gt4py.cartesian.gtc import gtir
 
 
 def prune_unused_parameters(node: gtir.Stencil) -> gtir.Stencil:

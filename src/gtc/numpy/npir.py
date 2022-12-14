@@ -14,10 +14,10 @@
 
 from typing import List, Optional, Tuple, Union
 
-import eve
-from eve import datamodels
-from gtc import common
-from gtc.definitions import Extent
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.eve import datamodels
 
 
 # --- Misc ---

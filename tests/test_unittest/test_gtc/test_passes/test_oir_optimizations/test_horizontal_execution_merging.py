@@ -14,9 +14,9 @@
 
 import time
 
-from gtc import common, oir
-from gtc.definitions import Extent
-from gtc.passes.oir_optimizations.horizontal_execution_merging import (
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging import (
     HorizontalExecutionMerging,
     OnTheFlyMerging,
     compute_horizontal_block_extents,

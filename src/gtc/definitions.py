@@ -19,7 +19,7 @@ import enum
 import numbers
 import operator
 
-from gtc.utils import filter_mask, interpolate_mask
+from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 
 
 class CartesianSpace:

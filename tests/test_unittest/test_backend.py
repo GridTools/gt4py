@@ -17,13 +17,13 @@ from typing import Any, Dict, cast
 import numpy as np
 import pytest
 
-from gt4py.backend import REGISTRY as backend_registry
-from gt4py.backend.module_generator import make_args_data_from_gtir
-from gt4py.definitions import AccessKind
-from gt4py.gtscript import __INLINED, PARALLEL, Field, computation, interval
-from gt4py.stencil_builder import StencilBuilder
-from gt4py.type_hints import StencilFunc
-from gtc import gtir, utils
+from gt4py.cartesian.backend import REGISTRY as backend_registry
+from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
+from gt4py.cartesian.definitions import AccessKind
+from gt4py.cartesian.gtc import gtir, utils
+from gt4py.cartesian.gtscript import __INLINED, PARALLEL, Field, computation, interval
+from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.type_hints import StencilFunc
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
 

@@ -19,18 +19,18 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple, U
 import dace
 import sympy
 
-import eve
-import gtc
-import gtc.definitions
-from eve import datamodels
-from gtc import common, oir
-from gtc.common import LocNode
-from gtc.dace.symbol_utils import (
+import gt4py.cartesian.gtc.definitions
+from gt4py import eve
+from gt4py.cartesian import gtc
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.common import LocNode
+from gt4py.cartesian.gtc.dace.symbol_utils import (
     get_axis_bound_dace_symbol,
     get_axis_bound_diff_str,
     get_axis_bound_str,
     get_dace_symbol,
 )
+from gt4py.eve import datamodels
 
 
 @eve.utils.noninstantiable
@@ -444,7 +444,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=intervals)
 
     @classmethod
-    def from_gt4py_extent(cls, extent: gtc.definitions.Extent):
+    def from_gt4py_extent(cls, extent: gt4py.cartesian.gtc.definitions.Extent):
         i_interval = DomainInterval(
             start=AxisBound(level=common.LevelMarker.START, offset=extent[0][0], axis=Axis.I),
             end=AxisBound(level=common.LevelMarker.END, offset=extent[0][1], axis=Axis.I),

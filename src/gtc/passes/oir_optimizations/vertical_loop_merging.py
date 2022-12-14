@@ -15,8 +15,8 @@
 import warnings
 from typing import Any
 
-from eve import NodeTranslator
-from gtc import common, oir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.eve import NodeTranslator
 
 
 class AdjacentLoopMerging(NodeTranslator):

@@ -15,8 +15,8 @@
 import warnings
 from typing import List, Set
 
-from eve import NodeVisitor
-from gtc import gtir
+from gt4py.cartesian.gtc import gtir
+from gt4py.eve import NodeVisitor
 
 
 class DefinitiveAssignmentAnalysis(NodeVisitor):

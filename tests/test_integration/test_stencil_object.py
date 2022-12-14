@@ -19,9 +19,9 @@ from typing import Any, Dict
 
 import pytest
 
-from gt4py import gtscript
 from gt4py import storage as gt_storage
-from gt4py.gtscript import PARALLEL, Field, computation, interval
+from gt4py.cartesian import gtscript
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 
 from ..definitions import ALL_BACKENDS
 from ..storage_test_utils import OriginWrapper

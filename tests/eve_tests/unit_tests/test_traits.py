@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-import eve
-from eve.extended_typing import Any, ClassVar, List
+from gt4py import eve
+from gt4py.eve.extended_typing import Any, ClassVar, List
 
 from .. import definitions
 

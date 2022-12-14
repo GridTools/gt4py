@@ -15,10 +15,14 @@
 import numpy as np
 import pytest
 
-from gt4py.backend.module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
-from gt4py.definitions import AccessKind, Boundary, FieldInfo, ParameterInfo
-from gt4py.gtscript import PARALLEL, Field, computation, interval
-from gt4py.stencil_builder import StencilBuilder
+from gt4py.cartesian.backend.module_generator import (
+    BaseModuleGenerator,
+    ModuleData,
+    make_args_data_from_gtir,
+)
+from gt4py.cartesian.definitions import AccessKind, Boundary, FieldInfo, ParameterInfo
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 class SampleModuleGenerator(BaseModuleGenerator):

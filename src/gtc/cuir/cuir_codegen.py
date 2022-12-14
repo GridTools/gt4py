@@ -18,13 +18,19 @@ from typing import Any, Collection, Dict, List, Set, Union
 
 import numpy as np
 
-import eve
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
-from eve.concepts import LeafNode
-from gtc.common import BuiltInLiteral, DataType, LevelMarker, NativeFunction, UnaryOperator
-from gtc.cuir import cuir
+from gt4py import eve
+from gt4py.cartesian.gtc.common import (
+    BuiltInLiteral,
+    DataType,
+    LevelMarker,
+    NativeFunction,
+    UnaryOperator,
+)
+from gt4py.cartesian.gtc.cuir import cuir
+from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve.concepts import LeafNode
 
 
 class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):

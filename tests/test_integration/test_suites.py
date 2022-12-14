@@ -16,9 +16,18 @@
 import numpy as np
 import pytest
 
-from gt4py import gtscript
-from gt4py import testing as gt_testing
-from gt4py.gtscript import PARALLEL, Field, I, J, computation, horizontal, interval, region
+from gt4py.cartesian import gtscript
+from gt4py.cartesian import testing as gt_testing
+from gt4py.cartesian.gtscript import (
+    PARALLEL,
+    Field,
+    I,
+    J,
+    computation,
+    horizontal,
+    interval,
+    region,
+)
 
 from ..definitions import ALL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields

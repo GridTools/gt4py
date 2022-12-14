@@ -25,7 +25,7 @@ import pybind11
 import setuptools
 from setuptools.command.build_ext import build_ext
 
-from gt4py import config as gt_config
+from gt4py.cartesian import config as gt_config
 
 
 def get_dace_module_path() -> Optional[str]:

@@ -17,10 +17,10 @@ from typing import Type
 
 import pytest
 
-from gtc import common, oir
-from gtc.definitions import Extent
-from gtc.numpy import npir
-from gtc.numpy.oir_to_npir import OirToNpir
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.numpy import npir
+from gt4py.cartesian.gtc.numpy.oir_to_npir import OirToNpir
 
 from .oir_utils import (
     AssignStmtFactory,

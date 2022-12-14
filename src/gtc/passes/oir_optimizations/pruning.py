@@ -14,11 +14,11 @@
 
 from typing import Any, Dict
 
-import eve
-from gtc import oir
-from gtc.definitions import Extent
-from gtc.passes.horizontal_masks import mask_overlap_with_extent
-from gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
+from gt4py import eve
+from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc.definitions import Extent
+from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
 
 class NoFieldAccessPruning(eve.NodeTranslator):

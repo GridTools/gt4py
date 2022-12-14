@@ -16,8 +16,8 @@ import collections
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
-import eve
-from gtc import common, oir
+from gt4py import eve
+from gt4py.cartesian.gtc import common, oir
 
 from .utils import AccessCollector, symbol_name_creator
 

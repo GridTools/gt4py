@@ -16,14 +16,20 @@ from typing import Any, Collection, Dict, Union
 
 import numpy as np
 
-import eve
-from eve import codegen
-from eve.codegen import FormatTemplate as as_fmt
-from eve.codegen import MakoTemplate as as_mako
-from eve.concepts import LeafNode
-from gtc import common
-from gtc.common import BuiltInLiteral, DataType, LoopOrder, NativeFunction, UnaryOperator
-from gtc.gtcpp import gtcpp
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import (
+    BuiltInLiteral,
+    DataType,
+    LoopOrder,
+    NativeFunction,
+    UnaryOperator,
+)
+from gt4py.cartesian.gtc.gtcpp import gtcpp
+from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve.concepts import LeafNode
 
 
 def _offset_limit(root: eve.Node) -> int:

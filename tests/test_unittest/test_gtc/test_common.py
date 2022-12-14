@@ -16,9 +16,9 @@ from typing import List, Optional, Tuple, Union
 
 import pytest
 
-import eve
-from gtc import common
-from gtc.common import (
+from gt4py import eve
+from gt4py.cartesian.gtc import common
+from gt4py.cartesian.gtc.common import (
     ArithmeticOperator,
     ComparisonOperator,
     DataType,

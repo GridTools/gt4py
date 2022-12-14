@@ -14,25 +14,29 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-from eve import codegen
-from gt4py.backend.base import CLIBackendMixin, register
-from gt4py.backend.gtc_common import BackendCodegen, bindings_main_template, pybuffer_to_sid
-from gt4py.utils.layout import layout_checker_factory
-from gtc import gtir
-from gtc.common import DataType
-from gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
-from gtc.cuir.oir_to_cuir import OIRToCUIR
-from gtc.gtir_to_oir import GTIRToOIR
-from gtc.passes.gtir_pipeline import GtirPipeline
-from gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
-from gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
-from gtc.passes.oir_pipeline import DefaultPipeline
+from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.gtc_common import (
+    BackendCodegen,
+    bindings_main_template,
+    pybuffer_to_sid,
+)
+from gt4py.cartesian.gtc import gtir
+from gt4py.cartesian.gtc.common import DataType
+from gt4py.cartesian.gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
+from gt4py.cartesian.gtc.cuir.oir_to_cuir import OIRToCUIR
+from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
+from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
+from gt4py.cartesian.gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
+from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
+from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
+from gt4py.cartesian.utils.layout import layout_checker_factory
+from gt4py.eve import codegen
 
 from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator, make_cuda_layout_map
 
 
 if TYPE_CHECKING:
-    from gt4py.stencil_object import StencilObject
+    from gt4py.cartesian.stencil_object import StencilObject
 
 
 class CudaExtGenerator(BackendCodegen):

@@ -15,8 +15,9 @@
 import pytest
 
 import gt4py
-from gt4py.gtscript import PARALLEL, Field, computation, interval
-from gt4py.stencil_builder import StencilBuilder
+from gt4py import cartesian as gt4pyc
+from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
+from gt4py.cartesian.stencil_builder import StencilBuilder
 
 
 # type ignores in stencils are because mypy does not yet
@@ -47,8 +48,8 @@ def builder():
         """Make a builder instance a definition and default params."""
         return StencilBuilder(
             definition,
-            backend=gt4py.backend.from_name(backend_name),
-            options=gt4py.definitions.BuildOptions(name="foo", module=module or f"{__name__}"),
+            backend=gt4pyc.backend.from_name(backend_name),
+            options=gt4pyc.definitions.BuildOptions(name="foo", module=module or f"{__name__}"),
         )
 
     return make_builder

@@ -15,8 +15,8 @@
 import copy as cp
 from typing import Any, Dict, Optional, Set, Type, Union, cast
 
-import eve
-from gtc import oir
+from gt4py import eve
+from gt4py.cartesian.gtc import oir
 
 
 class MaskCollector(eve.NodeVisitor):

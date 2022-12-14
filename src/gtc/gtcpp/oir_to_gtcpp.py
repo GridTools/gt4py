@@ -20,11 +20,14 @@ from typing import Any, Callable, Dict, List, Set, Union, cast
 from devtools import debug  # noqa: F401
 from typing_extensions import Protocol
 
-import eve
-from gtc import common, oir
-from gtc.common import CartesianOffset, ExprKind
-from gtc.gtcpp import gtcpp
-from gtc.passes.oir_optimizations.utils import collect_symbol_names, symbol_name_creator
+from gt4py import eve
+from gt4py.cartesian.gtc import common, oir
+from gt4py.cartesian.gtc.common import CartesianOffset, ExprKind
+from gt4py.cartesian.gtc.gtcpp import gtcpp
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
+    collect_symbol_names,
+    symbol_name_creator,
+)
 
 
 # - Each HorizontalExecution is a Functor (and a Stage)
