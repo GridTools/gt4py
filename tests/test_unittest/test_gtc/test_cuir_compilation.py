@@ -14,13 +14,10 @@
 
 from pathlib import Path
 
+import gridtools_cpp
 import pytest
 import setuptools
 
-from gt4py import (  # TODO(havogt) this is a dependency from gtc tests to gt4py, ok?
-    config,
-    gt_src_manager,
-)
 from gt4py.backend import pyext_builder
 from gtc.cuir import cuir
 from gtc.cuir.cuir_codegen import CUIRCodegen
@@ -29,17 +26,13 @@ from .cuir_utils import KernelFactory, ProgramFactory
 from .utils import match
 
 
-if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-    raise RuntimeError("Missing GridTools sources.")
-
-
 def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cu"
     tmp_src.write_text(code)
 
     opts = pyext_builder.get_gt_pyext_build_opts(uses_cuda=True)
     assert isinstance(opts["include_dirs"], list)
-    opts["include_dirs"].append(config.GT_INCLUDE_PATH)
+    opts["include_dirs"].append(gridtools_cpp.get_include_dir())
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],

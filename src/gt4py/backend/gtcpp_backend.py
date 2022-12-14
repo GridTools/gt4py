@@ -15,7 +15,6 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from eve import codegen
-from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import BackendCodegen, bindings_main_template, pybuffer_to_sid
 from gt4py.utils.layout import layout_checker_factory
@@ -145,10 +144,6 @@ class GTBaseBackend(BaseGTBackend, CLIBackendMixin):
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
-
-        # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-            raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]
         pyext_file_path: Optional[str]

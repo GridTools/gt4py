@@ -40,12 +40,6 @@ Or
     pip install git+https://github.com/gridtools/gt4py.git
     # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda101]
 
-Finally, the last step to install the required GridTools C++ sources:
-
-.. code:: bash
-
-    python -m gt4py.gt_src_manager install
-
 
 ------------
 Introduction

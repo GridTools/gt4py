@@ -26,7 +26,6 @@ from dace.serialize import dumps
 
 from eve import codegen
 from eve.codegen import MakoTemplate as as_mako
-from gt4py import gt_src_manager
 from gt4py.backend.base import CLIBackendMixin, register
 from gt4py.backend.gtc_common import (
     BackendCodegen,
@@ -769,10 +768,6 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
     def generate(self) -> Type["StencilObject"]:
         self.check_options(self.builder.options)
-
-        # Generate the Python binary extension (checking if GridTools sources are installed)
-        if not gt_src_manager.has_gt_sources() and not gt_src_manager.install_gt_sources():
-            raise RuntimeError("Missing GridTools sources.")
 
         pyext_module_name: Optional[str]
         pyext_file_path: Optional[str]
