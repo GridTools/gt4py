@@ -14,4 +14,13 @@
 
 """Python API to develop performance portable applications for weather and climate."""
 
-from .__about__ import __version__, __version_info__
+import typing
+from packaging import version as pkg_version
+
+
+__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
+__license__: typing.Final = "GPLv3+"
+
+
+__version__: typing.Final = "0.1.1"
+__version_info__: typing.Final = pkg_version.parse(__version__)

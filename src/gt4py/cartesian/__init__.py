@@ -14,4 +14,14 @@
 
 """Python API to develop performance portable applications for weather and climate."""
 
-from .__about__ import __version__, __version_info__
+import typing
+
+
+__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
+__license__: typing.Final = "GPLv3+"
+
+from .version import __version__, __version_info__  # isort:skip
+
+
+from . import config, gtscript, storage
+from .stencil_object import StencilObject
