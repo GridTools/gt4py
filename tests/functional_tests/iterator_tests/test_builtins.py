@@ -97,13 +97,13 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
-def fencil_cast(builtin, out, *inps, processor, as_column=False):
+def fencil_cast(out, *inps, processor, as_column=False):
     column_axis = IDim if as_column else None
     arg1 = inps[1][0]
 
     @fundef
     def sten_cast(arg0):
-        return builtin(deref(arg0), arg1)
+        return cast_(deref(arg0), arg1)
 
     @fendef(offset_provider={}, column_axis=column_axis)
     def fenimpl_cast(size, arg0, out):
@@ -166,7 +166,6 @@ def test_cast(program_processor, as_column):
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
     fencil_cast(
-        getattr(it_builtins, "cast_"),
         out,
         *inps,
         processor=program_processor,
