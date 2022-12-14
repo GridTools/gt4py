@@ -223,7 +223,8 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
-    
+
+
 def test_astype(fieldview_backend):
     size = 10
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
@@ -257,6 +258,7 @@ def test_astype(fieldview_backend):
 
     astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
     assert np.allclose(c_int32.array(), out_int_32)
+
 
 def test_nested_tuple_return():
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
