@@ -55,7 +55,7 @@ def debug_itir(tree):
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
 
-from .test_ffront_utils import *
+from .ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):

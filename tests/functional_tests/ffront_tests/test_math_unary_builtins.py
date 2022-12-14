@@ -37,7 +37,7 @@ from functional.ffront.fbuiltins import (
     trunc,
 )
 
-from .test_ffront_utils import *
+from .ffront_test_utils import *
 
 
 # Math builtins
