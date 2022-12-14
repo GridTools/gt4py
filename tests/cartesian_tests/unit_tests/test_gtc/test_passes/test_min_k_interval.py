@@ -19,6 +19,7 @@ from typing import Callable, List, Tuple, TypedDict
 import numpy as np
 import pytest
 
+import gt4py.storage
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian import gtscript as gs
 from gt4py.cartesian.backend import from_name

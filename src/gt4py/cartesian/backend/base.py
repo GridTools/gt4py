@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol,
 
 from gt4py.cartesian import definitions as gt_definitions
 from gt4py.cartesian import utils as gt_utils
-
 from gt4py.storage import storage as gt_storage
 
 from . import pyext_builder

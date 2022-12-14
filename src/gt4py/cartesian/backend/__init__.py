@@ -30,6 +30,7 @@ except ImportError:
     pass
 
 from .cuda_backend import CudaBackend  # noqa: F401
-from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend  # noqa: F401
+from .gtcpp_backend import GTCpuIfirstBackend  # noqa: F401
+from .gtcpp_backend import GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend  # noqa: F401

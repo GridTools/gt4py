@@ -15,6 +15,7 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
+import gt4py.cartesian.caching
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import BuildOptions, StencilID
 from gt4py.cartesian.gtc import gtir

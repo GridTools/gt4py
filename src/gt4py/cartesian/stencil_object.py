@@ -25,6 +25,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
 import numpy as np
 
 import gt4py.cartesian.gtc.utils as gtc_utils
+import gt4py.storage.utils as storage_utils
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gt4py.cartesian.gtc.definitions import Index, Shape
@@ -46,7 +47,7 @@ def _compute_cache_key(
     origin: Optional[OriginType],
     device: str,
 ) -> int:
-    asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
+    asarray = storage_utils.as_cupy if device == "gpu" else storage_utils.as_numpy
     field_data = tuple(
         (name, asarray(arg).shape, getattr(arg, "__gt_origin__", (0, 0, 0)))
         for name, arg in field_args.items()
@@ -67,14 +68,14 @@ class ArgsInfo:
 def _extract_array_infos(
     field_args: Dict[str, Optional[FieldType]], device: str
 ) -> Dict[str, Optional[ArgsInfo]]:
-    asarray = gt4py.storage.utils.as_cupy if device == "gpu" else gt4py.storage.utils.as_numpy
+    asarray = storage_utils.as_cupy if device == "gpu" else storage_utils.as_numpy
     array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
         else:
             array = asarray(arg)
-            dimensions = gt4py.storage.utils.get_dims(arg)
+            dimensions = storage_utils.get_dims(arg)
             if dimensions is not None:
                 sorted_dimensions = [d for d in "IJK" if d in dimensions]
                 data_dims = [int(d) for d in dimensions if str(d).isdigit()]
@@ -87,7 +88,7 @@ def _extract_array_infos(
                 original_object=arg,
                 dimensions=dimensions,
                 device=device,
-                origin=gt4py.storage.utils.get_origin(arg),
+                origin=storage_utils.get_origin(arg),
             )
     return array_infos
 

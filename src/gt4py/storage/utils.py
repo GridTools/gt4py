@@ -80,7 +80,7 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     if aligned_index is None:
         aligned_index = [0] * len(shape)
 
-    dimensions = (getattr(d, "__gt_axis_name__", d) for d in dimensions)
+    dimensions = tuple(getattr(d, "__gt_axis_name__", d) for d in dimensions)
     if not all(isinstance(d, str) and (d.isdigit() or d in "IJK") for d in dimensions):
         raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
     else:

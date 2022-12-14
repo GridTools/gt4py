@@ -41,6 +41,7 @@ dependencies = [
   "black>=22.3",
   "cached-property>=1.5",
   "click>=7.1",
+  "gridtools-cpp>=2.2.2,==2.*",
   "jinja2>=2.10",
   "numpy>=1.15",
   "scipy>=1.4",
