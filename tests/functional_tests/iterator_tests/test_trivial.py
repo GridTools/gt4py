@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension, DimensionKind
+from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
@@ -59,6 +60,44 @@ def test_trivial(program_processor, lift_mode):
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)
+
+
+@fundef
+def stencil_shifted_arg_to_lift(inp):
+    return deref(lift(deref)(shift(I, -1)(inp)))
+
+
+def test_shifted_arg_to_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
+
+    if program_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
+    if lift_mode != transforms.LiftMode.FORCE_INLINE:
+        pytest.xfail("shifted input arguments not supported for lift_moe != LiftMode.FORCE_INLINE")
+
+    rng = np.random.default_rng()
+    inp = rng.uniform(size=(5, 7))
+    out = np.zeros_like(inp)
+    out[1:, :] = inp[:-1, :]
+    shape = (out.shape[0], out.shape[1])
+
+    inp_s = np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :])
+    out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :]))
+
+    run_processor(
+        stencil_shifted_arg_to_lift[
+            cartesian_domain(named_range(IDim, 1, shape[0]), named_range(JDim, 0, shape[1]))
+        ],
+        program_processor,
+        inp_s,
+        out=out_s,
+        lift_mode=lift_mode,
+        offset_provider={"I": IDim, "J": JDim},
+    )
+
+    if validate:
+        assert np.allclose(out, out_s)
 
 
 @fendef
