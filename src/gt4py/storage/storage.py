@@ -52,10 +52,11 @@ def from_name(name: str) -> Optional[StorageInfo]:
 
 
 def register(name: str, info: StorageInfo) -> None:
-    assert isinstance(name, str)
-    assert isinstance(info, dict)
+    if info is not None:
+        assert isinstance(name, str)
+        assert isinstance(info, dict) or None
 
-    REGISTRY[name] = info
+        REGISTRY[name] = info
 
 
 def _error_on_invalid_backend(backend):

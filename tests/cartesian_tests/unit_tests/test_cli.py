@@ -74,6 +74,7 @@ class NonCliBackend(backend.Backend):
     """This represents a non-CLI-enabled backend."""
 
     name = "nocli"
+    storage_info = None
 
     def generate(*args, **kwargs):
         pass
