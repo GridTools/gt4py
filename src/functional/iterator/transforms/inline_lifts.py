@@ -109,10 +109,14 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ):
         symtable = kwargs["symtable"]
 
-        node = ir.FunCall(
-            fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **kwargs),
-            args=self.generic_visit(node.args, **kwargs)
-        ) if recurse else node
+        node = (
+            ir.FunCall(
+                fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **kwargs),
+                args=self.generic_visit(node.args, **kwargs),
+            )
+            if recurse
+            else node
+        )
 
         if _is_shift_lift(node):
             # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
