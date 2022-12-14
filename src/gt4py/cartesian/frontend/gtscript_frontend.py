@@ -1765,9 +1765,9 @@ class GTScriptParser(ast.NodeVisitor):
             else:
                 for prefix in [
                     "__externals__.",
-                    "gt4py.__externals__.",
+                    "gt4py.cartesian.__externals__.",
                     "__gtscript__.",
-                    "gt4py.__gtscript__.",
+                    "gt4py.cartesian.__gtscript__.",
                 ]:
                     if key.startswith(prefix):
                         if "__externals__" in key:
