@@ -727,8 +727,10 @@ def test_astype(fieldview_backend):
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
     c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
+    c_int32 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int32))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     out_int_64 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
+    out_int_32 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int32))
 
     @field_operator(backend=fieldview_backend)
     def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int64]:
@@ -745,6 +747,14 @@ def test_astype(fieldview_backend):
 
     astype_fieldop_bool(b_float_64, out=out_bool, offset_provider={})
     assert np.allclose(c_bool, out_bool)
+
+    @field_operator(backend=fieldview_backend)
+    def astype_fieldop_float(b: Field[[IDim], int64]) -> Field[[IDim], int32]:
+        d = astype(b, int32)
+        return d
+
+    astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
+    assert np.allclose(c_int32.array(), out_int_32)
 
 
 def test_conditional_promotion(fieldview_backend):
