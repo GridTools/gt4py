@@ -1,6 +1,12 @@
 include:
 - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml'
 
+.py310: &py310
+  PYVERSION_PREFIX: py310
+  PYVERSION: 3.10.9
+  CSCS_REGISTRY_NEW: jfrog.svc.cscs.ch
+  IMAGE_NAME: contbuild/cscs-ci/gridtools/gt4py
+
 .py39: &py39
   PYVERSION_PREFIX: py39
   PYVERSION: 3.9.1
@@ -53,6 +59,12 @@ build py39:
   variables:
     <<: *py39
 
+build py310:
+  allow_failure: true
+  extends: build py38
+  variables:
+    <<: *py39
+
 test py38:
   extends: .daint
   only:
@@ -80,6 +92,12 @@ test py39:
   needs: ["build py39"]
   variables:
     <<: *py39
+
+test py310:
+  extends: test py38
+  needs: ["build py310"]
+  variables:
+    <<: *py310
 
 notify_github_success:
   stage: cleanup
