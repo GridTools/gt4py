@@ -29,10 +29,10 @@ from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
-from gt4py.cartesian.utils.layout import layout_checker_factory
+from gt4py import storage as gt_storage
 from gt4py.eve import codegen
 
-from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator, make_cuda_layout_map
+from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -138,12 +138,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     name = "cuda"
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
     languages = {"computation": "cuda", "bindings": ["python"]}
-    storage_info = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": make_cuda_layout_map,
-        "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
-    }
+    storage_info = gt_storage.layout.CUDALayout
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"

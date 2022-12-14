@@ -443,25 +443,3 @@ def collect_toplevel_iteration_nodes(
     collection: List[dcir.IterationNode] = []
     IterationNodeCollector().visit(list_or_node, collection=collection)
     return collection
-
-
-def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
-    def layout_maker(dimensions: List[bool]) -> Tuple[int, ...]:
-        mask = [dim in dimensions for dim in "IJK"]
-        mask += [True] * (len(dimensions) - sum(mask))
-        ranks = []
-        for m, l in zip(mask, base_layout):
-            if m:
-                ranks.append(l)
-        if len(mask) > 3:
-            if base_layout[2] == 2:
-                ranks.extend(3 + c for c in range(len(mask) - 3))
-            else:
-                ranks.extend(-c for c in range(len(mask) - 3))
-
-        res_layout = [0] * len(ranks)
-        for i, idx in enumerate(np.argsort(ranks)):
-            res_layout[idx] = i
-        return tuple(res_layout)
-
-    return layout_maker

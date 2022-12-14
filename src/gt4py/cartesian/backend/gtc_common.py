@@ -359,39 +359,3 @@ class CUDAPyExtModuleGenerator(PyExtModuleGenerator):
             + super().generate_imports()
         )
         return source
-
-
-def _permute_layout_to_dimensions(
-    layout: Sequence[int], dimensions: Tuple[str, ...]
-) -> Tuple[int, ...]:
-    data_dims = [int(d) for d in dimensions if d.isdigit()]
-    canonical_dimensions = [d for d in "IJK" if d in dimensions] + [
-        str(d) for d in sorted(data_dims)
-    ]
-    res_layout = []
-    for d in dimensions:
-        res_layout.append(layout[canonical_dimensions.index(d)])
-    return tuple(res_layout)
-
-
-def make_gtcpu_kfirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
-    layout = [i for i in range(len(dimensions))]
-    naxes = sum(dim in dimensions for dim in "IJK")
-    layout = [*layout[-naxes:], *layout[:-naxes]]
-    return _permute_layout_to_dimensions([lt for lt in layout if lt is not None], dimensions)
-
-
-def make_gtcpu_ifirst_layout_map(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
-    ctr = reversed(range(len(dimensions)))
-    layout = [next(ctr) for dim in "IJK" if dim in dimensions] + list(ctr)
-    if "K" in dimensions and "J" in dimensions:
-        if "I" in dimensions:
-            layout = [layout[0], layout[2], layout[1], *layout[3:]]
-        else:
-            layout = [layout[1], layout[0], *layout[2:]]
-    return _permute_layout_to_dimensions(layout, dimensions)
-
-
-def make_cuda_layout_map(dimensions: Tuple[str, ...]) -> Tuple[Optional[int], ...]:
-    layout = tuple(reversed(range(len(dimensions))))
-    return _permute_layout_to_dimensions(layout, dimensions)

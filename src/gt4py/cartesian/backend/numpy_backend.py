@@ -29,6 +29,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
 )
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
 from gt4py.eve.codegen import format_source
+from gt4py import storage as gt_storage
 
 
 if TYPE_CHECKING:
@@ -79,12 +80,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         # TODO: Implement this option in source code
         "ignore_np_errstate": {"versioning": True, "type": bool},
     }
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": lambda axes: tuple(i for i in range(len(axes))),
-        "is_optimal_layout": lambda *_: True,
-    }
+    storage_info = gt_storage.layout.NaiveCPULayout
     languages = {"computation": "python", "bindings": ["python"]}
     MODULE_GENERATOR_CLASS = ModuleGenerator
 

@@ -42,7 +42,7 @@ from gt4py.cartesian.gtc.dace.transformations import (
     NoEmptyEdgeTrivialMapElimination,
     nest_sequential_map_scopes,
 )
-from gt4py.cartesian.gtc.dace.utils import array_dimensions, layout_maker_factory, replace_strides
+from gt4py.cartesian.gtc.dace.utils import array_dimensions, replace_strides
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_k_boundary import compute_k_boundary
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
@@ -50,9 +50,9 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.inlining import MaskInlining
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
-from gt4py.cartesian.utils.layout import layout_checker_factory
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py import storage as gt_storage
 
 
 if TYPE_CHECKING:
@@ -790,8 +790,10 @@ class DaceCPUBackend(BaseDaceBackend):
     storage_info = {
         "alignment": 1,
         "device": "cpu",
-        "layout_map": layout_maker_factory((0, 1, 2)),
-        "is_optimal_layout": layout_checker_factory(layout_maker_factory((0, 1, 2))),
+        "layout_map": gt_storage.layout.layout_maker_factory((0, 1, 2)),
+        "is_optimal_layout": gt_storage.layout.layout_checker_factory(
+            gt_storage.layout.layout_maker_factory((0, 1, 2))
+        ),
     }
     MODULE_GENERATOR_CLASS = DaCePyExtModuleGenerator
 
@@ -810,8 +812,10 @@ class DaceGPUBackend(BaseDaceBackend):
     storage_info = {
         "alignment": 32,
         "device": "gpu",
-        "layout_map": layout_maker_factory((2, 1, 0)),
-        "is_optimal_layout": layout_checker_factory(layout_maker_factory((2, 1, 0))),
+        "layout_map": gt_storage.layout.layout_maker_factory((2, 1, 0)),
+        "is_optimal_layout": gt_storage.layout.layout_checker_factory(
+            gt_storage.layout.layout_maker_factory((2, 1, 0))
+        ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
     options = {

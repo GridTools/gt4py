@@ -27,16 +27,10 @@ from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
-from gt4py.cartesian.utils.layout import layout_checker_factory
 from gt4py.eve import codegen
+from gt4py import storage as gt_storage
 
-from .gtc_common import (
-    BaseGTBackend,
-    CUDAPyExtModuleGenerator,
-    make_cuda_layout_map,
-    make_gtcpu_ifirst_layout_map,
-    make_gtcpu_kfirst_layout_map,
-)
+from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator
 
 
 if TYPE_CHECKING:
@@ -169,12 +163,7 @@ class GTCpuIfirstBackend(GTBaseBackend):
     name = "gt:cpu_ifirst"
     GT_BACKEND_T = "cpu_ifirst"
     languages = {"computation": "c++", "bindings": ["python"]}
-    storage_info = {
-        "alignment": 8,
-        "device": "cpu",
-        "layout_map": make_gtcpu_ifirst_layout_map,
-        "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
-    }
+    storage_info = gt_storage.layout.CPUIFirstLayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return super()._generate_extension(uses_cuda=False)
@@ -187,12 +176,7 @@ class GTCpuKfirstBackend(GTBaseBackend):
     name = "gt:cpu_kfirst"
     GT_BACKEND_T = "cpu_kfirst"
     languages = {"computation": "c++", "bindings": ["python"]}
-    storage_info = {
-        "alignment": 1,
-        "device": "cpu",
-        "layout_map": make_gtcpu_kfirst_layout_map,
-        "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
-    }
+    storage_info = gt_storage.layout.CPUKFirstLayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return super()._generate_extension(uses_cuda=False)
@@ -207,12 +191,7 @@ class GTGpuBackend(GTBaseBackend):
     GT_BACKEND_T = "gpu"
     languages = {"computation": "cuda", "bindings": ["python"]}
     options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
-    storage_info = {
-        "alignment": 32,
-        "device": "gpu",
-        "layout_map": make_cuda_layout_map,
-        "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
-    }
+    storage_info = gt_storage.layout.CUDALayout
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return super()._generate_extension(uses_cuda=True)

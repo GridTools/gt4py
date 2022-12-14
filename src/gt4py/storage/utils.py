@@ -56,6 +56,12 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
+def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
+    ndata_dims = sum(d.isdigit() for d in dimensions)
+    mask = [(d in dimensions) for d in "IJK"] + [True for _ in range(ndata_dims)]
+    return tuple(mask)
+
+
 def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     """Normalize the fields of the storage spec in a homogeneous representation.
 

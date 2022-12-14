@@ -34,8 +34,8 @@ else:
     ArrayLike = Any
     DTypeLike = Any
 
-from . import utils as storage_utils
 from . import layout
+from . import utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
@@ -85,7 +85,7 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     _error_on_invalid_backend(backend)
-    storage_info = from_name(backend)
+    storage_info = layout.from_name(backend)
     assert storage_info is not None
     if storage_info["device"] == "gpu":
         allocate_f = storage_utils.allocate_gpu
@@ -382,7 +382,7 @@ if dace is not None:
             aligned_index, shape, dtype, dimensions
         )
         itemsize = dtype.itemsize
-        backend_cls = gt4pyc.backend.from_name(backend)
+        backend_cls = layout.from_name(backend)
         assert backend_cls is not None
         layout_map = backend_cls.storage_info["layout_map"](dimensions)
 
