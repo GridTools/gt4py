@@ -97,21 +97,6 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
-def fencil_cast(out, *inps, processor, as_column=False):
-    column_axis = IDim if as_column else None
-    arg1 = inps[1][0]
-
-    @fundef
-    def sten_cast(arg0):
-        return cast_(deref(arg0), arg1)
-
-    @fendef(offset_provider={}, column_axis=column_axis)
-    def fenimpl_cast(size, arg0, out):
-        closure(cartesian_domain(named_range(IDim, 0, size)), sten_cast, out, [arg0])
-
-    return run_processor(fenimpl_cast, processor, out.shape[0], *inps[0], out)
-
-
 @pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize(
     "builtin, inputs, expected",
@@ -151,26 +136,6 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
     fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
-
-    if validate:
-        assert np.allclose(np.asarray(out), expected)
-
-
-@pytest.mark.parametrize("as_column", [False, True])
-def test_cast(program_processor, as_column):
-    inputs = [[1, int32(1), int32(1), float64(1)], [float64, int64, bool, float32]]
-    expected = [1.0, int64(1), True, float32(1)]
-    program_processor, validate = program_processor
-
-    inps = [asfield(*asarray(inputs[0])), inputs[1]]
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
-
-    fencil_cast(
-        out,
-        *inps,
-        processor=program_processor,
-        as_column=as_column,
-    )
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
@@ -291,3 +256,46 @@ def test_can_deref(program_processor, stencil):
 
 #     if validate:
 #         assert np.allclose(np.asarray(out), 1.0)
+
+
+# There is no straight-forward way to test cast, because when we define the
+# output buffer with the cast-to type an implicit conversion will happen even
+# if no explicit cast was done.
+# Therefore, we have to set up the test in a way that the explicit cast is required,
+# e.g. by a combination of explicit an implicit cast.
+# Test setup:
+# - Input buffer is setup with the dtype from `input_value`
+# - Output buffer is setup with the type of the `expected_value`
+# `expected_value` should be chosen with a different type than the explict cast-to type `dtype`.
+@pytest.mark.parametrize(
+    "input_value, dtype, expected_value",
+    [
+        (float64("0.1"), float32, float64(float32("0.1"))),
+        (int64(42), bool, int64(1)),
+        (int64(2147483648), int32, int64(-2147483648)),
+        (int64(2147483648), int64, int64(2147483648)),  # int64 does not accidentally down-cast
+    ],
+)
+@pytest.mark.parametrize("as_column", [False, True])
+def test_cast(program_processor, as_column, input_value, dtype, expected_value):
+    program_processor, validate = program_processor
+    column_axis = IDim if as_column else None
+
+    inp = asfield(*asarray(input_value))[0]
+    out = asfield((np.zeros_like(*asarray(expected_value))))[0]
+
+    @fundef
+    def sten_cast(value):
+        return cast_(deref(value), dtype)
+
+    run_processor(
+        sten_cast[{IDim: range(1)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={},
+        column_axis=column_axis,
+    )
+
+    if validate:
+        assert out[0] == expected_value
