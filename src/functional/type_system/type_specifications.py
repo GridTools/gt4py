@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import EllipsisType
-from typing import Literal, Optional
+from typing import Optional
 
 import numpy as np
 

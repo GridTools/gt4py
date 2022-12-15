@@ -1,31 +1,56 @@
 from functools import reduce
 from typing import Iterator, cast
 
-from functional.common import GTTypeError
 import functional.ffront.type_specifications as ts
+from functional.common import GTTypeError
 from functional.type_system.type_info import (
-    is_concrete,
-    type_class,
-    primitive_constituents,
+    accepts_args,
     apply_to_primitive_constituents,
+    extract_dims,
     extract_dtype,
+    function_signature_incompatibilities,
+    function_signature_incompatibilities_field,
+    function_signature_incompatibilities_func,
+    is_arithmetic,
+    is_concrete,
+    is_concretizable,
+    is_field_type_or_tuple_of_field_type,
     is_floating_point,
     is_integral,
     is_logical,
-    is_arithmetic,
-    is_field_type_or_tuple_of_field_type,
-    extract_dims,
-    is_concretizable,
+    primitive_constituents,
     promote,
     promote_dims,
     return_type,
-    return_type_func,
     return_type_field,
-    function_signature_incompatibilities,
-    function_signature_incompatibilities_func,
-    function_signature_incompatibilities_field,
-    accepts_args
+    return_type_func,
+    type_class,
 )
+
+
+__all__ = [
+    "accepts_args",
+    "apply_to_primitive_constituents",
+    "extract_dims",
+    "extract_dtype",
+    "function_signature_incompatibilities",
+    "function_signature_incompatibilities_field",
+    "function_signature_incompatibilities_func",
+    "is_arithmetic",
+    "is_concrete",
+    "is_concretizable",
+    "is_field_type_or_tuple_of_field_type",
+    "is_floating_point",
+    "is_integral",
+    "is_logical",
+    "primitive_constituents",
+    "promote",
+    "promote_dims",
+    "return_type",
+    "return_type_field",
+    "return_type_func",
+    "type_class",
+]
 
 
 @return_type.register
