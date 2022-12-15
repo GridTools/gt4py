@@ -70,6 +70,7 @@ GT4Py Features:
    quickstart
    gtscript
    arrays
+   lang_design
    commandline
    apiref
    indices
