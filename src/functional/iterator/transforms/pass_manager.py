@@ -77,6 +77,7 @@ def apply_common_transforms(
     ir = EtaReduction().visit(ir)
 
     if common_subexpression_elimination:
+        ir = NormalizeShifts().visit(ir)
         ir = CommonSubexpressionElimination().visit(ir)
 
     ir = InlineLambdas.apply(ir, opcount_preserving=common_subexpression_elimination)

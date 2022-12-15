@@ -30,8 +30,9 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         program,
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
-        unroll_reduce=False,
-        common_subexpression_elimination=False,
+        # unroll_reduce=not kwargs["imperative"],
+        unroll_reduce=True,
+        common_subexpression_elimination=True,
     )
     gtfn_ir = GTFN_lowering.apply(
         transformed,

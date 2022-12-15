@@ -51,7 +51,12 @@ class CollectSubexpressions(NodeVisitor):
     ) -> None:
         self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node)
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
-        if node.fun == ir.SymRef(id="shift"):
+        if (
+            node.fun
+            == ir.SymRef(id="shift")
+            # or isinstance(node.fun, ir.FunCall)
+            # and node.fun.fun == ir.SymRef(id="shift")
+        ):
             return
         if not any(refs.maps[0].values()):
             subexprs.setdefault(node, ([], parent))[0].append(id(node))

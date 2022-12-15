@@ -210,17 +210,16 @@ class ToImpIR(NodeVisitor):
         return gtfn_ir.SymRef(id=red_idx)
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if (
-            isinstance(node.fun, gtfn_ir.Lambda) and "step" in node.fun.params[0].id
-        ):  # TODO: bad hardcoded string
-            #       maybe this could be improved by looking for lambdas that eval their arg or something?
-            red_idx = self.uids.sequential_id(prefix="red")
-            init = ToImpIR._peek_init(node.fun.expr)
-            self.imp_list_ir.append(
-                InitStmt(lhs=gtfn_ir.Sym(id=f"{red_idx}"), rhs=self.visit(init, **kwargs))
+        if isinstance(node.fun, gtfn_ir.Lambda) and any(
+            isinstance(
+                arg,
+                gtfn_ir.Lambda,
             )
-            num_iter = 1 + ToImpIR._depth(node.fun.expr)
-            self.handle_Lambda(node.args[0], num_iter=num_iter, red_idx=red_idx)
+            for arg in node.args
+        ):
+            # do not try to lower lambdas that take lambdas as arugment to something more readable
+            red_idx = self.uids.sequential_id(prefix="red")
+            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{red_idx}"), rhs=node))
             return gtfn_ir.SymRef(id=f"{red_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
             lam_idx = self.uids.sequential_id(prefix="lam")
