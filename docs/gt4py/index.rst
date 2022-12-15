@@ -21,7 +21,7 @@ a laplacian operation coded in GTScript, and note how similar the GTScript repre
 +--------------------------------------------------------+---------------------------------------+
 | .. code-block:: python                                 | :math:`\begin{align}                  |
 |                                                        | B_{i, j, k} = & - 4 A_{i, j, k} \\    |
-|    @stencil(backend="gt:cpu_kfirst")                  | & + (A_{i+1, j, k} + A_{i-1, j, k} \\ |
+|    @stencil(backend="gt:cpu_kfirst")                   | & + (A_{i+1, j, k} + A_{i-1, j, k} \\ |
 |    def laplacian(A: Field[float], B: Field[float]):    | & + A_{i, i+1, k} + A_{i, j-1, k})    |
 |        with computation(PARALLEL), interval(...):      | \end{align}`                          |
 |            B = - 4. * A + ( A[I + 1] + A[I - 1] +      |                                       |
