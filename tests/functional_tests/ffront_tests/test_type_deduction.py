@@ -662,20 +662,6 @@ def test_astype_dtype():
     )
 
 
-def test_astype_wrong_input():
-    ADim = Dimension("ADim")
-    msg = "Could not deduce type"
-
-    def bad_input_astype(a: Field[[ADim], float64]):
-        return astype(a, "float64")
-
-    with pytest.raises(
-        FieldOperatorTypeDeductionError,
-        match=msg,
-    ):
-        _ = FieldOperatorParser.apply_to_function(bad_input_astype)
-
-
 def test_mod_floats():
     def modulo_floats(inp: Field[..., float]):
         return inp % 3.0

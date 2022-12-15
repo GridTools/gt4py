@@ -670,24 +670,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(dtype_obj, foast.Name)
         dtype_obj_type = dtype_obj.type
         assert isinstance(dtype_obj_type, ct.FunctionType)
-        dtype_obj_type_returns = dtype_obj_type.returns
-        if dtype_obj.id not in fbuiltins.TYPE_BUILTIN_NAMES or not (
-            type_info.is_arithmetic(dtype_obj_type_returns)
-            or type_info.is_logical(dtype_obj_type_returns)
-        ):
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Incompatible argument in call to `{node.func.id}`'s new dtype. "
-                f"Expected an arithmetic or boolean dtype, but got {dtype_obj_type}.",
-            )
-        if not isinstance(casted_obj_type, ct.FieldType) or not (
-            type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
-        ):
-            raise FieldOperatorTypeDeductionError.from_foast_node(
-                node,
-                msg=f"Incompatible argument in call to `{node.func.id}`'s object. "
-                f"Expected arithmetic or boolean FieldType, but got {casted_obj_type}.",
-            )
+        assert dtype_obj.id in fbuiltins.TYPE_BUILTIN_NAMES
+        assert isinstance(casted_obj_type, ct.FieldType)
+        assert type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
+
         return_type = ct.FieldType(
             dims=casted_obj_type.dims,
             dtype=self.visit(dtype_obj_type).returns,
