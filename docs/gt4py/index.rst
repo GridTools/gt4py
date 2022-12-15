@@ -41,17 +41,17 @@ As an example of this, GT4Py comes with built-in integration to the `DaCe <https
 GT4Py Features:
 
 * High-Level:
-  GT4Py takes care of common concerns, such as storage layout, reducing boiler plate code and allowing the intent of the code to shine through
+  GT4Py takes care of common concerns, such as storage layout, reducing boiler plate code and allowing the intent of the code to shine through.
 
 * Performant & Portable:
-  GT4Py generates and compiles highly optimized code wherever GridTools is available
+  GT4Py generates and compiles highly optimized code wherever GridTools is available.
 
 * Familiar:
-  GTScript is a `DSL <https://en.wikipedia.org/wiki/Domain-specific_language#Usage_patterns>`_ in Python and easy learn for anyone with Python experience
+  GTScript is a `DSL <https://en.wikipedia.org/wiki/Domain-specific_language#Usage_patterns>`_ in Python and easy learn for anyone with Python experience.
 
 * Versatile:
   GT4Py is not limited to GridTools as a backend for compiling optimized code but rather can be extended.
-  GTScript code can also be used to generate optimized stencils that can be called from programs not written in Python (C++, Fortran, ...)
+  GTScript code can also be used to generate optimized stencils that can be called from programs not written in Python (C++, Fortran, ...).
 
 
 .. commented_out The :doc:`Quick Start Guide <quickstart>` contains some simple examples

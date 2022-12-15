@@ -125,7 +125,7 @@ function with the ``stencil`` decorator provided by GT4Py.
 The ``stencil`` decorator generates code in Python or C++ depending on the ``backend`` specified by name.
 Currently, the following backends are available:
 
-* ``"numpy"``: a vectorized python backend
+* ``"numpy"``: a vectorized Python backend
 * ``"gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
 * ``"gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
 * ``"gt:gpu"``: a GridTools backend targeting GPUs
@@ -157,7 +157,7 @@ regular function call receiving the definition function:
 
     stencil_example_numpy = gtscript.stencil(backend="numpy", definition=stencil_example)
 
-    another_example_gtmc = gtscript.stencil(backend="gt:cpu_ifirst", definition=stencil_example)
+    another_example_gt = gtscript.stencil(backend="gt:cpu_ifirst", definition=stencil_example)
 
 The generated code is written to and compiled in a local '.gt_cache' folder. Subsequent
 invocations will check whether a recent version of the stencil already exists in the cache.
