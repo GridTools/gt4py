@@ -68,6 +68,7 @@ GT4Py Features:
    :caption: Contents:
 
    quickstart
+   gtscript
    arrays
    commandline
    apiref
