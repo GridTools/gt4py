@@ -75,6 +75,17 @@ where = BuiltInFunction(
     )
 )
 
+astype = BuiltInFunction(
+    ts.FunctionType(
+        args=[
+            ts.DeferredType(constraint=ts.FieldType),
+            ts.DeferredType(constraint=ts.FunctionType),
+        ],
+        kwargs={},
+        returns=ts.DeferredType(constraint=ts.FieldType),
+    )
+)
+
 _unary_math_builtin = BuiltInFunction(
     ts.FunctionType(
         args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
@@ -180,6 +191,7 @@ FUN_BUILTIN_NAMES = [
     "min_over",
     "broadcast",
     "where",
+    "astype",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES

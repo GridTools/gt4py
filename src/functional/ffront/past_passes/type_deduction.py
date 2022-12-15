@@ -14,7 +14,7 @@
 from typing import Optional, cast
 
 import functional.ffront.dialect_ast_enums
-import functional.ffront.type_specifications
+import functional.ffront.dialect_ast_enums as ast_enums
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
 from functional.ffront import program_ast as past, type_info, type_specifications as ts
@@ -153,6 +153,12 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         if node.op == functional.ffront.dialect_ast_enums.BinaryOperator.POW:
             return left_type
+
+        if node.op == ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
+            raise ProgramTypeError.from_past_node(
+                arg,
+                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+            )
 
         try:
             return type_info.promote(left_type, right_type)

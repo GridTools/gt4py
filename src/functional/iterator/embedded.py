@@ -253,6 +253,13 @@ def if_(cond, t, f):
     return t if cond else f
 
 
+@builtins.cast_.register(EMBEDDED)
+def cast_(obj, new_dtype):
+    if isinstance(obj, Column):
+        return obj.data.astype(new_dtype.__name__)
+    return new_dtype(obj)
+
+
 @builtins.not_.register(EMBEDDED)
 def not_(a):
     if isinstance(a, Column):

@@ -39,6 +39,8 @@ class ProgramParser(DialectParser[past.Program]):
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
+        if "return" in annotations and not isinstance(None, annotations["return"]):
+            raise ProgramSyntaxError("Program should not have a return value!")
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
 

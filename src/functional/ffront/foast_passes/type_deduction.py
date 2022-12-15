@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
-import functional.ffront.type_specifications
+import functional.ffront.dialect_ast_enums as ast_enums
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import fbuiltins, type_info, type_specifications as ts
@@ -51,8 +51,8 @@ def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
 
 
 def construct_tuple_type(
-    true_branch_types: list[ts.TupleType],
-    false_branch_types: list[ts.TupleType],
+    true_branch_types: list,
+    false_branch_types: list,
     mask_type: ts.FieldType,
 ) -> list:
     """
@@ -81,7 +81,7 @@ def construct_tuple_type(
 
 
 def promote_to_mask_type(
-    mask_type: ts.FieldType, input_type: ts.FieldType | ts.ScalarType | ts.TupleType
+    mask_type: ts.FieldType, input_type: ts.FieldType | ts.ScalarType
 ) -> ts.FieldType:
     """
     Promote mask type with the input type.
@@ -107,7 +107,7 @@ def promote_to_mask_type(
         item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
-        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))
+        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
     else:
         return input_type
 
@@ -161,7 +161,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     """
 
     @classmethod
-    def apply(cls, node: foast.FieldOperator) -> foast.FieldOperator:
+    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
         typed_foast_node = cls().visit(node)
 
         FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
@@ -265,7 +265,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if isinstance(values.type, ts.TupleType):
             num_elts: int = len(values.type.types)
             targets: TargetType = node.targets
-            indices: tuple[tuple[int] | int] = compute_assign_indices(targets, num_elts)
+            indices: list[tuple[int, int] | int] = compute_assign_indices(targets, num_elts)
 
             if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
                 raise FieldOperatorTypeDeductionError.from_foast_node(
@@ -273,6 +273,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 )
 
             new_targets: TargetType = []
+            new_type: ts.TupleType | ts.DataType
             for i, index in enumerate(indices):
                 old_target = targets[i]
 
@@ -281,7 +282,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     new_type = ts.TupleType(types=[t for t in values.type.types[lower:upper]])
                     new_target = foast.Starred(
                         id=foast.DataSymbol(
-                            id=old_target.id.id, location=old_target.location, type=new_type
+                            id=self.visit(old_target.id).id,
+                            location=old_target.location,
+                            type=new_type,
                         ),
                         type=new_type,
                         location=old_target.location,
@@ -441,9 +444,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
-            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_AND,
-            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_OR,
-            functional.ffront.dialect_ast_enums.BinaryOperator.BIT_XOR,
+            ast_enums.BinaryOperator.BIT_AND,
+            ast_enums.BinaryOperator.BIT_OR,
+            ast_enums.BinaryOperator.BIT_XOR,
         }
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
@@ -457,8 +460,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ts.FieldType | ts.ScalarType, left.type)
         right_type = cast(ts.FieldType | ts.ScalarType, right.type)
 
-        if node.op == functional.ffront.dialect_ast_enums.BinaryOperator.POW:
+        if node.op == ast_enums.BinaryOperator.POW:
             return left_type
+
+        if node.op == ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                arg,
+                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+            )
 
         try:
             return type_info.promote(left_type, right_type)
@@ -661,10 +670,33 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
 
+    def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
+        casted_obj_type = node.args[0].type
+        dtype_obj = node.args[1]
+        assert isinstance(dtype_obj, foast.Name)
+        dtype_obj_type = dtype_obj.type
+        assert isinstance(dtype_obj_type, ts.FunctionType)
+        assert dtype_obj.id in fbuiltins.TYPE_BUILTIN_NAMES
+        assert isinstance(casted_obj_type, ts.FieldType)
+        assert type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
+
+        return_type = ts.FieldType(
+            dims=casted_obj_type.dims,
+            dtype=self.visit(dtype_obj_type).returns,
+        )
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
+
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ts.FieldType, node.args[0].type)
-        true_branch_type = cast(ts.FieldType, node.args[1].type)
-        false_branch_type = cast(ts.FieldType, node.args[2].type)
+        true_branch_type = node.args[1].type
+        false_branch_type = node.args[2].type
+        return_type: ts.TupleType | ts.FieldType
         if not type_info.is_logical(mask_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -676,10 +708,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if isinstance(true_branch_type, ts.TupleType) and isinstance(
                 false_branch_type, ts.TupleType
             ):
-                true_branch_types = node.args[1].type.types
-                false_branch_types = node.args[2].type.types
                 return_type = ts.TupleType(
-                    types=construct_tuple_type(true_branch_types, false_branch_types, mask_type)
+                    types=construct_tuple_type(
+                        true_branch_type.types, false_branch_type.types, mask_type
+                    )
                 )
             elif isinstance(true_branch_type, ts.TupleType) or isinstance(
                 false_branch_type, ts.TupleType
@@ -690,7 +722,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"{node.args[1].type} and {node.args[2].type}",
                 )
             else:
-                promoted_type = type_info.promote(true_branch_type, false_branch_type)
+                true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
+                false_branch_fieldtype = cast(ts.FieldType, false_branch_type)
+                promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
                 return_type = promote_to_mask_type(mask_type, promoted_type)
 
         except GTTypeError as ex:

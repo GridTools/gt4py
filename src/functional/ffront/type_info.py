@@ -13,6 +13,7 @@ from functional.type_system.type_info import (
     function_signature_incompatibilities_func,
     is_arithmetic,
     is_concrete,
+    is_number,
     is_concretizable,
     is_field_type_or_tuple_of_field_type,
     is_floating_point,
@@ -38,6 +39,7 @@ __all__ = [
     "function_signature_incompatibilities_func",
     "is_arithmetic",
     "is_concrete",
+    "is_number",
     "is_concretizable",
     "is_field_type_or_tuple_of_field_type",
     "is_floating_point",
@@ -51,6 +53,26 @@ __all__ = [
     "return_type_func",
     "type_class",
 ]
+
+
+
+def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
+    return isinstance(field, ts.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
+
+
+def promote_zero_dims(
+    args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
+) -> list:
+    """Promote arg types to zero dimensional fields if compatible and required by function signature."""
+    new_args = args.copy()
+    for arg_i, arg in enumerate(args):
+        def_type = function_type.definition.args[arg_i]
+        if _is_zero_dim_field(def_type) and is_number(arg):
+            if extract_dtype(def_type) == extract_dtype(arg):
+                new_args[arg_i] = def_type
+            else:
+                raise GTTypeError(f"{arg} is not compatible with {def_type}.")
+    return new_args
 
 
 @return_type.register
@@ -68,7 +90,8 @@ def return_type_fieldop(
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ts.FieldOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(fieldop_type.definition, args, kwargs)
+    new_args = promote_zero_dims(args, fieldop_type)
+    yield from function_signature_incompatibilities_func(fieldop_type.definition, new_args, kwargs)
 
 
 @function_signature_incompatibilities.register
@@ -124,7 +147,8 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ts.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    yield from function_signature_incompatibilities_func(program_type.definition, args, kwargs)
+    new_args = promote_zero_dims(args, program_type)
+    yield from function_signature_incompatibilities_func(program_type.definition, new_args, kwargs)
 
 
 @return_type.register

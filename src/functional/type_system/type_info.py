@@ -170,6 +170,27 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     ]
 
 
+def is_number(symbol_type: ts.TypeSpec) -> bool:
+    """
+    Check if ``symbol_type`` is either intergral or float.
+    Examples:
+    ---------
+    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    True
+    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.INT32))
+    True
+    >>> is_number(ts.ScalarType(kind=ts.ScalarKind.BOOL))
+    False
+    >>> is_number(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT)))
+    False
+    """
+    if not isinstance(symbol_type, ts.ScalarType):
+        return False
+    # TODO(nfarabullini): re-factor is_arithmetic such that it only checks for scalars
+    #  and the emtpy field pass in an another function
+    return is_arithmetic(symbol_type)
+
+
 def is_logical(symbol_type: ts.TypeSpec) -> bool:
     return extract_dtype(symbol_type).kind is ts.ScalarKind.BOOL
 

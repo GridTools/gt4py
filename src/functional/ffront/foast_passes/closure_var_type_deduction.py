@@ -32,7 +32,9 @@ class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait
     closure_vars: dict[str, Any]
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode, closure_vars: dict[str, Any]) -> foast.LocatedNode:
+    def apply(
+        cls, node: foast.FunctionDefinition, closure_vars: dict[str, Any]
+    ) -> foast.FunctionDefinition:
         return cls(closure_vars=closure_vars).visit(node)
 
     def visit_FunctionDefinition(

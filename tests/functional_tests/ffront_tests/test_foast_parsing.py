@@ -28,7 +28,7 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import field_operator_ast as foast
-from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.iterator import ir as itir
@@ -267,6 +267,18 @@ def test_conditional_wrong_arg_type():
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
+def test_astype():
+    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
+        return astype(a, float64)
+
+    parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+    )
+
+
 # --- External symbols ---
 def test_closure_symbols():
     import numpy as np
@@ -325,3 +337,18 @@ def test_empty_dims_type():
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
+
+
+def test_zero_dims_ternary():
+    ADim = Dimension("ADim")
+
+    def zero_dims_ternary(
+        cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]
+    ):
+        return a if cond == 1 else b
+
+    msg = r"Could not deduce type"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+    assert re.search(msg, exc_info.value.args[0]) is not None
