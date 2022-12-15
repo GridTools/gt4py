@@ -54,13 +54,11 @@ build py38:
   - trying
 
 build py39:
-  allow_failure: true
   extends: build py38
   variables:
     <<: *py39
 
 build py310:
-  allow_failure: true
   extends: build py38
   variables:
     <<: *py310
