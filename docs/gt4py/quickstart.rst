@@ -220,6 +220,9 @@ behavior is as follows:
    the lowest index where a value is written. The explicit ``origin`` keyword when calling a stencil takes priority over
    this.
 
+
+.. _Computations and Intervals:
+
 --------------------------
 Computations and Intervals
 --------------------------
