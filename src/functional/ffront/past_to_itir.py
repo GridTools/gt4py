@@ -213,7 +213,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             if node_domain is not None:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
-                assert isinstance(slices, (itir.SymRef, itir.Literal))
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
                     itir.Literal(value="0", type="int"),
@@ -248,10 +247,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node_domain: past.Dict,
     ) -> tuple[past.Expr, past.Expr]:
         keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
-        values_dims_elts = node_domain.values_[dim_i].elts
         if keys_dims_types == dim:
-            assert len(values_dims_elts) == 2
-            return (values_dims_elts[0], values_dims_elts[1])
+            assert len(node_domain.values_[dim_i].elts) == 2
+            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
