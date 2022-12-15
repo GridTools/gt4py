@@ -213,13 +213,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             if node_domain is not None:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
+                assert isinstance(slices, (itir.SymRef, itir.Literal))
                 lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,  # type: ignore
+                    slices[dim_i].lower if slices else None,
                     itir.Literal(value="0", type="int"),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size  # type: ignore
+                    slices[dim_i].upper if slices else None, dim_size, dim_size
                 )
 
             if dim.kind == DimensionKind.LOCAL:
