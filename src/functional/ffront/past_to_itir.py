@@ -246,12 +246,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim_i: int,
         dim: Dimension,
         node_domain: past.Dict,
-    ) -> tuple[itir.SymRef | itir.Literal, itir.SymRef | itir.Literal]:
+    ) -> tuple[past.Expr, past.Expr]:
         keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
         values_dims_elts = node_domain.values_[dim_i].elts
         if keys_dims_types == dim:
             assert len(values_dims_elts) == 2
-            return (bound for bound in values_dims_elts)  # type:ignore
+            return (values_dims_elts[0], values_dims_elts[1])
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
