@@ -214,12 +214,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,
+                    slices[dim_i].lower if slices else None,  # type: ignore
                     itir.Literal(value="0", type="int"),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size
+                    slices[dim_i].upper if slices else None, dim_size, dim_size  # type: ignore
                 )
 
             if dim.kind == DimensionKind.LOCAL:
@@ -249,7 +249,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
         if keys_dims_types == dim:
             assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
+            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)  # type: ignore
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
