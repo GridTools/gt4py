@@ -252,8 +252,8 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
-        " but got Field\[\[JDim\], dtype=float64\].",
+        "- Expected 0-th argument to be of type Field\[\[IDim], float64\],"
+        " but got Field\[\[JDim\], float64\].",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None

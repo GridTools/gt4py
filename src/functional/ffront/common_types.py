@@ -62,6 +62,24 @@ class BinaryOperator(StrEnum):
         return "Unknown BinaryOperator"
 
 
+class UnaryOperator(StrEnum):
+    UADD = "plus"
+    USUB = "minus"
+    NOT = "not_"
+    INVERT = "invert"
+
+    def __str__(self) -> str:
+        if self is self.UADD:
+            return "+"
+        elif self is self.USUB:
+            return "-"
+        elif self is self.NOT:
+            return "not"
+        elif self is self.INVERT:
+            return "~"
+        return "Unknown UnaryOperator"
+
+
 class SymbolType:
     pass
 
@@ -135,19 +153,19 @@ class CallableType:
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type,misc]
+    dims: list[func_common.Dimension] | Literal[Ellipsis]  # type: ignore[valid-type]
     dtype: ScalarType
 
     def __str__(self):
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
-        return f"Field[{dims}, dtype={self.dtype}]"
+        return f"Field[{dims}, {self.dtype}]"
 
 
 @dataclass(frozen=True)
 class FunctionType(SymbolType, CallableType):
     args: list[DataType | DeferredSymbolType]
     kwargs: dict[str, DataType | DeferredSymbolType]
-    returns: DataType | DeferredSymbolType | VoidType
+    returns: DataType | DeferredSymbolType | VoidType | SymbolType
 
     def __str__(self):
         arg_strs = [str(arg) for arg in self.args]
