@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Union, List, Any
 
 from eve import Coerced, SymbolName, Node
-from functional.program_processors.codegens.gtfn.gtfn_ir import Sym, Expr, SymRef
+import functional.program_processors.codegens.gtfn.gtfn_ir as gtfn_ir
 from eve.traits import SymbolTableTrait
 
 
@@ -27,8 +27,8 @@ class Stmt(Node):
 
 class AssignStmt(Stmt):
     op: str = "="
-    lhs: Union[Sym, SymRef]  # TODO not sure what to use
-    rhs: Union[Sym, Expr]
+    lhs: Union[gtfn_ir.Sym, gtfn_ir.SymRef]
+    rhs: Union[gtfn_ir.SymRef, gtfn_ir.Expr]
 
 
 class InitStmt(AssignStmt):
@@ -38,16 +38,16 @@ class InitStmt(AssignStmt):
 class Conditional(Stmt):
     type: str
     init_stmt: Stmt
-    cond: Union[SymRef, Expr]
+    cond: Union[gtfn_ir.SymRef, gtfn_ir.Expr]
     if_stmt: Stmt
     else_stmt: Stmt
 
 
 class ReturnStmt(Stmt):
-    ret: Union[Expr, Sym, SymRef]
+    ret: Union[gtfn_ir.Expr, gtfn_ir.Sym, gtfn_ir.SymRef]
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    params: List[Sym]
+    params: List[gtfn_ir.Sym]
     fun: List[Stmt]

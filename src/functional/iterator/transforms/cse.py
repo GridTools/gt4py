@@ -52,10 +52,11 @@ class CollectSubexpressions(NodeVisitor):
         self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node)
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
         if (
-            node.fun
-            == ir.SymRef(id="shift")
-            # or isinstance(node.fun, ir.FunCall)
-            # and node.fun.fun == ir.SymRef(id="shift")
+            node.fun == ir.SymRef(id="shift")
+            or isinstance(
+                node.fun, ir.FunCall
+            )  # TODO: want to remove the guard after the `or` (gtfn_im backend)
+            and node.fun.fun == ir.SymRef(id="shift")
         ):
             return
         if not any(refs.maps[0].values()):

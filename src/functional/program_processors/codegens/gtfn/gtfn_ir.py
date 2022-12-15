@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional, Union, Any
+from typing import ClassVar, Optional, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
@@ -170,11 +170,17 @@ class TagDefinition(Node):
     alias: Optional[Union[str, SymRef]] = None
 
 
+# TODO: additional file with common types? (Sym, Symref, Expr)
+import functional.program_processors.codegens.gtfn.gtfn_im_ir as gtfn_im_ir
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
-    # function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
-    function_definitions: list[Any]  # TODO
+    function_definitions: list[
+        Union[FunctionDefinition, ScanPassDefinition, gtfn_im_ir.ImperativeFunctionDefinition]
+    ]
+    # function_definitions: list[Any]  # TODO
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType

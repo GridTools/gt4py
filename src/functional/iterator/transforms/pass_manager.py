@@ -68,7 +68,6 @@ def apply_common_transforms(
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
-
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
@@ -77,7 +76,6 @@ def apply_common_transforms(
     ir = EtaReduction().visit(ir)
 
     if common_subexpression_elimination:
-        ir = NormalizeShifts().visit(ir)
         ir = CommonSubexpressionElimination().visit(ir)
 
     ir = InlineLambdas.apply(ir, opcount_preserving=common_subexpression_elimination)

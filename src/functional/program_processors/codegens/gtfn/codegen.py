@@ -181,10 +181,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
-        if False:
-            expr_ = to_imp(node)
-        else:
-            expr_ = "return " + self.visit(node.expr)
+        expr_ = "return " + self.visit(node.expr)
         return self.generic_visit(node, expr_=expr_)
 
     def visit_FencilDefinition(
