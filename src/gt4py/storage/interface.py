@@ -381,27 +381,27 @@ if dace is not None:
             aligned_index, shape, dtype, dimensions
         )
         itemsize = dtype.itemsize
-        backend_cls = layout.from_name(backend)
-        assert backend_cls is not None
-        layout_map = backend_cls.storage_info["layout_map"](dimensions)
+        storage_info = layout.from_name(backend)
+        assert storage_info is not None
+        layout_map = storage_info["layout_map"](dimensions)
 
         order_idx = storage_utils.idx_from_order([i for i in layout_map if i is not None])
         padded_shape = storage_utils.compute_padded_shape(
-            shape, backend_cls.storage_info["alignment"], order_idx
+            shape, storage_info["alignment"], order_idx
         )
 
         strides = storage_utils.strides_from_padded_shape(padded_shape, order_idx, itemsize)
 
         storage = (
             dace.StorageType.GPU_Global
-            if backend_cls.storage_info["device"] == "gpu"
+            if storage_info["device"] == "gpu"
             else dace.StorageType.CPU_Heap
         )
         start_offset = int(np.array([aligned_index]) @ np.array([strides]).T) // itemsize
 
         total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
 
-        start_offset = start_offset % backend_cls.storage_info["alignment"]
+        start_offset = start_offset % storage_info["alignment"]
         return dace.data.Array(
             shape=shape,
             strides=[s // itemsize for s in strides],
