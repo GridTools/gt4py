@@ -75,7 +75,6 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-
     if dimensions is None:
         dimensions = (
             list("IJK"[: len(shape)])

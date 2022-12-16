@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from numbers import Number
-from typing import Any, Callable, Dict, Literal, Optional, Sequence, Tuple, TypedDict, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 
@@ -308,7 +308,6 @@ def from_array(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
-
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     asarray = storage_utils.as_cupy if is_cupy_array else storage_utils.as_numpy
     shape = asarray(data).shape

@@ -15,7 +15,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import gt4py
 from gt4py import cartesian as gt4pyc
 
 

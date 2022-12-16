@@ -16,7 +16,6 @@ import re
 
 import pytest
 
-import gt4py
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder

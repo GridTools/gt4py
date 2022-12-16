@@ -12,8 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""GlobalDecl configuration of test generation and execution (with Hypothesis and pytest)
-"""
+"""GlobalDecl configuration of test generation and execution (with Hypothesis and pytest)."""
 
 import os
 import shutil
