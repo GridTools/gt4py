@@ -30,4 +30,4 @@ jobs:
         python -m pip install .
     - name: Build documentation
       run: |
-        cd docs/gt4py && SPHINXOPTS=-W make -e html
+        cd docs && SPHINXOPTS=-W make -e html

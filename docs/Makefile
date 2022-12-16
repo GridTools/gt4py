@@ -5,7 +5,7 @@
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         = 
-SRCDIR        = ../../src/eve
+SRCDIR        = ../src/gt4py
 AUTODOCDIR    = _source
 BUILDDIR      = _build
 
