@@ -15,7 +15,7 @@
 
 """GridTools storages classes."""
 
-
+from . import *
 from .layout import from_name, register
 from .interface import empty, from_array, full, ones, zeros  # noqa: F401
 

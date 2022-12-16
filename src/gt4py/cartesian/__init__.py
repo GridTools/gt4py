@@ -23,5 +23,5 @@ __license__: typing.Final = "GPLv3+"
 from .version import __version__, __version_info__  # isort:skip
 
 
-from . import backend, config, gtscript
+from . import backend, config, frontend, gtscript
 from .stencil_object import StencilObject

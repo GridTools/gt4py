@@ -119,7 +119,7 @@ NaiveCPULayout: Final[LayoutInfo] = {
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
-
+register("naive_cpu", NaiveCPULayout)
 
 CPUIFirstLayout: Final = {
     "alignment": 8,
@@ -127,6 +127,7 @@ CPUIFirstLayout: Final = {
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
+register("cpu_ifirst", CPUIFirstLayout)
 
 
 CPUKFirstLayout: Final = {
@@ -135,6 +136,7 @@ CPUKFirstLayout: Final = {
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
+register("cpu_kfirst", CPUKFirstLayout)
 
 
 CUDALayout: Final = {
@@ -143,3 +145,7 @@ CUDALayout: Final = {
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
+register("cuda", CUDALayout)
+
+GPULayout: Final = CUDALayout
+register("gpu", GPULayout)
