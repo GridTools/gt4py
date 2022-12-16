@@ -11,13 +11,3 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-import typing
-
-
-__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: typing.Final = "GPLv3+"
-
-from .version import __version__, __version_info__  # isort:skip
-
-__all__ = ["__copyright__", "__license__", "__version__", "__version_info__"]

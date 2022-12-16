@@ -22,7 +22,7 @@ import gt4py.storage as gt_storage
 from gt4py.cartesian.gtscript import Field, K
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
-from ..storage_test_utils import DimensionsWrapper, OriginWrapper
+from ..utils import DimensionsWrapper, OriginWrapper
 
 
 def base_stencil(
