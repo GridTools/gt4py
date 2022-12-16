@@ -74,7 +74,7 @@ class Backend(abc.ABC):
     #:  - "device": "cpu" | "gpu"
     #:  - "layout_map": callback converting a mask to a layout
     #:  - "is_optimal_layout": callback checking if a storage has compatible layout
-    storage_info: ClassVar[Dict[str, Any]]
+    storage_info: ClassVar[gt_storage.layout.LayoutInfo]
 
     #: Language support:
     #:

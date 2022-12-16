@@ -16,7 +16,6 @@
 
 import typing
 
-
 from . import (
     caching,
     cli,
@@ -29,5 +28,4 @@ from . import (
     stencil_object,
     type_hints,
 )
-
 from .stencil_object import StencilObject

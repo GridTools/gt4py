@@ -310,7 +310,7 @@ def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
     return SourceLocationGroup(loc1, loc2, context=make_str_value(fixed=fixed))
 
 
-def make_empty_node(*, fixed: bool = False) -> LocationNode:
+def make_empty_node(*, fixed: bool = False) -> EmptyNode:
     return EmptyNode()
 
 

@@ -133,7 +133,7 @@ NaiveCPULayout: Final[LayoutInfo] = {
 }
 register("naive_cpu", NaiveCPULayout)
 
-CPUIFirstLayout: Final = {
+CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
     "device": "cpu",
     "layout_map": make_gtcpu_ifirst_layout_map,
@@ -142,7 +142,7 @@ CPUIFirstLayout: Final = {
 register("cpu_ifirst", CPUIFirstLayout)
 
 
-CPUKFirstLayout: Final = {
+CPUKFirstLayout: Final[LayoutInfo] = {
     "alignment": 1,
     "device": "cpu",
     "layout_map": make_gtcpu_kfirst_layout_map,
@@ -151,7 +151,7 @@ CPUKFirstLayout: Final = {
 register("cpu_kfirst", CPUKFirstLayout)
 
 
-CUDALayout: Final = {
+CUDALayout: Final[LayoutInfo] = {
     "alignment": 32,
     "device": "gpu",
     "layout_map": make_cuda_layout_map,
@@ -159,5 +159,5 @@ CUDALayout: Final = {
 }
 register("cuda", CUDALayout)
 
-GPULayout: Final = CUDALayout
+GPULayout: Final[LayoutInfo] = CUDALayout
 register("gpu", GPULayout)
