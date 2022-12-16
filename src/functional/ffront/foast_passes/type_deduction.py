@@ -14,8 +14,8 @@
 from typing import Optional, cast
 
 import functional.ffront.dialect_ast_enums
-import functional.ffront.field_operator_ast as foast
 import functional.ffront.dialect_ast_enums as ast_enums
+import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import fbuiltins, type_info, type_specifications as ts

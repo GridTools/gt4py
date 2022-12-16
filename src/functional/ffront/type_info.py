@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import Iterator, cast
+from typing import Iterable, Iterator, cast
 
 import functional.ffront.type_specifications as ts
 from functional.common import GTTypeError
@@ -13,12 +13,12 @@ from functional.type_system.type_info import (
     function_signature_incompatibilities_func,
     is_arithmetic,
     is_concrete,
-    is_number,
     is_concretizable,
     is_field_type_or_tuple_of_field_type,
     is_floating_point,
     is_integral,
     is_logical,
+    is_number,
     primitive_constituents,
     promote,
     promote_dims,
@@ -55,9 +55,12 @@ __all__ = [
 ]
 
 
-
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
-    return isinstance(field, ts.FieldType) and field.dims != Ellipsis and len(field.dims) == 0
+    return (
+        isinstance(field, ts.FieldType)
+        and isinstance(field.dims, Iterable)
+        and len(field.dims) == 0
+    )
 
 
 def promote_zero_dims(

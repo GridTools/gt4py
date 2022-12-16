@@ -22,7 +22,7 @@ import numpy as np
 import functional.ffront.dialect_ast_enums
 import functional.ffront.type_specifications
 from eve import NodeTranslator
-from functional.common import DimensionKind
+from functional.common import Dimension, DimensionKind
 from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
@@ -38,7 +38,7 @@ def is_local_kind(symbol_type: ts.FieldType) -> bool:
     assert isinstance(symbol_type, ts.FieldType)
     if symbol_type.dims == ...:
         return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
+    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
 
 
 class ITIRTypeKind(enum.Enum):

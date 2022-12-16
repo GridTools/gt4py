@@ -173,6 +173,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
 def is_number(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if ``symbol_type`` is either intergral or float.
+
     Examples:
     ---------
     >>> is_number(ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
