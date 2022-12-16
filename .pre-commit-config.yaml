@@ -103,9 +103,7 @@ repos:
     exclude: |
       (?x)^(
       setup.py |
-      docs/gt4py/conf.py |
-      docs/eve/conf.py |
-      docs/gtc/conf.py |
+      docs/conf.py |
       src/gt4py/cartesian/__gtscript__.py |
       src/gt4py/cartesian/__init__.py |
       src/gt4py/cartesian/gtscript.py |
@@ -134,9 +132,7 @@ repos:
   - id: mypy
     exclude: |
       (?x)^(
-      docs/gt4py/conf.py |
-      docs/gtc/conf.py |
-      docs/eve/conf.py |
+      docs/conf.py |
       src/gt4py/cartesian/backend/pyext_builder.py |
       src/gt4py/cartesian/frontend/nodes.py |
       src/gt4py/cartesian/frontend/node_util.py |
