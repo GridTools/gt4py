@@ -209,8 +209,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     using namespace fn;
     using namespace literals;
 
+    template <typename T, T... S, typename F>
+    constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f) {
+      ((f(integral_constant<T, S>{})), ...);
+    }
+
     ${'\\n'.join(offset_definitions)}
-    ${'\\n'.join(function_definitions)}
+    ${'\\n'.join(function_definitions)}    
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
@@ -246,6 +251,15 @@ class GTFNIMCodegen(GTFNCodegen):
             ${else_stmt}
           }
     """
+    )
+
+    ForLoop = as_mako(
+        """
+      for_sequence(std::make_index_sequence<${num_iter}>{}, [&](auto i) {        
+         auto red_iter = integral_constant<int, i>{};
+         ${stmt}
+      });
+      """
     )
 
     ImperativeFunctionDefinition = as_mako(

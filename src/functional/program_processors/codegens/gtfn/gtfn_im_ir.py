@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Union, List, Any
+from typing import Union, List, Tuple
 
 from eve import Coerced, SymbolName, Node
 import functional.program_processors.codegens.gtfn.gtfn_ir as gtfn_ir
@@ -43,8 +43,13 @@ class Conditional(Stmt):
     else_stmt: Stmt
 
 
+class ForLoop(Stmt):
+    num_iter: int
+    stmt: Stmt
+
+
 class ReturnStmt(Stmt):
-    ret: Union[gtfn_ir.Expr, gtfn_ir.Sym, gtfn_ir.SymRef]
+    ret: Union[gtfn_ir.Expr, gtfn_ir.SymRef]
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):

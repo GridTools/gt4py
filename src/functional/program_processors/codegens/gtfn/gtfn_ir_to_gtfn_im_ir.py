@@ -10,6 +10,7 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
     ReturnStmt,
     Conditional,
+    ForLoop,
     ImperativeFunctionDefinition,
 )
 
@@ -71,6 +72,8 @@ class ToImpIR(NodeVisitor):
         return gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="deref"), args=[iterator])
 
     def handle_Reduction(self, node, **kwargs):
+        emit_for_loop = False
+
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = self._find_connectivity(node.args, offset_provider)
@@ -125,16 +128,25 @@ class ToImpIR(NodeVisitor):
                 if node.id == acc.id:
                     return gtfn_ir.SymRef(id=red_idx)
                 if node.id == "nbh_iter":
-                    return gtfn_ir.OffsetLiteral(value=self.cur_idx)
+                    return self.cur_idx
                 return self.generic_visit(node)
 
-            def __init__(self, cur_idx: int):
+            def __init__(self, cur_idx):
                 self.cur_idx = cur_idx
 
-        for i in range(max_neighbors):
-            new_expr = PlugInCurrentIdx(cur_idx=i).visit(new_fun)
+        if emit_for_loop:
+            new_expr = PlugInCurrentIdx(gtfn_ir.SymRef(id="red_iter")).visit(new_fun)
             rhs = self.visit(new_expr, **kwargs)
-            self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir.SymRef(id=red_idx), rhs=rhs))
+            self.imp_list_ir.append(
+                ForLoop(
+                    num_iter=max_neighbors, stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=red_idx), rhs=rhs)
+                )
+            )
+        else:
+            for i in range(max_neighbors):
+                new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_fun)
+                rhs = self.visit(new_expr, **kwargs)
+                self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir.SymRef(id=red_idx), rhs=rhs))
 
         return gtfn_ir.SymRef(id=red_idx)
 

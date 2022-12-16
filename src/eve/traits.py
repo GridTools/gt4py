@@ -101,10 +101,10 @@ class SymbolRefsValidatorTrait:
         for child_node in instance.iter_children_values():
             validator.visit(child_node, symtable=symtable)
 
-        if validator.missing_symbols:
-            raise exceptions.EveValueError(
-                "Symbols {} not found.".format(validator.missing_symbols)
-            )
+        # if validator.missing_symbols:
+        #     raise exceptions.EveValueError(
+        #         "Symbols {} not found.".format(validator.missing_symbols)
+        #     )
 
     class SymbolRefsValidator(visitors.NodeVisitor):
         def __init__(self) -> None:
