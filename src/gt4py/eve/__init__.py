@@ -34,8 +34,6 @@ on some of the previous ones):
 
 from __future__ import annotations  # isort:skip
 
-from .version import __version__, __version_info__  # isort:skip
-
 
 from .concepts import (
     AnnexManager,
