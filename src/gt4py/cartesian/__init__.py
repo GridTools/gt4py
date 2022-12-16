@@ -28,7 +28,6 @@ from . import (
     stencil_builder,
     stencil_object,
     type_hints,
-    version,
 )
 
 from .stencil_object import StencilObject

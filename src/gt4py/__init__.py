@@ -14,8 +14,8 @@
 
 """Python API to develop performance portable applications for weather and climate."""
 
-from . import __about__, cartesian, eve, storage
-from .__about__ import __version__, __version_info__  # noqa: F401
+from .__about__ import __version__, __version_info__  
+from . import __about__, eve, storage, cartesian
 
 
 __all__ = ["__about__", "__version__", "__version_info__", "cartesian", "eve", "storage"]
