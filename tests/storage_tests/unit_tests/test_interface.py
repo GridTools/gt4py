@@ -35,8 +35,9 @@ CPU_LAYOUTS = [
     name for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "cpu"
 ]
 GPU_LAYOUTS = [
-    
-    pytest.param(name, marks=pytest.mark.requires_gpu) for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "gpu"
+    pytest.param(name, marks=pytest.mark.requires_gpu)
+    for name, info in gt4py.storage.layout.REGISTRY.items()
+    if info["device"] == "gpu"
 ]
 
 try:

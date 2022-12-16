@@ -15,6 +15,7 @@
 import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
+from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
@@ -29,7 +30,6 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.caches import (
 )
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline, OirPipeline
 from gt4py.eve.codegen import format_source
-from gt4py import storage as gt_storage
 
 
 if TYPE_CHECKING:

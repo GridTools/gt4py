@@ -24,6 +24,7 @@ import dace.data
 from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
+from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -52,7 +53,6 @@ from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
 from gt4py.eve import codegen
 from gt4py.eve.codegen import MakoTemplate as as_mako
-from gt4py import storage as gt_storage
 
 
 if TYPE_CHECKING:

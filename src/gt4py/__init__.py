@@ -14,6 +14,5 @@
 
 """Python API to develop performance portable applications for weather and climate."""
 
+from . import cartesian, eve, storage
 from .__about__ import __version__, __version_info__
-
-from . import eve, storage, cartesian
