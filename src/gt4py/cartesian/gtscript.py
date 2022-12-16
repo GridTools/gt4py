@@ -213,7 +213,7 @@ def stencil(
 
         cache_settings: `dict`, optional
             Dictionary to configure cache (directory) settings (see
-            ``gt4py.config.cache_settings``).
+            ``gt4py.cartesian.config.cache_settings``).
             Possible key-value pairs:
             - `root_path`: (str)
             - `dir_name`: (str)
