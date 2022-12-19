@@ -316,31 +316,6 @@ def test_np_int_types():
     )
 
 
-def test_np_array_int_types():
-    backend = "numpy"
-    stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
-
-    # test numpy int types are accepted
-    in_field = gt_storage.ones(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        aligned_index=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    out_field = gt_storage.zeros(
-        backend=backend,
-        shape=np.asarray((23, 23, 10), dtype=np.int64),
-        aligned_index=np.asarray((1, 1, 0), dtype=np.int64),
-        dtype=np.float64,
-    )
-    stencil(
-        in_field=in_field,
-        out_field=out_field,
-        origin=np.asarray((2, 2, 0), dtype=np.int64),
-        domain=np.asarray((20, 20, 10), dtype=np.int64),
-    )
-
-
 @pytest.mark.parametrize("backend", ["numpy", "gt:cpu_kfirst"])
 def test_exec_info(backend):
     """Test that proper warnings are raised depending on field type."""
