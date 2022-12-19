@@ -13,38 +13,20 @@ domain-specific language (DSL).
    :alt:
 
 ⚡️ Quick Start
---------------
+---------------
 
 GT4Py requires Python 3.8+ and uses the standard Python packaging method,
 so can be installed using `pip`.
-It is not yet released on PyPI, so users have to point to the
-git repository to install it.
 
 It is recommended to install the package in a virtual environment.
 For example:
 
 .. code-block:: bash
 
-    $ git clone https://github.com/GridTools/gt4py.git && cd gt4py
     $ python -m venv venv
     $ source venv/bin/activate
-    $ pip install --upgrade setuptools wheel pip
     # For the CUDA backends add the '[cudaXXX]' optional dependency
-    $ pip install -e ./[cuda117]
-
-There are notebooks in the ``examples/`` directory that can be run using
-IPython notebooks on Jupyter.
-
-.. code-block:: bash
-
-   $ pip install jupyterlab matplotlib
-   $ jupyter-lab
-
-There are two options to run the unit and integration tests in ``tests/``:
-
-1. Use tox: ``pip install tox && tox -r -e py39-all-cpu``.
-2. Install the development requirements: ``pip install -r requirements-dev.txt``,
-   then ``pytest`` can execute the tests directly.
+    $ pip install gt4py[cuda117]
 
 
 📖 Description
@@ -135,9 +117,24 @@ and use an *editable* installation of GT4Py:
 Dependencies for running tests locally and for linting and formatting
 source are listed in `requirements-dev.txt`.
 
+There are notebooks in the ``examples/`` directory that can be run using
+IPython notebooks on Jupyter.
+
+.. code-block:: bash
+
+   $ pip install jupyterlab matplotlib
+   $ jupyter-lab
+
+There are two options to run the unit and integration tests in ``tests/``:
+
+1. Use tox: ``pip install tox && tox -r -e py39-all-cpu``.
+2. Install the development requirements: ``pip install -r requirements-dev.txt``,
+   then ``pytest`` can execute the tests directly.
+
+
 
 ⚠️ License
----------
+----------
 
 GT4Py is licensed under the terms of the
 `GPLv3 <https://github.com/GridTools/gt4py/blob/main/LICENSE.txt>`__.
