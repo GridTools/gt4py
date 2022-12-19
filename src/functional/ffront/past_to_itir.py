@@ -203,7 +203,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of `{out_field}` argument to be"
+                f"Expected constituents of `{out_field.id}` argument to be"
                 f" fields defined on the same dimensions. This error should be "
                 f" caught in type deduction already."
             )
