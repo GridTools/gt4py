@@ -214,7 +214,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if node_domain is not None:
-                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)  # type: ignore[arg-type]  # node_domain is added dynamically
+                assert isinstance(node_domain, past.Dict)
+                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
