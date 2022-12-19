@@ -189,7 +189,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _construct_itir_domain_arg(
         self,
-        out_field: past.Name | past.Constant,
+        out_field: past.Name,
         node_domain: Optional[past.Expr] | past.Dict,
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
@@ -203,7 +203,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of `{self.visit(out_field).id}` argument to be"
+                f"Expected constituents of `{out_field}` argument to be"
                 f" fields defined on the same dimensions. This error should be "
                 f" caught in type deduction already."
             )
@@ -211,7 +211,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         for dim_i, dim in enumerate(dims):
             # an expression for the size of a dimension
-            dim_size = itir.SymRef(id=_size_arg_from_field(self.visit(out_field).id, dim_i))
+            dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
             if node_domain is not None:
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)  # type: ignore[arg-type]  # node_domain is added dynamically
@@ -286,7 +286,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
             #  inspection of the PAST to emulate the behaviour
-            out_field_name: past.Name | past.Constant = out_arg.value
+            out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
                 self._construct_itir_domain_arg(
