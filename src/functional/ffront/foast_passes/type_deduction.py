@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
-import functional.ffront.dialect_ast_enums
 import functional.ffront.dialect_ast_enums as ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
@@ -494,8 +493,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type_info.is_logical
             if node.op
             in [
-                functional.ffront.dialect_ast_enums.UnaryOperator.NOT,
-                functional.ffront.dialect_ast_enums.UnaryOperator.INVERT,
+                ast_enums.UnaryOperator.NOT,
+                ast_enums.UnaryOperator.INVERT,
             ]
             else type_info.is_arithmetic
         )

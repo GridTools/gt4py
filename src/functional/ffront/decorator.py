@@ -31,8 +31,7 @@ from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, Ty
 import numpy as np
 from devtools import debug
 
-import functional.ffront.dialect_ast_enums
-import functional.ffront.type_specifications
+import functional.ffront.dialect_ast_enums as ast_enums
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
@@ -530,7 +529,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
-                namespace=functional.ffront.dialect_ast_enums.Namespace.LOCAL,
+                namespace=ast_enums.Namespace.LOCAL,
                 location=loc,
             )
             for arg_type in arg_types
@@ -539,7 +538,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
             type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=functional.ffront.dialect_ast_enums.Namespace.LOCAL,
+            namespace=ast_enums.Namespace.LOCAL,
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
@@ -551,7 +550,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past.Symbol(
                 id=self.foast_node.id,
                 type=ts.DeferredType(constraint=None),
-                namespace=functional.ffront.dialect_ast_enums.Namespace.CLOSURE,
+                namespace=ast_enums.Namespace.CLOSURE,
                 location=loc,
             ),
         ]

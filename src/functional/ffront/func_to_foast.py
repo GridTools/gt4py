@@ -19,7 +19,7 @@ import builtins
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
-import functional.ffront.dialect_ast_enums
+import functional.ffront.dialect_ast_enums as ast_enums
 from functional import common
 from functional.ffront import (
     fbuiltins,
@@ -146,7 +146,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         kwargs={},
                         returns=cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
-                    namespace=functional.ffront.dialect_ast_enums.Namespace.CLOSURE,
+                    namespace=ast_enums.Namespace.CLOSURE,
                     location=location,
                 )
             )
@@ -164,7 +164,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 foast.Symbol(
                     id=name,
                     type=ts.DeferredType(constraint=None),
-                    namespace=functional.ffront.dialect_ast_enums.Namespace.CLOSURE,
+                    namespace=ast_enums.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
             )
@@ -331,25 +331,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(
-        self, node: ast.UAdd, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.UnaryOperator:
-        return functional.ffront.dialect_ast_enums.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> ast_enums.UnaryOperator:
+        return ast_enums.UnaryOperator.UADD
 
-    def visit_USub(
-        self, node: ast.USub, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.UnaryOperator:
-        return functional.ffront.dialect_ast_enums.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> ast_enums.UnaryOperator:
+        return ast_enums.UnaryOperator.USUB
 
-    def visit_Not(
-        self, node: ast.Not, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.UnaryOperator:
-        return functional.ffront.dialect_ast_enums.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> ast_enums.UnaryOperator:
+        return ast_enums.UnaryOperator.NOT
 
-    def visit_Invert(
-        self, node: ast.Invert, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.UnaryOperator:
-        return functional.ffront.dialect_ast_enums.UnaryOperator.INVERT
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> ast_enums.UnaryOperator:
+        return ast_enums.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(
@@ -359,55 +351,35 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
-    def visit_Add(
-        self, node: ast.Add, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(
-        self, node: ast.Sub, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(
-        self, node: ast.Mult, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.MULT
 
-    def visit_Div(
-        self, node: ast.Div, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(
-        self, node: ast.FloorDiv, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.FLOOR_DIV
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(
-        self, node: ast.Pow, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.POW
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.POW
 
-    def visit_Mod(
-        self, node: ast.Mod, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.MOD
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(
-        self, node: ast.BitAnd, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_AND
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(
-        self, node: ast.BitOr, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_OR
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.BIT_OR
 
-    def visit_BitXor(
-        self, node: ast.BitXor, **kwargs
-    ) -> functional.ffront.dialect_ast_enums.BinaryOperator:
-        return functional.ffront.dialect_ast_enums.BinaryOperator.BIT_XOR
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ast_enums.BinaryOperator:
+        return ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")

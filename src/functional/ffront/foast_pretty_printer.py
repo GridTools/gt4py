@@ -4,7 +4,7 @@ import enum
 import textwrap
 from typing import Final, TypeAlias, Union
 
-import functional.ffront.dialect_ast_enums
+import functional.ffront.dialect_ast_enums as ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
 from functional.ffront import type_specifications as ts
@@ -112,7 +112,7 @@ class _PrettyPrinter(TemplatedGenerator):
     UnaryOp = as_fmt("{op}{operand}")
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> str:
-        if node.op is functional.ffront.dialect_ast_enums.UnaryOperator.NOT:
+        if node.op is ast_enums.UnaryOperator.NOT:
             op = "not "
         else:
             op = str(node.op)

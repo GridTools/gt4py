@@ -4,7 +4,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
-import functional.ffront.dialect_ast_enums
+import functional.ffront.dialect_ast_enums as ast_enums
 from functional.ffront import fbuiltins, field_operator_ast as foast
 from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64
@@ -61,7 +61,7 @@ def make_builtin_field_operator(builtin_name: str):
         foast.Symbol(
             id=name,
             type=type_translation.from_value(val),
-            namespace=functional.ffront.dialect_ast_enums.Namespace.CLOSURE,
+            namespace=ast_enums.Namespace.CLOSURE,
             location=loc,
         )
         for name, val in closure_vars.items()

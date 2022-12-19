@@ -19,8 +19,7 @@ from typing import Any, Callable, Optional, cast
 
 import numpy as np
 
-import functional.ffront.dialect_ast_enums
-import functional.ffront.type_specifications
+import functional.ffront.dialect_ast_enums as ast_enums
 from eve import NodeTranslator
 from functional.common import Dimension, DimensionKind
 from functional.ffront import (
@@ -303,8 +302,8 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         if node.op in [
-            functional.ffront.dialect_ast_enums.UnaryOperator.NOT,
-            functional.ffront.dialect_ast_enums.UnaryOperator.INVERT,
+            ast_enums.UnaryOperator.NOT,
+            ast_enums.UnaryOperator.INVERT,
         ]:
             return self._lift_if_field(node)(
                 im.call_("not_")(to_value(node.operand)(self.visit(node.operand, **kwargs)))
@@ -531,7 +530,7 @@ class InsideReductionLowering(FieldOperatorLowering):
         )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
-        if node.op is functional.ffront.dialect_ast_enums.UnaryOperator.NOT:
+        if node.op is ast_enums.UnaryOperator.NOT:
             return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
 
         return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))
