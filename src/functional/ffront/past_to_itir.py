@@ -134,7 +134,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         domain = node.kwargs.get("domain", None)
         output, lowered_domain = self._visit_stencil_call_out_arg(
-            node.kwargs["out"], domain, **kwargs  # type: ignore
+            node.kwargs["out"], domain, **kwargs
         )
 
         return itir.StencilClosure(
@@ -145,8 +145,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_slice_bound(
-        self, slice_bound: past.Constant, default_value: itir.Expr, dim_size: itir.Expr, **kwargs
-    ) -> itir.SymRef | itir.Literal | itir.FunCall:
+        self,
+        slice_bound: Optional[past.Constant],
+        default_value: itir.Expr,
+        dim_size: itir.Expr,
+        **kwargs,
+    ):
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
@@ -214,12 +218,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
             else:
                 lower = self._visit_slice_bound(
-                    slices[dim_i].lower if slices else None,  # type: ignore
+                    slices[dim_i].lower if slices else None,
                     itir.Literal(value="0", type="int"),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
-                    slices[dim_i].upper if slices else None, dim_size, dim_size  # type: ignore
+                    slices[dim_i].upper if slices else None, dim_size, dim_size
                 )
 
             if dim.kind == DimensionKind.LOCAL:
