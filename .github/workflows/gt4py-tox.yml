@@ -2,13 +2,13 @@ name: Tox (CPU only)
 
 on:
   schedule:
-  - cron: '30 5 * * *'
+  - cron: "30 5 * * *"
   push:
     branches:
-    - master
+    - main
   pull_request:
     branches:
-    - master
+    - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,14 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, '3.10']
+        python-version: [3.8, 3.9, "3.10"]
         backends: [internal-cpu, all-cpu]
         exclude:
         - python-version: 3.8
           backends: internal-cpu
         - python-version: 3.9
           backends: internal-cpu
-
 
     steps:
     - uses: actions/checkout@v2

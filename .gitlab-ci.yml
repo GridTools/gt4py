@@ -1,5 +1,5 @@
 include:
-- remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml'
+- remote: "https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.cscs.yml"
 
 .py310: &py310
   PYVERSION_PREFIX: py310
@@ -30,7 +30,7 @@ stages:
 
 notify_github_pending:
   stage: notifystart
-  only: ["master", "staging", "trying"]
+  only: ["main", "staging", "trying"]
   tags: ["kubernetes"]
   image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh pending
@@ -49,7 +49,7 @@ build py38:
   - docker build --network=host --cache-from $BUILD_IMAGE --build-arg BUILDKIT_INLINE_CACHE=1 --build-arg PYVERSION=$PYVERSION --build-arg CI_PROJECT_DIR=$CI_PROJECT_DIR -t $BUILD_IMAGE .
   - docker push $BUILD_IMAGE
   only:
-  - master
+  - main
   - staging
   - trying
 
@@ -66,7 +66,7 @@ build py310:
 test py38:
   extends: .daint
   only:
-  - master
+  - main
   - staging
   - trying
   needs: ["build py38"]
@@ -100,7 +100,7 @@ test py310:
 notify_github_success:
   stage: cleanup
   when: on_success
-  only: ["master", "staging", "trying"]
+  only: ["main", "staging", "trying"]
   tags: ["kubernetes"]
   image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh success
@@ -110,7 +110,7 @@ notify_github_success:
 notify_github_failure:
   stage: cleanup
   when: on_failure
-  only: ["master", "staging", "trying"]
+  only: ["main", "staging", "trying"]
   tags: ["kubernetes"]
   image: $STATUS_IMAGE
   script: ./ci/set_github_status.sh failure

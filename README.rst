@@ -9,7 +9,7 @@ domain-specific language (DSL).
 
 .. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?event=schedule
    :alt:
-.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=master
+.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=main
    :alt:
 
 ⚡️ Quick Start
@@ -98,7 +98,7 @@ Other commonly used environment variables are:
 - ``GT_CACHE_ROOT``: Path to the compiler cache (defaults to ``./``)
 
 More options and details in
-`config.py <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`__.
+`config.py <https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py>`__.
 
 
 Documentation
@@ -140,4 +140,4 @@ source are listed in `requirements-dev.txt`.
 ---------
 
 GT4Py is licensed under the terms of the
-`GPLv3 <https://github.com/GridTools/gt4py/blob/master/LICENSE.txt>`__.
+`GPLv3 <https://github.com/GridTools/gt4py/blob/main/LICENSE.txt>`__.
