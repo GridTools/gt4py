@@ -190,7 +190,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _construct_itir_domain_arg(
         self,
         out_field: past.Name | past.Constant,
-        node_domain: Optional[past.Dict],
+        node_domain: Optional[past.Expr] | past.Dict,
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         domain_args = []
@@ -215,7 +215,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             dim_size = itir.SymRef(id=_size_arg_from_field(self.visit(out_field).id, dim_i))
             # bounds
             if node_domain is not None:
-                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
+                lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)  # type: ignore[arg-type]  # node_domain is added dynamically
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
@@ -282,7 +282,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, out_arg: past.Expr, domain_arg: past.Dict | None, **kwargs
+        self, out_arg: past.Expr, domain_arg: Optional[past.Expr] | past.Dict, **kwargs
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
