@@ -12,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections.abc
 import math
 import numbers
 from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
-
-import gt4py.utils as gt_util
 
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
@@ -57,6 +56,12 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
+def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
+    ndata_dims = sum(d.isdigit() for d in dimensions)
+    mask = [(d in dimensions) for d in "IJK"] + [True for _ in range(ndata_dims)]
+    return tuple(mask)
+
+
 def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     """Normalize the fields of the storage spec in a homogeneous representation.
 
@@ -70,7 +75,6 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-    from gt4py.gtscript import Axis  # prevent circular import
 
     if dimensions is None:
         dimensions = (
@@ -82,14 +86,16 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
     if aligned_index is None:
         aligned_index = [0] * len(shape)
 
-    if not all(
-        isinstance(d, (str, Axis)) and (str(d).isdigit() or str(d) in "IJK") for d in dimensions
-    ):
+    dimensions = tuple(getattr(d, "__gt_axis_name__", d) for d in dimensions)
+    if not all(isinstance(d, str) and (d.isdigit() or d in "IJK") for d in dimensions):
         raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
     else:
         dimensions = tuple(str(d) for d in dimensions)
     if shape is not None:
-        if not gt_util.is_iterable_of(shape, numbers.Integral):
+        if not (
+            isinstance(shape, collections.abc.Iterable)
+            and all(isinstance(s, numbers.Integral) for s in shape)
+        ):
             raise TypeError("shape must be an iterable of ints.")
         if len(shape) != len(dimensions):
             raise ValueError(
@@ -106,7 +112,10 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
         raise TypeError("shape must be an iterable of ints.")
 
     if aligned_index is not None:
-        if not gt_util.is_iterable_of(aligned_index, numbers.Integral):
+        if not (
+            isinstance(aligned_index, collections.abc.Iterable)
+            and all(isinstance(i, numbers.Integral) for i in aligned_index)
+        ):
             raise TypeError("aligned_index must be an iterable of ints.")
         if len(aligned_index) != len(shape):
             raise ValueError(

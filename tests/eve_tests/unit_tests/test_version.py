@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import eve
+from gt4py import eve
 
 
 def test_version():

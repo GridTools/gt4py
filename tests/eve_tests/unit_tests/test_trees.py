@@ -21,7 +21,7 @@ from typing import List, Union
 
 import pytest
 
-import eve
+from gt4py import eve
 
 
 class SampleTree(eve.concepts.Node):

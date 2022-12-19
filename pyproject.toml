@@ -1,10 +1,80 @@
 [build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
+requires = ["setuptools>=60.6", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "gt4py"
+description = "Python framework for performance portable applications in the weather and climate domain."
+authors = [{ name = "ETH Zurich", email = "gridtools@cscs.ch" }]
+version = "0.1.1"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = [
+  "gridtools",
+  "gt4py",
+  "climate",
+  "forecasting",
+  "hpc",
+  "nwp",
+  "stencil",
+  "weather",
+]
+license = { text = "GPL-3.0-or-later (GPLv3+)" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: GT4Py",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Operating System :: POSIX",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+  "attrs>=21.3",
+  "black>=22.3",
+  "cached-property>=1.5",
+  "click>=7.1",
+  "gridtools-cpp>=2.2.2,==2.*",
+  "jinja2>=2.10",
+  "numpy>=1.15",
+  "scipy>=1.4",
+  "packaging>=20.0",
+  "pybind11>=2.5",
+  "tabulate>=0.8",
+  "typing-extensions>=4.2",
+  "astunparse>=1.6.3;python_version<'3.9'",
+  # ---- eve / gtc ----
+  "boltons>=20.0",
+  "cytoolz>=0.11",
+  "devtools>=0.5",
+  "deepdiff>=5.8",
+  "frozendict>=2.3",
+  "mako>=1.1",
+  "networkx>=2.4",
+  "toolz>=0.11",
+  "typing_inspect>=0.6.0",
+  "xxhash>=1.4.4,<3.1.0",
+]
+
+[project.optional-dependencies]
+cpp-format = ["clang-format>=9.0"]
+
+[project.urls]
+Homepage = "https://gridtools.github.io/"
+Repository = "https://github.com/GridTools/gt4py"
+
+
+# -- Configuration of development tools --
 [tool.black]
 line-length = 100
-target_version = ['py38']
+target_version = ["py38", "py39", "py310", "py311"]
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -20,23 +90,3 @@ exclude = '''
   | dist
 )/
 '''
-
-[tool.flakehell]  # Other options read from flake8 config in setup.cfg
-format = "colored"
-
-[tool.flakehell.plugins]
-flake8-bugbear = ["+*", "-B008"] # B008: Do not perform function calls in argument defaults
-flake8-builtins = ["+*"]
-flake8-darglint = ["-*", "-DAR"] # DAR: Disable dargling errors by default
-flake8-debugger = ["+*"]
-flake8-docstrings = ["+*", "-D1*"] # D1: Public code object needs docstring
-flake8-eradicate = ["+*"]
-flake8-mutable = ["+*"]
-flake8-rst-docstrings = ["+*"]
-mccabe = ["+*"]
-pycodestyle = ["+*",
-  "-E203", # Whitespace before ':' (black formatter breaks this sometimes)
-  "-E501", # Line too long (using Bugbear's B950 warning)
-  "-W503", # Line break occurred before a binary operator
-]
-pyflakes = ["+*"]
