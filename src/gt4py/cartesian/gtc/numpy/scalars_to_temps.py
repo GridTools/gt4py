@@ -1,4 +1,4 @@
-# GTC Toolchain - GT4Py Project - GridTools Framework
+# GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
