@@ -195,8 +195,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> itir.FunCall:
         domain_args = []
 
-        out_field_type = self.visit(out_field.type)
-        out_field_types = type_info.primitive_constituents(out_field_type).to_list()
+        out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_field_types0 = self.visit(out_field_types[0])
         if any(
             not isinstance(out_field_type, ct.FieldType)
