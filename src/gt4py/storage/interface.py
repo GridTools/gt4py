@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from numbers import Number
+import numbers
 from typing import Any, Optional, Sequence, Union
 
 import numpy as np
@@ -160,7 +160,7 @@ def ones(
 
 def full(
     shape: Sequence[int],
-    fill_value: Number,
+    fill_value: numbers.Number,
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
@@ -173,7 +173,7 @@ def full(
     ----------
         shape : `Sequence` of `int`
             The shape of the resulting `ndarray`
-        fill_value: `Number`
+        fill_value: `numbers.Number`
             The value to which the array elements are initialized.
         dtype :  DTypeLike, optional
             The dtype of the resulting `ndarray`

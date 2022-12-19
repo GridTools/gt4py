@@ -63,8 +63,11 @@ def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
 
 
 def normalize_storage_spec(
-    aligned_index, shape, dtype, dimensions: Optional[Sequence[str]]
-) -> Tuple[Any, Any, Any, Tuple[str, ...]]:
+    aligned_index: Optional[Sequence[int]],
+    shape: Sequence[int],
+    dtype: np.DTypeLike,
+    dimensions: Optional[Sequence[str]],
+) -> Tuple[Sequence[int], Sequence[int], np.DTypeLike, Tuple[str, ...]]:
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
