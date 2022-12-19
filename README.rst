@@ -98,7 +98,7 @@ Other commonly used environment variables are:
 - ``GT_CACHE_ROOT``: Path to the compiler cache (defaults to ``./``)
 
 More options and details in
-`config.py <https://github.com/GridTools/gt4py/blob/main/src/gt4py/config.py>`__.
+`config.py <https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py>`__.
 
 
 Documentation
