@@ -486,7 +486,8 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     elif math_builtin_name in ["int", "float", "bool", "str"]:
         # TODO: Using python builtins instead of numpy fixed size types to keep
         # behaviour the same. Maybe change in the future.
-        import builtins as python_builtins
+        import builtins as python_builtins  # noqa: T100 functional.iterator.builtins shadows builtins
+
         impl = getattr(python_builtins, math_builtin_name)
     else:
         impl = getattr(np, math_builtin_name)
