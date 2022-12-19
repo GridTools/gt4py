@@ -483,6 +483,11 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     if math_builtin_name == "gamma":
         # numpy has no gamma function
         impl = np.vectorize(math.gamma)
+    elif math_builtin_name in ["int", "float", "bool", "str"]:
+        # TODO: Using python builtins instead of numpy fixed size types to keep
+        # behaviour the same. Maybe change in the future.
+        import builtins as python_builtins
+        impl = getattr(python_builtins, math_builtin_name)
     else:
         impl = getattr(np, math_builtin_name)
     globals()[math_builtin_name] = decorator(impl)
