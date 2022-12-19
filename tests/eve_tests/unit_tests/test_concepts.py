@@ -20,7 +20,7 @@ import re
 import pytest
 
 import eve
-import functional.ffront.dialect_ast_enums
+import eve.utils
 
 from .. import definitions
 
@@ -123,7 +123,7 @@ class TestNode:
         assert id(node_a) != id(node_b) != id(node_c)
 
     def test_annex(self, sample_node):
-        assert isinstance(sample_node.annex, functional.ffront.dialect_ast_enums.Namespace)
+        assert isinstance(sample_node.annex, eve.utils.Namespace)
 
         sample_node.annex.an_int = 32
         assert sample_node.annex.an_int == 32
