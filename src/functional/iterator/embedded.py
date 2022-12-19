@@ -479,16 +479,13 @@ def promote_scalars(val: CompositeOfScalarOrField):
 
 
 for math_builtin_name in builtins.MATH_BUILTINS:
+    special_builtins = {"int": int, "float": float, "bool": bool, "str": str}
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     if math_builtin_name == "gamma":
         # numpy has no gamma function
         impl = np.vectorize(math.gamma)
-    elif math_builtin_name in ["int", "float", "bool", "str"]:
-        # TODO: Using python builtins instead of numpy fixed size types to keep
-        # behaviour the same. Maybe change in the future.
-        import builtins as python_builtins  # noqa: T100 functional.iterator.builtins shadows builtins
-
-        impl = getattr(python_builtins, math_builtin_name)
+    elif math_builtin_name in special_builtins:
+        impl = special_builtins[math_builtin_name]
     else:
         impl = getattr(np, math_builtin_name)
     globals()[math_builtin_name] = decorator(impl)
