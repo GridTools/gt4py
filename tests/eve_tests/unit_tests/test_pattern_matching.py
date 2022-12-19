@@ -20,8 +20,8 @@ from typing import Any
 
 import pytest
 
-from eve import Node
-from eve.pattern_matching import ObjectPattern, get_differences
+from gt4py.eve import Node
+from gt4py.eve.pattern_matching import ObjectPattern, get_differences
 
 
 class SampleNode(Node):

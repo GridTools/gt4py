@@ -27,7 +27,8 @@ jobs:
         python -m pip install -r requirements-dev.txt
     - name: Install package
       run: |
-        python -m pip install .
+        python -m pip install .[dace]
     - name: Build documentation
+        # TODO re-enable SPHINXOPTS=-W
       run: |
-        cd docs/gt4py && SPHINXOPTS=-W make -e html
+        cd docs && make -e html
