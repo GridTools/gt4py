@@ -407,7 +407,7 @@ System Setup
 ------------
 
 Compilation settings for GT4Py backends generating C++ or CUDA code can be modified by updating
-the default values in the `gt4py.cartesian.config <https://github.com/GridTools/gt4py/blob/master/src/gt4py/config.py>`_ module.
+the default values in the `gt4py.cartesian.config <https://github.com/GridTools/gt4py/blob/main/src/gt4py/config.py>`_ module.
 Note that most of the system dependent settings can also be modified using the following environment variables:
 
 * ``BOOST_ROOT`` or ``BOOST_HOME``: root of the boost library headers.

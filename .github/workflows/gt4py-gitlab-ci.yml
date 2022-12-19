@@ -3,7 +3,7 @@ name: Daint CI
 on:
   push:
     branches:
-    - master
+    - main
     - trying
     - staging
 jobs:
