@@ -4,7 +4,6 @@ from typing import (
     Callable,
     Dict,
     Final,
-    List,
     Literal,
     Optional,
     Sequence,
@@ -59,8 +58,10 @@ def check_layout(layout_map, strides):
     return True
 
 
-def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
-    def layout_maker(dimensions: List[bool]) -> Tuple[int, ...]:
+def layout_maker_factory(
+    base_layout: Tuple[int, ...]
+) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
+    def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
         mask = [dim in dimensions for dim in "IJK"]
         mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
