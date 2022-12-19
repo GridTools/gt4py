@@ -27,7 +27,7 @@ from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.storage import utils as storage_utils
 
-from ..storage_test_utils import OriginWrapper
+from ..utils import OriginWrapper
 
 
 dace = pytest.importorskip("dace")

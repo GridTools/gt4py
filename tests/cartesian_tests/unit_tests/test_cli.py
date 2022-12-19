@@ -74,7 +74,7 @@ class NonCliBackend(backend.Backend):
     """This represents a non-CLI-enabled backend."""
 
     name = "nocli"
-    storage_info = None
+    storage_info = None  # type: ignore[assignment] # TODO provide a proper LayoutInfo
 
     def generate(*args, **kwargs):
         pass

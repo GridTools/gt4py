@@ -17,7 +17,7 @@ import abc
 import os
 import textwrap
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils

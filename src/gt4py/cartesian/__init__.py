@@ -16,12 +16,16 @@
 
 import typing
 
-
-__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: typing.Final = "GPLv3+"
-
-from .version import __version__, __version_info__  # isort:skip
-
-
-from . import backend, config, gtscript
+from . import (
+    caching,
+    cli,
+    config,
+    definitions,
+    gt_cache_manager,
+    gtscript,
+    loader,
+    stencil_builder,
+    stencil_object,
+    type_hints,
+)
 from .stencil_object import StencilObject

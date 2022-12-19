@@ -2,4 +2,4 @@ include *.md
 include *.rst
 include *.toml
 include *.txt
-graft src/gt4py/backend/templates
+graft src/gt4py/cartesian/backend/templates

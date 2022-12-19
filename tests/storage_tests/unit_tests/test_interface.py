@@ -24,13 +24,20 @@ try:
 except ImportError:
     cp = None
 
+import gt4py
 import gt4py.cartesian.backend as gt_backend
-from gt4py import cartesian as gt4pyc
 from gt4py.cartesian import gtscript
 from gt4py.storage.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
-from ..definitions import CPU_BACKENDS, GPU_BACKENDS
 
+CPU_LAYOUTS = [
+    name for name, info in gt4py.storage.layout.REGISTRY.items() if info["device"] == "cpu"
+]
+GPU_LAYOUTS = [
+    pytest.param(name, marks=pytest.mark.requires_gpu)
+    for name, info in gt4py.storage.layout.REGISTRY.items()
+    if info["device"] == "gpu"
+]
 
 try:
     import dace
@@ -368,7 +375,7 @@ def _create_ndarray_for_test_from_array(*, dtype, aligned_index, shape, backend)
         _create_ndarray_for_test_from_array,
     ],
 )
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
+@pytest.mark.parametrize("backend", CPU_LAYOUTS)
 def test_cpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
@@ -387,7 +394,7 @@ def test_cpu_constructor(alloc_fun, backend):
 )
 @pytest.mark.parametrize(
     "backend",
-    GPU_BACKENDS,
+    GPU_LAYOUTS,
 )
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)

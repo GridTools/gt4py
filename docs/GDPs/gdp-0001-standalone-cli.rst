@@ -294,7 +294,7 @@ to allow many more extensions, however the potential confusion outweighs the ben
 permissive.
 
 Enabling all of GTScript without importing from gt4py.cartesian
-+++++++++++++++++++++++++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The currently chosen route for this is to require a comment at the very start of the file::
 

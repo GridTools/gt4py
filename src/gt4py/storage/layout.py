@@ -1,5 +1,16 @@
-from typing import TYPE_CHECKING, Callable, List, Final, Tuple, Union
-from typing import Any, Callable, Dict, Literal, Optional, Sequence, Tuple, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Final,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+)
 
 import numpy as np
 
@@ -47,8 +58,10 @@ def check_layout(layout_map, strides):
     return True
 
 
-def layout_maker_factory(base_layout: Tuple[int, ...]) -> Callable[[List[bool]], Tuple[int, ...]]:
-    def layout_maker(dimensions: List[bool]) -> Tuple[int, ...]:
+def layout_maker_factory(
+    base_layout: Tuple[int, ...]
+) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
+    def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
         mask = [dim in dimensions for dim in "IJK"]
         mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
@@ -119,27 +132,33 @@ NaiveCPULayout: Final[LayoutInfo] = {
     "layout_map": lambda axes: tuple(i for i in range(len(axes))),
     "is_optimal_layout": lambda *_: True,
 }
+register("naive_cpu", NaiveCPULayout)
 
-
-CPUIFirstLayout: Final = {
+CPUIFirstLayout: Final[LayoutInfo] = {
     "alignment": 8,
     "device": "cpu",
     "layout_map": make_gtcpu_ifirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_ifirst_layout_map),
 }
+register("cpu_ifirst", CPUIFirstLayout)
 
 
-CPUKFirstLayout: Final = {
+CPUKFirstLayout: Final[LayoutInfo] = {
     "alignment": 1,
     "device": "cpu",
     "layout_map": make_gtcpu_kfirst_layout_map,
     "is_optimal_layout": layout_checker_factory(make_gtcpu_kfirst_layout_map),
 }
+register("cpu_kfirst", CPUKFirstLayout)
 
 
-CUDALayout: Final = {
+CUDALayout: Final[LayoutInfo] = {
     "alignment": 32,
     "device": "gpu",
     "layout_map": make_cuda_layout_map,
     "is_optimal_layout": layout_checker_factory(make_cuda_layout_map),
 }
+register("cuda", CUDALayout)
+
+GPULayout: Final[LayoutInfo] = CUDALayout
+register("gpu", GPULayout)

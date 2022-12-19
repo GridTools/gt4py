@@ -55,7 +55,7 @@ from gt4py.storage import layout as gt_layout
     ],
 )
 def test_gtcpu_kfirst_layout(dimensions, layout):
-    make_layout_map = gt_layout.from_name("gt:cpu_kfirst").storage_info["layout_map"]
+    make_layout_map = gt_layout.CPUKFirstLayout["layout_map"]
     assert make_layout_map(dimensions) == layout
 
 
@@ -97,7 +97,7 @@ def test_gtcpu_kfirst_layout(dimensions, layout):
     ],
 )
 def test_gtcpu_ifirst_layout(dimensions, layout):
-    make_layout_map = gt_layout.from_name("gt:cpu_ifirst").storage_info["layout_map"]
+    make_layout_map = gt_layout.CPUIFirstLayout["layout_map"]
     assert make_layout_map(dimensions) == layout
 
 
@@ -139,5 +139,5 @@ def test_gtcpu_ifirst_layout(dimensions, layout):
     ],
 )
 def test_gpu_layout(dimensions, layout):
-    make_layout_map = gt_layout.from_name("gt:gpu").storage_info["layout_map"]
+    make_layout_map = gt_layout.GPULayout["layout_map"]
     assert make_layout_map(dimensions) == layout

@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, cast
 
 import gt4py.eve.utils
-from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent

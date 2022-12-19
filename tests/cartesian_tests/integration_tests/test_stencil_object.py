@@ -24,7 +24,7 @@ from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 
 from ..definitions import ALL_BACKENDS
-from ..storage_test_utils import OriginWrapper
+from ..utils import OriginWrapper
 
 
 @pytest.mark.parametrize("backend", ["numpy"])

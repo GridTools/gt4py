@@ -30,12 +30,11 @@ import os
 import sys
 
 
-src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, "src")
+src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, "src")
 abs_src_dir = os.path.abspath(src_dir)
 sys.path.insert(0, abs_src_dir)
 
 import gt4py
-from gt4py import cartesian as gt4pyc
 
 
 # -- Project information -----------------------------------------------------
@@ -50,10 +49,10 @@ description = "Python API of the GridTools framework to develop performance port
 # built documents.
 
 # The short X.Y.Z version.
-version = gt4pyc.__version_info__.base_version
+version = gt4py.__version_info__.base_version
 
 # The full version, including alpha/beta/rc tags
-release = gt4pyc.__version__
+release = gt4py.__version__
 
 
 # -- General configuration ---------------------------------------------------

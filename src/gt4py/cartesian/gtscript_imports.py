@@ -38,6 +38,7 @@ Usage Example
 
 """
 import importlib
+import importlib.abc
 import pathlib
 import sys
 import tempfile

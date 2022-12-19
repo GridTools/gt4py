@@ -19,7 +19,6 @@ from typing import Callable, Optional, Set, Type
 import pytest
 
 import gt4py.eve.codegen
-from gt4py import eve
 
 from .test_utils import name_with_cases  # noqa: F401
 

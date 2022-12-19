@@ -62,7 +62,12 @@ def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
     return tuple(mask)
 
 
-def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
+def normalize_storage_spec(
+    aligned_index: Optional[Sequence[int]],
+    shape: Sequence[int],
+    dtype: DTypeLike,
+    dimensions: Optional[Sequence[str]],
+) -> Tuple[Sequence[int], Sequence[int], DTypeLike, Tuple[str, ...]]:
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
@@ -75,7 +80,6 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-
     if dimensions is None:
         dimensions = (
             list("IJK"[: len(shape)])
@@ -93,7 +97,7 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
         dimensions = tuple(str(d) for d in dimensions)
     if shape is not None:
         if not (
-            isinstance(shape, collections.abc.Iterable)
+            isinstance(shape, collections.abc.Sequence)
             and all(isinstance(s, numbers.Integral) for s in shape)
         ):
             raise TypeError("shape must be an iterable of ints.")
@@ -113,7 +117,7 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
 
     if aligned_index is not None:
         if not (
-            isinstance(aligned_index, collections.abc.Iterable)
+            isinstance(aligned_index, collections.abc.Sequence)
             and all(isinstance(i, numbers.Integral) for i in aligned_index)
         ):
             raise TypeError("aligned_index must be an iterable of ints.")

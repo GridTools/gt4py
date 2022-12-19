@@ -14,6 +14,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
+from gt4py import storage as gt_storage
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -29,7 +30,6 @@ from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_optimizations.caches import FillFlushToLocalKCaches
 from gt4py.cartesian.gtc.passes.oir_optimizations.pruning import NoFieldAccessPruning
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
-from gt4py import storage as gt_storage
 from gt4py.eve import codegen
 
 from .gtc_common import BaseGTBackend, CUDAPyExtModuleGenerator

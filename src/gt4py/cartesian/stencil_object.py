@@ -413,7 +413,9 @@ class StencilObject(abc.ABC):
 
                 if not backend_cls.storage_info["is_optimal_layout"](
                     arg_info.array,
-                    list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))],
+                    tuple(
+                        list(field_info.axes) + [str(d) for d in range(len(field_info.data_dims))]
+                    ),
                 ):
                     import warnings
 

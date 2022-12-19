@@ -21,9 +21,9 @@ import time
 import warnings
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
 
+from gt4py import storage as gt_storage
 from gt4py.cartesian import definitions as gt_definitions
 from gt4py.cartesian import utils as gt_utils
-from gt4py import storage as gt_storage
 
 from . import pyext_builder
 from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
@@ -74,7 +74,7 @@ class Backend(abc.ABC):
     #:  - "device": "cpu" | "gpu"
     #:  - "layout_map": callback converting a mask to a layout
     #:  - "is_optimal_layout": callback checking if a storage has compatible layout
-    storage_info: ClassVar[Dict[str, Any]]
+    storage_info: ClassVar[gt_storage.layout.LayoutInfo]
 
     #: Language support:
     #:

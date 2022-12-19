@@ -21,7 +21,6 @@ import sympy
 
 import gt4py.cartesian.gtc.definitions
 from gt4py import eve
-from gt4py.cartesian import gtc
 from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.common import LocNode
 from gt4py.cartesian.gtc.dace.symbol_utils import (
