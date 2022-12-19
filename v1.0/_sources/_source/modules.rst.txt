@@ -1,0 +1,7 @@
+gt4py
+=====
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py

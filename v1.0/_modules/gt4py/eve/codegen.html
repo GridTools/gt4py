@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.codegen &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.codegen</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.eve.codegen</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Tools for source code generation.&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">abc</span>
+<span class="kn">import</span> <span class="nn">collections.abc</span>
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">import</span> <span class="nn">types</span>
+
+<span class="kn">import</span> <span class="nn">black</span>
+<span class="kn">import</span> <span class="nn">jinja2</span>
+<span class="kn">from</span> <span class="nn">mako</span> <span class="kn">import</span> <span class="n">template</span> <span class="k">as</span> <span class="n">mako_tpl</span>  <span class="c1"># type: ignore[import]</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">exceptions</span><span class="p">,</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">.concepts</span> <span class="kn">import</span> <span class="n">CollectionNode</span><span class="p">,</span> <span class="n">LeafNode</span><span class="p">,</span> <span class="n">Node</span><span class="p">,</span> <span class="n">RootNode</span>
+<span class="kn">from</span> <span class="nn">.extended_typing</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Any</span><span class="p">,</span>
+    <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">ClassVar</span><span class="p">,</span>
+    <span class="n">Collection</span><span class="p">,</span>
+    <span class="n">Dict</span><span class="p">,</span>
+    <span class="n">Iterator</span><span class="p">,</span>
+    <span class="n">List</span><span class="p">,</span>
+    <span class="n">Mapping</span><span class="p">,</span>
+    <span class="n">Optional</span><span class="p">,</span>
+    <span class="n">Protocol</span><span class="p">,</span>
+    <span class="n">Sequence</span><span class="p">,</span>
+    <span class="n">Set</span><span class="p">,</span>
+    <span class="n">Tuple</span><span class="p">,</span>
+    <span class="n">TypeVar</span><span class="p">,</span>
+    <span class="n">Union</span><span class="p">,</span>
+    <span class="n">overload</span><span class="p">,</span>
+    <span class="n">runtime_checkable</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.visitors</span> <span class="kn">import</span> <span class="n">NodeVisitor</span>
+
+
+<span class="n">SourceFormatter</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span>
+
+<span class="n">SOURCE_FORMATTERS</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SourceFormatter</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="sd">&quot;&quot;&quot;Global dict storing registered formatters.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="FormatterNameError"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.FormatterNameError">[docs]</a><span class="k">class</span> <span class="nc">FormatterNameError</span><span class="p">(</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Run-time error registering a new source code formatter.&quot;&quot;&quot;</span>
+
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="FormattingError"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.FormattingError">[docs]</a><span class="k">class</span> <span class="nc">FormattingError</span><span class="p">(</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Run-time error applying a source code formatter.&quot;&quot;&quot;</span>
+
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="TemplateDefinitionError"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplateDefinitionError">[docs]</a><span class="k">class</span> <span class="nc">TemplateDefinitionError</span><span class="p">(</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveTypeError</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Template definition error.&quot;&quot;&quot;</span>
+
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="TemplateRenderingError"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplateRenderingError">[docs]</a><span class="k">class</span> <span class="nc">TemplateRenderingError</span><span class="p">(</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Run-time error rendering a template.&quot;&quot;&quot;</span>
+
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="register_formatter"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.register_formatter">[docs]</a><span class="k">def</span> <span class="nf">register_formatter</span><span class="p">(</span><span class="n">language</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">SourceFormatter</span><span class="p">],</span> <span class="n">SourceFormatter</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Register source code formatters for specific languages (decorator).&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">_decorator</span><span class="p">(</span><span class="n">formatter</span><span class="p">:</span> <span class="n">SourceFormatter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SourceFormatter</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">language</span> <span class="ow">in</span> <span class="n">SOURCE_FORMATTERS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FormatterNameError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Another formatter for language &#39;</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">&#39; already exists&quot;</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="n">callable</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+        <span class="n">SOURCE_FORMATTERS</span><span class="p">[</span><span class="n">language</span><span class="p">]</span> <span class="o">=</span> <span class="n">formatter</span>
+
+        <span class="k">return</span> <span class="n">formatter</span>
+
+    <span class="k">return</span> <span class="n">_decorator</span></div>
+
+
+<div class="viewcode-block" id="format_python_source"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.format_python_source">[docs]</a><span class="nd">@register_formatter</span><span class="p">(</span><span class="s2">&quot;python&quot;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">format_python_source</span><span class="p">(</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">line_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="n">python_versions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">string_normalization</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Format Python source code using black formatter.&quot;&quot;&quot;</span>
+    <span class="n">python_versions</span> <span class="o">=</span> <span class="n">python_versions</span> <span class="ow">or</span> <span class="p">{</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="o">.</span><span class="n">major</span><span class="si">}{</span><span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="o">.</span><span class="n">minor</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">}</span>
+    <span class="n">target_versions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span>
+        <span class="n">black</span><span class="o">.</span><span class="n">TargetVersion</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;PY</span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">python_versions</span>
+    <span class="p">)</span>
+
+    <span class="n">formatted_source</span> <span class="o">=</span> <span class="n">black</span><span class="o">.</span><span class="n">format_str</span><span class="p">(</span>
+        <span class="n">source</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="n">black</span><span class="o">.</span><span class="n">FileMode</span><span class="p">(</span>
+            <span class="n">line_length</span><span class="o">=</span><span class="n">line_length</span><span class="p">,</span>
+            <span class="n">target_versions</span><span class="o">=</span><span class="n">target_versions</span><span class="p">,</span>
+            <span class="n">string_normalization</span><span class="o">=</span><span class="n">string_normalization</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">formatted_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">formatted_source</span></div>
+
+
+<div class="viewcode-block" id="_get_clang_format"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen._get_clang_format">[docs]</a><span class="k">def</span> <span class="nf">_get_clang_format</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Return the clang-format executable, or None if not available.&quot;&quot;&quot;</span>
+    <span class="n">executable</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CLANG_FORMAT_EXECUTABLE&quot;</span><span class="p">,</span> <span class="s2">&quot;clang-format&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">executable</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="n">executable</span><span class="p">,</span> <span class="s2">&quot;--version&quot;</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">returncode</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">executable</span></div>
+
+
+<span class="n">_CLANG_FORMAT_EXECUTABLE</span> <span class="o">=</span> <span class="n">_get_clang_format</span><span class="p">()</span>
+
+
+<span class="k">if</span> <span class="n">_CLANG_FORMAT_EXECUTABLE</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+
+    <span class="nd">@register_formatter</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">format_cpp_source</span><span class="p">(</span>
+        <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">style</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">fallback_style</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">sort_includes</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Format C++ source code using clang-format.&quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_CLANG_FORMAT_EXECUTABLE</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">_CLANG_FORMAT_EXECUTABLE</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">style</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--style=</span><span class="si">{</span><span class="n">style</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fallback_style</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--fallback-style=</span><span class="si">{</span><span class="n">style</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sort_includes</span><span class="p">:</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--sort-includes&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># use a timeout as clang-format used to deadlock on some sources</span>
+            <span class="n">formatted_source</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="n">args</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">source</span><span class="p">,</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">stdout</span>
+        <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">source</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">formatted_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">formatted_source</span>
+
+
+<div class="viewcode-block" id="format_source"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.format_source">[docs]</a><span class="k">def</span> <span class="nf">format_source</span><span class="p">(</span><span class="n">language</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">skip_errors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Format source code if a formatter exists for the specific language.&quot;&quot;&quot;</span>
+    <span class="n">formatter</span> <span class="o">=</span> <span class="n">SOURCE_FORMATTERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">language</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">formatter</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">formatter</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FormattingError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing formatter for &#39;</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">&#39; language&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">skip_errors</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">source</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FormattingError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Something went wrong when trying to format &#39;</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">&#39; source code&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></div>
+
+
+<div class="viewcode-block" id="Name"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Name">[docs]</a><span class="k">class</span> <span class="nc">Name</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Text formatter with different case styles for symbol names in source code.&quot;&quot;&quot;</span>
+
+    <span class="n">words</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Name.from_string"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Name.from_string">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_string</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">case_style</span><span class="p">:</span> <span class="n">utils</span><span class="o">.</span><span class="n">CaseStyleConverter</span><span class="o">.</span><span class="n">CASE_STYLE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Name</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">CaseStyleConverter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">case_style</span><span class="p">))</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">words</span><span class="p">:</span> <span class="n">utils</span><span class="o">.</span><span class="n">AnyWordsIterable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">words</span> <span class="o">=</span> <span class="p">[</span><span class="n">words</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Iterable</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Identifier definition (&#39;</span><span class="si">{</span><span class="n">words</span><span class="si">}</span><span class="s2">&#39;) type is not a valid sequence of words&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">words</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">words</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">words</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Identifier definition (&#39;</span><span class="si">{</span><span class="n">words</span><span class="si">}</span><span class="s2">&#39;) type is not a valid sequence of words&quot;</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">words</span> <span class="o">=</span> <span class="n">words</span>
+
+<div class="viewcode-block" id="Name.as_case"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Name.as_case">[docs]</a>    <span class="k">def</span> <span class="nf">as_case</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">case_style</span><span class="p">:</span> <span class="n">utils</span><span class="o">.</span><span class="n">CaseStyleConverter</span><span class="o">.</span><span class="n">CASE_STYLE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">utils</span><span class="o">.</span><span class="n">CaseStyleConverter</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">words</span><span class="p">,</span> <span class="n">case_style</span><span class="p">)</span></div></div>
+
+
+<span class="n">AnyTextSequence</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="s2">&quot;TextBlock&quot;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="TextBlock"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock">[docs]</a><span class="k">class</span> <span class="nc">TextBlock</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;A block of source code represented as a sequence of text lines.</span>
+
+<span class="sd">    Check the provided context manager creator method (:meth:`indented`)</span>
+<span class="sd">    for simple `indent - append - dedent` workflows.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        indent_level: Initial indentation level.</span>
+<span class="sd">        indent_size: Number of characters per indentation level.</span>
+<span class="sd">        indent_char: Character used in the indentation.</span>
+<span class="sd">        end_line: Character or string used as new-line separator.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">indent_level</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">indent_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="n">indent_char</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span><span class="p">,</span>
+        <span class="n">end_line</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indent_char</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">indent_char</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;indent_char&#39; must be a single-character string&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end_line</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;end_line&#39; must be a string&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">=</span> <span class="n">indent_level</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_size</span> <span class="o">=</span> <span class="n">indent_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="o">=</span> <span class="n">indent_char</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">end_line</span> <span class="o">=</span> <span class="n">end_line</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="TextBlock.append"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.append">[docs]</a>    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_line</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">update_indent</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">update_indent</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">indent</span><span class="p">(</span><span class="n">update_indent</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">update_indent</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="o">-</span><span class="n">update_indent</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indent_str</span> <span class="o">+</span> <span class="n">new_line</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="TextBlock.extend"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.extend">[docs]</a>    <span class="k">def</span> <span class="nf">extend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_lines</span><span class="p">:</span> <span class="n">AnyTextSequence</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">dedent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">new_lines</span><span class="p">,</span> <span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">,</span> <span class="n">TextBlock</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">dedent</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">new_lines</span><span class="p">,</span> <span class="n">TextBlock</span><span class="p">):</span>
+                <span class="n">new_lines</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">new_lines</span><span class="o">.</span><span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_lines</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">new_lines</span><span class="p">))</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">new_lines</span><span class="p">,</span> <span class="n">TextBlock</span><span class="p">):</span>
+            <span class="n">new_lines</span> <span class="o">=</span> <span class="n">new_lines</span><span class="o">.</span><span class="n">lines</span>
+
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">new_lines</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="TextBlock.empty_line"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.empty_line">[docs]</a>    <span class="k">def</span> <span class="nf">empty_line</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s2">&quot;&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">count</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="TextBlock.indent"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.indent">[docs]</a>    <span class="k">def</span> <span class="nf">indent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">+=</span> <span class="n">steps</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="TextBlock.dedent"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.dedent">[docs]</a>    <span class="k">def</span> <span class="nf">dedent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">&gt;=</span> <span class="n">steps</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">-=</span> <span class="n">steps</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="TextBlock.indented"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TextBlock.indented">[docs]</a>    <span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+    <span class="k">def</span> <span class="nf">indented</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">TextBlock</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Context manager creator for temporary indentation of sources.</span>
+
+<span class="sd">        This context manager simplifies the usage of indent/dedent in</span>
+<span class="sd">        common `indent - append - dedent` workflows.</span>
+
+<span class="sd">        Examples:</span>
+<span class="sd">            &gt;&gt;&gt; block = TextBlock();</span>
+<span class="sd">            &gt;&gt;&gt; block.append(&#39;first line&#39;)  # doctest: +ELLIPSIS</span>
+<span class="sd">            &lt;...&gt;</span>
+<span class="sd">            &gt;&gt;&gt; with block.indented():</span>
+<span class="sd">            ...     block.append(&#39;second line&#39;);  # doctest: +ELLIPSIS</span>
+<span class="sd">            &lt;...&gt;</span>
+<span class="sd">            &gt;&gt;&gt; block.append(&#39;third line&#39;)  # doctest: +ELLIPSIS</span>
+<span class="sd">            &lt;...&gt;</span>
+<span class="sd">            &gt;&gt;&gt; print(block.text)</span>
+<span class="sd">            first line</span>
+<span class="sd">                second line</span>
+<span class="sd">            third line</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indent</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span>
+        <span class="k">yield</span> <span class="bp">self</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">steps</span><span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">text</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Single string with the whole block contents.&quot;&quot;&quot;</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">line</span><span class="p">])</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_line</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">indent_str</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Indentation string for new lines (in the current state).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent_char</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indent_level</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent_size</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__iadd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_line</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AnyTextSequence</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">TextBlock</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source_line</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">source_line</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">source_line</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span></div>
+
+
+<span class="n">TemplateT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;TemplateT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">&quot;Template&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Template"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Template">[docs]</a><span class="nd">@runtime_checkable</span>
+<span class="k">class</span> <span class="nc">Template</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Protocol (abstract base class) defining the Template interface.</span>
+
+<span class="sd">    Direct subclassess of this base class only need to implement the</span>
+<span class="sd">    abstract methods to adapt different template engines to this</span>
+<span class="sd">    interface.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        TemplateDefinitionError: If the template definition contains errors.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Template.render"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Template.render">[docs]</a>    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mapping</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Render the template.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            mapping: A mapping whose keys match the template placeholders.</span>
+
+<span class="sd">            ``**kwargs``: Placeholder values provided as keyword arguments (they will</span>
+<span class="sd">                take precedence over ``mapping`` values for duplicated keys.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The rendered string.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TemplateRenderingError: If the template rendering fails.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">mapping</span><span class="p">:</span>
+            <span class="n">mapping</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">mapping</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">mapping</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_values</span><span class="p">(</span><span class="o">**</span><span class="n">mapping</span><span class="p">)</span></div>
+
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">definition</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="Template.render_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.Template.render_values">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">render_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Render the template.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            ``**kwargs``: Placeholder values provided as keyword arguments.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The rendered string.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TemplateRenderingError: If the template rendering fails.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span></div></div>
+
+
+<div class="viewcode-block" id="BaseTemplate"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.BaseTemplate">[docs]</a><span class="k">class</span> <span class="nc">BaseTemplate</span><span class="p">(</span><span class="n">Template</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Helper class to add source location info of template definitions.&quot;&quot;&quot;</span>
+
+    <span class="n">definition</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">definition_loc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">currentframe</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_back</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_back</span><span class="o">.</span><span class="n">f_back</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">lineno</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getframeinfo</span><span class="p">(</span><span class="n">frame</span><span class="o">.</span><span class="n">f_back</span><span class="o">.</span><span class="n">f_back</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span> <span class="o">=</span> <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">lineno</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">frame</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">}</span><span class="s2">: &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="si">}</span><span class="s2">&#39;&gt;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="FormatTemplate"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.FormatTemplate">[docs]</a><span class="k">class</span> <span class="nc">FormatTemplate</span><span class="p">(</span><span class="n">BaseTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Template adapter to render regular strings as fully-featured f-strings.&quot;&quot;&quot;</span>
+
+    <span class="n">definition</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">definition</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">definition</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;(f&quot;&quot;&quot;</span><span class="si">{</span><span class="n">definition</span><span class="si">}</span><span class="s1">&quot;&quot;&quot;)&#39;</span>
+
+<div class="viewcode-block" id="FormatTemplate.render_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.FormatTemplate.render_values">[docs]</a>    <span class="k">def</span> <span class="nf">render_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="p">,</span> <span class="p">{},</span> <span class="n">kwargs</span> <span class="ow">or</span> <span class="p">{})</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="si">}</span><span class="s2">&#39;&gt;&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; rendering error.&quot;</span>
+
+            <span class="k">raise</span> <span class="n">TemplateRenderingError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></div></div>
+
+
+<div class="viewcode-block" id="StringTemplate"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.StringTemplate">[docs]</a><span class="k">class</span> <span class="nc">StringTemplate</span><span class="p">(</span><span class="n">BaseTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Template adapter for `string.Template`.&quot;&quot;&quot;</span>
+
+    <span class="n">definition</span><span class="p">:</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">definition</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">definition</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">definition</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="n">string</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">definition</span> <span class="o">=</span> <span class="n">definition</span>
+
+<div class="viewcode-block" id="StringTemplate.render_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.StringTemplate.render_values">[docs]</a>    <span class="k">def</span> <span class="nf">render_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">loc_info</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;line (\d+), col (\d+)&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; rendering error at template line: </span><span class="si">{</span><span class="n">loc_info</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">, column </span><span class="si">{</span><span class="n">loc_info</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">.&quot;</span>  <span class="c1"># type: ignore</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; rendering error.&quot;</span>
+
+            <span class="k">raise</span> <span class="n">TemplateRenderingError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></div></div>
+
+
+<div class="viewcode-block" id="JinjaTemplate"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.JinjaTemplate">[docs]</a><span class="k">class</span> <span class="nc">JinjaTemplate</span><span class="p">(</span><span class="n">BaseTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Template adapter for `jinja2.Template`.&quot;&quot;&quot;</span>
+
+    <span class="n">definition</span><span class="p">:</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Template</span>
+
+    <span class="n">__jinja_env__</span> <span class="o">=</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Environment</span><span class="p">(</span><span class="n">undefined</span><span class="o">=</span><span class="n">jinja2</span><span class="o">.</span><span class="n">StrictUndefined</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">definition</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Template</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">definition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__jinja_env__</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">definition</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">definition</span> <span class="o">=</span> <span class="n">definition</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Error in JinjaTemplate&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;lineno&quot;</span><span class="p">):</span>
+                        <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (error likely around line: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">lineno</span><span class="si">}</span><span class="s2">)&quot;</span>  <span class="c1"># type: ignore  # assume Jinja exception</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="s2">---</span><span class="se">\n</span><span class="si">{</span><span class="n">definition</span><span class="si">}</span><span class="se">\n</span><span class="s2">---</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+            <span class="k">raise</span> <span class="n">TemplateDefinitionError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">definition</span><span class="o">=</span><span class="n">definition</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+
+<div class="viewcode-block" id="JinjaTemplate.render_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.JinjaTemplate.render_values">[docs]</a>    <span class="k">def</span> <span class="nf">render_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; rendering error at template line: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">lineno</span><span class="si">}</span><span class="s2">.&quot;</span>  <span class="c1"># type: ignore  # assume Jinja exception</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; rendering error.&quot;</span>
+
+            <span class="k">raise</span> <span class="n">TemplateRenderingError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></div></div>
+
+
+<div class="viewcode-block" id="MakoTemplate"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.MakoTemplate">[docs]</a><span class="k">class</span> <span class="nc">MakoTemplate</span><span class="p">(</span><span class="n">BaseTemplate</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Template adapter for `mako.template.Template`.&quot;&quot;&quot;</span>
+
+    <span class="n">definition</span><span class="p">:</span> <span class="n">mako_tpl</span><span class="o">.</span><span class="n">Template</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">definition</span><span class="p">:</span> <span class="n">mako_tpl</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">definition</span> <span class="o">=</span> <span class="n">mako_tpl</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span><span class="n">definition</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="n">mako_tpl</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">definition</span> <span class="o">=</span> <span class="n">definition</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Error in MakoTemplate&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (error likely around line </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">lineno</span><span class="si">}</span><span class="s2">, column: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s1">&#39;pos&#39;</span><span class="p">,</span> <span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>  <span class="c1"># type: ignore  # assume Mako exception</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="s2">---</span><span class="se">\n</span><span class="si">{</span><span class="n">definition</span><span class="si">}</span><span class="se">\n</span><span class="s2">---</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+            <span class="k">raise</span> <span class="n">TemplateDefinitionError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">definition</span><span class="o">=</span><span class="n">definition</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+
+<div class="viewcode-block" id="MakoTemplate.render_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.MakoTemplate.render_values">[docs]</a>    <span class="k">def</span> <span class="nf">render_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (created at </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_loc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; rendering error at template line: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">lineno</span><span class="si">}</span><span class="s2">, column: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s1">&#39;pos&#39;</span><span class="p">,</span> <span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># type: ignore  # assume Mako exception</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; rendering error.&quot;</span>
+            <span class="k">raise</span> <span class="n">TemplateRenderingError</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">template</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span></div></div>
+
+
+<div class="viewcode-block" id="TemplatedGenerator"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator">[docs]</a><span class="k">class</span> <span class="nc">TemplatedGenerator</span><span class="p">(</span><span class="n">NodeVisitor</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A code generator visitor using :class:`TextTemplate`.</span>
+
+<span class="sd">    The order followed to choose a `dump()` function for node values is the following:</span>
+
+<span class="sd">        1. A ``self.visit_NODE_CLASS_NAME()`` method where `NODE_CLASS_NAME`</span>
+<span class="sd">           matches ``type(node).__name__``.</span>
+<span class="sd">        2. A ``self.visit_NODE_BASE_CLASS_NAME()`` method where</span>
+<span class="sd">           `NODE_BASE_CLASS_NAME` matches ``base.__name__``, and `base` is</span>
+<span class="sd">           one of the node base classes (evaluated following the order</span>
+<span class="sd">           given in ``type(node).__mro__``).</span>
+
+<span class="sd">        If `node` is an instance of :class:`eve.Node` and a `visit_` method has</span>
+<span class="sd">        not been found, `TemplatedGenerator` will look for an appropriate</span>
+<span class="sd">        :class:`Template` definition:</span>
+
+<span class="sd">        3. A ``NODE_CLASS_NAME`` class variable of type :class:`Template`,</span>
+<span class="sd">           where ``NODE_CLASS_NAME`` matches ``type(node).__name__``.</span>
+<span class="sd">        4. A ``NODE_BASE_CLASS_NAME`` class variable of type :class:`Template`,</span>
+<span class="sd">           where ``NODE_BASE_CLASS_NAME`` matches ``base.__name__``, and</span>
+<span class="sd">           `base` is one of the node base classes (evaluated following the</span>
+<span class="sd">           order given in ``type(node).__mro__``).</span>
+
+<span class="sd">        In any other case (templates cannot be used for instances of arbitrary types),</span>
+<span class="sd">        steps 3 and 4 will be substituted by a call to the :meth:`self.generic_dump()`</span>
+<span class="sd">        method.</span>
+
+<span class="sd">    The following keys are passed to template instances at rendering:</span>
+
+<span class="sd">        * ``**node_fields``: all the node children and implementation fields by name.</span>
+<span class="sd">        * ``_impl``: a ``dict`` instance with the results of visiting all</span>
+<span class="sd">          the node implementation fields.</span>
+<span class="sd">        * ``_children``: a ``dict`` instance with the results of visiting all</span>
+<span class="sd">          the node children.</span>
+<span class="sd">        * ``_this_node``: the actual node instance (before visiting children).</span>
+<span class="sd">        * ``_this_generator``: the current generator instance.</span>
+<span class="sd">        * ``_this_module``: the generator&#39;s module instance.</span>
+<span class="sd">        * ``**kwargs``: the keyword arguments received by the visiting method.</span>
+
+<span class="sd">    Visitor methods can trigger regular template rendering for the same node class</span>
+<span class="sd">    by explicitly calling :meth:`generic_visit()` (typically at the end), which will</span>
+<span class="sd">    continue the search rendering algorithm at step 3. Thus, a common pattern to deal</span>
+<span class="sd">    with complicated nodes is to define both a visitor method and a template for</span>
+<span class="sd">    the same class, where the visitor method preprocess the node data and calls</span>
+<span class="sd">    :meth:`generic_visit()` at the end with additional keyword arguments which will</span>
+<span class="sd">    be forwarded to the node template.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__templates__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Template</span><span class="p">]]</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">__init_subclass__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">inherit_templates</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__init_subclass__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;__templates__&quot;</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid &#39;__templates__&#39; member in class </span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">templates</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Template</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">inherit_templates</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">templated_gen_class</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__mro__</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="nb">issubclass</span><span class="p">(</span><span class="n">templated_gen_class</span><span class="p">,</span> <span class="n">TemplatedGenerator</span><span class="p">)</span>
+                    <span class="ow">and</span> <span class="n">templated_gen_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">TemplatedGenerator</span>
+                <span class="p">):</span>
+                    <span class="n">templates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">templated_gen_class</span><span class="o">.</span><span class="n">__templates__</span><span class="p">)</span>
+
+        <span class="n">templates</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="n">key</span><span class="p">:</span> <span class="n">value</span>
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Template</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">key</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+
+        <span class="bp">cls</span><span class="o">.</span><span class="n">__templates__</span> <span class="o">=</span> <span class="n">types</span><span class="o">.</span><span class="n">MappingProxyType</span><span class="p">(</span><span class="n">templates</span><span class="p">)</span>
+
+    <span class="nd">@overload</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">LeafNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinition of symbol</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">CollectionNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="o">...</span>
+
+<div class="viewcode-block" id="TemplatedGenerator.apply"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinition of symbol</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Public method to build a class instance and visit an IR node.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            root: An IR node.</span>
+<span class="sd">            node_templates (optiona): see :class:`NodeDumper`.</span>
+<span class="sd">            dump_function (optiona): see :class:`NodeDumper`.</span>
+<span class="sd">            ``**kwargs`` (optional): custom extra parameters forwarded to `visit_NODE_TYPE_NAME()`.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            String (or collection of strings) with the dumped version of the root IR node.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.generic_dump"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.generic_dump">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">generic_dump</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Class-specific ``dump()`` function for primitive types.</span>
+
+<span class="sd">        This class could be redefined in the subclasses.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.generic_visit"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.generic_visit">[docs]</a>    <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">Node</span><span class="p">):</span>
+            <span class="n">template</span><span class="p">,</span> <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_template</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">template</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_template</span><span class="p">(</span>
+                        <span class="n">template</span><span class="p">,</span>
+                        <span class="n">node</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">transform_children</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">transform_annexed_items</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+                        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">except</span> <span class="n">TemplateRenderingError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="c1"># Raise a new exception with extra information keeping the original cause</span>
+                    <span class="k">raise</span> <span class="n">TemplateRenderingError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Error in &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; template when rendering node &#39;</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">&#39;.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                        <span class="o">+</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)),</span>
+                        <span class="o">**</span><span class="n">e</span><span class="o">.</span><span class="n">info</span><span class="p">,</span>
+                        <span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span>
+                    <span class="p">)</span> <span class="kn">from</span> <span class="nn">e.__cause__</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Set</span><span class="p">))</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">))</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Mapping</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_dump</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.get_template"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.get_template">[docs]</a>    <span class="k">def</span> <span class="nf">get_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">RootNode</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">Template</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Get a template for a node instance (see class documentation).&quot;&quot;&quot;</span>
+        <span class="n">template</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Template</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">template_key</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">Node</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">node_class</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__mro__</span><span class="p">:</span>
+                <span class="n">template_key</span> <span class="o">=</span> <span class="n">node_class</span><span class="o">.</span><span class="vm">__name__</span>
+                <span class="n">template</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__templates__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">template_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">template</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">node_class</span> <span class="ow">is</span> <span class="n">Node</span><span class="p">:</span>
+                    <span class="k">break</span>
+
+        <span class="k">return</span> <span class="n">template</span><span class="p">,</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">template</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">template_key</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.render_template"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.render_template">[docs]</a>    <span class="k">def</span> <span class="nf">render_template</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">template</span><span class="p">:</span> <span class="n">Template</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">Node</span><span class="p">,</span>
+        <span class="n">transformed_children</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">transformed_annexed_items</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Render a template using node instance data (see class documentation).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span>
+            <span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">transformed_children</span><span class="p">,</span> <span class="o">**</span><span class="n">transformed_annexed_items</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">},</span>
+            <span class="n">_children</span><span class="o">=</span><span class="n">transformed_children</span><span class="p">,</span>
+            <span class="n">_impl</span><span class="o">=</span><span class="n">transformed_annexed_items</span><span class="p">,</span>
+            <span class="n">_this_node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span>
+            <span class="n">_this_generator</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">_this_module</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__module__</span><span class="p">],</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.transform_children"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.transform_children">[docs]</a>    <span class="k">def</span> <span class="nf">transform_children</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">Node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">iter_children_items</span><span class="p">()}</span>  <span class="c1"># type: ignore[misc]</span></div>
+
+<div class="viewcode-block" id="TemplatedGenerator.transform_annexed_items"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.codegen.TemplatedGenerator.transform_annexed_items">[docs]</a>    <span class="k">def</span> <span class="nf">transform_annexed_items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">Node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

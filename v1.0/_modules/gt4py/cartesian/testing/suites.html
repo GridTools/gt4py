@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.testing.suites &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.testing.suites</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.testing.suites</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">types</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">count</span><span class="p">,</span> <span class="n">product</span>
+
+<span class="kn">import</span> <span class="nn">hypothesis</span> <span class="k">as</span> <span class="nn">hyp</span>
+<span class="kn">import</span> <span class="nn">hypothesis.strategies</span> <span class="k">as</span> <span class="nn">hyp_st</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pytest</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.cartesian.gtc.utils</span> <span class="k">as</span> <span class="nn">gtc_utils</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt4pyc</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">storage</span> <span class="k">as</span> <span class="n">gt_storage</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian</span> <span class="kn">import</span> <span class="n">gtscript</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian</span> <span class="kn">import</span> <span class="n">utils</span> <span class="k">as</span> <span class="n">gt_utils</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.definitions</span> <span class="kn">import</span> <span class="n">AccessKind</span><span class="p">,</span> <span class="n">Boundary</span><span class="p">,</span> <span class="n">CartesianSpace</span><span class="p">,</span> <span class="n">FieldInfo</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.frontend.nodes</span> <span class="kn">import</span> <span class="n">Index</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Shape</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_object</span> <span class="kn">import</span> <span class="n">StencilObject</span>
+<span class="kn">from</span> <span class="nn">gt4py.storage</span> <span class="kn">import</span> <span class="n">utils</span> <span class="k">as</span> <span class="n">storage_utils</span>
+
+<span class="kn">from</span> <span class="nn">.input_strategies</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">SymbolKind</span><span class="p">,</span>
+    <span class="n">composite_implementation_strategy_factory</span><span class="p">,</span>
+    <span class="n">composite_strategy_factory</span><span class="p">,</span>
+    <span class="n">derived_shape_st</span><span class="p">,</span>
+    <span class="n">ndarray_shape_st</span><span class="p">,</span>
+    <span class="n">ndarray_st</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">annotate_function</span><span class="p">,</span> <span class="n">standardize_dtype_dict</span>
+
+
+<span class="n">ParameterSet</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">())</span>
+
+<span class="n">counter</span> <span class="o">=</span> <span class="n">count</span><span class="p">()</span>
+<span class="n">RTOL</span> <span class="o">=</span> <span class="mf">1e-05</span>
+<span class="n">ATOL</span> <span class="o">=</span> <span class="mf">1e-08</span>
+<span class="n">EQUAL_NAN</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="n">unique_str_ctr</span> <span class="o">=</span> <span class="n">count</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="unique_str"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.unique_str">[docs]</a><span class="k">def</span> <span class="nf">unique_str</span><span class="p">():</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">unique_str_ctr</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="SuiteMeta"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.SuiteMeta">[docs]</a><span class="k">class</span> <span class="nc">SuiteMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Custom metaclass for all :class:`StencilTestSuite` classes.</span>
+
+<span class="sd">    This metaclass generates a namespace-like class where all methods are static</span>
+<span class="sd">    and adds new members with the required testing strategies and expected results</span>
+<span class="sd">    to test a stencil definition and implementations using Hypothesis and pytest.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">required_members</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;domain_range&quot;</span><span class="p">,</span> <span class="s2">&quot;symbols&quot;</span><span class="p">,</span> <span class="s2">&quot;definition&quot;</span><span class="p">,</span> <span class="s2">&quot;validation&quot;</span><span class="p">,</span> <span class="s2">&quot;backends&quot;</span><span class="p">,</span> <span class="s2">&quot;dtypes&quot;</span><span class="p">}</span>
+
+<div class="viewcode-block" id="SuiteMeta.collect_symbols"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.SuiteMeta.collect_symbols">[docs]</a>    <span class="k">def</span> <span class="nf">collect_symbols</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">):</span>
+        <span class="n">domain_range</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;domain_range&quot;</span><span class="p">]</span>
+        <span class="n">domain_strategy</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;domain_strategy&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span>
+            <span class="n">ndarray_shape_st</span><span class="p">(</span><span class="n">domain_range</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="n">cls_name</span>
+        <span class="p">)</span>
+
+        <span class="n">generation_strategy_factories</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;generation_strategy_factories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">implementation_strategy_factories</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;implementation_strategy_factories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">global_boundaries</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;global_boundaries&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">constants</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">singletons</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;singletons&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;field_params&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field_params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">max_boundary</span> <span class="o">=</span> <span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">symbol</span> <span class="ow">in</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;symbols&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">:</span>
+                <span class="n">max_boundary</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">max</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+                    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">max_boundary</span><span class="p">,</span> <span class="n">symbol</span><span class="o">.</span><span class="n">boundary</span><span class="p">)</span>
+                <span class="p">)</span>
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;max_boundary&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">max_boundary</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">symbol</span> <span class="ow">in</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;symbols&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">GLOBAL_STRATEGY</span><span class="p">:</span>
+                <span class="n">generation_strategy_factories</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">value_st_factory</span>
+            <span class="k">elif</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">GLOBAL_SET</span><span class="p">:</span>
+                <span class="n">constants</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">values</span>
+            <span class="k">elif</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">SINGLETON</span><span class="p">:</span>
+                <span class="n">singletons</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">symbol</span><span class="o">.</span><span class="n">axes</span><span class="p">:</span>
+                    <span class="n">axes</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">axes</span>
+                    <span class="n">extra_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                        <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">symbol</span><span class="o">.</span><span class="n">axes</span> <span class="k">else</span> <span class="kc">None</span>
+                        <span class="k">for</span> <span class="n">b</span><span class="p">,</span> <span class="n">ax</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">max_boundary</span><span class="p">,</span> <span class="s2">&quot;IJK&quot;</span><span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">axes</span> <span class="o">=</span> <span class="s2">&quot;IJK&quot;</span>
+                    <span class="n">extra_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">max_boundary</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">symbol</span><span class="o">.</span><span class="n">data_dims</span><span class="p">:</span>
+                    <span class="n">data_dims</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">data_dims</span>
+                    <span class="n">extra_shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">extra_shape</span><span class="p">,</span> <span class="o">*</span><span class="n">symbol</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">data_dims</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">()</span>
+
+                <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">data_dims</span><span class="p">)</span>
+
+                <span class="n">global_boundaries</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">boundary</span>
+                <span class="n">shape_strategy</span> <span class="o">=</span> <span class="n">derived_shape_st</span><span class="p">(</span><span class="n">domain_strategy</span><span class="p">,</span> <span class="n">extra_shape</span><span class="p">)</span>
+
+                <span class="c1"># Use default arguments to pass values avoiding late binding problems</span>
+                <span class="k">def</span> <span class="nf">implementation_strategy_factory</span><span class="p">(</span>
+                    <span class="n">dt</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape_strategy</span><span class="p">,</span> <span class="n">value_st_factory</span><span class="o">=</span><span class="n">symbol</span><span class="o">.</span><span class="n">value_st_factory</span>
+                <span class="p">):</span>
+                    <span class="k">return</span> <span class="n">ndarray_st</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">value_st_factory</span><span class="p">)</span>
+
+                <span class="n">implementation_strategy_factories</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">implementation_strategy_factory</span>
+            <span class="k">elif</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">PARAMETER</span><span class="p">:</span>
+                <span class="n">implementation_strategy_factories</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">value_st_factory</span>
+            <span class="k">elif</span> <span class="n">symbol</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">:</span>
+                <span class="n">implementation_strategy_factories</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">symbol</span><span class="o">.</span><span class="n">value_st_factory</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">AssertionError</span>
+
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;origin&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">max_boundary</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SuiteMeta.parametrize_generation_tests"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.SuiteMeta.parametrize_generation_tests">[docs]</a>    <span class="k">def</span> <span class="nf">parametrize_generation_tests</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">):</span>
+
+        <span class="n">backends</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;backends&quot;</span><span class="p">]</span>
+        <span class="n">dtypes</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">]</span>
+        <span class="n">field_params</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;field_params&quot;</span><span class="p">]</span>
+        <span class="n">generation_strategy_factories</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;generation_strategy_factories&quot;</span><span class="p">]</span>
+
+        <span class="k">def</span> <span class="nf">get_dtype_combinations</span><span class="p">(</span><span class="n">dtypes</span><span class="p">):</span>
+            <span class="n">grouped_combinations</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">dtypes</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">p</span><span class="p">)}</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">dtypes</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+            <span class="p">]</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">combination</span><span class="p">[</span><span class="n">ktuple</span><span class="p">]</span> <span class="k">for</span> <span class="n">ktuple</span> <span class="ow">in</span> <span class="n">combination</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">ktuple</span><span class="p">}</span>
+                <span class="k">for</span> <span class="n">combination</span> <span class="ow">in</span> <span class="n">grouped_combinations</span>
+            <span class="p">]</span>
+            <span class="k">return</span> <span class="n">ret</span>
+
+        <span class="k">def</span> <span class="nf">get_globals_combinations</span><span class="p">(</span><span class="n">dtypes</span><span class="p">):</span>
+            <span class="n">combinations</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">dtypes</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">p</span><span class="p">)}</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+            <span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">combinations</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">[{}]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">combinations</span>
+
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">backends</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">get_dtype_combinations</span><span class="p">(</span><span class="n">dtypes</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">get_globals_combinations</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+                    <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="nb">dict</span><span class="p">(</span>
+                            <span class="n">backend</span><span class="o">=</span><span class="n">b</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">b</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                            <span class="n">marks</span><span class="o">=</span><span class="p">[]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">b</span><span class="o">.</span><span class="n">marks</span><span class="p">,</span>
+                            <span class="n">suite</span><span class="o">=</span><span class="n">cls_name</span><span class="p">,</span>
+                            <span class="n">constants</span><span class="o">=</span><span class="n">g</span><span class="p">,</span>
+                            <span class="n">dtypes</span><span class="o">=</span><span class="n">d</span><span class="p">,</span>
+                            <span class="n">generation_strategy</span><span class="o">=</span><span class="n">composite_strategy_factory</span><span class="p">(</span>
+                                <span class="n">d</span><span class="p">,</span> <span class="n">generation_strategy_factories</span>
+                            <span class="p">),</span>
+                            <span class="n">implementations</span><span class="o">=</span><span class="p">[],</span>
+                            <span class="n">test_id</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]),</span>
+                            <span class="n">definition</span><span class="o">=</span><span class="n">annotate_function</span><span class="p">(</span>
+                                <span class="n">function</span><span class="o">=</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;definition&quot;</span><span class="p">],</span>
+                                <span class="n">dtypes</span><span class="o">=</span><span class="p">{</span>
+                                    <span class="n">name</span><span class="p">:</span> <span class="p">(</span>
+                                        <span class="n">dtype</span><span class="o">.</span><span class="n">type</span>
+                                        <span class="k">if</span> <span class="p">(</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">field_params</span><span class="p">)</span>
+                                        <span class="k">else</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span>
+                                            <span class="nb">getattr</span><span class="p">(</span><span class="n">gtscript</span><span class="p">,</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                                            <span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span>
+                                        <span class="p">]</span>
+                                    <span class="p">)</span>
+                                    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                                <span class="p">},</span>
+                            <span class="p">),</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">generation_test_wrapper</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">):</span>
+            <span class="nd">@hyp</span><span class="o">.</span><span class="n">given</span><span class="p">(</span><span class="n">hypothesis_data</span><span class="o">=</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;generation_strategy&quot;</span><span class="p">]())</span>
+            <span class="k">def</span> <span class="nf">hyp_wrapper</span><span class="p">(</span><span class="n">test_hyp</span><span class="p">,</span> <span class="n">hypothesis_data</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_test_generation</span><span class="p">(</span>
+                    <span class="n">test_hyp</span><span class="p">,</span> <span class="p">{</span><span class="o">**</span><span class="n">test_hyp</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">hypothesis_data</span><span class="p">,</span> <span class="o">**</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;singletons&quot;</span><span class="p">]}</span>
+                <span class="p">)</span>
+
+            <span class="n">hyp_wrapper</span><span class="p">(</span><span class="n">test</span><span class="p">)</span>
+
+        <span class="n">pytest_params</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;suite&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">cls_name</span><span class="p">:</span>
+                <span class="n">marks</span> <span class="o">=</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;marks&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span><span class="p">:</span>
+                    <span class="n">marks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">requires_gpu</span><span class="p">)</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">]</span>
+                <span class="n">name</span> <span class="o">+=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+                <span class="n">name</span> <span class="o">+=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="s2">&quot;_</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="p">)</span>
+                <span class="n">param</span> <span class="o">=</span> <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">marks</span><span class="o">=</span><span class="n">marks</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">pytest_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">param</span><span class="p">)</span>
+
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;test_generation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">parametrize</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">pytest_params</span><span class="p">)(</span>
+            <span class="n">generation_test_wrapper</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="SuiteMeta.parametrize_implementation_tests"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.SuiteMeta.parametrize_implementation_tests">[docs]</a>    <span class="k">def</span> <span class="nf">parametrize_implementation_tests</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">):</span>
+        <span class="n">implementation_strategy_factories</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;implementation_strategy_factories&quot;</span><span class="p">]</span>
+        <span class="n">global_boundaries</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;global_boundaries&quot;</span><span class="p">]</span>
+
+        <span class="k">def</span> <span class="nf">implementation_test_wrapper</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">implementation_strategy</span><span class="p">):</span>
+            <span class="nd">@hyp</span><span class="o">.</span><span class="n">given</span><span class="p">(</span><span class="n">hypothesis_data</span><span class="o">=</span><span class="n">implementation_strategy</span><span class="p">())</span>
+            <span class="k">def</span> <span class="nf">hyp_wrapper</span><span class="p">(</span><span class="n">test_hyp</span><span class="p">,</span> <span class="n">hypothesis_data</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_test_implementation</span><span class="p">(</span><span class="n">test_hyp</span><span class="p">,</span> <span class="n">hypothesis_data</span><span class="p">)</span>
+
+            <span class="n">hyp_wrapper</span><span class="p">(</span><span class="n">test</span><span class="p">)</span>
+
+        <span class="n">runtime_pytest_params</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;suite&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">cls_name</span><span class="p">:</span>
+                <span class="n">marks</span> <span class="o">=</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;marks&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span><span class="p">:</span>
+                    <span class="n">marks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">requires_gpu</span><span class="p">)</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">]</span>
+                <span class="n">name</span> <span class="o">+=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;constants&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+                <span class="n">name</span> <span class="o">+=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="s2">&quot;_</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="p">)</span>
+                <span class="n">runtime_pytest_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span>
+                        <span class="n">test</span><span class="p">,</span>
+                        <span class="n">composite_implementation_strategy_factory</span><span class="p">(</span>
+                            <span class="n">test</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">],</span> <span class="n">implementation_strategy_factories</span><span class="p">,</span> <span class="n">global_boundaries</span>
+                        <span class="p">),</span>
+                        <span class="n">marks</span><span class="o">=</span><span class="n">marks</span><span class="p">,</span>
+                        <span class="nb">id</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;test_implementation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">parametrize</span><span class="p">(</span>
+            <span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="s2">&quot;implementation_strategy&quot;</span><span class="p">),</span> <span class="n">runtime_pytest_params</span>
+        <span class="p">)(</span><span class="n">implementation_test_wrapper</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_validate_new_args</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">):</span>
+        <span class="n">missing_members</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">required_members</span> <span class="o">-</span> <span class="n">cls_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">missing_members</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="s2">&quot;Missing </span><span class="si">{missing}</span><span class="s2"> required members in &#39;</span><span class="si">{name}</span><span class="s2">&#39; definition&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">missing</span><span class="o">=</span><span class="n">missing_members</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">cls_name</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="c1"># Check class dict</span>
+        <span class="n">domain_range</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;domain_range&quot;</span><span class="p">]</span>
+        <span class="n">backends</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;backends&quot;</span><span class="p">]</span>
+
+        <span class="c1"># Create testing strategies</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;symbols&quot;</span><span class="p">],</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Mapping</span><span class="p">),</span> <span class="s2">&quot;Invalid &#39;symbols&#39; mapping&quot;</span>
+
+        <span class="c1"># Check domain and ndims</span>
+        <span class="k">assert</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain_range</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domain_range</span>
+        <span class="p">),</span> <span class="s2">&quot;Invalid &#39;domain_range&#39; definition&quot;</span>
+
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">cls_name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">suffix</span><span class="p">)</span> <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;1D&quot;</span><span class="p">,</span> <span class="s2">&quot;2D&quot;</span><span class="p">,</span> <span class="s2">&quot;3D&quot;</span><span class="p">)):</span>
+            <span class="k">assert</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;ndims&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span>
+                <span class="n">cls_name</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="p">),</span> <span class="s2">&quot;Suite name does not match the actual &#39;ndims&#39;&quot;</span>
+
+        <span class="c1"># Check dtypes</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">],</span> <span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Mapping</span><span class="p">)</span>
+        <span class="p">),</span> <span class="s2">&quot;&#39;dtypes&#39; must be a sequence or a mapping object&quot;</span>
+
+        <span class="c1"># Check backends</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">ParameterSet</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">backends</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;&#39;backends&#39; must be a sequence of strings&quot;</span><span class="p">)</span>
+        <span class="n">backends</span> <span class="o">=</span> <span class="p">[</span><span class="n">pytest</span><span class="o">.</span><span class="n">param</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">backends</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">backends</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">b</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">gt</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">REGISTRY</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;backend &#39;</span><span class="si">{backend}</span><span class="s2">&#39; not supported&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">b</span><span class="p">))</span>
+
+        <span class="c1"># Check definition and validation functions</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;definition&quot;</span><span class="p">],</span> <span class="n">types</span><span class="o">.</span><span class="n">FunctionType</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;The &#39;definition&#39; attribute must be a stencil definition function&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;validation&quot;</span><span class="p">],</span> <span class="n">types</span><span class="o">.</span><span class="n">FunctionType</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;The &#39;validation&#39; attribute must be a validation function&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">cls_name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cls_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_skip_&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>  <span class="c1"># skip metaclass magic</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">cls_name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span>
+        <span class="c1"># Grab members inherited from base classes</span>
+
+        <span class="n">missing_members</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">required_members</span> <span class="o">-</span> <span class="n">cls_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">missing_members</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="n">bases</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+                    <span class="n">cls_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                    <span class="k">break</span>
+
+        <span class="n">dtypes</span> <span class="o">=</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtypes</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
+            <span class="n">dtypes</span> <span class="o">=</span> <span class="p">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;symbols&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span> <span class="n">dtypes</span><span class="p">}</span>
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;dtypes&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">standardize_dtype_dict</span><span class="p">(</span><span class="n">dtypes</span><span class="p">)</span>
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;ndims&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;domain_range&quot;</span><span class="p">])</span>
+
+        <span class="c1"># Filter out unsupported backends</span>
+        <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;backends&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">backend</span>
+            <span class="k">for</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;backends&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">backend</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">backend</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="p">]</span>
+
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_validate_new_args</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span>
+
+        <span class="c1"># Extract input and parameter names</span>
+        <span class="n">input_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">parameter_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">definition_signature</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;definition&quot;</span><span class="p">])</span>
+        <span class="n">validation_signature</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;validation&quot;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">def_name</span><span class="p">,</span> <span class="n">def_pobj</span><span class="p">),</span> <span class="p">(</span><span class="n">val_name</span><span class="p">,</span> <span class="n">val_pobj</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="n">definition_signature</span><span class="o">.</span><span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">validation_signature</span><span class="o">.</span><span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="n">def_name</span> <span class="o">!=</span> <span class="n">val_name</span> <span class="ow">or</span> <span class="n">def_pobj</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">val_pobj</span><span class="o">.</span><span class="n">kind</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Incompatible signatures for &#39;definition&#39; and &#39;validation&#39; functions&quot;</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">def_pobj</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">KEYWORD_ONLY</span><span class="p">:</span>
+                <span class="n">parameter_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">def_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">def_pobj</span><span class="o">.</span><span class="n">default</span> <span class="o">!=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="n">def_pobj</span><span class="o">.</span><span class="n">default</span> <span class="o">==</span> <span class="n">val_pobj</span><span class="o">.</span><span class="n">default</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">input_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">def_name</span><span class="p">)</span>
+
+        <span class="bp">cls</span><span class="o">.</span><span class="n">collect_symbols</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">input_names</span> <span class="o">+</span> <span class="n">parameter_names</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span>
+            <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;implementation_strategy_factories&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="p">),</span> <span class="s2">&quot;Missing or invalid keys in &#39;symbols&#39; mapping (generated: </span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">cls_dict</span><span class="p">[</span><span class="s2">&quot;implementation_strategy_factories&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="p">)</span>
+
+        <span class="bp">cls</span><span class="o">.</span><span class="n">parametrize_generation_tests</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">parametrize_implementation_tests</span><span class="p">(</span><span class="n">cls_name</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">cls_name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">cls_dict</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StencilTestSuite"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.StencilTestSuite">[docs]</a><span class="k">class</span> <span class="nc">StencilTestSuite</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">SuiteMeta</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Base class for every *stencil test suite*.</span>
+
+<span class="sd">    Every new test suite must inherit from this class and define proper</span>
+<span class="sd">    attributes and methods to generate a valid set of testing strategies.</span>
+<span class="sd">    For compatibility with pytest, suites must have names starting with &#39;Test&#39;</span>
+
+<span class="sd">    Supported and required class attributes are:</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dtypes : `dict` or `list`</span>
+<span class="sd">        Required class attribute.</span>
+<span class="sd">        GlobalDecl suite dtypes dictionary.</span>
+<span class="sd">        - ``label``: `list` of `dtype`.</span>
+<span class="sd">        If this value is a `list`, it will be converted to a `dict` with the default</span>
+<span class="sd">        `None` key assigned to its value. It is meant to be populated with labels representing</span>
+<span class="sd">        groups of symbols that should have the same type.</span>
+
+<span class="sd">        Example:</span>
+
+<span class="sd">        .. code-block:: python</span>
+
+<span class="sd">                    {</span>
+<span class="sd">                        &#39;float_symbols&#39; : (np.float32, np.float64),</span>
+<span class="sd">                        &#39;int_symbols&#39; : (int, np.int_, np.int64)</span>
+<span class="sd">                    }</span>
+
+<span class="sd">    domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`</span>
+<span class="sd">        Required class attribute.</span>
+<span class="sd">        CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.</span>
+<span class="sd">    symbols : `dict`</span>
+<span class="sd">        Required class attribute.</span>
+<span class="sd">        Definition of symbols (globals, parameters and inputs) used in this stencil.</span>
+<span class="sd">        - ``name``: `utils._SymbolDescriptor`. It is recommended to use the convenience</span>
+<span class="sd">        functions `global_name()`, `parameter()` and `field()`. These functions have similar</span>
+<span class="sd">        and self-explanatory arguments. Note that `dtypes` could be a list of actual dtypes</span>
+<span class="sd">        but it is usually assumed to be a label from the global suite dtypes dictionary.</span>
+<span class="sd">    definition : `function`</span>
+<span class="sd">        Required class attribute.</span>
+<span class="sd">        Stencil definition function.</span>
+<span class="sd">    validation : `function`</span>
+<span class="sd">        Required class attribute.</span>
+<span class="sd">        Stencil validation function. It should have exactly the same signature than</span>
+<span class="sd">        arguments to access the actual values used in the current testing invocation.</span>
+<span class="sd">        the ``definition`` function plus the extra ``_globals_``, ``_domain_``, and ``_origin_``</span>
+<span class="sd">        It should always return a `list` of `numpy.ndarray` s, one per output, even if</span>
+<span class="sd">        the function only defines one output value.</span>
+<span class="sd">    definition_strategies : `dict`</span>
+<span class="sd">        Automatically generated.</span>
+<span class="sd">        Hypothesis strategies for the stencil parameters used at definition (externals)</span>
+<span class="sd">        - ``constant_name``: Hypothesis strategy (`strategy`).</span>
+<span class="sd">    validation_strategies : `dict`</span>
+<span class="sd">        Automatically generated.</span>
+<span class="sd">        Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)</span>
+<span class="sd">        - ``field_name``: Hypothesis strategy (`strategy`).</span>
+<span class="sd">        - ``parameter_name``: Hypothesis strategy (`strategy`).</span>
+<span class="sd">    ndims : `int`</span>
+<span class="sd">        Automatically generated.</span>
+<span class="sd">        Constant of dimensions (1-3). If the name of class ends in [&quot;1D&quot;, &quot;2D&quot;, &quot;3D&quot;],</span>
+<span class="sd">        this attribute needs to match the name or an assertion error will be raised.</span>
+<span class="sd">    global_boundaries : `dict`</span>
+<span class="sd">        Automatically generated.</span>
+<span class="sd">        Expected global boundaries for the input fields.</span>
+<span class="sd">        - ``field_name``: &#39;list&#39; of ``ndim`` &#39;tuple`s  (``(lower_boundary, upper_boundary)``).</span>
+<span class="sd">        Example (3D): `[(1, 3), (2, 2), (0, 0)]`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_skip_</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Avoid processing of this empty test suite</span>
+
+<div class="viewcode-block" id="StencilTestSuite._test_generation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.StencilTestSuite._test_generation">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_test_generation</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">externals_dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Test source code generation for all *backends* and *stencil suites*.</span>
+
+<span class="sd">        The generated implementations are cached in a :class:`utils.ImplementationsDB`</span>
+<span class="sd">        instance, to avoid duplication of (potentially expensive) compilations.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">backend_slug</span> <span class="o">=</span> <span class="n">gt_utils</span><span class="o">.</span><span class="n">slugify</span><span class="p">(</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">],</span> <span class="n">valid_symbols</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">implementation</span> <span class="o">=</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span>
+            <span class="n">backend</span><span class="o">=</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">],</span>
+            <span class="n">definition</span><span class="o">=</span><span class="n">test</span><span class="p">[</span><span class="s2">&quot;definition&quot;</span><span class="p">],</span>
+            <span class="n">name</span><span class="o">=</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__module__</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;.</span><span class="si">{</span><span class="n">test</span><span class="p">[</span><span class="s1">&#39;suite&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">backend_slug</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">test</span><span class="p">[</span><span class="s1">&#39;test_id&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">rebuild</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">externals</span><span class="o">=</span><span class="n">externals_dict</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">externals_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">implementation</span><span class="o">.</span><span class="n">constants</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">implementation</span><span class="p">,</span> <span class="n">StencilObject</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">implementation</span><span class="o">.</span><span class="n">backend</span> <span class="o">==</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">field_info</span> <span class="ow">in</span> <span class="n">implementation</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">field_info</span><span class="o">.</span><span class="n">access</span> <span class="o">==</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ax</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">):</span>
+                <span class="k">assert</span> <span class="p">(</span>
+                    <span class="n">ax</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">field_info</span><span class="o">.</span><span class="n">axes</span>
+                    <span class="ow">or</span> <span class="n">ax</span> <span class="o">==</span> <span class="s2">&quot;K&quot;</span>
+                    <span class="ow">or</span> <span class="n">field_info</span><span class="o">.</span><span class="n">boundary</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">global_boundaries</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="n">i</span><span class="p">]</span>
+                <span class="p">)</span>
+        <span class="n">test</span><span class="p">[</span><span class="s2">&quot;implementations&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">implementation</span><span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_run_test_implementation</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">parameters_dict</span><span class="p">,</span> <span class="n">implementation</span><span class="p">):</span>  <span class="c1"># noqa: C901  # too complex</span>
+        <span class="n">input_data</span><span class="p">,</span> <span class="n">exec_info</span> <span class="o">=</span> <span class="n">parameters_dict</span>
+
+        <span class="n">origin</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">origin</span>
+        <span class="n">max_boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">max_boundary</span><span class="p">)</span>
+        <span class="n">field_params</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">field_params</span>
+        <span class="n">field_dimensions</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">field_masks</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">input_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="n">field_masks</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">ax</span> <span class="ow">in</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">CartesianSpace</span><span class="o">.</span><span class="n">names</span>
+                <span class="p">)</span>
+                <span class="n">field_dimensions</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">ax</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">CartesianSpace</span><span class="o">.</span><span class="n">names</span> <span class="k">if</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                <span class="p">)</span>
+
+        <span class="n">data_shape</span> <span class="o">=</span> <span class="n">Shape</span><span class="p">((</span><span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span><span class="p">,)</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">input_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="n">data_shape</span> <span class="o">&amp;=</span> <span class="n">Shape</span><span class="p">(</span>
+                    <span class="n">gtc_utils</span><span class="o">.</span><span class="n">interpolate_mask</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">field_masks</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">default</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span><span class="p">)</span>
+                <span class="p">)</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">data_shape</span> <span class="o">-</span> <span class="p">(</span>
+            <span class="n">Index</span><span class="p">(</span><span class="n">max_boundary</span><span class="o">.</span><span class="n">lower_indices</span><span class="p">)</span> <span class="o">+</span> <span class="n">Index</span><span class="p">(</span><span class="n">max_boundary</span><span class="o">.</span><span class="n">upper_indices</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="n">referenced_inputs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="n">info</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">implementation</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="p">}</span>
+        <span class="n">referenced_inputs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+            <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">info</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">implementation</span><span class="o">.</span><span class="n">parameter_info</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+        <span class="p">)</span>
+
+        <span class="c1"># set externals for validation method</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">implementation</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__module__</span><span class="p">]</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+        <span class="c1"># copy input data</span>
+        <span class="n">test_values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">validation_values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">input_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">input_data</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">referenced_inputs</span><span class="p">:</span>
+                <span class="n">info</span> <span class="o">=</span> <span class="n">referenced_inputs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">):</span>
+                    <span class="n">data_dims</span> <span class="o">=</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">data_dims</span><span class="p">:</span>
+                        <span class="n">dtype</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">data_dims</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">dtype</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">dtype</span>
+                    <span class="n">test_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+                        <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+                        <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+                        <span class="n">dimensions</span><span class="o">=</span><span class="n">field_dimensions</span><span class="p">[</span><span class="n">name</span><span class="p">],</span>
+                        <span class="n">aligned_index</span><span class="o">=</span><span class="n">gtc_utils</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">field_masks</span><span class="p">[</span><span class="n">name</span><span class="p">]),</span>
+                        <span class="n">backend</span><span class="o">=</span><span class="n">implementation</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">test_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span>
+                    <span class="n">validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">test_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># call implementation</span>
+        <span class="n">implementation</span><span class="p">(</span><span class="o">**</span><span class="n">test_values</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">exec_info</span><span class="o">=</span><span class="n">exec_info</span><span class="p">)</span>
+
+        <span class="c1"># for validation data, data is cropped to actually touched domain, so that origin offseting</span>
+        <span class="c1"># does not have to be implemented for every test suite. This is done based on info</span>
+        <span class="c1"># specified in test suite</span>
+        <span class="n">cropped_validation_values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">validation_values</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">sym</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">symbols</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">sym</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">SymbolKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">:</span>
+                <span class="n">field_extent_low</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">sym</span><span class="o">.</span><span class="n">boundary</span><span class="p">)</span>
+                <span class="n">offset_low</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">e</span> <span class="k">for</span> <span class="n">b</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">max_boundary</span><span class="p">,</span> <span class="n">field_extent_low</span><span class="p">))</span>
+                <span class="n">field_extent_high</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">sym</span><span class="o">.</span><span class="n">boundary</span><span class="p">)</span>
+                <span class="n">offset_high</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">e</span> <span class="k">for</span> <span class="n">b</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">max_boundary</span><span class="p">,</span> <span class="n">field_extent_high</span><span class="p">))</span>
+                <span class="n">validation_slice</span> <span class="o">=</span> <span class="n">gtc_utils</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span>
+                    <span class="nb">tuple</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">s</span> <span class="o">-</span> <span class="n">h</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">offset_low</span><span class="p">,</span> <span class="n">data_shape</span><span class="p">,</span> <span class="n">offset_high</span><span class="p">)),</span>
+                    <span class="n">field_masks</span><span class="p">[</span><span class="n">name</span><span class="p">],</span>
+                <span class="p">)</span>
+                <span class="n">data_dims</span> <span class="o">=</span> <span class="n">field_params</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">data_dims</span><span class="p">:</span>
+                    <span class="n">validation_slice</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="o">*</span><span class="n">validation_slice</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_dims</span><span class="p">))</span>
+                <span class="n">cropped_validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">validation_slice</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">cropped_validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span>
+
+        <span class="bp">cls</span><span class="o">.</span><span class="n">validation</span><span class="p">(</span>
+            <span class="o">**</span><span class="n">cropped_validation_values</span><span class="p">,</span>
+            <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span>
+            <span class="n">origin</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">name</span><span class="p">:</span> <span class="n">info</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">lower_indices</span>
+                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">implementation</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="p">},</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Test values</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">test_values</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="n">expected_value</span> <span class="o">=</span> <span class="n">validation_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">cpu_copy</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+                <span class="n">np</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_allclose</span><span class="p">(</span>
+                    <span class="n">value</span><span class="p">,</span>
+                    <span class="n">expected_value</span><span class="p">,</span>
+                    <span class="n">rtol</span><span class="o">=</span><span class="n">RTOL</span><span class="p">,</span>
+                    <span class="n">atol</span><span class="o">=</span><span class="n">ATOL</span><span class="p">,</span>
+                    <span class="n">equal_nan</span><span class="o">=</span><span class="n">EQUAL_NAN</span><span class="p">,</span>
+                    <span class="n">err_msg</span><span class="o">=</span><span class="s2">&quot;Wrong data in output field &#39;</span><span class="si">{name}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">),</span>
+                <span class="p">)</span>
+
+<div class="viewcode-block" id="StencilTestSuite._test_implementation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.suites.StencilTestSuite._test_implementation">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_test_implementation</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">parameters_dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Test computed values for implementations generated for all *backends* and *stencil suites*.</span>
+
+<span class="sd">        The generated implementations are reused from previous tests by means of a</span>
+<span class="sd">        :class:`utils.ImplementationsDB` instance shared at module scope.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">implementation_list</span> <span class="o">=</span> <span class="n">test</span><span class="p">[</span><span class="s2">&quot;implementations&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">implementation_list</span><span class="p">:</span>
+            <span class="n">pytest</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot perform validation tests, since there are no valid implementations.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">implementation</span> <span class="ow">in</span> <span class="n">implementation_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">implementation</span><span class="p">,</span> <span class="n">StencilObject</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Wrong function got from implementations_db cache!&quot;</span><span class="p">)</span>
+
+            <span class="bp">cls</span><span class="o">.</span><span class="n">_run_test_implementation</span><span class="p">(</span><span class="n">parameters_dict</span><span class="p">,</span> <span class="n">implementation</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

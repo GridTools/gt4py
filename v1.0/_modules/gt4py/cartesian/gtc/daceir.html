@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.daceir &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.daceir</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.daceir</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Generator</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">sympy</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.cartesian.gtc.definitions</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="n">LocNode</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.symbol_utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_axis_bound_dace_symbol</span><span class="p">,</span>
+    <span class="n">get_axis_bound_diff_str</span><span class="p">,</span>
+    <span class="n">get_axis_bound_str</span><span class="p">,</span>
+    <span class="n">get_dace_symbol</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">datamodels</span>
+
+
+<div class="viewcode-block" id="Expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Expr">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Expr</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span></div>
+
+
+<div class="viewcode-block" id="Stmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Stmt">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Stmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Axis"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis">[docs]</a><span class="k">class</span> <span class="nc">Axis</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">I</span> <span class="o">=</span> <span class="s2">&quot;I&quot;</span>  <span class="c1"># noqa: E741 ambiguous variable name &#39;I&#39;</span>
+    <span class="n">J</span> <span class="o">=</span> <span class="s2">&quot;J&quot;</span>
+    <span class="n">K</span> <span class="o">=</span> <span class="s2">&quot;K&quot;</span>
+
+<div class="viewcode-block" id="Axis.domain_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.domain_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">domain_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">(</span><span class="s2">&quot;__&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Axis.iteration_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.iteration_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">iteration_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">(</span><span class="s2">&quot;__&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Axis.tile_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.tile_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">tile_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">(</span><span class="s2">&quot;__tile_&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Axis.dims_3d"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.dims_3d">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">dims_3d</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="s2">&quot;Axis&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="k">yield from</span> <span class="p">[</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="Axis.dims_horizontal"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.dims_horizontal">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">dims_horizontal</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="s2">&quot;Axis&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="k">yield from</span> <span class="p">[</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="Axis.to_idx"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.to_idx">[docs]</a>    <span class="k">def</span> <span class="nf">to_idx</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Axis.domain_dace_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.domain_dace_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">domain_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Axis.iteration_dace_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.iteration_dace_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">iteration_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="Axis.tile_dace_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis.tile_dace_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">tile_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tile_symbol</span><span class="p">())</span></div></div>
+
+
+<div class="viewcode-block" id="MapSchedule"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.MapSchedule">[docs]</a><span class="k">class</span> <span class="nc">MapSchedule</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">Default</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">Sequential</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">CPU_Multicore</span> <span class="o">=</span> <span class="mi">2</span>
+
+    <span class="n">GPU_Device</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">GPU_ThreadBlock</span> <span class="o">=</span> <span class="mi">4</span>
+
+<div class="viewcode-block" id="MapSchedule.to_dace_schedule"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.MapSchedule.to_dace_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">MapSchedule</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">,</span>
+            <span class="n">MapSchedule</span><span class="o">.</span><span class="n">Sequential</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span><span class="p">,</span>
+            <span class="n">MapSchedule</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">,</span>
+            <span class="n">MapSchedule</span><span class="o">.</span><span class="n">GPU_Device</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_Device</span><span class="p">,</span>
+            <span class="n">MapSchedule</span><span class="o">.</span><span class="n">GPU_ThreadBlock</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_ThreadBlock</span><span class="p">,</span>
+        <span class="p">}[</span><span class="bp">self</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="MapSchedule.from_dace_schedule"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.MapSchedule.from_dace_schedule">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_dace_schedule</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">schedule</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span> <span class="n">MapSchedule</span><span class="o">.</span><span class="n">Default</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span><span class="p">:</span> <span class="n">MapSchedule</span><span class="o">.</span><span class="n">Sequential</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">:</span> <span class="n">MapSchedule</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_Device</span><span class="p">:</span> <span class="n">MapSchedule</span><span class="o">.</span><span class="n">GPU_Device</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_ThreadBlock</span><span class="p">:</span> <span class="n">MapSchedule</span><span class="o">.</span><span class="n">GPU_ThreadBlock</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">schedule</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="StorageType"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.StorageType">[docs]</a><span class="k">class</span> <span class="nc">StorageType</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">Default</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">CPU_Heap</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">GPU_Global</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">GPU_Shared</span> <span class="o">=</span> <span class="mi">4</span>
+
+    <span class="n">Register</span> <span class="o">=</span> <span class="mi">5</span>
+
+<div class="viewcode-block" id="StorageType.to_dace_storage"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.StorageType.to_dace_storage">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_storage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">StorageType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">Default</span><span class="p">,</span>
+            <span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_Heap</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_Heap</span><span class="p">,</span>
+            <span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Global</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Global</span><span class="p">,</span>
+            <span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Shared</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Shared</span><span class="p">,</span>
+            <span class="n">StorageType</span><span class="o">.</span><span class="n">Register</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">Register</span><span class="p">,</span>
+        <span class="p">}[</span><span class="bp">self</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="StorageType.from_dace_storage"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.StorageType.from_dace_storage">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_dace_storage</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">schedule</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span> <span class="n">StorageType</span><span class="o">.</span><span class="n">Default</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_Heap</span><span class="p">:</span> <span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_Heap</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Global</span><span class="p">:</span> <span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Global</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Shared</span><span class="p">:</span> <span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Shared</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">Register</span><span class="p">:</span> <span class="n">StorageType</span><span class="o">.</span><span class="n">Register</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">schedule</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="AxisBound"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.AxisBound">[docs]</a><span class="k">class</span> <span class="nc">AxisBound</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">):</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_axis_bound_str</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">())</span>
+
+<div class="viewcode-block" id="AxisBound.from_common"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.AxisBound.from_common">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_common</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AxisBound.to_dace_symbolic"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.AxisBound.to_dace_symbolic">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_symbolic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_axis_bound_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="IndexWithExtent"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexWithExtent">[docs]</a><span class="k">class</span> <span class="nc">IndexWithExtent</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">AxisBound</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+    <span class="n">extent</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">()}</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">()}</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+
+<div class="viewcode-block" id="IndexWithExtent.from_axis"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexWithExtent.from_axis">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_axis</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">(),</span> <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">overapproximated_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span>
+
+<div class="viewcode-block" id="IndexWithExtent.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexWithExtent.union">[docs]</a>    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;IndexWithExtent&quot;</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">axis</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span>
+        <span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">elif</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">()</span>
+        <span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">other</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">return</span> <span class="n">IndexWithExtent</span><span class="p">(</span>
+            <span class="n">axis</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">extent</span><span class="o">=</span><span class="p">(</span>
+                <span class="nb">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">other</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">other</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="p">),</span>
+        <span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">idx_range</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">+d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="si">:</span><span class="s2">+d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="IndexWithExtent.to_dace_symbolic"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexWithExtent.to_dace_symbolic">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_symbolic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="n">symbolic_value</span> <span class="o">=</span> <span class="n">get_axis_bound_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">symbolic_value</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+                <span class="n">axis</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">()</span> <span class="k">if</span> <span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">()</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">iteration_dace_symbol</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">symbolic_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">return</span> <span class="n">symbolic_value</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">symbolic_value</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="IndexWithExtent.shifted"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexWithExtent.shifted">[docs]</a>    <span class="k">def</span> <span class="nf">shifted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="n">extent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset</span>
+        <span class="k">return</span> <span class="n">IndexWithExtent</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DomainInterval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval">[docs]</a><span class="k">class</span> <span class="nc">DomainInterval</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">start</span><span class="p">:</span> <span class="n">AxisBound</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">AxisBound</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]:</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">())</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_axis_bound_diff_str</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">var_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">overapproximated_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span>
+
+<div class="viewcode-block" id="DomainInterval.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval.union">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">second</span><span class="o">.</span><span class="n">start</span><span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">second</span><span class="o">.</span><span class="n">end</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="DomainInterval.intersection"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval.intersection">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">intersection</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">):</span>
+        <span class="n">first_start</span> <span class="o">=</span> <span class="n">first</span><span class="o">.</span><span class="n">start</span> <span class="k">if</span> <span class="n">first</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">second</span><span class="o">.</span><span class="n">start</span>
+        <span class="n">first_end</span> <span class="o">=</span> <span class="n">first</span><span class="o">.</span><span class="n">end</span> <span class="k">if</span> <span class="n">first</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">second</span><span class="o">.</span><span class="n">end</span>
+        <span class="n">second_start</span> <span class="o">=</span> <span class="n">second</span><span class="o">.</span><span class="n">start</span> <span class="k">if</span> <span class="n">second</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">first</span><span class="o">.</span><span class="n">start</span>
+        <span class="n">second_end</span> <span class="o">=</span> <span class="n">second</span><span class="o">.</span><span class="n">end</span> <span class="k">if</span> <span class="n">second</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">first_end</span><span class="o">.</span><span class="n">end</span>
+
+        <span class="k">assert</span> <span class="p">(</span><span class="n">first_start</span> <span class="o">&lt;=</span> <span class="n">second_end</span> <span class="ow">and</span> <span class="n">first_end</span> <span class="o">&gt;=</span> <span class="n">second_start</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="n">second_start</span> <span class="o">&lt;=</span> <span class="n">first_end</span> <span class="ow">and</span> <span class="n">second_end</span> <span class="o">&gt;=</span> <span class="n">first_start</span>
+        <span class="p">)</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">first_start</span><span class="p">,</span> <span class="n">second_start</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">first_end</span><span class="p">,</span> <span class="n">second_end</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">idx_range</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DomainInterval.to_dace_symbolic"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval.to_dace_symbolic">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_symbolic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">to_dace_symbolic</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">to_dace_symbolic</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="DomainInterval.shifted"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval.shifted">[docs]</a>    <span class="k">def</span> <span class="nf">shifted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">DomainInterval</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                <span class="n">axis</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span>
+                <span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                <span class="n">axis</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span>
+                <span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="DomainInterval.is_subset_of"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainInterval.is_subset_of">[docs]</a>    <span class="k">def</span> <span class="nf">is_subset_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;DomainInterval&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span></div></div>
+
+
+<div class="viewcode-block" id="TileInterval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.TileInterval">[docs]</a><span class="k">class</span> <span class="nc">TileInterval</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span>
+    <span class="n">start_offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">end_offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">tile_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">domain_limit</span><span class="p">:</span> <span class="n">AxisBound</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]:</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">tile_symbol</span><span class="p">(),</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_limit</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;min(</span><span class="si">{tile_size}</span><span class="s2">, </span><span class="si">{domain_limit}</span><span class="s2"> - </span><span class="si">{tile_symbol}</span><span class="s2">)</span><span class="si">{halo_size:+d}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">tile_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tile_size</span><span class="p">,</span>
+            <span class="n">domain_limit</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_limit</span><span class="p">,</span>
+            <span class="n">tile_symbol</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">tile_symbol</span><span class="p">(),</span>
+            <span class="n">halo_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_offset</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">overapproximated_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{tile_size}{halo_size:+d}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">tile_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tile_size</span><span class="p">,</span>
+            <span class="n">halo_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_offset</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="TileInterval.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.TileInterval.union">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">first</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">second</span><span class="o">.</span><span class="n">axis</span>
+        <span class="k">assert</span> <span class="n">first</span><span class="o">.</span><span class="n">tile_size</span> <span class="o">==</span> <span class="n">second</span><span class="o">.</span><span class="n">tile_size</span>
+        <span class="k">assert</span> <span class="n">first</span><span class="o">.</span><span class="n">domain_limit</span> <span class="o">==</span> <span class="n">second</span><span class="o">.</span><span class="n">domain_limit</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">axis</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span>
+            <span class="n">start_offset</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">start_offset</span><span class="p">,</span> <span class="n">second</span><span class="o">.</span><span class="n">start_offset</span><span class="p">),</span>
+            <span class="n">end_offset</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">end_offset</span><span class="p">,</span> <span class="n">second</span><span class="o">.</span><span class="n">end_offset</span><span class="p">),</span>
+            <span class="n">tile_size</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">tile_size</span><span class="p">,</span>
+            <span class="n">domain_limit</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">domain_limit</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">idx_range</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">tile_symbol</span><span class="p">()</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">start_offset</span><span class="si">:</span><span class="s2">+d</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">+(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span>
+
+<div class="viewcode-block" id="TileInterval.dace_symbolic_size"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.TileInterval.dace_symbolic_size">[docs]</a>    <span class="k">def</span> <span class="nf">dace_symbolic_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">sympy</span><span class="o">.</span><span class="n">Min</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tile_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_limit</span><span class="o">.</span><span class="n">to_dace_symbolic</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">tile_dace_symbol</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_offset</span>
+            <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_offset</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="TileInterval.to_dace_symbolic"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.TileInterval.to_dace_symbolic">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_symbolic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">tile_dace_symbol</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_offset</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">dace_symbolic_size</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span></div></div>
+
+
+<div class="viewcode-block" id="Range"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Range">[docs]</a><span class="k">class</span> <span class="nc">Range</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">var</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span>
+    <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">]</span>
+    <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span>
+
+<div class="viewcode-block" id="Range.from_axis_and_interval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Range.from_axis_and_interval">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_axis_and_interval</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">],</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span>
+    <span class="p">):</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">var</span><span class="o">=</span><span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">(),</span>
+            <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">,</span>
+            <span class="n">stride</span><span class="o">=</span><span class="n">stride</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">free_symbols</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="GridSubset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset">[docs]</a><span class="k">class</span> <span class="nc">GridSubset</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">intervals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Axis</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">]]</span>
+
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+
+<div class="viewcode-block" id="GridSubset.items"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.items">[docs]</a>    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">axis</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">free_symbols</span> <span class="k">for</span> <span class="n">interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+<div class="viewcode-block" id="GridSubset.single_gridpoint"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.single_gridpoint">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">single_gridpoint</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">intervals</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">axis</span><span class="p">:</span> <span class="n">IndexWithExtent</span><span class="o">.</span><span class="n">from_axis</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">offset</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">())</span>
+            <span class="p">}</span>
+        <span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">size</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">overapproximated_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">overapproximated_size</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+
+<div class="viewcode-block" id="GridSubset.restricted_to_index"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.restricted_to_index">[docs]</a>    <span class="k">def</span> <span class="nf">restricted_to_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="s2">&quot;GridSubset&quot;</span><span class="p">:</span>
+        <span class="n">intervals</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">)</span>
+        <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">IndexWithExtent</span><span class="o">.</span><span class="n">from_axis</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">intervals</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GridSubset.set_interval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.set_interval">[docs]</a>    <span class="k">def</span> <span class="nf">set_interval</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span>
+        <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;GridSubset&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">):</span>
+            <span class="n">interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+                <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                    <span class="n">level</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                    <span class="n">offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                    <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">axis</span>
+        <span class="n">intervals</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">)</span>
+        <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">interval</span>
+        <span class="k">return</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">intervals</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GridSubset.from_gt4py_extent"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.from_gt4py_extent">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_gt4py_extent</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">extent</span><span class="p">:</span> <span class="n">gt4py</span><span class="o">.</span><span class="n">cartesian</span><span class="o">.</span><span class="n">gtc</span><span class="o">.</span><span class="n">definitions</span><span class="o">.</span><span class="n">Extent</span><span class="p">):</span>
+        <span class="n">i_interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">j_interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="p">{</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">:</span> <span class="n">i_interval</span><span class="p">,</span> <span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">:</span> <span class="n">j_interval</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="GridSubset.from_interval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.from_interval">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_interval</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">],</span>
+        <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">res_interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">IndexWithExtent</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="p">(</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">)):</span>
+            <span class="n">res_interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+                <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                    <span class="n">level</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                    <span class="n">offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                    <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="p">(</span><span class="n">TileInterval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">))</span>
+            <span class="n">res_interval</span> <span class="o">=</span> <span class="n">interval</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="p">{</span><span class="n">axis</span><span class="p">:</span> <span class="n">res_interval</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="GridSubset.axes"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.axes">[docs]</a>    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">axis</span></div>
+
+<div class="viewcode-block" id="GridSubset.full_domain"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.full_domain">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">full_domain</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">axes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">()</span>
+        <span class="n">res_subsets</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+            <span class="n">res_subsets</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+                <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+                <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">res_subsets</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GridSubset.tile"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.tile">[docs]</a>    <span class="k">def</span> <span class="nf">tile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tile_sizes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Axis</span><span class="p">,</span> <span class="nb">int</span><span class="p">]):</span>
+        <span class="n">res_intervals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Axis</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">DomainInterval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">)</span> <span class="ow">and</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">tile_sizes</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">axis</span> <span class="o">==</span> <span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span>
+                    <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">TileInterval</span><span class="p">(</span>
+                        <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                        <span class="n">tile_size</span><span class="o">=</span><span class="n">tile_sizes</span><span class="p">[</span><span class="n">axis</span><span class="p">],</span>
+                        <span class="n">start_offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">end_offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">domain_limit</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="p">(</span>
+                        <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span>
+                        <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span>
+                    <span class="p">)</span>
+                    <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">TileInterval</span><span class="p">(</span>
+                        <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                        <span class="n">tile_size</span><span class="o">=</span><span class="n">tile_sizes</span><span class="p">[</span><span class="n">axis</span><span class="p">],</span>
+                        <span class="n">start_offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                        <span class="n">end_offset</span><span class="o">=</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                        <span class="n">domain_limit</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+                    <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">interval</span>
+        <span class="k">return</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">res_intervals</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GridSubset.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.GridSubset.union">[docs]</a>    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">())</span> <span class="o">==</span> <span class="nb">list</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">axes</span><span class="p">())</span>
+        <span class="n">intervals</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes</span><span class="p">():</span>
+            <span class="n">interval1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+            <span class="n">interval2</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval2</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">):</span>
+                <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">interval2</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval2</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">):</span>
+                <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">TileInterval</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">interval2</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval2</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">):</span>
+                <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">interval1</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">interval2</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="p">(</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval2</span><span class="p">,</span> <span class="p">(</span><span class="n">TileInterval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">))</span>
+                    <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">)</span>
+                <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="p">(</span><span class="n">TileInterval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">))</span>
+                    <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval2</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">interval1</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval1</span><span class="p">,</span> <span class="p">(</span><span class="n">TileInterval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">))</span>
+                    <span class="k">else</span> <span class="n">interval2</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">intervals</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="FieldAccessInfo"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo">[docs]</a><span class="k">class</span> <span class="nc">FieldAccessInfo</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">grid_subset</span><span class="p">:</span> <span class="n">GridSubset</span>
+    <span class="n">global_grid_subset</span><span class="p">:</span> <span class="n">GridSubset</span>
+    <span class="n">dynamic_access</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">variable_offset_axes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_dynamic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="FieldAccessInfo.axes"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.axes">[docs]</a>    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">yield from</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">axes</span><span class="p">()</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">overapproximated_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">overapproximated_shape</span>
+
+<div class="viewcode-block" id="FieldAccessInfo.apply_iteration"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.apply_iteration">[docs]</a>    <span class="k">def</span> <span class="nf">apply_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grid_subset</span><span class="p">:</span> <span class="n">GridSubset</span><span class="p">):</span>
+        <span class="n">res_intervals</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">field_interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+                <span class="n">grid_interval</span> <span class="o">=</span> <span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field_interval</span><span class="p">,</span> <span class="n">IndexWithExtent</span><span class="p">)</span>
+                <span class="n">extent</span> <span class="o">=</span> <span class="n">field_interval</span><span class="o">.</span><span class="n">extent</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grid_interval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+                        <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+                            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                                <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                                <span class="n">level</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                                <span class="n">offset</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                            <span class="p">),</span>
+                            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span>
+                                <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                                <span class="n">level</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                                <span class="n">offset</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                            <span class="p">),</span>
+                        <span class="p">)</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grid_interval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">):</span>
+                    <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">TileInterval</span><span class="p">(</span>
+                        <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                        <span class="n">tile_size</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">tile_size</span><span class="p">,</span>
+                        <span class="n">start_offset</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">start_offset</span> <span class="o">+</span> <span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                        <span class="n">end_offset</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">end_offset</span> <span class="o">+</span> <span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                        <span class="n">domain_limit</span><span class="o">=</span><span class="n">grid_interval</span><span class="o">.</span><span class="n">domain_limit</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="n">field_interval</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="n">grid_interval</span><span class="o">.</span><span class="n">value</span>
+                    <span class="n">extent</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="nb">min</span><span class="p">(</span><span class="n">extent</span><span class="p">)</span> <span class="o">+</span> <span class="n">grid_interval</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                        <span class="nb">max</span><span class="p">(</span><span class="n">extent</span><span class="p">)</span> <span class="o">+</span> <span class="n">grid_interval</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                    <span class="p">)</span>
+                    <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">IndexWithExtent</span><span class="p">(</span>
+                        <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">field_interval</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">extent</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="n">FieldAccessInfo</span><span class="p">(</span>
+            <span class="n">grid_subset</span><span class="o">=</span><span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">res_intervals</span><span class="p">),</span>
+            <span class="n">dynamic_access</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span><span class="p">,</span>
+            <span class="n">variable_offset_axes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">,</span>
+            <span class="n">global_grid_subset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FieldAccessInfo.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.union">[docs]</a>    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;FieldAccessInfo&quot;</span><span class="p">):</span>
+        <span class="n">grid_subset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">grid_subset</span><span class="p">)</span>
+        <span class="n">global_subset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="p">)</span>
+        <span class="n">variable_offset_axes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">axis</span>
+            <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span> <span class="ow">or</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">variable_offset_axes</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">FieldAccessInfo</span><span class="p">(</span>
+            <span class="n">grid_subset</span><span class="o">=</span><span class="n">grid_subset</span><span class="p">,</span>
+            <span class="n">dynamic_access</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">dynamic_access</span><span class="p">,</span>
+            <span class="n">variable_offset_axes</span><span class="o">=</span><span class="n">variable_offset_axes</span><span class="p">,</span>
+            <span class="n">global_grid_subset</span><span class="o">=</span><span class="n">global_subset</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FieldAccessInfo.clamp_full_axis"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.clamp_full_axis">[docs]</a>    <span class="k">def</span> <span class="nf">clamp_full_axis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+        <span class="n">grid_subset</span> <span class="o">=</span> <span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">)</span>
+        <span class="n">interval</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+        <span class="n">full_interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">res_interval</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+            <span class="n">full_interval</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">full_interval</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">DomainInterval</span><span class="p">):</span>
+            <span class="n">interval_union</span> <span class="o">=</span> <span class="n">DomainInterval</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">res_interval</span><span class="p">)</span>
+            <span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">interval_union</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">res_interval</span>
+            <span class="n">grid_subset</span> <span class="o">=</span> <span class="n">grid_subset</span><span class="o">.</span><span class="n">set_interval</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">res_interval</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">FieldAccessInfo</span><span class="p">(</span>
+            <span class="n">grid_subset</span><span class="o">=</span><span class="n">grid_subset</span><span class="p">,</span>
+            <span class="n">dynamic_access</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span><span class="p">,</span>
+            <span class="n">variable_offset_axes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">,</span>
+            <span class="n">global_grid_subset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FieldAccessInfo.untile"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.untile">[docs]</a>    <span class="k">def</span> <span class="nf">untile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tile_axes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Axis</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;FieldAccessInfo&quot;</span><span class="p">:</span>
+        <span class="n">res_intervals</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="n">TileInterval</span><span class="p">)</span> <span class="ow">and</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">tile_axes</span><span class="p">:</span>
+                <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="o">.</span><span class="n">intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_intervals</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">interval</span>
+        <span class="k">return</span> <span class="n">FieldAccessInfo</span><span class="p">(</span>
+            <span class="n">grid_subset</span><span class="o">=</span><span class="n">GridSubset</span><span class="p">(</span><span class="n">intervals</span><span class="o">=</span><span class="n">res_intervals</span><span class="p">),</span>
+            <span class="n">global_grid_subset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="p">,</span>
+            <span class="n">dynamic_access</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span><span class="p">,</span>
+            <span class="n">variable_offset_axes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FieldAccessInfo.restricted_to_index"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo.restricted_to_index">[docs]</a>    <span class="k">def</span> <span class="nf">restricted_to_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span><span class="p">,</span> <span class="n">extent</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">FieldAccessInfo</span><span class="p">(</span>
+            <span class="n">grid_subset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">restricted_to_index</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">),</span>
+            <span class="n">global_grid_subset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">global_grid_subset</span><span class="p">,</span>
+            <span class="n">dynamic_access</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dynamic_access</span><span class="p">,</span>
+            <span class="n">variable_offset_axes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Memlet"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet">[docs]</a><span class="k">class</span> <span class="nc">Memlet</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">field</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">access_info</span><span class="p">:</span> <span class="n">FieldAccessInfo</span>
+    <span class="n">connector</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">is_read</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">is_write</span><span class="p">:</span> <span class="nb">bool</span>
+
+<div class="viewcode-block" id="Memlet.union"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet.union">[docs]</a>    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">field</span>
+        <span class="k">return</span> <span class="n">Memlet</span><span class="p">(</span>
+            <span class="n">field</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">access_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">access_info</span><span class="p">),</span>
+            <span class="n">connector</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">is_read</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_read</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">is_read</span><span class="p">,</span>
+            <span class="n">is_write</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_write</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">is_write</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Memlet.remove_read"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet.remove_read">[docs]</a>    <span class="k">def</span> <span class="nf">remove_read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Memlet</span><span class="p">(</span>
+            <span class="n">field</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">access_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="p">,</span>
+            <span class="n">connector</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connector</span><span class="p">,</span>
+            <span class="n">is_read</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">is_write</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_write</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Memlet.remove_write"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet.remove_write">[docs]</a>    <span class="k">def</span> <span class="nf">remove_write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Memlet</span><span class="p">(</span>
+            <span class="n">field</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">access_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="p">,</span>
+            <span class="n">connector</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connector</span><span class="p">,</span>
+            <span class="n">is_read</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">is_read</span><span class="p">,</span>
+            <span class="n">is_write</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Decl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Decl">[docs]</a><span class="k">class</span> <span class="nc">Decl</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolName</span><span class="p">]</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Decl</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Trying to instantiate `Decl` abstract class.&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FieldDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldDecl">[docs]</a><span class="k">class</span> <span class="nc">FieldDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="n">strides</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span>
+    <span class="n">access_info</span><span class="p">:</span> <span class="n">FieldAccessInfo</span>
+    <span class="n">storage</span><span class="p">:</span> <span class="n">StorageType</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">access_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">access_info</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">:</span>
+            <span class="n">access_info</span> <span class="o">=</span> <span class="n">access_info</span><span class="o">.</span><span class="n">clamp_full_axis</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+        <span class="n">ijk_shape</span> <span class="o">=</span> <span class="n">access_info</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">return</span> <span class="n">ijk_shape</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FieldDecl.axes"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldDecl.axes">[docs]</a>    <span class="k">def</span> <span class="nf">axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">yield from</span> <span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="o">.</span><span class="n">grid_subset</span><span class="o">.</span><span class="n">axes</span><span class="p">()</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_dynamic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">access_info</span><span class="o">.</span><span class="n">is_dynamic</span>
+
+<div class="viewcode-block" id="FieldDecl.with_set_access_info"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldDecl.with_set_access_info">[docs]</a>    <span class="k">def</span> <span class="nf">with_set_access_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">access_info</span><span class="p">:</span> <span class="n">FieldAccessInfo</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;FieldDecl&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">FieldDecl</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">strides</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">strides</span><span class="p">,</span>
+            <span class="n">data_dims</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data_dims</span><span class="p">,</span>
+            <span class="n">access_info</span><span class="o">=</span><span class="n">access_info</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Literal"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Literal">[docs]</a><span class="k">class</span> <span class="nc">Literal</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ScalarAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.ScalarAccess">[docs]</a><span class="k">class</span> <span class="nc">ScalarAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="VariableKOffset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.VariableKOffset">[docs]</a><span class="k">class</span> <span class="nc">VariableKOffset</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">[</span><span class="n">Expr</span><span class="p">]):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="IndexAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IndexAccess">[docs]</a><span class="k">class</span> <span class="nc">IndexAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">,</span> <span class="n">VariableKOffset</span><span class="p">]]</span></div>
+
+
+<div class="viewcode-block" id="AssignStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.AssignStmt">[docs]</a><span class="k">class</span> <span class="nc">AssignStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">IndexAccess</span><span class="p">],</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+
+    <span class="n">_dtype_validation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">assign_stmt_dtype_validation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MaskStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.MaskStmt">[docs]</a><span class="k">class</span> <span class="nc">MaskStmt</span><span class="p">(</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="n">mask</span><span class="p">:</span> <span class="n">Expr</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+
+<div class="viewcode-block" id="MaskStmt.mask_is_boolean_field_expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.MaskStmt.mask_is_boolean_field_expr">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;mask&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">mask_is_boolean_field_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Mask must be a boolean expression.&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalRestriction"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.HorizontalRestriction">[docs]</a><span class="k">class</span> <span class="nc">HorizontalRestriction</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">[</span><span class="n">Stmt</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="UnaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.UnaryOp">[docs]</a><span class="k">class</span> <span class="nc">UnaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BinaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.BinaryOp">[docs]</a><span class="k">class</span> <span class="nc">BinaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">binary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="TernaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.TernaryOp">[docs]</a><span class="k">class</span> <span class="nc">TernaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ternary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Cast"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Cast">[docs]</a><span class="k">class</span> <span class="nc">Cast</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Cast</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="NativeFuncCall"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.NativeFuncCall">[docs]</a><span class="k">class</span> <span class="nc">NativeFuncCall</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">native_func_call_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="While"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.While">[docs]</a><span class="k">class</span> <span class="nc">While</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">While</span><span class="p">[</span><span class="n">Stmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ScalarDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.ScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">ScalarDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="LocalScalarDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.LocalScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">LocalScalarDecl</span><span class="p">(</span><span class="n">ScalarDecl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="SymbolDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.SymbolDecl">[docs]</a><span class="k">class</span> <span class="nc">SymbolDecl</span><span class="p">(</span><span class="n">ScalarDecl</span><span class="p">):</span>
+<div class="viewcode-block" id="SymbolDecl.to_dace_symbol"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.SymbolDecl.to_dace_symbol">[docs]</a>    <span class="k">def</span> <span class="nf">to_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_dace_symbol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Temporary"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Temporary">[docs]</a><span class="k">class</span> <span class="nc">Temporary</span><span class="p">(</span><span class="n">FieldDecl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ComputationNode"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.ComputationNode">[docs]</a><span class="k">class</span> <span class="nc">ComputationNode</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="c1"># mapping connector names to tuple of field name and access info</span>
+    <span class="n">read_memlets</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Memlet</span><span class="p">]</span>
+    <span class="n">write_memlets</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Memlet</span><span class="p">]</span>
+
+    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;read_memlets&quot;</span><span class="p">)</span>
+    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;write_memlets&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_validator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Memlet</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">conns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">conns</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
+            <span class="k">if</span> <span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="ow">in</span> <span class="n">conns</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found multiple Memlets for connector &#39;</span><span class="si">{</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+            <span class="n">conns</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">read_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">ml</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">write_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">ml</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">input_connectors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">ml</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">output_connectors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">ml</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">ml</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="IterationNode"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IterationNode">[docs]</a><span class="k">class</span> <span class="nc">IterationNode</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">grid_subset</span><span class="p">:</span> <span class="n">GridSubset</span></div>
+
+
+<div class="viewcode-block" id="Tasklet"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Tasklet">[docs]</a><span class="k">class</span> <span class="nc">Tasklet</span><span class="p">(</span><span class="n">ComputationNode</span><span class="p">,</span> <span class="n">IterationNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="n">decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LocalScalarDecl</span><span class="p">]</span>
+    <span class="n">stmts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+    <span class="n">grid_subset</span><span class="p">:</span> <span class="n">GridSubset</span> <span class="o">=</span> <span class="n">GridSubset</span><span class="o">.</span><span class="n">single_gridpoint</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="DomainMap"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainMap">[docs]</a><span class="k">class</span> <span class="nc">DomainMap</span><span class="p">(</span><span class="n">ComputationNode</span><span class="p">,</span> <span class="n">IterationNode</span><span class="p">):</span>
+    <span class="n">index_ranges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Range</span><span class="p">]</span>
+    <span class="n">schedule</span><span class="p">:</span> <span class="n">MapSchedule</span>
+    <span class="n">computations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Tasklet</span><span class="p">,</span> <span class="n">DomainMap</span><span class="p">,</span> <span class="n">NestedSDFG</span><span class="p">]]</span></div>
+
+
+<div class="viewcode-block" id="ComputationState"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.ComputationState">[docs]</a><span class="k">class</span> <span class="nc">ComputationState</span><span class="p">(</span><span class="n">IterationNode</span><span class="p">):</span>
+    <span class="n">computations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Tasklet</span><span class="p">,</span> <span class="n">DomainMap</span><span class="p">]]</span></div>
+
+
+<div class="viewcode-block" id="DomainLoop"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.DomainLoop">[docs]</a><span class="k">class</span> <span class="nc">DomainLoop</span><span class="p">(</span><span class="n">IterationNode</span><span class="p">,</span> <span class="n">ComputationNode</span><span class="p">):</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="n">Axis</span>
+    <span class="n">index_range</span><span class="p">:</span> <span class="n">Range</span>
+    <span class="n">loop_states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ComputationState</span><span class="p">,</span> <span class="n">DomainLoop</span><span class="p">]]</span></div>
+
+
+<div class="viewcode-block" id="NestedSDFG"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.NestedSDFG">[docs]</a><span class="k">class</span> <span class="nc">NestedSDFG</span><span class="p">(</span><span class="n">ComputationNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="n">label</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">field_decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FieldDecl</span><span class="p">]</span>
+    <span class="n">symbol_decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SymbolDecl</span><span class="p">]</span>
+    <span class="n">states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">DomainLoop</span><span class="p">,</span> <span class="n">ComputationState</span><span class="p">]]</span></div>
+
+
+<span class="c1"># There are circular type references with string placeholders. These statements let datamodels resolve those.</span>
+<span class="n">DomainMap</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>  <span class="c1"># type: ignore[attr-defined]</span>
+<span class="n">DomainLoop</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>  <span class="c1"># type: ignore[attr-defined]</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick Start Guide &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Allocation and Array Interfaces" href="arrays.html" />
+    <link rel="prev" title="GT4Py: GridTools for Python" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#a-simple-example">A Simple Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#allocation">Allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#array-interfaces">Array Interfaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#computations-and-intervals">Computations and Intervals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#offset-syntax">Offset syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#compile-time-conditionals">Compile-time conditionals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#system-setup">System Setup</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#macos">MacOS</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">Quick Start Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quick-start-guide">
+<h1>Quick Start Guide<a class="headerlink" href="#quick-start-guide" title="Permalink to this headline"></a></h1>
+<p>This document will guide you through the basic steps to get started with GT4Py.</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
+<p>GT4Py contains a <code class="docutils literal notranslate"><span class="pre">setup.py</span></code> installation script and can be installed as usual with <cite>pip</cite>.
+Additional commands are provided to install and remove the GridTools C++ sources, which are not contained in the package.</p>
+<p>We strongly recommended to create a virtual environment for any new project:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python -m venv path_for_the_new_venv
+<span class="nb">source</span> path_for_the_new_venv/bin/activate
+pip install --upgrade pip wheel setuptools
+</pre></div>
+</div>
+<p>Then clone the GT4Py repository and install the local copy or install it directly from GitHub with <cite>pip</cite>.
+For use with NVIDIA GPUs, add the <cite>[cudaXXX]</cite> optional dependency, where <cite>XXX</cite> takes the values
+<cite>101</cite>, <cite>102</cite>, … depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, …).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git clone https://github.com/GridTools/gt4py.git
+pip install ./gt4py
+<span class="c1"># pip install ./gt4py[cuda115]</span>
+</pre></div>
+</div>
+<p>Or</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install git+https://github.com/gridtools/gt4py.git
+<span class="c1"># pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda115]</span>
+</pre></div>
+</div>
+</section>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline"></a></h2>
+<p>In GT4Py, grid computations such as stencils are defined in a domain-specific language (DSL) called GTScript.
+GTScript is syntactically a subset of Python, but has different semantics.
+Computations defined in this DSL are translated by the GT4Py toolchain into code in Python based on
+<a class="reference external" href="http://www.numpy.org/">NumPy</a> or C++/CUDA based on the <a class="reference external" href="http://gridtools.github.io/">GridTools</a> library.
+To be able to achieve full performance with GridTools, data has to adhere to certain layout requirements, which
+are taken care of by storing the data in GT4Py storage containers.</p>
+<section id="a-simple-example">
+<h3>A Simple Example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline"></a></h3>
+<p>Suppose we want to write a stencil computing a parameterized linear combination of multiple 3D fields.
+The stencil has two parameters to change the relative weights (<code class="docutils literal notranslate"><span class="pre">alpha</span></code> and <code class="docutils literal notranslate"><span class="pre">weight</span></code>) of the input
+fields (<code class="docutils literal notranslate"><span class="pre">field_a</span></code>, <code class="docutils literal notranslate"><span class="pre">field_b</span></code>, and <code class="docutils literal notranslate"><span class="pre">field_c</span></code>) to be combined:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1"># assuming fields of size nx, ny, nz</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nx</span><span class="p">,</span> <span class="n">ny</span><span class="p">,</span> <span class="n">nz</span><span class="p">))</span>
+
+<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span><span class="n">field_a</span><span class="p">,</span> <span class="n">field_b</span><span class="p">,</span> <span class="n">field_c</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">weight</span><span class="p">):</span>
+    <span class="n">nx</span><span class="p">,</span> <span class="n">ny</span><span class="p">,</span> <span class="n">nz</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nx</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ny</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nz</span><span class="p">):</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+                        <span class="n">field_b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span>
+                <span class="p">)</span>
+</pre></div>
+</div>
+<p>To express this calculation using GTScript, we create a function and use the DSL syntax to represent the loop
+over 3 dimensions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.cartesian.gtscript</span> <span class="k">as</span> <span class="nn">gtscript</span>
+
+<span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;numpy&quot;</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
+    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+            <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="p">)</span>
+
+<span class="k">assert</span> <span class="n">callable</span><span class="p">(</span><span class="n">stencil_example</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">True</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">stencil_example</span><span class="p">),</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">stencil_example</span><span class="p">)</span>
+
+<span class="c1"># --&gt; &lt;class &#39;_GT_.__main__.stencil_example.m_stencil_example__numpy&#39;...</span>
+<span class="c1"># --&gt; &lt;StencilObject: __main__.stencil_example&gt; [backend=&quot;numpy&quot;] ...</span>
+</pre></div>
+</div>
+<p>This definition basically expresses the operations (or <em>kernel</em>) performed at every point of the computation domain to generate the output values.
+The indices inside the brackets are interpreted as offsets relative to the current point in the iteration, and not as absolute positions in the data fields.
+For an explanation of the line <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">computation(PARALLEL),</span> <span class="pre">interval(...):</span></code>, please refer to the section <a class="reference internal" href="#computations-and-intervals"><span class="std std-ref">Computations and Intervals</span></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>While not required, it is recommended to specify <em>fields</em> as standard arguments and run-time <em>parameters</em> as
+<em>keyword-only</em> arguments.</p>
+</div>
+<p>Once the stencil kernel has been defined, we use GT4Py to generate an <em>implementation</em> of this high-level definition as
+a callable object that we can use to apply the operations to data. This can be done by just decorating the definition
+function with the <code class="docutils literal notranslate"><span class="pre">stencil</span></code> decorator provided by GT4Py.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">stencil</span></code> decorator generates code in Python or C++ depending on the <code class="docutils literal notranslate"><span class="pre">backend</span></code> specified by name.
+Currently, the following backends are available:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;numpy&quot;</span></code>: a vectorized Python backend</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;gt:cpu_kfirst&quot;</span></code>: a backend based on GridTools code performance-optimized for x86 architecture</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;gt:cpu_ifirst&quot;</span></code>: a GridTools backend targeting many core architectures</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;gt:gpu&quot;</span></code>: a GridTools backend targeting GPUs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;cuda&quot;</span></code>: a backend targeting NVIDIA GPUs using CUDA and some GridTools</p></li>
+</ul>
+<p>The decorator further replaces the stencil definition function (here <code class="docutils literal notranslate"><span class="pre">stencil_example</span></code>) by a callable object that
+can be used as a function to call the generated code which modifies the passed data in place.</p>
+<p>Instead of using the <code class="docutils literal notranslate"><span class="pre">stencil</span></code> decorator, it is also possible to compile the stencil using a
+regular function call receiving the definition function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gt4py.cartesian.gtscript</span> <span class="k">as</span> <span class="nn">gtscript</span>
+
+<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
+    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+            <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="p">)</span>
+
+<span class="n">stencil_example_numpy</span> <span class="o">=</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;numpy&quot;</span><span class="p">,</span> <span class="n">definition</span><span class="o">=</span><span class="n">stencil_example</span><span class="p">)</span>
+
+<span class="n">another_example_gt</span> <span class="o">=</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;gt:cpu_ifirst&quot;</span><span class="p">,</span> <span class="n">definition</span><span class="o">=</span><span class="n">stencil_example</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The generated code is written to and compiled in a local ‘.gt_cache’ folder. Subsequent
+invocations will check whether a recent version of the stencil already exists in the cache.</p>
+</section>
+</section>
+<section id="allocation">
+<h2>Allocation<a class="headerlink" href="#allocation" title="Permalink to this headline"></a></h2>
+<p>Since some backends require data to be in a certain layout in memory, GT4Py provides special <cite>NumPy</cite>-like
+allocators. They work like the familiar set of routines used in <cite>NumPy</cite> for allocation: <code class="docutils literal notranslate"><span class="pre">ones</span></code>, <code class="docutils literal notranslate"><span class="pre">zeros</span></code>,
+<code class="docutils literal notranslate"><span class="pre">full</span></code> and <code class="docutils literal notranslate"><span class="pre">empty</span></code>. There is also <code class="docutils literal notranslate"><span class="pre">from_array</span></code> that initializes the array to a provided array value.
+The result of these routines is either a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code> (for CPU backends) or a <code class="docutils literal notranslate"><span class="pre">cupy.ndarray</span></code>
+(for GPU backends).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gt4py.storage</span> <span class="k">as</span> <span class="nn">gt_storage</span>
+
+<span class="n">backend</span><span class="o">=</span> <span class="s2">&quot;numpy&quot;</span>
+
+<span class="n">field_a</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+    <span class="n">aligned_index</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">field_b</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span>
+    <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">aligned_index</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">field_c</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+    <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">aligned_index</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span>
+    <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">aligned_index</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">stencil_example</span><span class="p">(</span><span class="n">field_a</span><span class="p">,</span> <span class="n">field_b</span><span class="p">,</span> <span class="n">field_c</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">aligned_index</span></code> specifies that the array is to be allocated such that memory address of the point specified in
+<code class="docutils literal notranslate"><span class="pre">aligned_index</span></code> is <cite>aligned</cite> to a backend-dependent value. For optimal performance, you set the <code class="docutils literal notranslate"><span class="pre">algined_index</span></code> to
+a point which is the lower-left corner of the iteration domain most frequently used for this field.</p>
+</section>
+<section id="array-interfaces">
+<h2>Array Interfaces<a class="headerlink" href="#array-interfaces" title="Permalink to this headline"></a></h2>
+<p>When passing buffers to stencils, they can be in any form that is compatible with <code class="docutils literal notranslate"><span class="pre">np.asarray</span></code> or <code class="docutils literal notranslate"><span class="pre">cp.asarray</span></code>,
+respectively. Some meta information can be provided to describe the correspondence between array dimensions and
+their semantic meaning (e.g. IJK) as well as to specify the correspondence. Also, an index can be designated as the
+<cite>origin</cite> of the array to denote the start of the index range considered to be the <cite>iteration domain</cite>. Specifically, the
+behavior is as follows:</p>
+<ol class="arabic simple">
+<li><p>Dimensions can be denoted by adding a <code class="docutils literal notranslate"><span class="pre">__gt_dims__</span></code> attribute to the buffer object. It should be a tuple of strings
+where currently valid dimensions are <code class="docutils literal notranslate"><span class="pre">&quot;I&quot;,</span> <span class="pre">&quot;J&quot;,</span> <span class="pre">&quot;K&quot;</span></code> as well as string representations of integers to represent
+data dimensions, i.e. the dimensions of vector, matrices or higher tensors per grid point. If <code class="docutils literal notranslate"><span class="pre">__gt_dims__</span></code> is not
+present, the dimensions specified in the <code class="docutils literal notranslate"><span class="pre">Field</span></code> annotation of functions serves as a default.</p></li>
+<li><p>The origin can be specified with the <code class="docutils literal notranslate"><span class="pre">__gt_origin__</span></code> attribute, which is a tuple of <code class="docutils literal notranslate"><span class="pre">int</span></code> s. If when calling the
+stencil, no other <cite>origin</cite> is specified, this value is where the <cite>iteration domain</cite> begins, i.e. the grid point with
+the lowest index where a value is written. The explicit <code class="docutils literal notranslate"><span class="pre">origin</span></code> keyword when calling a stencil takes priority over
+this.</p></li>
+</ol>
+</section>
+<section id="computations-and-intervals">
+<span id="id1"></span><h2>Computations and Intervals<a class="headerlink" href="#computations-and-intervals" title="Permalink to this headline"></a></h2>
+<p><cite>Computations</cite> and <cite>interval</cite> determine the iteration space and schedule in the vertical direction.
+The <cite>computation</cite> context determines in which order the vertical
+dimension is iterated over. <code class="docutils literal notranslate"><span class="pre">FORWARD</span></code> specifies an iteration from low to high index, while <code class="docutils literal notranslate"><span class="pre">BACKWARD</span></code> is an
+iteration from high to low index. For contexts declared <code class="docutils literal notranslate"><span class="pre">PARALLEL</span></code>, no order is assumed and only computations
+for which the result is the same irrespective of iteration order are allowed.</p>
+<p><cite>Intervals</cite> declare the range of indices for which the statements
+of the respective context are applied. For example, <code class="docutils literal notranslate"><span class="pre">interval(0,1)</span></code> declares that the following context is executed for indices
+in [0,1), i.e. only for <cite>K=0</cite>. The <code class="docutils literal notranslate"><span class="pre">interval(1,</span> <span class="pre">None)</span></code> represents indices in [1,∞), <code class="docutils literal notranslate"><span class="pre">interval(0,</span> <span class="pre">-1)</span></code> all indices
+except the last.</p>
+<p>For example the Thomas algorithm to solve a linear, tridiagonal system of equations can be implemented using a
+forward and a backward loop with specialized computations at the beginning of each iteration:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gt4py.cartesian.gtscript</span> <span class="k">as</span> <span class="nn">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">tridiagonal_solver</span><span class="p">(</span>
+    <span class="n">inf</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">diag</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">sup</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">rhs</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">out</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+<span class="p">):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">sup</span> <span class="o">=</span> <span class="n">sup</span> <span class="o">/</span> <span class="n">diag</span>
+            <span class="n">rhs</span> <span class="o">=</span> <span class="n">rhs</span> <span class="o">/</span> <span class="n">diag</span>
+        <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="n">sup</span> <span class="o">=</span> <span class="n">sup</span> <span class="o">/</span> <span class="p">(</span><span class="n">diag</span> <span class="o">-</span> <span class="n">sup</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">inf</span><span class="p">)</span>
+            <span class="n">rhs</span> <span class="o">=</span> <span class="p">(</span><span class="n">rhs</span> <span class="o">-</span> <span class="n">inf</span> <span class="o">*</span> <span class="n">rhs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">diag</span> <span class="o">-</span> <span class="n">sup</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">inf</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">BACKWARD</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">rhs</span> <span class="o">-</span> <span class="n">sup</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">rhs</span>
+</pre></div>
+</div>
+<p>However, <code class="docutils literal notranslate"><span class="pre">PARALLEL</span></code> also differs from <code class="docutils literal notranslate"><span class="pre">FORWARD</span></code> and <code class="docutils literal notranslate"><span class="pre">BACKWARD</span></code> in another way:
+For <code class="docutils literal notranslate"><span class="pre">PARALLEL</span></code>, we can assume that each statement
+(i.e. each assignment within the context) is applied to the full vertical domain, before the next one starts.
+If <code class="docutils literal notranslate"><span class="pre">FORWARD</span></code> or <code class="docutils literal notranslate"><span class="pre">BACKWARD</span></code> is specified
+however, all statements are applied to each slice with the same <code class="docutils literal notranslate"><span class="pre">K</span></code>, one after each other, before moving to <code class="docutils literal notranslate"><span class="pre">K+1</span></code>
+or <code class="docutils literal notranslate"><span class="pre">K-1</span></code>, respectively.</p>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h2>
+<p>Functions allow to reuse code elements and to structure your code. They are decorated with <code class="docutils literal notranslate"><span class="pre">&#64;gtscript.function</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@gtscript</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">ddx</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+    <span class="n">v2</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">v2</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">ddy</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+    <span class="n">v2</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">v2</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">ddz</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+    <span class="n">v2</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">v2</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">laplacian</span><span class="p">(</span>
+    <span class="n">v</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="n">lap</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">h</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="p">):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">lap</span> <span class="o">=</span> <span class="n">ddx</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="o">+</span> <span class="n">ddy</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="o">+</span> <span class="n">ddz</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Functions are pure, that is, none of the passed fields are modified and the results must be passed back using
+the <code class="docutils literal notranslate"><span class="pre">return</span></code> statement. In the above example, <code class="docutils literal notranslate"><span class="pre">v</span></code> is not modified. However, multiple return values are allowed:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@gtscript</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">ddxyz</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mf">2.</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">),</span> <span class="n">y</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">),</span> <span class="n">z</span> <span class="o">/</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">laplace</span><span class="p">(</span>
+    <span class="n">v</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="n">lap</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">h</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="p">):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="n">ddxyz</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+        <span class="n">lap</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span> <span class="n">z</span>
+</pre></div>
+</div>
+<p>Functions can be used only for code inside of computation/interval blocks. There is no overhead attached
+to function calls since they are inlined in the generated code.</p>
+</section>
+<section id="offset-syntax">
+<h2>Offset syntax<a class="headerlink" href="#offset-syntax" title="Permalink to this headline"></a></h2>
+<p>Offsets can be specified either as a list of offsets on all spatial axes, e.g. <code class="docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">1]</span></code>, or as offsets on the
+axes present by specifying the axis <code class="docutils literal notranslate"><span class="pre">field[K+1]</span></code>.</p>
+</section>
+<section id="compile-time-conditionals">
+<h2>Compile-time conditionals<a class="headerlink" href="#compile-time-conditionals" title="Permalink to this headline"></a></h2>
+<p>Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
+call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
+example, when we are testing an extension to a existing model, we might want to perform some additional computations
+when running the extended versions and compare the results against the regular one. For this purpose we can force a
+<em>compile-time</em> evaluation of a conditional <code class="docutils literal notranslate"><span class="pre">if</span></code> statement whose test condition depends only on <strong>constant symbol</strong>
+definitions. The condition will be evaluated at the generation step and only the statements in the
+selected branch will be actually compiled.</p>
+<p>For example, the previous definition could be modified in the following way:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">USE_ALPHA</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
+    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="k">if</span> <span class="n">__INLINED</span><span class="p">(</span><span class="n">USE_ALPHA</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+                <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">__INLINED()</span></code> call is used to force the compile-time evaluation of <code class="docutils literal notranslate"><span class="pre">USE_ALPHA</span></code>, which is an external symbol
+that must be defined explicitly before the <code class="docutils literal notranslate"><span class="pre">gtscript.stencil()</span></code> decorator processes the definition function.
+For <cite>C</cite> programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
+<code class="docutils literal notranslate"><span class="pre">#IF</span></code> definitions.</p>
+<p>Alternatively, the actual values of <em>constant</em> symbols can be defined in the <code class="docutils literal notranslate"><span class="pre">gtscript.stencil()</span></code> call as a
+dictionary passed to the <code class="docutils literal notranslate"><span class="pre">externals</span></code> keyword. This allows a more flexible way to parameterize kernel definitions.
+In this case, the symbol must be imported from <code class="docutils literal notranslate"><span class="pre">__externals__</span></code> in the body of the function definition.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">externals</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;USE_ALPHA&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
+    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">__externals__</span> <span class="kn">import</span> <span class="n">USE_ALPHA</span>
+
+    <span class="k">if</span> <span class="n">__INLINED</span><span class="p">(</span><span class="n">USE_ALPHA</span><span class="p">):</span>
+        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+                <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+</section>
+<section id="system-setup">
+<h2>System Setup<a class="headerlink" href="#system-setup" title="Permalink to this headline"></a></h2>
+<p>Compilation settings for GT4Py backends generating C++ or CUDA code can be modified by updating
+the default values in the <a class="reference external" href="https://github.com/GridTools/gt4py/blob/main/src/gt4py/cartesian/config.py">gt4py.cartesian.config</a> module.
+Note that most of the system dependent settings can also be modified using the following environment variables:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">BOOST_ROOT</span></code> or <code class="docutils literal notranslate"><span class="pre">BOOST_HOME</span></code>: root of the boost library headers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CUDA_ROOT</span></code> or <code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code>: installation prefix of the CUDA toolkit.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">GT_INCLUDE_PATH</span></code>: path prefix to an alternative installation of GridTools header files.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">OPENMP_CPPFLAGS</span></code>: preprocessor arguments for OpenMP support.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">OPENMP_LDFLAGS</span></code>: arguments when linking executables with OpenMP support.</p></li>
+</ul>
+<section id="macos">
+<h3>MacOS<a class="headerlink" href="#macos" title="Permalink to this headline"></a></h3>
+<p>The clang compiler supplied with the MacOS Command Line Tools does not support the <code class="docutils literal notranslate"><span class="pre">-fopenmp</span></code> flag, but it does have
+support for OpenMP in the C preprocessor and can link with OpenMP support if the libomp package is installed using
+<code class="docutils literal notranslate"><span class="pre">homebrew</span></code> (<a class="reference external" href="https://brew.sh/">https://brew.sh/</a>). Then set the following environment variables:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span> <span class="nv">OPENMP_CPPFLAGS</span><span class="o">=</span><span class="s2">&quot;-Xpreprocessor -fopenmp&quot;</span>
+<span class="nb">export</span> <span class="nv">OPENMP_LDFLAGS</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>brew --prefix libomp<span class="k">)</span><span class="s2">/lib/libomp.a&quot;</span>
+</pre></div>
+</div>
+<p>Similarly, boost headers are most easily installed using <code class="docutils literal notranslate"><span class="pre">homebrew</span></code>. Then set the corresponding environment variable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span> <span class="nv">BOOST_ROOT</span><span class="o">=</span>/usr/local/opt/boost
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="GT4Py: GridTools for Python" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="arrays.html" class="btn btn-neutral float-right" title="Allocation and Array Interfaces" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

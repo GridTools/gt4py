@@ -1,0 +1,53 @@
+gt4py.cartesian.gtc.cuir package
+================================
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.cuir.cuir module
+------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir.cuir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.cuir.cuir\_codegen module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir.cuir_codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.cuir.extent\_analysis module
+------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir.extent_analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.cuir.kernel\_fusion module
+----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir.kernel_fusion
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.cuir.oir\_to\_cuir module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir.oir_to_cuir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.cuir
+   :members:
+   :undoc-members:
+   :show-inheritance:

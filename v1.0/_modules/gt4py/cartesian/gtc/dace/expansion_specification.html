@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.expansion_specification &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.expansion_specification</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.expansion_specification</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">.nodes</span> <span class="kn">import</span> <span class="n">StencilComputation</span>
+
+<span class="n">_EXPANSION_VALIDITY_CHECKS</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<span class="k">def</span> <span class="nf">_register_validity_check</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="n">_EXPANSION_VALIDITY_CHECKS</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+
+<div class="viewcode-block" id="ExpansionItem"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">ExpansionItem</span><span class="p">:</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Iteration"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.Iteration">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Iteration</span><span class="p">:</span>
+    <span class="n">axis</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># tiling, contiguous</span>
+    <span class="c1"># if stride is not specified, it is chosen based on backend (tiling) and loop order (K)</span>
+    <span class="n">stride</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">iterations</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Iteration&quot;</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Map"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.Map">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Map</span><span class="p">(</span><span class="n">ExpansionItem</span><span class="p">):</span>
+    <span class="n">iterations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Iteration</span><span class="p">]</span>
+    <span class="n">schedule</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Loop"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.Loop">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Loop</span><span class="p">(</span><span class="n">Iteration</span><span class="p">,</span> <span class="n">ExpansionItem</span><span class="p">):</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;contiguous&quot;</span>
+    <span class="n">storage</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">iterations</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Iteration</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Stages"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.Stages">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Stages</span><span class="p">(</span><span class="n">ExpansionItem</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Sections"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.Sections">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Sections</span><span class="p">(</span><span class="n">ExpansionItem</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<span class="k">def</span> <span class="nf">_get_axis_from_pattern</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">fmt</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span> <span class="o">==</span> <span class="n">item</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">axis</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">_is_domain_loop</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_get_axis_from_pattern</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{axis}</span><span class="s2">Loop&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_is_domain_map</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_get_axis_from_pattern</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{axis}</span><span class="s2">Map&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_is_tiling</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_get_axis_from_pattern</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;Tile</span><span class="si">{axis}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="get_expansion_order_axis"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_axis">[docs]</a><span class="k">def</span> <span class="nf">get_expansion_order_axis</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">axis</span> <span class="o">:=</span> <span class="p">(</span>
+        <span class="n">_is_domain_map</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">_is_domain_loop</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">_is_tiling</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">_get_axis_from_pattern</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{axis}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Can&#39;t get axis for item &#39;</span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_expansion_order_index"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_index">[docs]</a><span class="k">def</span> <span class="nf">get_expansion_order_index</span><span class="p">(</span><span class="n">expansion_order</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expansion_order</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Iteration</span><span class="p">)</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">axis</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">idx</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;contiguous&quot;</span> <span class="ow">and</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">axis</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">idx</span></div>
+
+
+<span class="k">def</span> <span class="nf">_is_expansion_order_implemented</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">):</span>
+
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Sections</span><span class="p">):</span>
+            <span class="k">break</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Iteration</span><span class="p">)</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="k">def</span> <span class="nf">_choose_loop_or_map</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">eo</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">eo</span> <span class="o">==</span> <span class="n">axis</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">()):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">eo</span><span class="si">}</span><span class="s2">Map&quot;</span>
+    <span class="k">if</span> <span class="n">eo</span> <span class="o">==</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">eo</span><span class="si">}</span><span class="s2">Map&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">eo</span><span class="si">}</span><span class="s2">Loop&quot;</span>
+    <span class="k">return</span> <span class="n">eo</span>
+
+
+<span class="k">def</span> <span class="nf">_order_as_spec</span><span class="p">(</span><span class="n">computation_node</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">):</span>
+    <span class="n">expansion_order</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_choose_loop_or_map</span><span class="p">(</span><span class="n">computation_node</span><span class="p">,</span> <span class="n">eo</span><span class="p">)</span> <span class="k">for</span> <span class="n">eo</span> <span class="ow">in</span> <span class="n">expansion_order</span><span class="p">)</span>
+    <span class="n">expansion_specification</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_order</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">ExpansionItem</span><span class="p">):</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">axis</span> <span class="o">:=</span> <span class="n">_is_tiling</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">Map</span><span class="p">(</span>
+                    <span class="n">iterations</span><span class="o">=</span><span class="p">[</span>
+                        <span class="n">Iteration</span><span class="p">(</span>
+                            <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                            <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;tiling&quot;</span><span class="p">,</span>
+                            <span class="n">stride</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">axis</span> <span class="o">:=</span> <span class="n">_is_domain_map</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">Map</span><span class="p">(</span>
+                    <span class="n">iterations</span><span class="o">=</span><span class="p">[</span>
+                        <span class="n">Iteration</span><span class="p">(</span>
+                            <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                            <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;contiguous&quot;</span><span class="p">,</span>
+                            <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">axis</span> <span class="o">:=</span> <span class="n">_is_domain_loop</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">Loop</span><span class="p">(</span>
+                    <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span>
+                    <span class="n">stride</span><span class="o">=-</span><span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">computation_node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span>
+                    <span class="k">else</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">item</span> <span class="o">==</span> <span class="s2">&quot;Sections&quot;</span><span class="p">:</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Sections</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">item</span> <span class="o">==</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="n">item</span>
+            <span class="n">expansion_specification</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Stages</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">expansion_specification</span>
+
+
+<div class="viewcode-block" id="_populate_strides"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification._populate_strides">[docs]</a><span class="k">def</span> <span class="nf">_populate_strides</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Fill in `stride` attribute of `Iteration` and `Loop` dataclasses.</span>
+
+<span class="sd">    For loops, stride is set to either -1 or 1, based on iteration order.</span>
+<span class="sd">    For tiling maps, the stride is chosen such that the resulting tile size</span>
+<span class="sd">    is that of the tile_size attribute.</span>
+<span class="sd">    Other maps get stride 1.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">ExpansionItem</span><span class="p">)</span> <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">)</span>
+
+    <span class="n">iterations</span> <span class="o">=</span> <span class="p">[</span><span class="n">it</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s2">&quot;iterations&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+
+    <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">iterations</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="n">Loop</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span>
+                    <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;tiling&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">extents</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+                        <span class="n">extent</span> <span class="o">=</span> <span class="n">Extent</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">he_extent</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">extents</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                            <span class="n">extent</span> <span class="o">=</span> <span class="n">extent</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">he_extent</span><span class="p">)</span>
+                        <span class="n">extent</span> <span class="o">=</span> <span class="n">extent</span><span class="p">[</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">extent</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                    <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">tile_strides</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">it</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+
+<span class="k">def</span> <span class="nf">_populate_storages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">ExpansionItem</span><span class="p">)</span> <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="n">innermost_axes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">())</span>
+    <span class="n">tiled_axes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;tiling&quot;</span><span class="p">:</span>
+                    <span class="n">tiled_axes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">es</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">innermost_axes</span><span class="p">:</span>
+                    <span class="n">innermost_axes</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;tiling&quot;</span><span class="p">:</span>
+                    <span class="n">tiled_axes</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_populate_cpu_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="n">is_outermost</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">is_outermost</span><span class="p">:</span>
+                    <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span>
+                    <span class="n">is_outermost</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span>
+
+
+<span class="k">def</span> <span class="nf">_populate_gpu_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="c1"># On GPU if any dimension is tiled and has a contiguous map in the same axis further in</span>
+    <span class="c1"># pick those two maps as Device/ThreadBlock maps. If not, Make just device map with</span>
+    <span class="c1"># default blocksizes</span>
+    <span class="n">is_outermost</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">tiled</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">tiled</span> <span class="ow">and</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;tiling&quot;</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">inner_item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]:</span>
+                        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">inner_item</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
+                            <span class="n">inner_it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;contiguous&quot;</span> <span class="ow">and</span> <span class="n">inner_it</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span>
+                            <span class="k">for</span> <span class="n">inner_it</span> <span class="ow">in</span> <span class="n">inner_item</span><span class="o">.</span><span class="n">iterations</span>
+                        <span class="p">):</span>
+                            <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_Device</span>
+                            <span class="n">inner_item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_ThreadBlock</span>
+                            <span class="n">tiled</span> <span class="o">=</span> <span class="kc">True</span>
+                            <span class="k">break</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tiled</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span>
+        <span class="p">),</span> <span class="s2">&quot;needs at least one map to avoid dereferencing on CPU&quot;</span>
+        <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">is_outermost</span><span class="p">:</span>
+                        <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">GPU_Device</span>
+                        <span class="n">is_outermost</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">es</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span>
+
+
+<span class="k">def</span> <span class="nf">_populate_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">es</span><span class="p">,</span> <span class="n">ExpansionItem</span><span class="p">)</span> <span class="k">for</span> <span class="n">es</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_device&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">GPU</span><span class="p">:</span>
+        <span class="n">_populate_gpu_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_populate_cpu_schedules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_collapse_maps_gpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_union_map_items</span><span class="p">(</span><span class="n">last_item</span><span class="p">,</span> <span class="n">next_item</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">last_item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">next_item</span><span class="o">.</span><span class="n">schedule</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">Map</span><span class="p">(</span>
+                    <span class="n">iterations</span><span class="o">=</span><span class="n">last_item</span><span class="o">.</span><span class="n">iterations</span> <span class="o">+</span> <span class="n">next_item</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+                    <span class="n">schedule</span><span class="o">=</span><span class="n">last_item</span><span class="o">.</span><span class="n">schedule</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">next_item</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">next_item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span>
+            <span class="n">specified_item</span> <span class="o">=</span> <span class="n">last_item</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">specified_item</span> <span class="o">=</span> <span class="n">next_item</span>
+
+        <span class="k">if</span> <span class="n">specified_item</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">specified_item</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">Map</span><span class="p">(</span>
+                    <span class="n">iterations</span><span class="o">=</span><span class="n">last_item</span><span class="o">.</span><span class="n">iterations</span> <span class="o">+</span> <span class="n">next_item</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+                    <span class="n">schedule</span><span class="o">=</span><span class="n">specified_item</span><span class="o">.</span><span class="n">schedule</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="c1"># one is default and the other None</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">Map</span><span class="p">(</span>
+                <span class="n">iterations</span><span class="o">=</span><span class="n">last_item</span><span class="o">.</span><span class="n">iterations</span> <span class="o">+</span> <span class="n">next_item</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+                <span class="n">schedule</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="n">res_items</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">res_items</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">Map</span><span class="p">):</span>
+                <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:]</span> <span class="o">=</span> <span class="n">_union_map_items</span><span class="p">(</span><span class="n">last_item</span><span class="o">=</span><span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">next_item</span><span class="o">=</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">res_items</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span>
+            <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span>
+        <span class="p">):</span>
+            <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span>
+    <span class="k">return</span> <span class="n">res_items</span>
+
+
+<span class="k">def</span> <span class="nf">_collapse_maps_cpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="n">res_items</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="ow">not</span> <span class="n">res_items</span>
+                <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">Map</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span>
+                    <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">outer_it</span><span class="o">.</span><span class="n">axis</span> <span class="k">for</span> <span class="n">outer_it</span> <span class="ow">in</span> <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">iterations</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span>
+                <span class="p">)</span>
+            <span class="p">):</span>
+                <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">schedule</span><span class="p">:</span>
+                <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">iterations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">:</span>
+                    <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">iterations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="p">(</span>
+                <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="ow">or</span> <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Default</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">:</span>
+                    <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">iterations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">)</span>
+                    <span class="n">res_items</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">res_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">res_items</span>
+
+
+<span class="k">def</span> <span class="nf">_collapse_maps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_device&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">GPU</span><span class="p">:</span>
+        <span class="n">res_items</span> <span class="o">=</span> <span class="n">_collapse_maps_gpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">res_items</span> <span class="o">=</span> <span class="n">_collapse_maps_cpu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="n">expansion_specification</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="n">expansion_specification</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">res_items</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="make_expansion_order"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.make_expansion_order">[docs]</a><span class="k">def</span> <span class="nf">make_expansion_order</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="n">expansion_order</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">expansion_order</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">expansion_order</span><span class="p">)</span>
+    <span class="n">expansion_specification</span> <span class="o">=</span> <span class="n">_order_as_spec</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_expansion_order_implemented</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Provided StencilComputation.expansion_order is not supported.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_expansion_order_valid</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Provided StencilComputation.expansion_order is invalid.&quot;</span><span class="p">)</span>
+
+    <span class="n">_populate_strides</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="n">_populate_schedules</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="n">_collapse_maps</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="n">_populate_storages</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">expansion_specification</span></div>
+
+
+<span class="k">def</span> <span class="nf">_k_inside_dims</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">):</span>
+    <span class="c1"># Putting K inside of i or j is valid if</span>
+    <span class="c1"># * K parallel or</span>
+    <span class="c1"># * All reads with k-offset to values modified in same HorizontalExecution are not</span>
+    <span class="c1">#   to fields that are also accessed horizontally (in I or J, respectively)</span>
+    <span class="c1">#   (else, race condition in other column)</span>
+
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">}</span>
+
+    <span class="n">res</span> <span class="o">=</span> <span class="p">{</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">}</span>
+    <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">he</span> <span class="ow">in</span> <span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">:</span>
+            <span class="n">i_offset_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span>
+                <span class="p">(</span>
+                    <span class="n">acc</span><span class="o">.</span><span class="n">name</span>
+                    <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;i&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">j_offset_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span>
+                <span class="p">(</span>
+                    <span class="n">acc</span><span class="o">.</span><span class="n">name</span>
+                    <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;j&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">k_offset_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span>
+                <span class="p">(</span>
+                    <span class="n">acc</span><span class="o">.</span><span class="n">name</span>
+                    <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">)</span> <span class="ow">or</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">modified_fields</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">modified_fields</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">k_offset_fields</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">i_offset_fields</span><span class="p">:</span>
+                    <span class="n">res</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">k_offset_fields</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">j_offset_fields</span><span class="p">:</span>
+                    <span class="n">res</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">res</span>
+
+
+<span class="k">def</span> <span class="nf">_k_inside_stages</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">):</span>
+    <span class="c1"># Putting K inside of stages is valid if</span>
+    <span class="c1"># * K parallel</span>
+    <span class="c1"># * not &quot;ahead&quot; in order of iteration to fields that are modified in previous</span>
+    <span class="c1">#   HorizontalExecutions (else, reading updated values that should be old)</span>
+
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">:</span>
+        <span class="n">modified_fields</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">he</span> <span class="ow">in</span> <span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">modified_fields</span><span class="p">:</span>
+                <span class="n">ahead_acc</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="nb">isinstance</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">)</span>
+                        <span class="ow">or</span> <span class="p">(</span>
+                            <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span>
+                            <span class="ow">and</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">k</span> <span class="o">&gt;</span> <span class="mi">0</span>
+                        <span class="p">)</span>
+                        <span class="ow">or</span> <span class="p">(</span>
+                            <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span>
+                            <span class="ow">and</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">k</span> <span class="o">&lt;</span> <span class="mi">0</span>
+                        <span class="p">)</span>
+                    <span class="p">):</span>
+                        <span class="n">ahead_acc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">modified_fields</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">ahead_acc</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+
+            <span class="n">modified_fields</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_sequential_as_loops</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># K can&#39;t be Map if not parallel</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Map</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="o">==</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_stages_inside_sections</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># Oir defines that HorizontalExecutions have to be applied per VerticalLoopSection. A meaningful inversion of this</span>
+    <span class="c1"># is not possible.</span>
+    <span class="n">sections_idx</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+        <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Sections</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">stages_idx</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+        <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Stages</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">stages_idx</span> <span class="o">&lt;</span> <span class="n">sections_idx</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_k_inside_ij_valid</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># OIR defines that horizontal maps go inside vertical K loop (i.e. all grid points are updated in a</span>
+    <span class="c1"># HorizontalExecution before the computation of the next one is executed.).  Under certain conditions the semantics</span>
+    <span class="c1"># remain unchanged even if a single horizontal map is executing all contained HorizontalExecution nodes.</span>
+    <span class="c1"># Note: Opposed to e.g. Fusions in OIR, this can here be done on a per-dimension basis. See `_k_inside_dims` for</span>
+    <span class="c1"># details.</span>
+    <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">get_expansion_order_index</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">,</span> <span class="n">axis</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">get_expansion_order_index</span><span class="p">(</span>
+            <span class="n">expansion_specification</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span>
+        <span class="p">)</span> <span class="ow">and</span> <span class="n">axis</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_k_inside_dims</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_k_inside_stages_valid</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># OIR defines that all horizontal executions of a VerticalLoopSection are run per level. Under certain conditions</span>
+    <span class="c1"># the semantics remain unchanged even if the k loop is run per horizontal execution. See `_k_inside_stages` for</span>
+    <span class="c1"># details</span>
+    <span class="n">stages_idx</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+        <span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Stages</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">stages_idx</span> <span class="o">&lt;</span> <span class="n">get_expansion_order_index</span><span class="p">(</span>
+        <span class="n">expansion_specification</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span>
+    <span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_k_inside_stages</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_ij_outside_sections_valid</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># If there are multiple horizontal executions in any section, IJ iteration must go inside sections.</span>
+    <span class="c1"># TODO: do mergeability checks on a per-axis basis.</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Sections</span><span class="p">):</span>
+            <span class="k">break</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="p">(</span><span class="n">Map</span><span class="p">,</span> <span class="n">Loop</span><span class="p">,</span> <span class="n">Iteration</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">()</span> <span class="ow">and</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;contiguous&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span>
+                    <span class="p">):</span>
+                        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="c1"># if there are horizontal executions with different iteration ranges in an axis across sections,</span>
+    <span class="c1"># that iteration must be per section</span>
+    <span class="c1"># TODO less conservative: allow different domains if all outputs smaller than bounding box are temporaries</span>
+    <span class="c1"># TODO implement/allow this with predicates implicit regions / predicates</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">Sections</span><span class="p">):</span>
+            <span class="k">break</span>
+        <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s2">&quot;iterations&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">()</span> <span class="ow">and</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;contiguous&quot;</span><span class="p">:</span>
+                <span class="n">xiter</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">))</span>
+                <span class="n">extent</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">get_extents</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">xiter</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">he</span> <span class="ow">in</span> <span class="n">xiter</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">get_extents</span><span class="p">(</span><span class="n">he</span><span class="p">)[</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()]</span> <span class="o">!=</span> <span class="n">extent</span><span class="p">[</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()]:</span>
+                        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="nd">@_register_validity_check</span>
+<span class="k">def</span> <span class="nf">_iterates_domain</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># There must be exactly one iteration per dimension, except for tiled dimensions, where a Tiling has to go outside</span>
+    <span class="c1"># and the corresponding contiguous iteration inside.</span>
+    <span class="n">tiled_axes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">contiguous_axes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">expansion_specification</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="p">(</span><span class="n">Map</span><span class="p">,</span> <span class="n">Loop</span><span class="p">,</span> <span class="n">Iteration</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">iterations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;tiling&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">tiled_axes</span> <span class="ow">or</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">contiguous_axes</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="kc">False</span>
+                    <span class="n">tiled_axes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">it</span><span class="o">.</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">contiguous_axes</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="kc">False</span>
+                    <span class="n">contiguous_axes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">axis</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">axis</span> <span class="ow">in</span> <span class="n">contiguous_axes</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_3d</span><span class="p">()):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<div class="viewcode-block" id="is_expansion_order_valid"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.expansion_specification.is_expansion_order_valid">[docs]</a><span class="k">def</span> <span class="nf">is_expansion_order_valid</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Check if a given expansion specification valid.</span>
+
+<span class="sd">    That is, it is semantically valid for the StencilComputation node that is to be configured and currently</span>
+<span class="sd">    implemented.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">expansion_specification</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_choose_loop_or_map</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">eo</span><span class="p">)</span> <span class="k">for</span> <span class="n">eo</span> <span class="ow">in</span> <span class="n">expansion_order</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">check</span> <span class="ow">in</span> <span class="n">_EXPANSION_VALIDITY_CHECKS</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">check</span><span class="p">(</span><span class="n">node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_specification</span><span class="o">=</span><span class="n">expansion_specification</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">return</span> <span class="n">_is_expansion_order_implemented</span><span class="p">(</span><span class="n">expansion_specification</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

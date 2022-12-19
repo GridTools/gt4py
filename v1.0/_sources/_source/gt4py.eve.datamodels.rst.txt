@@ -1,0 +1,29 @@
+gt4py.eve.datamodels package
+============================
+
+Submodules
+----------
+
+gt4py.eve.datamodels.core module
+--------------------------------
+
+.. automodule:: gt4py.eve.datamodels.core
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.datamodels.validators module
+--------------------------------------
+
+.. automodule:: gt4py.eve.datamodels.validators
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.eve.datamodels
+   :members:
+   :undoc-members:
+   :show-inheritance:

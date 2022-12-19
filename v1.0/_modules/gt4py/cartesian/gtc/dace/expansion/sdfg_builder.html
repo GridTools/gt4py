@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.expansion.sdfg_builder &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.expansion.sdfg_builder</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.expansion.sdfg_builder</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ChainMap</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.library</span>
+<span class="kn">import</span> <span class="nn">dace.subsets</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.expansion.tasklet_codegen</span> <span class="kn">import</span> <span class="n">TaskletCodegen</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.expansion.utils</span> <span class="kn">import</span> <span class="n">get_dace_debuginfo</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.symbol_utils</span> <span class="kn">import</span> <span class="n">data_type_to_dace_typeclass</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.utils</span> <span class="kn">import</span> <span class="n">make_dace_subset</span>
+
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder">[docs]</a><span class="k">class</span> <span class="nc">StencilComputationSDFGBuilder</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.NodeContext"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.NodeContext">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">NodeContext</span><span class="p">:</span>
+        <span class="n">input_node_and_conns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span>
+        <span class="n">output_node_and_conns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.SDFGContext"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.SDFGContext">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">SDFGContext</span><span class="p">:</span>
+        <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span>
+        <span class="n">state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span>
+        <span class="n">state_stack</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.SDFGContext.add_state"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.SDFGContext.add_state">[docs]</a>        <span class="k">def</span> <span class="nf">add_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="n">new_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">remove_edge</span><span class="p">(</span><span class="n">edge</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">new_state</span><span class="p">,</span> <span class="n">edge</span><span class="o">.</span><span class="n">dst</span><span class="p">,</span> <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">new_state</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">InterstateEdge</span><span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">new_state</span>
+            <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.SDFGContext.add_loop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.SDFGContext.add_loop">[docs]</a>        <span class="k">def</span> <span class="nf">add_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index_range</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Range</span><span class="p">):</span>
+            <span class="n">loop_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">()</span>
+            <span class="n">after_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">remove_edge</span><span class="p">(</span><span class="n">edge</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                    <span class="n">after_state</span><span class="p">,</span>
+                    <span class="n">edge</span><span class="o">.</span><span class="n">dst</span><span class="p">,</span>
+                    <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index_range</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">DomainInterval</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">index_range</span><span class="o">.</span><span class="n">stride</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">initialize_expr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index_range</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="si">}</span><span class="s2"> - 1&quot;</span>
+                <span class="n">end_expr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index_range</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="si">}</span><span class="s2"> - 1&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">initialize_expr</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">index_range</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+                <span class="n">end_expr</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">index_range</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+            <span class="n">comparison_op</span> <span class="o">=</span> <span class="s2">&quot;&lt;&quot;</span> <span class="k">if</span> <span class="n">index_range</span><span class="o">.</span><span class="n">stride</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;&gt;&quot;</span>
+            <span class="n">condition_expr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index_range</span><span class="o">.</span><span class="n">var</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">comparison_op</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">end_expr</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">after_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_loop</span><span class="p">(</span>
+                <span class="n">before_state</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">,</span>
+                <span class="n">loop_state</span><span class="o">=</span><span class="n">loop_state</span><span class="p">,</span>
+                <span class="n">after_state</span><span class="o">=</span><span class="n">after_state</span><span class="p">,</span>
+                <span class="n">loop_var</span><span class="o">=</span><span class="n">index_range</span><span class="o">.</span><span class="n">var</span><span class="p">,</span>
+                <span class="n">initialize_expr</span><span class="o">=</span><span class="n">initialize_expr</span><span class="p">,</span>
+                <span class="n">condition_expr</span><span class="o">=</span><span class="n">condition_expr</span><span class="p">,</span>
+                <span class="n">increment_expr</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index_range</span><span class="o">.</span><span class="n">var</span><span class="si">}</span><span class="s2">+(</span><span class="si">{</span><span class="n">index_range</span><span class="o">.</span><span class="n">stride</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">index_range</span><span class="o">.</span><span class="n">var</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">index_range</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">state_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">after_state</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">loop_state</span>
+            <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.SDFGContext.pop_loop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.SDFGContext.pop_loop">[docs]</a>        <span class="k">def</span> <span class="nf">pop_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_Memlet"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_Memlet">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Memlet</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Memlet</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">scope_node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">ComputationNode</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="n">node_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.NodeContext&quot;</span><span class="p">,</span>
+        <span class="n">connector_prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">ChainMap</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Decl</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">field_decl</span> <span class="o">=</span> <span class="n">symtable</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">field</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field_decl</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">)</span>
+        <span class="n">memlet</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">Memlet</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">subset</span><span class="o">=</span><span class="n">make_dace_subset</span><span class="p">(</span><span class="n">field_decl</span><span class="o">.</span><span class="n">access_info</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">access_info</span><span class="p">,</span> <span class="n">field_decl</span><span class="o">.</span><span class="n">data_dims</span><span class="p">),</span>
+            <span class="n">dynamic</span><span class="o">=</span><span class="n">field_decl</span><span class="o">.</span><span class="n">is_dynamic</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">is_read</span><span class="p">:</span>
+            <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">node_ctx</span><span class="o">.</span><span class="n">input_node_and_conns</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">data</span><span class="p">],</span>
+                <span class="n">scope_node</span><span class="p">,</span>
+                <span class="n">connector_prefix</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">connector</span><span class="p">,</span>
+                <span class="n">memlet</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">is_write</span><span class="p">:</span>
+            <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                <span class="n">scope_node</span><span class="p">,</span>
+                <span class="n">connector_prefix</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">connector</span><span class="p">,</span>
+                <span class="o">*</span><span class="n">node_ctx</span><span class="o">.</span><span class="n">output_node_and_conns</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">data</span><span class="p">],</span>
+                <span class="n">memlet</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_add_empty_edges</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">entry_node</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span>
+        <span class="n">exit_node</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="n">node_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.NodeContext&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">in_degree</span><span class="p">(</span><span class="n">entry_node</span><span class="p">)</span> <span class="ow">and</span> <span class="kc">None</span> <span class="ow">in</span> <span class="n">node_ctx</span><span class="o">.</span><span class="n">input_node_and_conns</span><span class="p">:</span>
+            <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">node_ctx</span><span class="o">.</span><span class="n">input_node_and_conns</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">entry_node</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">Memlet</span><span class="p">()</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">out_degree</span><span class="p">(</span><span class="n">exit_node</span><span class="p">)</span> <span class="ow">and</span> <span class="kc">None</span> <span class="ow">in</span> <span class="n">node_ctx</span><span class="o">.</span><span class="n">output_node_and_conns</span><span class="p">:</span>
+            <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                <span class="n">exit_node</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">node_ctx</span><span class="o">.</span><span class="n">output_node_and_conns</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">dace</span><span class="o">.</span><span class="n">Memlet</span><span class="p">()</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_Tasklet"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_Tasklet">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Tasklet</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Tasklet</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="n">node_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.NodeContext&quot;</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">ChainMap</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Decl</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="n">TaskletCodegen</span><span class="o">.</span><span class="n">apply_codegen</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">read_memlets</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">,</span>
+            <span class="n">write_memlets</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+            <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">tasklet</span> <span class="o">=</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_tasklet</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">label</span><span class="si">}</span><span class="s2">_Tasklet&quot;</span><span class="p">,</span>
+            <span class="n">code</span><span class="o">=</span><span class="n">code</span><span class="p">,</span>
+            <span class="n">inputs</span><span class="o">=</span><span class="nb">set</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">),</span>
+            <span class="n">outputs</span><span class="o">=</span><span class="nb">set</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">),</span>
+            <span class="n">debuginfo</span><span class="o">=</span><span class="n">get_dace_debuginfo</span><span class="p">(</span><span class="n">node</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">,</span>
+            <span class="n">scope_node</span><span class="o">=</span><span class="n">tasklet</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+            <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+            <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">,</span>
+            <span class="n">scope_node</span><span class="o">=</span><span class="n">tasklet</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+            <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+            <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">_add_empty_edges</span><span class="p">(</span>
+            <span class="n">tasklet</span><span class="p">,</span> <span class="n">tasklet</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_Range"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_Range">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Range</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">to_dace_symbolic</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">node</span><span class="o">.</span><span class="n">var</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">dace</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">Range</span><span class="p">([(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">stride</span><span class="p">)]))}</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_DomainMap"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_DomainMap">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DomainMap</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">DomainMap</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">node_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.NodeContext&quot;</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ndranges</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+            <span class="k">for</span> <span class="n">index_range</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">index_ranges</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">index_range</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">label</span> <span class="o">+</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ndranges</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">+</span> <span class="s2">&quot;_map&quot;</span>
+        <span class="n">map_entry</span><span class="p">,</span> <span class="n">map_exit</span> <span class="o">=</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_map</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">ndrange</span><span class="o">=</span><span class="n">ndranges</span><span class="p">,</span>
+            <span class="n">schedule</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">schedule</span><span class="o">.</span><span class="n">to_dace_schedule</span><span class="p">(),</span>
+            <span class="n">debuginfo</span><span class="o">=</span><span class="n">get_dace_debuginfo</span><span class="p">(</span><span class="n">node</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">scope_node</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">computations</span><span class="p">:</span>
+            <span class="n">input_node_and_conns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">output_node_and_conns</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">scope_node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">):</span>
+                <span class="n">map_entry</span><span class="o">.</span><span class="n">add_in_connector</span><span class="p">(</span><span class="s2">&quot;IN_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+                <span class="n">map_entry</span><span class="o">.</span><span class="n">add_out_connector</span><span class="p">(</span><span class="s2">&quot;OUT_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+                <span class="n">input_node_and_conns</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">map_entry</span><span class="p">,</span> <span class="s2">&quot;OUT_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">scope_node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">):</span>
+                <span class="n">map_exit</span><span class="o">.</span><span class="n">add_in_connector</span><span class="p">(</span><span class="s2">&quot;IN_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+                <span class="n">map_exit</span><span class="o">.</span><span class="n">add_out_connector</span><span class="p">(</span><span class="s2">&quot;OUT_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+                <span class="n">output_node_and_conns</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">map_exit</span><span class="p">,</span> <span class="s2">&quot;IN_&quot;</span> <span class="o">+</span> <span class="n">field</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">input_node_and_conns</span><span class="p">:</span>
+                <span class="n">input_node_and_conns</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">map_entry</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">output_node_and_conns</span><span class="p">:</span>
+                <span class="n">output_node_and_conns</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">map_exit</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">inner_node_ctx</span> <span class="o">=</span> <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">NodeContext</span><span class="p">(</span>
+                <span class="n">input_node_and_conns</span><span class="o">=</span><span class="n">input_node_and_conns</span><span class="p">,</span>
+                <span class="n">output_node_and_conns</span><span class="o">=</span><span class="n">output_node_and_conns</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">scope_node</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">node_ctx</span><span class="o">=</span><span class="n">inner_node_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">,</span>
+            <span class="n">scope_node</span><span class="o">=</span><span class="n">map_entry</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+            <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+            <span class="n">connector_prefix</span><span class="o">=</span><span class="s2">&quot;IN_&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">,</span>
+            <span class="n">scope_node</span><span class="o">=</span><span class="n">map_exit</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+            <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+            <span class="n">connector_prefix</span><span class="o">=</span><span class="s2">&quot;OUT_&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">_add_empty_edges</span><span class="p">(</span>
+            <span class="n">map_entry</span><span class="p">,</span> <span class="n">map_exit</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_DomainLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_DomainLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DomainLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">DomainLoop</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">sdfg_ctx</span> <span class="o">=</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">add_loop</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">index_range</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">loop_states</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">pop_loop</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_ComputationState"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_ComputationState">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ComputationState</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">ComputationState</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+
+        <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">add_state</span><span class="p">()</span>
+        <span class="n">read_acc_and_conn</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">write_acc_and_conn</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">computation</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">computations</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">computation</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">ComputationNode</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">computation</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">memlet</span><span class="o">.</span><span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">read_acc_and_conn</span><span class="p">:</span>
+                    <span class="n">read_acc_and_conn</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_access</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="n">debuginfo</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+                        <span class="kc">None</span><span class="p">,</span>
+                    <span class="p">)</span>
+            <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">computation</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">memlet</span><span class="o">.</span><span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">write_acc_and_conn</span><span class="p">:</span>
+                    <span class="n">write_acc_and_conn</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_access</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="n">debuginfo</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+                        <span class="kc">None</span><span class="p">,</span>
+                    <span class="p">)</span>
+            <span class="n">node_ctx</span> <span class="o">=</span> <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">NodeContext</span><span class="p">(</span>
+                <span class="n">input_node_and_conns</span><span class="o">=</span><span class="n">read_acc_and_conn</span><span class="p">,</span> <span class="n">output_node_and_conns</span><span class="o">=</span><span class="n">write_acc_and_conn</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">computation</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_FieldDecl"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_FieldDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldDecl</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="n">non_transients</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">strides</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_array</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">strides</span><span class="o">=</span><span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">strides</span><span class="p">],</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">data_type_to_dace_typeclass</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span>
+            <span class="n">storage</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">storage</span><span class="o">.</span><span class="n">to_dace_storage</span><span class="p">(),</span>
+            <span class="n">transient</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">non_transients</span><span class="p">,</span>
+            <span class="n">debuginfo</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_SymbolDecl"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_SymbolDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_SymbolDecl</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">SymbolDecl</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="n">data_type_to_dace_typeclass</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="StencilComputationSDFGBuilder.visit_NestedSDFG"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.sdfg_builder.StencilComputationSDFGBuilder.visit_NestedSDFG">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NestedSDFG</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;StencilComputationSDFGBuilder.SDFGContext&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">node_ctx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;StencilComputationSDFGBuilder.NodeContext&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">ChainMap</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">:</span>
+
+        <span class="n">sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">inner_sdfg_ctx</span> <span class="o">=</span> <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">SDFGContext</span><span class="p">(</span>
+            <span class="n">sdfg</span><span class="o">=</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">(</span><span class="n">is_start_state</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">field_decls</span><span class="p">,</span>
+            <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">inner_sdfg_ctx</span><span class="p">,</span>
+            <span class="n">non_transients</span><span class="o">=</span><span class="p">{</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">},</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">symbol_decls</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">inner_sdfg_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">symbol_mapping</span> <span class="o">=</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">decl</span><span class="o">.</span><span class="n">to_dace_symbol</span><span class="p">()</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">symbol_decls</span><span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">computation_state</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">states</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">computation_state</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">inner_sdfg_ctx</span><span class="p">,</span> <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">sdfg_ctx</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">node_ctx</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">nsdfg</span> <span class="o">=</span> <span class="n">sdfg_ctx</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">add_nested_sdfg</span><span class="p">(</span>
+                <span class="n">sdfg</span><span class="o">=</span><span class="n">sdfg</span><span class="p">,</span>
+                <span class="n">parent</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">inputs</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">input_connectors</span><span class="p">,</span>
+                <span class="n">outputs</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">output_connectors</span><span class="p">,</span>
+                <span class="n">symbol_mapping</span><span class="o">=</span><span class="n">symbol_mapping</span><span class="p">,</span>
+                <span class="n">debuginfo</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">,</span>
+                <span class="n">scope_node</span><span class="o">=</span><span class="n">nsdfg</span><span class="p">,</span>
+                <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+                <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+                <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="o">.</span><span class="n">parents</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">,</span>
+                <span class="n">scope_node</span><span class="o">=</span><span class="n">nsdfg</span><span class="p">,</span>
+                <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span>
+                <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span><span class="p">,</span>
+                <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="o">.</span><span class="n">parents</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">StencilComputationSDFGBuilder</span><span class="o">.</span><span class="n">_add_empty_edges</span><span class="p">(</span>
+                <span class="n">nsdfg</span><span class="p">,</span> <span class="n">nsdfg</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">node_ctx</span><span class="o">=</span><span class="n">node_ctx</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">nsdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">(</span>
+                <span class="n">label</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                <span class="n">sdfg</span><span class="o">=</span><span class="n">sdfg</span><span class="p">,</span>
+                <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">},</span>
+                <span class="n">outputs</span><span class="o">=</span><span class="p">{</span><span class="n">memlet</span><span class="o">.</span><span class="n">connector</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">},</span>
+                <span class="n">symbol_mapping</span><span class="o">=</span><span class="n">symbol_mapping</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">nsdfg</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

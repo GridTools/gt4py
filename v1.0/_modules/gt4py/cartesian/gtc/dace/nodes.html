@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.nodes &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.nodes</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.nodes</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.dtypes</span>
+<span class="kn">import</span> <span class="nn">dace.properties</span>
+<span class="kn">import</span> <span class="nn">dace.subsets</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">dace</span> <span class="kn">import</span> <span class="n">library</span>
+
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.expansion.expansion</span> <span class="kn">import</span> <span class="n">StencilComputationExpansion</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.oir</span> <span class="kn">import</span> <span class="n">Decl</span><span class="p">,</span> <span class="n">FieldDecl</span><span class="p">,</span> <span class="n">VerticalLoop</span><span class="p">,</span> <span class="n">VerticalLoopSection</span>
+
+<span class="kn">from</span> <span class="nn">.expansion.utils</span> <span class="kn">import</span> <span class="n">HorizontalExecutionSplitter</span><span class="p">,</span> <span class="n">get_dace_debuginfo</span>
+<span class="kn">from</span> <span class="nn">.expansion_specification</span> <span class="kn">import</span> <span class="n">ExpansionItem</span><span class="p">,</span> <span class="n">make_expansion_order</span>
+
+
+<span class="k">def</span> <span class="nf">_set_expansion_order</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">ExpansionItem</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>
+<span class="p">):</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">make_expansion_order</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">)</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_expansion_specification</span> <span class="o">=</span> <span class="n">res</span>
+
+
+<span class="k">def</span> <span class="nf">_set_tile_sizes_interpretation</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">tile_sizes_interpretation</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="n">valid_values</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="s2">&quot;strides&quot;</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">tile_sizes_interpretation</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_values</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tile_sizes_interpretation must be one in </span><span class="si">{</span><span class="n">valid_values</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_tile_sizes_interpretation</span> <span class="o">=</span> <span class="n">tile_sizes_interpretation</span>
+
+
+<div class="viewcode-block" id="PickledProperty"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledProperty">[docs]</a><span class="k">class</span> <span class="nc">PickledProperty</span><span class="p">:</span>
+<div class="viewcode-block" id="PickledProperty.to_json"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledProperty.to_json">[docs]</a>    <span class="k">def</span> <span class="nf">to_json</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+        <span class="n">protocol</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">DEFAULT_PROTOCOL</span>
+        <span class="n">pbytes</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="n">protocol</span><span class="p">)</span>
+        <span class="n">jsonobj</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pickle</span><span class="o">=</span><span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">pbytes</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">jsonobj</span></div>
+
+<div class="viewcode-block" id="PickledProperty.from_json"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledProperty.from_json">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_json</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">sdfg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">b64string</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;pickle&quot;</span><span class="p">]</span>
+        <span class="n">byte_repr</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">b64string</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">byte_repr</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="PickledDataclassProperty"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledDataclassProperty">[docs]</a><span class="k">class</span> <span class="nc">PickledDataclassProperty</span><span class="p">(</span><span class="n">PickledProperty</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">DataclassProperty</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="PickledListProperty"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledListProperty">[docs]</a><span class="k">class</span> <span class="nc">PickledListProperty</span><span class="p">(</span><span class="n">PickledProperty</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">ListProperty</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="PickledDictProperty"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.PickledDictProperty">[docs]</a><span class="k">class</span> <span class="nc">PickledDictProperty</span><span class="p">(</span><span class="n">PickledProperty</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">DictProperty</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="StencilComputation"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.StencilComputation">[docs]</a><span class="nd">@library</span><span class="o">.</span><span class="n">node</span>
+<span class="k">class</span> <span class="nc">StencilComputation</span><span class="p">(</span><span class="n">library</span><span class="o">.</span><span class="n">LibraryNode</span><span class="p">):</span>
+    <span class="n">implementations</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">library</span><span class="o">.</span><span class="n">ExpandTransformation</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="n">StencilComputationExpansion</span>
+    <span class="p">}</span>
+    <span class="n">default_implementation</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span>
+
+    <span class="n">oir_node</span> <span class="o">=</span> <span class="n">PickledDataclassProperty</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">declarations</span> <span class="o">=</span> <span class="n">PickledDictProperty</span><span class="p">(</span><span class="n">key_type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">value_type</span><span class="o">=</span><span class="n">Decl</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">extents</span> <span class="o">=</span> <span class="n">PickledDictProperty</span><span class="p">(</span><span class="n">key_type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">value_type</span><span class="o">=</span><span class="n">Extent</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">access_infos</span> <span class="o">=</span> <span class="n">PickledDictProperty</span><span class="p">(</span>
+        <span class="n">key_type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">value_type</span><span class="o">=</span><span class="n">dcir</span><span class="o">.</span><span class="n">FieldAccessInfo</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+
+    <span class="n">device</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">EnumProperty</span><span class="p">(</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">CPU</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+    <span class="n">expansion_specification</span> <span class="o">=</span> <span class="n">PickledListProperty</span><span class="p">(</span>
+        <span class="n">element_type</span><span class="o">=</span><span class="n">ExpansionItem</span><span class="p">,</span>
+        <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">setter</span><span class="o">=</span><span class="n">_set_expansion_order</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">tile_sizes</span> <span class="o">=</span> <span class="n">PickledDictProperty</span><span class="p">(</span>
+        <span class="n">key_type</span><span class="o">=</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="p">,</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="p">{</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span> <span class="mi">8</span><span class="p">},</span>
+    <span class="p">)</span>
+
+    <span class="n">tile_sizes_interpretation</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">Property</span><span class="p">(</span>
+        <span class="n">setter</span><span class="o">=</span><span class="n">_set_tile_sizes_interpretation</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;strides&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">symbol_mapping</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">DictProperty</span><span class="p">(</span>
+        <span class="n">key_type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">value_type</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">allow_none</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+    <span class="n">_dace_library_name</span> <span class="o">=</span> <span class="s2">&quot;StencilComputation&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;unnamed_vloop&quot;</span><span class="p">,</span>
+        <span class="n">oir_node</span><span class="p">:</span> <span class="n">VerticalLoop</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">extents</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">declarations</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Decl</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">expansion_order</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.utils</span> <span class="kn">import</span> <span class="n">compute_dcir_access_infos</span>
+
+        <span class="k">if</span> <span class="n">oir_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">extents</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">assert</span> <span class="n">declarations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">extents_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">he</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">):</span>
+                    <span class="n">extents_dict</span><span class="p">[</span><span class="n">j</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">extents</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">he</span><span class="p">)]</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">oir_node</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">PickledDataclassProperty</span><span class="p">,</span> <span class="n">oir_node</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extents</span> <span class="o">=</span> <span class="n">extents_dict</span>  <span class="c1"># type: ignore</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">declarations</span> <span class="o">=</span> <span class="n">declarations</span>  <span class="c1"># type: ignore</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">symbol_mapping</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbol</span><span class="p">(</span>
+                    <span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">typeclass</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">data_type_to_typestr</span><span class="p">(</span><span class="n">decl</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span><span class="o">.</span><span class="n">type</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">declarations</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">)</span>
+            <span class="p">}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">():</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbol</span><span class="p">(</span><span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">()</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">access_infos</span> <span class="o">=</span> <span class="n">compute_dcir_access_infos</span><span class="p">(</span>
+                <span class="n">oir_node</span><span class="p">,</span>
+                <span class="n">oir_decls</span><span class="o">=</span><span class="n">declarations</span><span class="p">,</span>
+                <span class="n">block_extents</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_extents</span><span class="p">,</span>
+                <span class="n">collect_read</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">collect_write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+                <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span>
+                <span class="ow">or</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span>
+                <span class="k">for</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">oir_node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">VerticalLoopSection</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;interval&quot;</span><span class="p">)</span>
+            <span class="p">)</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span>
+                <span class="n">decl</span><span class="o">.</span><span class="n">dimensions</span><span class="p">[</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()]</span>
+                <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">declarations</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">)</span>
+            <span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">[</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">()]</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbol</span><span class="p">(</span>
+                    <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">int32</span>
+                <span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">debuginfo</span> <span class="o">=</span> <span class="n">get_dace_debuginfo</span><span class="p">(</span><span class="n">oir_node</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">expansion_order</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">expansion_order</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;TileI&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TileJ&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;Sections&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;K&quot;</span><span class="p">,</span>  <span class="c1"># Expands to either Loop or Map</span>
+                <span class="s2">&quot;Stages&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;I&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;J&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+        <span class="n">_set_expansion_order</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expansion_order</span><span class="p">)</span>
+
+<div class="viewcode-block" id="StencilComputation.get_extents"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.StencilComputation.get_extents">[docs]</a>    <span class="k">def</span> <span class="nf">get_extents</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">he</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">cand_he</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">he</span> <span class="ow">is</span> <span class="n">cand_he</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extents</span><span class="p">[</span><span class="n">j</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">field_decls</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldDecl</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="n">decl</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">decl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">declarations</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">FieldDecl</span><span class="p">)</span>
+        <span class="p">}</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">free_symbols</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">result</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">free_symbols</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+<div class="viewcode-block" id="StencilComputation.has_splittable_regions"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.nodes.StencilComputation.has_splittable_regions">[docs]</a>    <span class="k">def</span> <span class="nf">has_splittable_regions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">he</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">HorizontalExecutionSplitter</span><span class="o">.</span><span class="n">is_horizontal_execution_splittable</span><span class="p">(</span><span class="n">he</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">tile_strides</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tile_sizes_interpretation</span> <span class="o">==</span> <span class="s2">&quot;strides&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tile_sizes</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">overall_extent</span><span class="p">:</span> <span class="n">Extent</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extents</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+            <span class="k">for</span> <span class="n">extent</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extents</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">overall_extent</span> <span class="o">|=</span> <span class="n">extent</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="o">+</span> <span class="n">overall_extent</span><span class="p">[</span><span class="n">key</span><span class="o">.</span><span class="n">to_idx</span><span class="p">()]</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tile_sizes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">}</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

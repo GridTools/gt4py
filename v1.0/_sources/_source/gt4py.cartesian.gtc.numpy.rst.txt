@@ -1,0 +1,45 @@
+gt4py.cartesian.gtc.numpy package
+=================================
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.numpy.npir module
+-------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.numpy.npir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.numpy.npir\_codegen module
+----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.numpy.npir_codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.numpy.oir\_to\_npir module
+----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.numpy.oir_to_npir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.numpy.scalars\_to\_temps module
+---------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.numpy.scalars_to_temps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.numpy
+   :members:
+   :undoc-members:
+   :show-inheritance:

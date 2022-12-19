@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.numpy.npir &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.numpy.npir</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.numpy.npir</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">datamodels</span>
+
+
+<span class="c1"># --- Misc ---</span>
+<div class="viewcode-block" id="AxisName"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.AxisName">[docs]</a><span class="k">class</span> <span class="nc">AxisName</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">I</span> <span class="o">=</span> <span class="s2">&quot;I&quot;</span>  <span class="c1"># noqa: E741 (ambiguous variable name)</span>
+    <span class="n">J</span> <span class="o">=</span> <span class="s2">&quot;J&quot;</span>
+    <span class="n">K</span> <span class="o">=</span> <span class="s2">&quot;K&quot;</span></div>
+
+
+<span class="c1"># NOTE HorizontalMask in npir differs from common.HorizontalMask:</span>
+<span class="c1"># - They are expressed relative to the iteration domain of the statement</span>
+<span class="c1"># - Each axis is a tuple of two common.AxisBound instead of common.HorizontalInterval</span>
+<div class="viewcode-block" id="HorizontalMask"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.HorizontalMask">[docs]</a><span class="k">class</span> <span class="nc">HorizontalMask</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">i</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">]</span>
+    <span class="n">j</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">]</span></div>
+
+
+<span class="c1"># --- Decls ---</span>
+<div class="viewcode-block" id="Decl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.Decl">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Decl</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolName</span><span class="p">]</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span></div>
+
+
+<div class="viewcode-block" id="ScalarDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.ScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">ScalarDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Scalar per grid point.</span>
+
+<span class="sd">    Used for API scalar parameters. Local scalars never have data_dims.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="LocalScalarDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.LocalScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">LocalScalarDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Scalar per grid point.</span>
+
+<span class="sd">    Used for API scalar parameters. Local scalars never have data_dims.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="FieldDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.FieldDecl">[docs]</a><span class="k">class</span> <span class="nc">FieldDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;General field shared across HorizontalBlocks.&quot;&quot;&quot;</span>
+
+    <span class="n">dimensions</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span>
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span>
+    <span class="n">extent</span><span class="p">:</span> <span class="n">Extent</span></div>
+
+
+<div class="viewcode-block" id="TemporaryDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.TemporaryDecl">[docs]</a><span class="k">class</span> <span class="nc">TemporaryDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Temporary field shared across HorizontalBlocks.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    offset: Origin of the temporary field.</span>
+<span class="sd">    padding: Buffer added to compute domain as field size.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span>
+    <span class="n">padding</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span></div>
+
+
+<span class="c1"># --- Expressions ---</span>
+<div class="viewcode-block" id="Expr"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.Expr">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Expr</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VectorLValue"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorLValue">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">VectorLValue</span><span class="p">(</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ScalarLiteral"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.ScalarLiteral">[docs]</a><span class="k">class</span> <span class="nc">ScalarLiteral</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span>
+
+<div class="viewcode-block" id="ScalarLiteral.is_defined"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.ScalarLiteral.is_defined">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;dtype&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">is_defined</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">undefined</span> <span class="o">=</span> <span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">AUTO</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">DEFAULT</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INVALID</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">undefined</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;npir.Literal may not have undefined data type.&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ScalarCast"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.ScalarCast">[docs]</a><span class="k">class</span> <span class="nc">ScalarCast</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Cast</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span></div>
+
+
+<div class="viewcode-block" id="VectorCast"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorCast">[docs]</a><span class="k">class</span> <span class="nc">VectorCast</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Cast</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span></div>
+
+
+<div class="viewcode-block" id="Broadcast"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.Broadcast">[docs]</a><span class="k">class</span> <span class="nc">Broadcast</span><span class="p">(</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="n">expr</span><span class="p">:</span> <span class="n">Expr</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span></div>
+
+
+<div class="viewcode-block" id="VarKOffset"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VarKOffset">[docs]</a><span class="k">class</span> <span class="nc">VarKOffset</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">[</span><span class="n">Expr</span><span class="p">]):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="FieldSlice"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.FieldSlice">[docs]</a><span class="k">class</span> <span class="nc">FieldSlice</span><span class="p">(</span><span class="n">VectorLValue</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">i_offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">j_offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">k_offset</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">VarKOffset</span><span class="p">]</span>
+    <span class="n">data_index</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Expr</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span>
+
+<div class="viewcode-block" id="FieldSlice.data_indices_are_scalar"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.FieldSlice.data_indices_are_scalar">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;data_index&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">data_indices_are_scalar</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">data_index</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Expr</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">data_index</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">index</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Data indices must be scalars&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ParamAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.ParamAccess">[docs]</a><span class="k">class</span> <span class="nc">ParamAccess</span><span class="p">(</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span></div>
+
+
+<div class="viewcode-block" id="LocalScalarAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.LocalScalarAccess">[docs]</a><span class="k">class</span> <span class="nc">LocalScalarAccess</span><span class="p">(</span><span class="n">VectorLValue</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span></div>
+
+
+<div class="viewcode-block" id="VectorArithmetic"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorArithmetic">[docs]</a><span class="k">class</span> <span class="nc">VectorArithmetic</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">op</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">ArithmeticOperator</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="p">]</span>
+
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">binary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="VectorLogic"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorLogic">[docs]</a><span class="k">class</span> <span class="nc">VectorLogic</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">op</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LogicalOperator</span></div>
+
+
+<div class="viewcode-block" id="VectorUnaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorUnaryOp">[docs]</a><span class="k">class</span> <span class="nc">VectorUnaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VectorTernaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorTernaryOp">[docs]</a><span class="k">class</span> <span class="nc">VectorTernaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ternary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NativeFuncCall"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.NativeFuncCall">[docs]</a><span class="k">class</span> <span class="nc">NativeFuncCall</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">native_func_call_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<span class="c1"># --- Statements ---</span>
+<div class="viewcode-block" id="Stmt"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.Stmt">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Stmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VectorAssign"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorAssign">[docs]</a><span class="k">class</span> <span class="nc">VectorAssign</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">[</span><span class="n">VectorLValue</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="c1"># NOTE HorizontalMask in npir differs from common.HorizontalMask (see above)</span>
+    <span class="n">horizontal_mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="VectorAssign.right_is_field_kind"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VectorAssign.right_is_field_kind">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">right_is_field_kind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">right</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">right</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;right is not a common.ExprKind.FIELD&quot;</span><span class="p">)</span></div>
+
+    <span class="n">_dtype_validation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">assign_stmt_dtype_validation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="While"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.While">[docs]</a><span class="k">class</span> <span class="nc">While</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">While</span><span class="p">[</span><span class="n">Stmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<span class="c1"># --- Control Flow ---</span>
+<div class="viewcode-block" id="HorizontalBlock"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.HorizontalBlock">[docs]</a><span class="k">class</span> <span class="nc">HorizontalBlock</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">LocNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+    <span class="n">extent</span><span class="p">:</span> <span class="n">Extent</span>
+    <span class="n">declarations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LocalScalarDecl</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="VerticalPass"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.VerticalPass">[docs]</a><span class="k">class</span> <span class="nc">VerticalPass</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">HorizontalBlock</span><span class="p">]</span>
+    <span class="n">lower</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span>
+    <span class="n">upper</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span>
+    <span class="n">direction</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span></div>
+
+
+<div class="viewcode-block" id="Computation"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir.Computation">[docs]</a><span class="k">class</span> <span class="nc">Computation</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">LocNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="n">arguments</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">api_field_decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FieldDecl</span><span class="p">]</span>
+    <span class="n">param_decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ScalarDecl</span><span class="p">]</span>
+    <span class="n">temp_decls</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TemporaryDecl</span><span class="p">]</span>
+    <span class="n">vertical_passes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">VerticalPass</span><span class="p">]</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

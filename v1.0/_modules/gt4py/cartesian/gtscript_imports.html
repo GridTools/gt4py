@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtscript_imports &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtscript_imports</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtscript_imports</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">GTScript import machinery.</span>
+
+<span class="sd">Usage Example</span>
+<span class="sd">-------------</span>
+
+<span class="sd">.. code-block::</span>
+
+<span class="sd">    from gt4py.cartesian import gtscript_imports</span>
+
+<span class="sd">    # simple usage</span>
+<span class="sd">    gtscript_imports.enable()  # for allowing .gt.py everywhere in sys.path</span>
+
+<span class="sd">    # advanced usage</span>
+<span class="sd">    gtscript_imports.enable(</span>
+<span class="sd">        search_path=[&lt;path1&gt;, &lt;path2&gt;, ...],  # for allowing only in search_path</span>
+<span class="sd">        generate_path=&lt;mybuildpath&gt;,  # for generating python modules in a specific dir</span>
+<span class="sd">        in_source=False,  # set True to generate python modules next to gtscfipt files</span>
+<span class="sd">    )</span>
+
+<span class="sd">    # scoped usage</span>
+<span class="sd">    with gtscript_imports.enabled():</span>
+<span class="sd">        import ...</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">importlib</span>
+<span class="kn">import</span> <span class="nn">importlib.abc</span>
+<span class="kn">import</span> <span class="nn">pathlib</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">contextmanager</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">ModuleType</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Generator</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+
+<span class="n">GTS_EXTENSIONS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;.gt.py&quot;</span><span class="p">]</span>
+<span class="n">GTS_COMMENT</span> <span class="o">=</span> <span class="s2">&quot;# [GT] using-dsl: gtscript&quot;</span>
+<span class="n">GTS_IMPORT</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;from gt4py.cartesian.gtscript import *  &quot;</span>
+    <span class="s2">&quot;# This file is automatically generated, changes may be overwritten.&quot;</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="_add_extension"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports._add_extension">[docs]</a><span class="k">def</span> <span class="nf">_add_extension</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">,</span> <span class="n">extension</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Add an extension to the filename of a path.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">extension</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GtsFinder"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder">[docs]</a><span class="k">class</span> <span class="nc">GtsFinder</span><span class="p">(</span><span class="n">importlib</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">MetaPathFinder</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implements the :py:class:`importlib.abc.PathFinder` protocol.</span>
+
+<span class="sd">    This finder is responsible for finding GTScript files within a set of</span>
+<span class="sd">    search paths.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    search_path :</span>
+<span class="sd">        Search path for `gtscript` sources, defaults to `sys.path`</span>
+
+<span class="sd">    generate_path :</span>
+<span class="sd">        Path to generate py modules in. use a temp dir by default</span>
+
+<span class="sd">    in_source :</span>
+<span class="sd">        If True, py modules are built next to the gtscript files</span>
+<span class="sd">        (generate_path is ignored).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">search_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">generate_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">in_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">if</span> <span class="n">in_source</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generate_path</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">elif</span> <span class="n">generate_path</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generate_path</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">generate_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generate_path</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">())</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">search_path</span> <span class="o">=</span> <span class="n">search_path</span>
+
+<div class="viewcode-block" id="GtsFinder.get_generate_path"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder.get_generate_path">[docs]</a>    <span class="k">def</span> <span class="nf">get_generate_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src_file_path</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Find the out-of-source or in-source generate directory.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_path</span> <span class="ow">or</span> <span class="n">src_file_path</span><span class="o">.</span><span class="n">parent</span></div>
+
+<div class="viewcode-block" id="GtsFinder.iter_search_candidates"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder.iter_search_candidates">[docs]</a>    <span class="k">def</span> <span class="nf">iter_search_candidates</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Iterate possible source file paths.&quot;&quot;&quot;</span>
+        <span class="n">search_paths</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_path</span> <span class="ow">or</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">]</span>
+        <span class="n">search_paths</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">path</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="n">filepath</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">fullname</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">search_path</span> <span class="ow">in</span> <span class="n">search_paths</span><span class="p">:</span>
+            <span class="n">search_path</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">search_path</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">extension</span> <span class="ow">in</span> <span class="n">GTS_EXTENSIONS</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">search_path</span><span class="o">.</span><span class="n">absolute</span><span class="p">()</span> <span class="o">/</span> <span class="n">_add_extension</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">extension</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GtsFinder.find_spec"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder.find_spec">[docs]</a>    <span class="k">def</span> <span class="nf">find_spec</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">importlib</span><span class="o">.</span><span class="n">machinery</span><span class="o">.</span><span class="n">ModuleSpec</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Create a module spec for the first matching source file path.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">fullname</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iter_search_candidates</span><span class="p">(</span><span class="n">fullname</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">candidate</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="n">spec</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">machinery</span><span class="o">.</span><span class="n">ModuleSpec</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">fullname</span><span class="p">,</span>
+                    <span class="n">loader</span><span class="o">=</span><span class="n">GtsLoader</span><span class="p">(</span>
+                        <span class="n">fullname</span><span class="p">,</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">generate_at</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_generate_path</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span>
+                    <span class="p">),</span>
+                    <span class="n">origin</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">candidate</span><span class="p">),</span>
+                    <span class="n">is_package</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">spec</span><span class="o">.</span><span class="n">has_location</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">return</span> <span class="n">spec</span>
+
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="GtsFinder.install"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder.install">[docs]</a>    <span class="k">def</span> <span class="nf">install</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">meta_path</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_path</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">search_path</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="GtsFinder.load_module"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsFinder.load_module">[docs]</a>    <span class="k">def</span> <span class="nf">load_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModuleType</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">fullname</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">fullname</span><span class="p">]</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_spec</span><span class="p">(</span><span class="n">fullname</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">loader</span><span class="p">,</span> <span class="n">GtsLoader</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;could not find gtscript module </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fullname</span><span class="p">)</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">loader</span><span class="o">.</span><span class="n">create_module</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+        <span class="n">spec</span><span class="o">.</span><span class="n">loader</span><span class="o">.</span><span class="n">exec_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">module</span></div></div>
+
+
+<div class="viewcode-block" id="GtsLoader"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsLoader">[docs]</a><span class="k">class</span> <span class="nc">GtsLoader</span><span class="p">(</span><span class="n">importlib</span><span class="o">.</span><span class="n">machinery</span><span class="o">.</span><span class="n">SourceFileLoader</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extend :py:class:`importlib.machinery.SourceFileLoader` for GTScript files.</span>
+
+<span class="sd">    Generate a python module for a GTScript file and use the super class to</span>
+<span class="sd">    load that instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">,</span> <span class="n">generate_at</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span> <span class="o">=</span> <span class="n">generate_at</span> <span class="o">/</span> <span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">stem</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;.py&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">fullname</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">absolute</span><span class="p">()))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">plpath</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">))</span>
+
+<div class="viewcode-block" id="GtsLoader.get_filename"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsLoader.get_filename">[docs]</a>    <span class="k">def</span> <span class="nf">get_filename</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate a py module if an up to date one doesn&#39;t exist yet.</span>
+
+<span class="sd">        Create the generation directory if necessary.</span>
+<span class="sd">        Use file stats to check if the module needs to be updated.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        fullname : `str`, optional</span>
+<span class="sd">            Dotted name corresponding to the gtscript module.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            The file path of the generated py module as a string</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">touch</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_stats</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_stats</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">absolute</span><span class="p">())):</span>
+            <span class="k">assert</span> <span class="n">fullname</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_source_code</span><span class="p">(</span><span class="n">fullname</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">module_file</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GtsLoader.get_source_code"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsLoader.get_source_code">[docs]</a>    <span class="k">def</span> <span class="nf">get_source_code</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullname</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plpath</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">GTS_COMMENT</span><span class="p">,</span> <span class="n">GTS_IMPORT</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GtsLoader.create_module"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.GtsLoader.create_module">[docs]</a>    <span class="k">def</span> <span class="nf">create_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">importlib</span><span class="o">.</span><span class="n">machinery</span><span class="o">.</span><span class="n">ModuleSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModuleType</span><span class="p">:</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="n">ModuleType</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">module</span></div></div>
+
+
+<div class="viewcode-block" id="enable"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.enable">[docs]</a><span class="k">def</span> <span class="nf">enable</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">search_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">generate_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">in_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GtsFinder</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Install GTScript import extensions.</span>
+
+<span class="sd">    Parameters are passed through to the constructor of :py:class:`GtsFinder`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">finder</span> <span class="o">=</span> <span class="n">GtsFinder</span><span class="p">(</span><span class="n">search_path</span><span class="o">=</span><span class="n">search_path</span><span class="p">,</span> <span class="n">generate_path</span><span class="o">=</span><span class="n">generate_path</span><span class="p">,</span> <span class="n">in_source</span><span class="o">=</span><span class="n">in_source</span><span class="p">)</span>
+    <span class="n">finder</span><span class="o">.</span><span class="n">install</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">finder</span></div>
+
+
+<div class="viewcode-block" id="enabled"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.gtscript_imports.enabled">[docs]</a><span class="nd">@contextmanager</span>
+<span class="k">def</span> <span class="nf">enabled</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a context within which GTScript extensions can be imported.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block: python</span>
+
+<span class="sd">        mystencil = None</span>
+<span class="sd">        with gtscript_imports.enabled(search_path=[&quot;my/gtscript/extensions/&quot;]):</span>
+<span class="sd">            import some_stencil  # works</span>
+<span class="sd">            mystencil = some_stencil.some_stencil</span>
+
+<span class="sd">        ## use mystencil</span>
+
+<span class="sd">        import some_other_stencil  # in the same directory as some_stencil.gt.py raises error</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">backup_import_system</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">meta_path</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">enable</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">meta_path</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span> <span class="o">=</span> <span class="n">backup_import_system</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

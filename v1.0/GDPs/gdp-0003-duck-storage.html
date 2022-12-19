@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP 3 — A New Storage Implementation using Duck Typing &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="GDP 1 — Standalone Compiler CLI" href="gdp-0001-standalone-cli.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="gdp-index.html">GT4Py Development</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="gdp-index.html#declined-gdps">Declined GDPs</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GDP 3 — A New Storage Implementation using Duck Typing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#abstract">Abstract</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#motivation-and-scope">Motivation and Scope</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#backward-compatibility">Backward Compatibility</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#detailed-description">Detailed Description</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#alternatives">Alternatives</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#copyright">Copyright</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="gdp-index.html">GT4Py Development</a></li>
+      <li class="breadcrumb-item active">GDP 3 — A New Storage Implementation using Duck Typing</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/GDPs/gdp-0003-duck-storage.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gdp-3-a-new-storage-implementation-using-duck-typing">
+<h1>GDP 3 — A New Storage Implementation using Duck Typing<a class="headerlink" href="#gdp-3-a-new-storage-implementation-using-duck-typing" title="Permalink to this headline"></a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>Linus Groner &lt;<a class="reference external" href="mailto:linus&#46;groner&#37;&#52;&#48;cscs&#46;ch">linus<span>&#46;</span>groner<span>&#64;</span>cscs<span>&#46;</span>ch</a>&gt;</p>
+</dd>
+<dt class="field-even">Author</dt>
+<dd class="field-even"><p>Enrique G. Paredes &lt;<a class="reference external" href="mailto:enrique&#46;gonzalez&#37;&#52;&#48;cscs&#46;ch">enrique<span>&#46;</span>gonzalez<span>&#64;</span>cscs<span>&#46;</span>ch</a>&gt;</p>
+</dd>
+<dt class="field-odd">Status</dt>
+<dd class="field-odd"><p>Declined</p>
+</dd>
+<dt class="field-even">Type</dt>
+<dd class="field-even"><p>Feature</p>
+</dd>
+<dt class="field-odd">Created</dt>
+<dd class="field-odd"><p>08-05-2020</p>
+</dd>
+<dt class="field-even">Discussion PR</dt>
+<dd class="field-even"><p><a class="reference external" href="https://github.com/GridTools/gt4py/pull/28">https://github.com/GridTools/gt4py/pull/28</a></p>
+</dd>
+</dl>
+<section id="abstract">
+<h2>Abstract<a class="headerlink" href="#abstract" title="Permalink to this headline"></a></h2>
+<p>We propose to replace the current storage implementation by a new <cite>storage</cite> class hierarchy
+which does not inherit from NumPy <cite>ndarray</cite>. Instead we propose to support the also established
+<code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> interfaces. These new storage
+classes shall also introduce the possibility to be constructed from externally allocated memory
+buffers and provide more control over the underlying memory.</p>
+<p>Further, we propose the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code> attribute which can be added to any object to
+provide the necessary information about how it can be used as a field in gt4py stencils or when
+creating and interacting with storages. We also propose to accept the <code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code>
+and <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> interfaces if these provide all necessary information.</p>
+<p>Lastly, these storages shall focus on providing a mechanism that allows users to write code with
+only minimal dependence on the backend while achieving optimal performance. Since this goal is
+fundamentally difficult to achieve under some operations that we previously targeted such as
+<cite>universal functions</cite>, we propose to remove these functionalities.</p>
+</section>
+<section id="motivation-and-scope">
+<h2>Motivation and Scope<a class="headerlink" href="#motivation-and-scope" title="Permalink to this headline"></a></h2>
+<p>In the current state of GT4Py, we implemented storages as subclasses of NumPy <code class="code docutils literal notranslate"><span class="pre">ndarrays</span></code>.
+Although this strategy is fully documented and supported by NumPy API, it presents some drawbacks
+such as that one-sided changes to coupled host/device buffers managed by GT4Py storages (e.g.
+<code class="code docutils literal notranslate"><span class="pre">ExplicitlySyncedGPUStorage</span></code> class) cannot be tracked reliably, resulting in validation errors
+which are hard to find and fix.</p>
+<p>The current implementation of GT4Py storages as <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code> subclasses was needed to use
+storages transparently with third-party frameworks relying on NumPy <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code> implementation
+details. Nowadays, however, most of the Python scientific ecosystem supports the more generic
+interface known as the
+<a class="reference external" href="https://numpy.org/doc/stable/reference/arrays.interface.html">Array Interface</a>, which can be
+implemented by types to provide information about their use as a n-dimensional array. It is an
+approach based on <a class="reference external" href="https://en.wikipedia.org/wiki/Duck_typing">duck typing</a> to allow integration
+of generic buffers that are not instances of a particular type in libraries. A similar interface for
+GPU buffer is defined as the
+<a class="reference external" href="https://numba.pydata.org/numba-doc/latest/cuda/cuda_array_interface.html">CUDA Array Interface</a>,
+also with good and still increasing adaption in the ecosystem. Therefore, reimplementing
+GT4Py storages based on these interfaces allows GT4Py to retain full control over the internal
+behavior of complex operations, while keeping interoperability with third-party scientific
+frameworks.</p>
+<p>We propose to take this opportunity to improve the interaction with existing codes by
+allowing the initialization of storages from external buffers without requiring a copying operation.
+To use this feature, some additional information about the provided buffers needs to be specified to
+both the <code class="code docutils literal notranslate"><span class="pre">__init__</span></code> method of the storages.</p>
+<p>With the adaption of our storages to the generic array interfaces, we will also add support
+for third-party types implementing said interfaces that can then be passed to the stencils directly.
+While these interfaces provide all information needed to understand a buffer as an n-dimensional
+array, this may not be enough for all use cases of GT4Py. For example, objects may hold buffers in
+both the main memory and on a GPU. In this case, updating the respective other after changes to one
+is a concern. Also, with coming developments to gt4py, the need to provide additional semantic
+information with the buffers will arise. For example, the dimensions will evolve away from only the
+<code class="code docutils literal notranslate"><span class="pre">&quot;I&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code> and <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code> axes which arise from indexing 3-dimensional fields on
+cartesian grids.</p>
+<p>To resolve these limitations of the array interfaces we propose to define another property, the
+<code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code>, which can be implemented by third-party objects. It shall summarize
+the buffer infos of multiple devices while also adding information about the semantic meaning of
+dimensions and function handles to interact with the object to address the concerns of data
+synchronization between devices. If only default array interfaces are implemented, these shall
+nevertheless work, with a well-defined default behavior.</p>
+<p>Finally, without internally keeping information about the semantic meaning of dimensions, e.g. the
+best layout and proper broadcasting for the resulting storage can not be determined. Further,
+implementations would depend on the availability of a library implementing the operations for a
+given device. We have already observed performance problems when using cupy on AMD hardware. For
+future hardware, these libraries might be entirely unavailable. Therefore, we will not commit to
+supporting such operations.</p>
+</section>
+<section id="backward-compatibility">
+<h2>Backward Compatibility<a class="headerlink" href="#backward-compatibility" title="Permalink to this headline"></a></h2>
+<p>The implementation of this GDP breaks the integration with external libraries which require a NumPy
+<cite>ndarray</cite> subclass. Further, we propose some API changes like renaming or repurposing of keyword
+arguments and attributes. These changes are expected to break most of existing user codes. However,
+existing GT4Py functionality will remain or be extended and thus updating codebases to the new
+interface amounts mostly to updating attribute and keyword argument names.</p>
+<p>The removal of universal functions will require codes relying on ufuncs to be re-written by
+implementing these using third-party libraries.</p>
+</section>
+<section id="detailed-description">
+<h2>Detailed Description<a class="headerlink" href="#detailed-description" title="Permalink to this headline"></a></h2>
+<section id="functionality">
+<h3>Functionality<a class="headerlink" href="#functionality" title="Permalink to this headline"></a></h3>
+<p>We chose to use internally NumPy and CuPy <cite>ndarrays</cite> to store CPU and GPU buffers, respectively,
+since they are standard and reliable components of the Python ecosystem. We rely on those libraries
+to implement part of the functionality, like <code class="code docutils literal notranslate"><span class="pre">__setitem__</span></code> and <code class="code docutils literal notranslate"><span class="pre">__getitem__</span></code>, by
+forwarding the calls to the appropriate NumPy/CuPy function call. As a consequence, support for
+<cite>dtypes</cite> and other functionality is restricted to the common denominator of CuPy and NumPy.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In this document, references to NumPy and CuPy objects or functions use the standard
+shorted prefiex for these libraries, that is <code class="code docutils literal notranslate"><span class="pre">np.</span></code> for NumPy and <code class="code docutils literal notranslate"><span class="pre">cp.</span></code> for CuPy.</p>
+</div>
+</section>
+<section id="data-interface">
+<h3>Data Interface<a class="headerlink" href="#data-interface" title="Permalink to this headline"></a></h3>
+<p>Objects implementing the data interface have the attribute <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code>. This
+attribute is a dictionary which maps <cite>device identifiers</cite> to a dictionary similar to those
+defined as the <code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and the <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code>.</p>
+<p>A device identifier can be one of:</p>
+<ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">None</span></code> denoting a buffer in main memory</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;gpu&quot;</span></code> denoting a buffer on a GPU.</p></li>
+</ul>
+<p>The mapped dictionary in turn must contain the following keys and mapped objects of pairs. Their
+meaning is the same as in the NumPy <code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and the
+<code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code>:</p>
+<ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;shape&quot;:</span> <span class="pre">Tuple[int,</span> <span class="pre">...]</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;typestr&quot;:</span> <span class="pre">str</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;data&quot;:</span> <span class="pre">Tuple[int,</span> <span class="pre">bool]</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;strides&quot;:</span> <span class="pre">Tuple[int,</span> <span class="pre">...]</span></code></p></li>
+</ul>
+<p>In Addition, the following optional keys can be contained:</p>
+<ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;acquire&quot;:</span> <span class="pre">Optional[Callable[[],</span> <span class="pre">Any]]</span></code> Is called on all objects that are passed to a
+stencil, before running computations. It can be used to trigger a copy to the respective device.
+If the key is not in the dictionary or if the value is <code class="code docutils literal notranslate"><span class="pre">None</span></code>, no action is taken.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;dims&quot;:</span> <span class="pre">Optional[Sequence[str]]]</span></code> Specifies the semantic dimensions to which the
+respective dimensions of the object correspond. Currently meaningful are <code class="code docutils literal notranslate"><span class="pre">&quot;I&quot;</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code>.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;halo&quot;:</span> <span class="pre">Optional[Sequence[Tuple[int,</span> <span class="pre">int]]]</span></code> A tuple of length ndim with entries which are
+2-tuples of ints. Specifies the start and end boundary sizes on the respective dimension.
+At stencil call time, this property is used to infer the compute domain.
+<code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code>.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;release&quot;:</span> <span class="pre">Optional[Callable[[],</span> <span class="pre">Any]]</span></code> Is called on all objects that are passed to a
+stencil after all computations have completed. If the key is not in the dictionary or if the value
+is <code class="code docutils literal notranslate"><span class="pre">None</span></code>, no action is taken. We do not have the intention to use it in our own storage
+implementation and it is added here to complement the <code class="code docutils literal notranslate"><span class="pre">&quot;acquire&quot;</span></code> method.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">&quot;touch&quot;:</span> <span class="pre">Optional[Callable[[],</span> <span class="pre">Any]]</span></code> Is called on all objects for which the underlying
+memory has been changed after all computations have completed. If the key is not in the dictionary
+or if the value is <code class="code docutils literal notranslate"><span class="pre">None</span></code>, no action is taken.</p></li>
+</ul>
+<p>Note that other entries can be contained in these buffer info dictionaries, but they will not have
+any effect. It is therefore legal to forward the <code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> of NumPy and CuPy ndarrays, respectively.</p>
+<p>If the passed object does not have the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code> attribute, the
+<code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> attributes will be treated as
+descriptions of main memory or gpu buffers, respectively.</p>
+<p>Each backend is compiled for computation on either cpu or gpu. When calling the stencil, will use
+the buffer on the same device as the computation is to be performed. If no such buffer is present,
+but a buffer is present on the respective other device, the other buffer will be copied to a newly
+allocated buffer on the compute device and copied back after successful completion. In the latter
+case, a warning is printed, since these operations are typically expensive.</p>
+<section id="default-xarray-data-interface">
+<h4>Default <cite>xarray</cite> Data Interface<a class="headerlink" href="#default-xarray-data-interface" title="Permalink to this headline"></a></h4>
+<p>For xarray <code class="code docutils literal notranslate"><span class="pre">DataArray</span></code> s, we propose to add a default accessor upon importing the root gt4py
+module.
+The behavior for a <code class="code docutils literal notranslate"><span class="pre">data_array</span></code> of type <code class="code docutils literal notranslate"><span class="pre">DataArray</span></code> shall be as follows:</p>
+<ol class="arabic simple">
+<li><p>If <cite>data_array.data</cite> implements the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code>, then this is returned, while
+for each of the dictionaries per device, one of the following behaviors will apply:</p>
+<ul class="simple">
+<li><p>If <code class="code docutils literal notranslate"><span class="pre">&quot;dims&quot;</span></code> is a key in the dictionary, an error is raised if it does not agree with
+<code class="code docutils literal notranslate"><span class="pre">data_array.dims</span></code></p></li>
+<li><p>Otherwise, the <cite>“dims”</cite> key is set to be <cite>data_array.dims</cite>.</p></li>
+</ul>
+</li>
+<li><p>If <cite>data_array.data</cite> does not implement the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code>, the
+<code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> properties of
+<code class="code docutils literal notranslate"><span class="pre">data_array.data</span></code> are used as interfaces for the <code class="code docutils literal notranslate"><span class="pre">None</span></code> and <code class="code docutils literal notranslate"><span class="pre">&quot;gpu&quot;</span></code> device
+keys, respectively. The <code class="code docutils literal notranslate"><span class="pre">&quot;dims&quot;</span></code> are then added based on <code class="code docutils literal notranslate"><span class="pre">data_array.dims</span></code> to each.</p></li>
+</ol>
+<p>Users can still override this accessor and define their own behavior. In this case, xarray will
+raise a warning when defining the accessor.</p>
+</section>
+</section>
+<section id="storage-creation">
+<span id="constructors"></span><h3>Storage Creation<a class="headerlink" href="#storage-creation" title="Permalink to this headline"></a></h3>
+<p>The <code class="code docutils literal notranslate"><span class="pre">Storage</span></code> base class is exposed in the API mainly to enable type checking. For the actual
+creation and initialization of GT4Py storages we propose the following set of functions which
+closely resemble their NumPy counterparts (meaning of the common parameters is explained below):</p>
+<dl>
+<dt><code class="code docutils literal notranslate"><span class="pre">empty(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with uninitialized (undefined) values.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">empty_like(data:</span> <span class="pre">Storage,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with uninitialized (undefined) values, while choosing the not explicitly
+overridden parameters according to <code class="code docutils literal notranslate"><span class="pre">data</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">Storage</span></code>
+Not explicitly overridden parameters are chosen as the value used in this.
+<code class="code docutils literal notranslate"><span class="pre">Storage</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">data.dtype</span></code></p></li>
+</ul>
+</dd>
+</dl>
+<p>The common keyword-only arguments can also be overridden. Please see below for their description.</p>
+<p>Note that <code class="code docutils literal notranslate"><span class="pre">shape</span></code> is not a parameter and can not be overridden.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">zeros(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to 0.</p>
+<dl>
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+</dl>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">zeros_like(data:</span> <span class="pre">Storage,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to 0, while choosing the not explicitly
+overridden parameters according to <code class="code docutils literal notranslate"><span class="pre">data</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">Storage</span></code>
+Not explicitly overridden parameters are chosen as the value used in this
+<code class="code docutils literal notranslate"><span class="pre">Storage</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">data.dtype</span></code></p></li>
+</ul>
+</dd>
+</dl>
+<p>The common keyword-only arguments can also be overridden. Please see below for their
+description.</p>
+<p>Note that <code class="code docutils literal notranslate"><span class="pre">shape</span></code> is not a parameter and can not be overridden.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">ones(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to 1.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">ones_like(data:</span> <span class="pre">Storage,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to 1, while choosing the not explicitly
+overridden parameters according to <code class="code docutils literal notranslate"><span class="pre">data</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">Storage</span></code>
+Not explicitly overridden parameters are chosen as the value used in this
+<code class="code docutils literal notranslate"><span class="pre">Storage</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">data.dtype</span></code></p></li>
+</ul>
+</dd>
+</dl>
+<p>The common keyword-only arguments can also be overridden. Please see below for their
+description.</p>
+<p>Note that <code class="code docutils literal notranslate"><span class="pre">shape</span></code> is not a parameter and can not be overridden.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">full(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">fill_value:</span> <span class="pre">Number,</span> <span class="pre">dtype=np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to the scalar given in <code class="code docutils literal notranslate"><span class="pre">fill_value</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">fill_value:</span> <span class="pre">Number</span></code>. The number to which the storage is initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">full_like(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">fill_value:</span> <span class="pre">Number,</span> <span class="pre">dtype=np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Allocate a storage with values initialized to the scalar given in <code class="code docutils literal notranslate"><span class="pre">fill_value</span></code>, while
+choosing the not explicitly overridden parameters according to <code class="code docutils literal notranslate"><span class="pre">data</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">Storage</span></code> Not explicitly overridden parameters are chosen as the value used in
+this <code class="code docutils literal notranslate"><span class="pre">Storage</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">fill_value:</span> <span class="pre">Number</span></code>. The number to which the storage is initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">data.dtype</span></code></p></li>
+</ul>
+</dd>
+</dl>
+<p>The common keyword-only arguments can also be overridden. Please see below for their description.</p>
+<p>Note that <code class="code docutils literal notranslate"><span class="pre">shape</span></code> is not a parameter and can not be overridden.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">as_storage(data:</span> <span class="pre">array_like</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">device_data:</span> <span class="pre">array_like</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">*,</span> <span class="pre">sync_state:</span> <span class="pre">Storage.SyncState</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Wrap an existing buffer in a GT4Py storage instance, without copying the buffer’s contents.</p>
+<dl>
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">array_like</span></code>. The memory buffer or storage from which the storage is
+initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">device_data:</span> <span class="pre">array_like</span></code>. The device buffer or storage in case wrapping
+existing buffers on both the device and main memory is desired.</p></li>
+</ul>
+</dd>
+<dt>Keyword-only parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">sync_state:</span> <span class="pre">gt4py.storage.SyncState</span></code>. If <cite>managed=”gt4py”</cite> indicates which of the
+provided buffers, <cite>data</cite> or <cite>device_data</cite>, is up to date at the time of initialization. If
+the buffers have previously been extracted from a Storage, the <code class="code docutils literal notranslate"><span class="pre">SyncState</span></code> object
+must also be the one extracted from that same original Storage through the
+<code class="code docutils literal notranslate"><span class="pre">sync_state</span></code> attribute. For more details see <a class="reference internal" href="#sync-state"><span class="std std-ref">Sync State</span></a>.</p></li>
+</ul>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+</dl>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">storage(data:</span> <span class="pre">array_like</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">device_data:</span> <span class="pre">array_like</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">*,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">copy=True,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Used to allocate a storage with values initialized to those of a given array. If the argument
+<code class="code docutils literal notranslate"><span class="pre">copy</span></code> is set to <code class="code docutils literal notranslate"><span class="pre">False</span></code>, the behavior is that of <code class="code docutils literal notranslate"><span class="pre">as_storage</span></code>.</p>
+<dl>
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">array_like</span></code>. The original array from which the storage is initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">device_data:</span> <span class="pre">array_like</span></code>. The original array in case copying to a gpu buffer is
+desired. The same buffer could also be passed through <cite>data</cite> in that case, however this
+parameter is here to provide the same interface like the <code class="code docutils literal notranslate"><span class="pre">as_storage</span></code> function.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">sync_state:</span> <span class="pre">gt4py.storage.SyncState</span></code>. If <cite>managed=”gt4py”</cite> indicates which of the
+provided buffers, <cite>data</cite> or <cite>device_data</cite>, is up to date at the time of initialization.</p></li>
+</ul>
+</dd>
+<dt>Keyword-only parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">copy:</span> <span class="pre">bool</span></code>. Allocate a new buffer and initialize it with a copy of the data or
+wrap the existing buffer.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">sync_state:</span> <span class="pre">gt4py.storage.SyncState</span></code>. If <cite>managed=”gt4py”</cite> indicates which of the
+provided buffers, <cite>data</cite> or <cite>device_data</cite>, is up to date at the time of initialization.</p></li>
+</ul>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+</dl>
+<p>If <code class="code docutils literal notranslate"><span class="pre">copy=False</span></code> and neither <code class="code docutils literal notranslate"><span class="pre">data</span></code> nor <code class="code docutils literal notranslate"><span class="pre">device_data</span></code> are provided, the other
+arguments are used to allocate an appropriate buffer without initialization (equivalent to call
+<code class="code docutils literal notranslate"><span class="pre">empty()</span></code>). If <code class="code docutils literal notranslate"><span class="pre">data</span></code> or <code class="code docutils literal notranslate"><span class="pre">device_data</span></code> is provided, the consistency of the
+parameters with the buffers is validated.</p>
+</dd>
+</dl>
+<section id="optional-keyword-only-parameters">
+<h4>Optional Keyword-Only Parameters<a class="headerlink" href="#optional-keyword-only-parameters" title="Permalink to this headline"></a></h4>
+<p>Additionally, these <strong>optional</strong> keyword-only parameters are accepted:</p>
+<dl>
+<dt><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code></dt><dd><p>The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the former <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. It defaults to the lower indices of the
+<code class="code docutils literal notranslate"><span class="pre">halo</span></code> parameter.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">alignment_size:</span> <span class="pre">Optional[int]</span></code></dt><dd><p>The buffers are allocated such that <code class="code docutils literal notranslate"><span class="pre">mod(aligned_addr,</span> <span class="pre">alignment_size)</span> <span class="pre">==</span> <span class="pre">0</span></code>, where
+<code class="code docutils literal notranslate"><span class="pre">aligned_addr</span></code> is the memory address of the grid point denoted by <code class="code docutils literal notranslate"><span class="pre">aligned_index</span></code>.</p>
+<p>It defaults to <code class="code docutils literal notranslate"><span class="pre">1</span></code>, which indicates no alignment.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">defaults:</span> <span class="pre">Optional[str]</span></code></dt><dd><p>It can be used in the way of the current <code class="code docutils literal notranslate"><span class="pre">backend</span></code> parameter. For each backend, as well
+as for the keys <code class="code docutils literal notranslate"><span class="pre">&quot;F&quot;</span></code> and <code class="code docutils literal notranslate"><span class="pre">&quot;C&quot;</span></code> (equivalent to the same values in the <code class="code docutils literal notranslate"><span class="pre">order</span></code>
+parameter for NumPy allocation routines) a preset of suitable parameters is provided. Explicit
+definitions of additional parameters are possible and they override its default value from the
+preset.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">device:</span> <span class="pre">Optional[str]</span></code></dt><dd><p>Indicates whether the storage should contain a buffer on an accelerator device. Currently it
+only accepts <code class="code docutils literal notranslate"><span class="pre">&quot;gpu&quot;</span></code> or <code class="code docutils literal notranslate"><span class="pre">None</span></code>. Defaults to <code class="code docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">dims:</span> <span class="pre">Optional[Sequence[str]</span></code></dt><dd><p>Sequence indicating the semantic meaning of the dimensions of this storage. This is used to
+determine the default layout for the storage. Currently supported will be <code class="code docutils literal notranslate"><span class="pre">&quot;I&quot;</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code> and additional dimensions as string representations of integers,
+starting at <code class="code docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code>.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">halo:</span> <span class="pre">Optional[Sequence[Union[int,</span> <span class="pre">Tuple[int,</span> <span class="pre">int]]]</span></code></dt><dd><p>Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> where each entry is either an <code class="code docutils literal notranslate"><span class="pre">int</span></code> or a 2-tuple
+of <code class="code docutils literal notranslate"><span class="pre">int</span></code> s. A sequence of integer numbers represent a symmetric halo with the specific
+size per dimension, while a sequence of 2-tuple specifies the start and end boundary sizes on
+the respective dimension, which can be used to denote asymmetric halos. It defaults to no halo,
+i.e. <code class="code docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0,</span> <span class="pre">0)</span></code>. (See also Section <a class="reference internal" href="#domain-and-halo"><span class="std std-ref">Storage Attributes and NumPy API functions</span></a>)</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">layout:</span> <span class="pre">Optional[Sequence[int]]</span></code></dt><dd><p>A permutation of integers in <code class="code docutils literal notranslate"><span class="pre">[0</span> <span class="pre">..</span> <span class="pre">ndim-1]</span></code>. It indicates the order of strides in
+decreasing order. I.e. “0” indicates that the stride in that dimension is the largest, while the
+largest entry in the layout sequence corresponds to the dimension with the smallest stride, which
+typically is contiguous in memory.</p>
+<p>Default values as indicated by the <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> parameter may depend on the dimensions. E.g.
+if <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> is any of the compiled GridTools backends, the default value is defined
+according to the semantic meaning of each dimension. For example for the <code class="code docutils literal notranslate"><span class="pre">&quot;gtx86&quot;</span></code>
+backend, the smallest stride is always in the K dimension, independently of which index
+corresponds to the K dimension. On the other hand, we assume that if a storage is created from
+an existing FORTRAN array, the first index has the smallest stride, irrespective of its
+corresponding axis. I.e. the layout of a 3d storage is always <code class="code docutils literal notranslate"><span class="pre">(2,</span> <span class="pre">1,</span> <span class="pre">0)</span></code> for both IJK and
+KJI storages.</p>
+<table class="docutils align-default" id="id6">
+<caption><span class="caption-text">Default <code class="code docutils literal notranslate"><span class="pre">layout</span></code> parameter when given <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> and <code class="code docutils literal notranslate"><span class="pre">dims</span></code></span><a class="headerlink" href="#id6" title="Permalink to this table"></a></caption>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head stub"></th>
+<th class="head"><p><code class="code docutils literal notranslate"><span class="pre">defaults=&quot;F&quot;</span></code></p></th>
+<th class="head"><p><code class="code docutils literal notranslate"><span class="pre">defaults=&quot;C&quot;</span></code></p></th>
+<th class="head"><p><code class="code docutils literal notranslate"><span class="pre">defaults=&quot;gtx86&quot;</span></code></p></th>
+<th class="head"><p><code class="code docutils literal notranslate"><span class="pre">defaults=&quot;gtcuda&quot;</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><th class="stub"><p><code class="code docutils literal notranslate"><span class="pre">dims=&quot;IJK&quot;</span></code></p></th>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(2,</span> <span class="pre">1,</span> <span class="pre">0)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(0,</span> <span class="pre">1,</span> <span class="pre">2)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(0,</span> <span class="pre">1,</span> <span class="pre">2)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(2,</span> <span class="pre">1,</span> <span class="pre">0)</span></code></p></td>
+</tr>
+<tr class="row-odd"><th class="stub"><p><code class="code docutils literal notranslate"><span class="pre">dims=&quot;KJI&quot;</span></code></p></th>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(2,</span> <span class="pre">1,</span> <span class="pre">0)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(0,</span> <span class="pre">1,</span> <span class="pre">2)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(2,</span> <span class="pre">1,</span> <span class="pre">0)</span></code></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">layout=(0,</span> <span class="pre">1,</span> <span class="pre">2)</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The rationale behind this is that in this way, storages allocated with <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> set to a
+backend will always get optimal performance, while <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> set to <code class="code docutils literal notranslate"><span class="pre">&quot;F&quot;</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">&quot;C&quot;</span></code> will have expected behavior when wrapping FORTRAN or C buffers, respectively.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">managed:</span> <span class="pre">Optional[str]</span></code></dt><dd><p><code class="code docutils literal notranslate"><span class="pre">None</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;gt4py&quot;</span></code> or <code class="code docutils literal notranslate"><span class="pre">&quot;cuda&quot;</span></code>. It only has effect if <code class="code docutils literal notranslate"><span class="pre">device=&quot;gpu&quot;</span></code> and
+it specifies whether the synchronization between the host and device buffers is not done
+(<code class="code docutils literal notranslate"><span class="pre">None</span></code>), GT4Py (<code class="code docutils literal notranslate"><span class="pre">&quot;gt4py&quot;</span></code>) or CUDA (<code class="code docutils literal notranslate"><span class="pre">&quot;cuda&quot;</span></code>). It defaults to <code class="code docutils literal notranslate"><span class="pre">&quot;gt4py&quot;</span></code></p>
+</dd>
+</dl>
+<p>The values of parameters which are not explicitly defined by the user will be inferred from the
+first alternative source where the parameter is defined in the following search order:</p>
+<ol class="arabic simple">
+<li><p>The provided <code class="code docutils literal notranslate"><span class="pre">defaults</span></code> parameter set.</p></li>
+<li><p>The provided <code class="code docutils literal notranslate"><span class="pre">data</span></code> or <code class="code docutils literal notranslate"><span class="pre">device_data</span></code> parameters.</p></li>
+<li><p>A fallback default value specified above. The only case where this is not available is
+<code class="code docutils literal notranslate"><span class="pre">shape</span></code>, in which case an exception is raised.</p></li>
+</ol>
+</section>
+</section>
+<section id="storage-attributes-and-numpy-api-functions">
+<span id="domain-and-halo"></span><h3>Storage Attributes and NumPy API functions<a class="headerlink" href="#storage-attributes-and-numpy-api-functions" title="Permalink to this headline"></a></h3>
+<p>An initial proposal of supported features is presented here. By features we mean NumPy functions
+(<code class="code docutils literal notranslate"><span class="pre">np.function()</span></code> -like) that work well with GT4Py storages, as well as attributes
+(<code class="code docutils literal notranslate"><span class="pre">ndarray.attribute</span></code>) and methods (<code class="code docutils literal notranslate"><span class="pre">ndarray.method()</span></code>) of the <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code> class.</p>
+<section id="numpy-functions">
+<h4>NumPy Functions<a class="headerlink" href="#numpy-functions" title="Permalink to this headline"></a></h4>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">np.transpose</span></code></dt><dd><p>Return a view of the buffers with the strides permuted in the order indicated by
+<code class="code docutils literal notranslate"><span class="pre">axes</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="attributes-and-properties">
+<h4>Attributes and Properties<a class="headerlink" href="#attributes-and-properties" title="Permalink to this headline"></a></h4>
+<p><code class="code docutils literal notranslate"><span class="pre">Storage</span></code> s have the following attributes:</p>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">__array_interface__:</span> <span class="pre">Dict[str,</span> <span class="pre">Any]</span></code></dt><dd><p>The <em>Array Interface</em> descriptor of this storage (only supported on instances with an
+actual host buffer).</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__:</span> <span class="pre">Dict[str,</span> <span class="pre">Any]</span></code></dt><dd><p>The <em>CUDA Array Interface</em> descriptor of this storage (only supported on instances with an
+actual GPU device buffer).</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__:</span> <span class="pre">Dict[str,</span> <span class="pre">Dict[str,</span> <span class="pre">Any]]</span></code></dt><dd><p>The high-level descriptor of this storage as documented above. The <code class="code docutils literal notranslate"><span class="pre">None</span></code> and
+<code class="code docutils literal notranslate"><span class="pre">&quot;gpu&quot;</span></code> keys will point to the <code class="code docutils literal notranslate"><span class="pre">__array_interface__</span></code> and
+<code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code> respectively, with the added <code class="code docutils literal notranslate"><span class="pre">&quot;acquire&quot;</span></code> and
+<code class="code docutils literal notranslate"><span class="pre">&quot;touch&quot;</span></code> keys of each interface set to point to the <code class="code docutils literal notranslate"><span class="pre">device_to_host</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">host_to_device</span></code>, <code class="code docutils literal notranslate"><span class="pre">set_host_modified</span></code> and <code class="code docutils literal notranslate"><span class="pre">set_device_modified</span></code> methods,
+respectively. The <code class="code docutils literal notranslate"><span class="pre">&quot;dims&quot;</span></code> and <code class="code docutils literal notranslate"><span class="pre">&quot;release&quot;</span></code> keys will not be used.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">Optional[memoryview]</span></code></dt><dd><p>If the instance contains a host memory buffer, the <code class="code docutils literal notranslate"><span class="pre">data</span></code> attribute of the underlying
+<code class="code docutils literal notranslate"><span class="pre">np.ndarray</span></code> instance backing the host memory buffer, <code class="code docutils literal notranslate"><span class="pre">None</span></code> otherwise.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">device:</span> <span class="pre">Optional[str]</span></code></dt><dd><p>If the instance contains a device memory buffer, the device identifier where the device
+buffer is allocated, <code class="code docutils literal notranslate"><span class="pre">None</span></code> otherwise.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">device_data:</span> <span class="pre">Optional[cp.cuda.MemoryPointer]</span></code></dt><dd><p>If the instance contains a device memory buffer, the <code class="code docutils literal notranslate"><span class="pre">data</span></code> attribute of the underlying
+<code class="code docutils literal notranslate"><span class="pre">cp.ndarray</span></code> instance backing the device memory buffer, <code class="code docutils literal notranslate"><span class="pre">None</span></code> otherwise.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">domain_view:</span> <span class="pre">Storage</span></code></dt><dd><p>A view of the buffer with the halo removed. In the returned view instance, the index
+<code class="code docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">0]</span></code> corresponds to the first point in the domain.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">np.dtype</span></code></dt><dd><p>The NumPy <code class="code docutils literal notranslate"><span class="pre">dtype</span></code> of the storage.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">halo:</span> <span class="pre">Tuple[Tuple[int,</span> <span class="pre">int],</span> <span class="pre">...]</span></code></dt><dd><p>A tuple of length ndim with entries which are 2-tuples of ints. Specifies the start and end
+boundary sizes on the respective dimension. This property can be modified at run-time and
+therefore has a corresponding setter, where values of the type
+<code class="code docutils literal notranslate"><span class="pre">Tuple[Union[int,Tuple[int,</span> <span class="pre">int]],</span> <span class="pre">...]</span></code> are accepted with the same meaning as for the
+halo parameter of the storage creation functions. Not however, that this will not readjust the
+gridpoint which is aligned, since this would require re-allocation.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">nbytes:</span> <span class="pre">int</span></code>,</dt><dd><p>Size of the buffer in bytes (excluding padding).</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">ndim:</span> <span class="pre">int</span></code></dt><dd><p>Number of allocated dimensions.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Tuple[int,</span> <span class="pre">...]</span></code></dt><dd><p>The shape of the buffer, i.e., a tuple of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> with entries corresponding to the
+axes indicated by <code class="code docutils literal notranslate"><span class="pre">axes</span></code>.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">strides:</span> <span class="pre">Tuple[int,</span> <span class="pre">...]</span></code></dt><dd><p>The strides of the buffer, i.e., a tuple of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> with entries corresponding to
+the axes indicated by <code class="code docutils literal notranslate"><span class="pre">axes</span></code>.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">sync_state:</span> <span class="pre">gt4py.storage.SyncState</span></code></dt><dd><p>Indicates which buffer is currently modified in case of a <code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code>. For
+more details on <code class="code docutils literal notranslate"><span class="pre">gt4py.storage.SyncState</span></code>, see <a class="reference internal" href="#sync-state"><span class="std std-ref">Sync State</span></a>. Only an attribute of the
+<code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code> storage.</p>
+</dd>
+</dl>
+</section>
+<section id="methods">
+<h4>Methods<a class="headerlink" href="#methods" title="Permalink to this headline"></a></h4>
+<dl>
+<dt><code class="code docutils literal notranslate"><span class="pre">__array__(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">Union[np.ndarray,</span> <span class="pre">cp.ndarray]</span></code></dt><dd><p>A view of <code class="code docutils literal notranslate"><span class="pre">self</span></code> as a NumPy ndarray (if this instance contains a host buffer), or as a
+CuPy ndarray if this instance only contains a device buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">__deepcopy__(self:</span> <span class="pre">Storage,</span> <span class="pre">memo:</span> <span class="pre">Optional[Dict]</span> <span class="pre">=</span> <span class="pre">None)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Used if <code class="code docutils literal notranslate"><span class="pre">copy.deepcopy()</span></code> is called on a <code class="code docutils literal notranslate"><span class="pre">Storage</span></code> instance.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">__getitem__(self:</span> <span class="pre">Storage,</span> <span class="pre">key)</span> <span class="pre">-&gt;</span> <span class="pre">Union[Number,</span> <span class="pre">Storage,</span> <span class="pre">cp.ndarray,</span> <span class="pre">np.ndarray]</span></code></dt><dd><p>Get a value at a certain index, a storage view of a subregion of the underlying buffer or
+a ndarray of values at selected locations.</p>
+<p>Otherwise, i.e. in the case of “Basic Indexing”, axes for which a single index is selected
+are removed from <code class="code docutils literal notranslate"><span class="pre">axes</span></code> in the returned Storage, while slices do not reduce
+dimensionality.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">key:</span> <span class="pre">index_like</span></code> Indicates the indices from which the data of the storage is to be
+returned. The same keys as in
+<a class="reference external" href="https://numpy.org/doc/stable/reference/arrays.indexing.html">NumPy Indexing</a> are
+allowed, with the addition that keys can be any object implementing the interfaces
+discussed in this proposal whenever a <code class="code docutils literal notranslate"><span class="pre">np.ndarray</span></code> is valid.</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">__setitem__(self:</span> <span class="pre">Storage,</span> <span class="pre">key:</span> <span class="pre">key_like,</span> <span class="pre">Value)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></dt><dd><p>Set the data of the storage at a certain index, in a subregion or
+at selected locations of the underlying buffer.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">key:</span> <span class="pre">index_like</span></code> Indicates the locations at which the values are to be changed. The
+same keys as for <code class="code docutils literal notranslate"><span class="pre">__getitem__</span></code> are supported.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">value:</span> <span class="pre">Union[Number,</span> <span class="pre">array_like]</span></code> the values that are copied to the storage at the
+locations indicated by <code class="code docutils literal notranslate"><span class="pre">key</span></code>.</p></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">copy(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Create a new Storage instance with the same parameters as this instance and a copy of the data.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">to_cupy(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">cp.ndarray</span></code></dt><dd><p>Return a view of the underlying device buffer (CuPy <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>) if present or raise a
+<code class="code docutils literal notranslate"><span class="pre">GTNoSuchBufferError</span></code> if this instance does not contain a device buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">to_ndarray(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">Union[np.ndarray,</span> <span class="pre">cp.ndarray]</span></code></dt><dd><p>Return a view of the device buffer (CuPy <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>) if present or a view of the host
+buffer (NumPy <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>) otherwise.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">to_numpy(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">np.ndarray</span></code></dt><dd><p>Return a view of the underlying host buffer (NumPy <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>) if present or raise a
+<code class="code docutils literal notranslate"><span class="pre">GTNoSuchBufferError</span></code> if this instance does not contain a host buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">transpose(self:</span> <span class="pre">Storage,</span> <span class="pre">*axes:</span> <span class="pre">Optional[Sequence[int]])</span> <span class="pre">-&gt;</span> <span class="pre">Storage</span></code></dt><dd><p>Return a view of the underlying buffers with the strides permuted in the order indicated by
+<code class="code docutils literal notranslate"><span class="pre">axes</span></code>.</p>
+</dd>
+</dl>
+<p>The following methods are used to ensure that one-sided modifications to the host or device
+buffers of a storage instance are tracked properly when the synchronization is managed by GT4Py.
+The use of these methods should only be necessary if a reference to the internal Storage buffers
+is kept or modified outside of GT4Py, which is generally not recommended. For Storage instances
+with a different synchronization option they are valid methods implemented as no-ops functions so
+user code can be agnostic of the backend and the synchronization mode.</p>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">device_to_host(self:</span> <span class="pre">Storage,</span> <span class="pre">*,</span> <span class="pre">force:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></dt><dd><p>Triggers a copy from device buffer to the sibling in host memory if the device is marked as
+modified or the method is called with <cite>force=True</cite>. After the call the buffers are flagged as
+synchronized.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">host_to_device(self:</span> <span class="pre">Storage,</span> <span class="pre">*,</span> <span class="pre">force:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code>,</dt><dd><p>Triggers a copy from host buffer to the sibling in device memory if the host is marked as
+modified or the method is called with <cite>force=True</cite>. After the call the buffers are flagged as
+synchronized.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">set_device_modified(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></dt><dd><p>Mark the device buffer as modified, so that a copy from device to host is automatically
+triggered before the next access to the host buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">set_host_modified(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></dt><dd><p>Mark the host buffer as modified, so that a copy from host to devcie is automatically triggered
+before the next access to the device buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">set_synchronized(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code></dt><dd><p>Mark host and device buffers as synchronized, meaning they are equal. (In case the user has done
+this synchronization manually).</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">synchronize(self:</span> <span class="pre">Storage)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code>,</dt><dd><p>Triggers a copy between host and device buffers if the host or device, respectively are
+marked as modified. After the call the buffers are flagged as
+synchronized.</p>
+</dd>
+</dl>
+</section>
+<section id="choosing-the-device">
+<h4>Choosing the Device<a class="headerlink" href="#choosing-the-device" title="Permalink to this headline"></a></h4>
+<p>For the synchronized memory classes (be it by CUDA or by GT4Py), the the device where data is
+written in <code class="code docutils literal notranslate"><span class="pre">__setitem__</span></code> is chosen depending on</p>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">CudaManagedGPUStorage</span></code></dt><dd><p>The device is chosen to be GPU if and only if the value is GPU-enabled. A value is considered
+GPU enabled, if:</p>
+<ol class="arabic simple">
+<li><p>It implements the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code> and information for a <code class="code docutils literal notranslate"><span class="pre">&quot;gpu&quot;</span></code> buffer is
+provided. In this case, the <code class="code docutils literal notranslate"><span class="pre">&quot;acquire&quot;</span></code> method is called before reading.</p></li>
+<li><p>It does not implement the data interface but it is compatible with <code class="code docutils literal notranslate"><span class="pre">cp.asarray</span></code>, which
+includes values implementing the <code class="code docutils literal notranslate"><span class="pre">__cuda_array_interface__</span></code>.</p></li>
+</ol>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code></dt><dd><p>The device is chosen to be GPU if and only if the value is considered as on GPU. If the value
+is itself a <code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code>, it is considered as on GPU, if the buffers are
+either in sync or the GPU buffer is modified. If however, the value is not a
+<code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code>, the same logic applies as for the
+<code class="code docutils literal notranslate"><span class="pre">CudaManagedGPUStorage</span></code>. Note that <code class="code docutils literal notranslate"><span class="pre">xarray</span></code> <code class="code docutils literal notranslate"><span class="pre">DataArray</span></code> will be treated based
+on the data interface and not the underlying storage.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="storage-types">
+<span id="id1"></span><h3>Storage Types<a class="headerlink" href="#storage-types" title="Permalink to this headline"></a></h3>
+<p>GT4Py Storages objects type should be subclasses of the main <code class="code docutils literal notranslate"><span class="pre">Storage</span></code> class. Depending on
+the choice of the <code class="code docutils literal notranslate"><span class="pre">device</span></code> and <code class="code docutils literal notranslate"><span class="pre">managed</span></code> values (see Section <a class="reference internal" href="#constructors"><span class="std std-ref">Storage Creation</span></a>), the
+type is one of <code class="code docutils literal notranslate"><span class="pre">CPUStorage</span></code>, <code class="code docutils literal notranslate"><span class="pre">GT4PySyncedGPUStorage</span></code>, <code class="code docutils literal notranslate"><span class="pre">CUDASyncedGPUStorage</span></code>
+or <code class="code docutils literal notranslate"><span class="pre">GPUStorage</span></code>.</p>
+<p>Their purpose is as follows:</p>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">CUDAManagedGPUStorage</span></code></dt><dd><p>Internally holds a reference to a <a class="reference external" href="https://numpy.org/">NumPy</a> <cite>ndarray</cite>. The memory is however
+allocated as CUDA unified memory, meaning that the same memory can be accessed from GPU, and
+synchronization is taken care of by the CUDA runtime.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">CPUStorage</span></code></dt><dd><p>It holds a reference to a <a class="reference external" href="https://numpy.org/">NumPy</a> <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">GPUStorage</span></code></dt><dd><p>Internally holds a reference to a <a class="reference external" href="https://cupy.chainer.org/">CuPy</a> <cite>ndarray</cite>. This storage
+does not have a CPU buffer.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code></dt><dd><p>Internally holds a reference to both a <a class="reference external" href="https://numpy.org/">NumPy</a> and a
+<a class="reference external" href="https://cupy.chainer.org/">CuPy</a> <code class="code docutils literal notranslate"><span class="pre">ndarray</span></code>. Synchronization is taken care of by GT4Py.</p>
+</dd>
+</dl>
+</section>
+<section id="sync-state">
+<span id="id5"></span><h3>Sync State<a class="headerlink" href="#sync-state" title="Permalink to this headline"></a></h3>
+<p>The <code class="code docutils literal notranslate"><span class="pre">gt4py.storage.SyncState</span></code> is used to track which buffer of a
+<code class="code docutils literal notranslate"><span class="pre">SoftwareManagedGPUStorage</span></code> is modified. Since multiple storages can be views of the same
+underlying buffers, or only different parts of it, changing the <code class="code docutils literal notranslate"><span class="pre">sync_state</span></code> of one such
+storage must also change the state of all other views of the same base buffer. They therefore share
+the same <code class="code docutils literal notranslate"><span class="pre">SyncState</span></code> instance, which can be accessed through the <code class="code docutils literal notranslate"><span class="pre">sync_state</span></code> attribute
+of the storage. The <code class="code docutils literal notranslate"><span class="pre">state</span></code> attribute of the <code class="code docutils literal notranslate"><span class="pre">SyncState</span></code> instance can assume the values
+<code class="code docutils literal notranslate"><span class="pre">SyncState.SYNC_CLEAN</span></code>, <code class="code docutils literal notranslate"><span class="pre">SyncState.SYNC_HOST_DIRTY</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">SyncState.SYNC_DEVICE_DIRTY</span></code>.</p>
+</section>
+</section>
+<section id="alternatives">
+<h2>Alternatives<a class="headerlink" href="#alternatives" title="Permalink to this headline"></a></h2>
+<section id="subclassing">
+<h3>Subclassing<a class="headerlink" href="#subclassing" title="Permalink to this headline"></a></h3>
+<p>For the implementation strategy, a viable alternative could be to implement GT4Py storages as a
+NumPy <cite>ndarray</cite> subclass as in the current implementation. Due to the issues mentioned in the
+introduction, we consider that this strategy imposes more limitations than using <cite>duck typing</cite>.</p>
+</section>
+<section id="retaining-dims-information">
+<h3>Retaining <cite>dims</cite> information<a class="headerlink" href="#retaining-dims-information" title="Permalink to this headline"></a></h3>
+<p>In an earlier version of this proposal, we proposed to also hold the information that can now be
+passed through the <code class="code docutils literal notranslate"><span class="pre">&quot;dims&quot;</span></code> of the <code class="code docutils literal notranslate"><span class="pre">__gt_data_interface__</span></code> in the gt4py implementation
+which would have allowed us to</p>
+<p>However, these would still not have covered all cases, while taking away some freedom to implement
+the desired behavior from users. Further the interface proposed here was done with the move to
+<code class="code docutils literal notranslate"><span class="pre">GridTools</span> <span class="pre">2.0</span></code> with which the <cite>Stencil Iterable Data (SID)</cite> concept will be supported in the
+generated code. With it, generated code will be valid for any stride order, although performance may
+still be better for certain combinations. With this change, the conservation of the layout under
+ufunc operations will be less important. We believe that the costs of having the <code class="code docutils literal notranslate"><span class="pre">dims</span></code> in the
+storage implementation rather than the interface proposed here will then outweigh the benefits.</p>
+</section>
+<section id="implementing-ufuncs-and-other-numpy-api-functionality">
+<h3>Implementing ufuncs and other NumPy API functionality<a class="headerlink" href="#implementing-ufuncs-and-other-numpy-api-functionality" title="Permalink to this headline"></a></h3>
+<p>Previously, it was possible to call mathematical operations on the storages, and an earlier version
+of this GDP proposed to implement this using the functionality offered by the <cite>NumPy Enhancment
+Proposals</cite> NEP13 and NEP18. However, it could not be guaranteed that in this way, the requirements
+for the best performance for a given backend could always be infered under these operations.
+Further, approaches to implementation of these interfaces depend on the availability of third party
+libraries implementing the operations on a lower level. However, this can not be assumed to be
+extensible for upcoming hardware.</p>
+</section>
+<section id="no-storages">
+<h3>No storages<a class="headerlink" href="#no-storages" title="Permalink to this headline"></a></h3>
+<p>Alternatively, instead of providing custom storages, a small set of utilities to facilitate
+allocation of buffers with properties desireable for performance can be provided. All operations
+on the data that are not in stencils are then to be performed in third party frameworks.
+Meta information like dimensionality, origins etc. can still be provided by an interface similar
+to the <cite>__gt_data_interface__</cite> described in this GDP.</p>
+</section>
+</section>
+<section id="copyright">
+<h2>Copyright<a class="headerlink" href="#copyright" title="Permalink to this headline"></a></h2>
+<p>This document has been placed in the public domain.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gdp-0001-standalone-cli.html" class="btn btn-neutral float-left" title="GDP 1 — Standalone Compiler CLI" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

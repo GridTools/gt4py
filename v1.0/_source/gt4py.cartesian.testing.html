@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.testing package &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="gt4py.cartesian.utils package" href="gt4py.cartesian.utils.html" />
+    <link rel="prev" title="gt4py.cartesian.gtc.passes.oir_optimizations package" href="gt4py.cartesian.gtc.passes.oir_optimizations.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../apiref.html">API Documentation</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="modules.html">gt4py</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="gt4py.html">gt4py package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="gt4py.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gt4py.html#module-gt4py">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../apiref.html">API Documentation</a></li>
+          <li class="breadcrumb-item"><a href="modules.html">gt4py</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.html">gt4py package</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.cartesian.html">gt4py.cartesian package</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.testing package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_source/gt4py.cartesian.testing.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gt4py-cartesian-testing-package">
+<h1>gt4py.cartesian.testing package<a class="headerlink" href="#gt4py-cartesian-testing-package" title="Permalink to this headline"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-gt4py.cartesian.testing.input_strategies">
+<span id="gt4py-cartesian-testing-input-strategies-module"></span><h2>gt4py.cartesian.testing.input_strategies module<a class="headerlink" href="#module-gt4py.cartesian.testing.input_strategies" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">SymbolKind</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#SymbolKind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="gt4py.eve.html#gt4py.eve.Enum" title="enum.Enum"><code class="xref py py-class docutils literal notranslate"><span class="pre">enum.Enum</span></code></a></p>
+<p>An enumeration.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.FIELD">
+<span class="sig-name descname"><span class="pre">FIELD</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.FIELD" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.GLOBAL_SET">
+<span class="sig-name descname"><span class="pre">GLOBAL_SET</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.GLOBAL_SET" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.GLOBAL_STRATEGY">
+<span class="sig-name descname"><span class="pre">GLOBAL_STRATEGY</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.GLOBAL_STRATEGY" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.NONE">
+<span class="sig-name descname"><span class="pre">NONE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.NONE" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.PARAMETER">
+<span class="sig-name descname"><span class="pre">PARAMETER</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.PARAMETER" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.SymbolKind.SINGLETON">
+<span class="sig-name descname"><span class="pre">SINGLETON</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.SymbolKind.SINGLETON" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">_SymbolStrategy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.testing.input_strategies.SymbolKind" title="gt4py.cartesian.testing.input_strategies.SymbolKind"><span class="pre">gt4py.cartesian.testing.input_strategies.SymbolKind</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_dims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_st_factory</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">hypothesis.strategies.SearchStrategy</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#_SymbolStrategy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy.axes">
+<span class="sig-name descname"><span class="pre">axes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy.axes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy.boundary">
+<span class="sig-name descname"><span class="pre">boundary</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy.boundary" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy.data_dims">
+<span class="sig-name descname"><span class="pre">data_dims</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy.data_dims" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy.kind">
+<span class="sig-name descname"><span class="pre">kind</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#gt4py.cartesian.testing.input_strategies.SymbolKind" title="gt4py.cartesian.testing.input_strategies.SymbolKind"><span class="pre">gt4py.cartesian.testing.input_strategies.SymbolKind</span></a></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy.kind" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolStrategy.value_st_factory">
+<span class="sig-name descname"><span class="pre">value_st_factory</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">hypothesis.strategies.SearchStrategy</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolStrategy.value_st_factory" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolValueTuple">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">_SymbolValueTuple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#_SymbolValueTuple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolValueTuple" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolValueTuple.boundary">
+<span class="sig-name descname"><span class="pre">boundary</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolValueTuple.boundary" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolValueTuple.kind">
+<span class="sig-name descname"><span class="pre">kind</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolValueTuple.kind" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies._SymbolValueTuple.values">
+<span class="sig-name descname"><span class="pre">values</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies._SymbolValueTuple.values" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.composite_implementation_strategy_factory">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">composite_implementation_strategy_factory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtypes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validation_strategy_factories</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_boundaries</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#composite_implementation_strategy_factory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.composite_implementation_strategy_factory" title="Permalink to this definition"></a></dt>
+<dd><p>Generate strategy for run-time <code class="xref py py-class docutils literal notranslate"><span class="pre">StencilTestSuite</span></code> parameters.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.composite_strategy_factory">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">composite_strategy_factory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtypes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strategy_factories</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#composite_strategy_factory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.composite_strategy_factory" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.derived_shape_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">derived_shape_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape_st</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.11)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#derived_shape_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.derived_shape_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy for extending shapes generated from a provided strategy with some extra padding.</p>
+<p>If an element of extra contains None, the item will be dropped from the final shape, otherwise,
+both shape and extra elements are summed together.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.draw_from_strategies">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">draw_from_strategies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">strategies</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">hypothesis.strategies.SearchStrategy</span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#draw_from_strategies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.draw_from_strategies" title="Permalink to this definition"></a></dt>
+<dd><p>Generate a Hypothesis strategy example by composing named strategies from a dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>draw</strong> (<cite>function</cite>) – Hypothesis <code class="xref py py-func docutils literal notranslate"><span class="pre">draw()</span></code> implementation.</p></li>
+<li><p><strong>strategies</strong> (<cite>dict</cite>) – Named strategies.
+- <code class="docutils literal notranslate"><span class="pre">name</span></code>: Hypothesis strategy (<cite>function</cite>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>args</strong> – A dictionary of Hypothesis examples.
+- <code class="docutils literal notranslate"><span class="pre">name</span></code>: Hypothesis strategy example (<code class="docutils literal notranslate"><span class="pre">value</span></code>).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.field">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_dims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#field"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.field" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>field</em> symbol.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.global_name">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">global_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">singleton</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symbol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_of</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#global_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.global_name" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>global</em> symbol.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.ndarray_in_range_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">ndarray_in_range_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_st</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_range</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#ndarray_in_range_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.ndarray_in_range_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy for ndarrays generated using the provided <cite>dtype</cite> and <cite>shape</cite> strategies and the <cite>value_range</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.ndarray_shape_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">ndarray_shape_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sizes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#ndarray_shape_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.ndarray_shape_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy for shapes of <cite>ndims</cite> dimensions and size within <cite>size_range</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.ndarray_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">ndarray_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_strategy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_st_factory</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#ndarray_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.ndarray_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy for ndarrays generated using the provided <cite>dtype</cite> and <cite>shape</cite> and <cite>value_st_factory</cite> strategies/factories.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.none">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">none</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#none"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.none" title="Permalink to this definition"></a></dt>
+<dd><p>Define the symbol <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.one_of_values_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">one_of_values_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#one_of_values_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.one_of_values_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy returning one of the values passed in the arguments.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.parameter">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">parameter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_of</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#parameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.parameter" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>parameter</em> symbol.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.input_strategies.scalar_value_st">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.input_strategies.</span></span><span class="sig-name descname"><span class="pre">scalar_value_st</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_nan</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#scalar_value_st"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.input_strategies.scalar_value_st" title="Permalink to this definition"></a></dt>
+<dd><p>Hypothesis strategy for <cite>dtype</cite> scalar values in range [min_value, max_value].</p>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.testing.suites">
+<span id="gt4py-cartesian-testing-suites-module"></span><h2>gt4py.cartesian.testing.suites module<a class="headerlink" href="#module-gt4py.cartesian.testing.suites" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.suites.</span></span><span class="sig-name descname"><span class="pre">StencilTestSuite</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base class for every <em>stencil test suite</em>.</p>
+<p>Every new test suite must inherit from this class and define proper
+attributes and methods to generate a valid set of testing strategies.
+For compatibility with pytest, suites must have names starting with ‘Test’</p>
+<p>Supported and required class attributes are:</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.dtypes">
+<span class="sig-name descname"><span class="pre">dtypes</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.dtypes" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+GlobalDecl suite dtypes dictionary.
+- <code class="docutils literal notranslate"><span class="pre">label</span></code>: <cite>list</cite> of <cite>dtype</cite>.
+If this value is a <cite>list</cite>, it will be converted to a <cite>dict</cite> with the default
+<cite>None</cite> key assigned to its value. It is meant to be populated with labels representing
+groups of symbols that should have the same type.</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s1">&#39;float_symbols&#39;</span> <span class="p">:</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+    <span class="s1">&#39;int_symbols&#39;</span> <span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int_</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite> or <cite>list</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.domain_range">
+<span class="sig-name descname"><span class="pre">domain_range</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.domain_range" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>Sequence</cite> of pairs like <cite>((int, int), (int, int) … )</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.symbols">
+<span class="sig-name descname"><span class="pre">symbols</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.symbols" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Definition of symbols (globals, parameters and inputs) used in this stencil.
+- <code class="docutils literal notranslate"><span class="pre">name</span></code>: <cite>utils._SymbolDescriptor</cite>. It is recommended to use the convenience
+functions <cite>global_name()</cite>, <cite>parameter()</cite> and <cite>field()</cite>. These functions have similar
+and self-explanatory arguments. Note that <cite>dtypes</cite> could be a list of actual dtypes
+but it is usually assumed to be a label from the global suite dtypes dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.definition">
+<span class="sig-name descname"><span class="pre">definition</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.definition" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Stencil definition function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>function</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.validation">
+<span class="sig-name descname"><span class="pre">validation</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.validation" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Stencil validation function. It should have exactly the same signature than
+arguments to access the actual values used in the current testing invocation.
+the <code class="docutils literal notranslate"><span class="pre">definition</span></code> function plus the extra <code class="docutils literal notranslate"><span class="pre">_globals_</span></code>, <code class="docutils literal notranslate"><span class="pre">_domain_</span></code>, and <code class="docutils literal notranslate"><span class="pre">_origin_</span></code>
+It should always return a <cite>list</cite> of <cite>numpy.ndarray</cite> s, one per output, even if
+the function only defines one output value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>function</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.definition_strategies">
+<span class="sig-name descname"><span class="pre">definition_strategies</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.definition_strategies" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Hypothesis strategies for the stencil parameters used at definition (externals)
+- <code class="docutils literal notranslate"><span class="pre">constant_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.validation_strategies">
+<span class="sig-name descname"><span class="pre">validation_strategies</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.validation_strategies" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)
+- <code class="docutils literal notranslate"><span class="pre">field_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).
+- <code class="docutils literal notranslate"><span class="pre">parameter_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.ndims">
+<span class="sig-name descname"><span class="pre">ndims</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.ndims" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Constant of dimensions (1-3). If the name of class ends in [“1D”, “2D”, “3D”],
+this attribute needs to match the name or an assertion error will be raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>int</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite.global_boundaries">
+<span class="sig-name descname"><span class="pre">global_boundaries</span></span><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite.global_boundaries" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Expected global boundaries for the input fields.
+- <code class="docutils literal notranslate"><span class="pre">field_name</span></code>: ‘list’ of <code class="docutils literal notranslate"><span class="pre">ndim</span></code> ‘tuple`s  (<code class="docutils literal notranslate"><span class="pre">(lower_boundary,</span> <span class="pre">upper_boundary)</span></code>).
+Example (3D): <cite>[(1, 3), (2, 2), (0, 0)]</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite._test_generation">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_test_generation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">externals_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite._test_generation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite._test_generation" title="Permalink to this definition"></a></dt>
+<dd><p>Test source code generation for all <em>backends</em> and <em>stencil suites</em>.</p>
+<p>The generated implementations are cached in a <code class="xref py py-class docutils literal notranslate"><span class="pre">utils.ImplementationsDB</span></code>
+instance, to avoid duplication of (potentially expensive) compilations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.StencilTestSuite._test_implementation">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_test_implementation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite._test_implementation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.StencilTestSuite._test_implementation" title="Permalink to this definition"></a></dt>
+<dd><p>Test computed values for implementations generated for all <em>backends</em> and <em>stencil suites</em>.</p>
+<p>The generated implementations are reused from previous tests by means of a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">utils.ImplementationsDB</span></code> instance shared at module scope.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.SuiteMeta">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.suites.</span></span><span class="sig-name descname"><span class="pre">SuiteMeta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bases</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#SuiteMeta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.SuiteMeta" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">type</span></code></a></p>
+<p>Custom metaclass for all <a class="reference internal" href="#gt4py.cartesian.testing.suites.StencilTestSuite" title="gt4py.cartesian.testing.suites.StencilTestSuite"><code class="xref py py-class docutils literal notranslate"><span class="pre">StencilTestSuite</span></code></a> classes.</p>
+<p>This metaclass generates a namespace-like class where all methods are static
+and adds new members with the required testing strategies and expected results
+to test a stencil definition and implementations using Hypothesis and pytest.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.SuiteMeta.collect_symbols">
+<span class="sig-name descname"><span class="pre">collect_symbols</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#SuiteMeta.collect_symbols"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.SuiteMeta.collect_symbols" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.SuiteMeta.parametrize_generation_tests">
+<span class="sig-name descname"><span class="pre">parametrize_generation_tests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#SuiteMeta.parametrize_generation_tests"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.SuiteMeta.parametrize_generation_tests" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.SuiteMeta.parametrize_implementation_tests">
+<span class="sig-name descname"><span class="pre">parametrize_implementation_tests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#SuiteMeta.parametrize_implementation_tests"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.SuiteMeta.parametrize_implementation_tests" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.SuiteMeta.required_members">
+<span class="sig-name descname"><span class="pre">required_members</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'backends',</span> <span class="pre">'definition',</span> <span class="pre">'domain_range',</span> <span class="pre">'dtypes',</span> <span class="pre">'symbols',</span> <span class="pre">'validation'}</span></em><a class="headerlink" href="#gt4py.cartesian.testing.suites.SuiteMeta.required_members" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.suites.unique_str">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.suites.</span></span><span class="sig-name descname"><span class="pre">unique_str</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#unique_str"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.suites.unique_str" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.testing.utils">
+<span id="gt4py-cartesian-testing-utils-module"></span><h2>gt4py.cartesian.testing.utils module<a class="headerlink" href="#module-gt4py.cartesian.testing.utils" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.utils.annotate_function">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.utils.</span></span><span class="sig-name descname"><span class="pre">annotate_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtypes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/utils.html#annotate_function"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.utils.annotate_function" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.utils.copy_func">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.utils.</span></span><span class="sig-name descname"><span class="pre">copy_func</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/utils.html#copy_func"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.utils.copy_func" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.utils.standardize_dtype_dict">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.utils.</span></span><span class="sig-name descname"><span class="pre">standardize_dtype_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtypes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/utils.html#standardize_dtype_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.utils.standardize_dtype_dict" title="Permalink to this definition"></a></dt>
+<dd><p>Standardizes the dtype dict as it can be specified for the stencil test suites.</p>
+<p>In the input dictionary, a selection of possible dtypes or just a single dtype can be specified for a set of fields
+or a single field. This function makes sure that all keys are tuples (by wrapping single field names and single
+dtypes as 1-tuples)</p>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.testing">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-gt4py.cartesian.testing" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.</span></span><span class="sig-name descname"><span class="pre">StencilTestSuite</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base class for every <em>stencil test suite</em>.</p>
+<p>Every new test suite must inherit from this class and define proper
+attributes and methods to generate a valid set of testing strategies.
+For compatibility with pytest, suites must have names starting with ‘Test’</p>
+<p>Supported and required class attributes are:</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.dtypes">
+<span class="sig-name descname"><span class="pre">dtypes</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.dtypes" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+GlobalDecl suite dtypes dictionary.
+- <code class="docutils literal notranslate"><span class="pre">label</span></code>: <cite>list</cite> of <cite>dtype</cite>.
+If this value is a <cite>list</cite>, it will be converted to a <cite>dict</cite> with the default
+<cite>None</cite> key assigned to its value. It is meant to be populated with labels representing
+groups of symbols that should have the same type.</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s1">&#39;float_symbols&#39;</span> <span class="p">:</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+    <span class="s1">&#39;int_symbols&#39;</span> <span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int_</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite> or <cite>list</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.domain_range">
+<span class="sig-name descname"><span class="pre">domain_range</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.domain_range" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+CartesianSpace sizes for testing. Each item encodes the (min, max) range of sizes for every axis.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>Sequence</cite> of pairs like <cite>((int, int), (int, int) … )</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.symbols">
+<span class="sig-name descname"><span class="pre">symbols</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.symbols" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Definition of symbols (globals, parameters and inputs) used in this stencil.
+- <code class="docutils literal notranslate"><span class="pre">name</span></code>: <cite>utils._SymbolDescriptor</cite>. It is recommended to use the convenience
+functions <cite>global_name()</cite>, <cite>parameter()</cite> and <cite>field()</cite>. These functions have similar
+and self-explanatory arguments. Note that <cite>dtypes</cite> could be a list of actual dtypes
+but it is usually assumed to be a label from the global suite dtypes dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.definition">
+<span class="sig-name descname"><span class="pre">definition</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.definition" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Stencil definition function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>function</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.validation">
+<span class="sig-name descname"><span class="pre">validation</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.validation" title="Permalink to this definition"></a></dt>
+<dd><p>Required class attribute.
+Stencil validation function. It should have exactly the same signature than
+arguments to access the actual values used in the current testing invocation.
+the <code class="docutils literal notranslate"><span class="pre">definition</span></code> function plus the extra <code class="docutils literal notranslate"><span class="pre">_globals_</span></code>, <code class="docutils literal notranslate"><span class="pre">_domain_</span></code>, and <code class="docutils literal notranslate"><span class="pre">_origin_</span></code>
+It should always return a <cite>list</cite> of <cite>numpy.ndarray</cite> s, one per output, even if
+the function only defines one output value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>function</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.definition_strategies">
+<span class="sig-name descname"><span class="pre">definition_strategies</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.definition_strategies" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Hypothesis strategies for the stencil parameters used at definition (externals)
+- <code class="docutils literal notranslate"><span class="pre">constant_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.validation_strategies">
+<span class="sig-name descname"><span class="pre">validation_strategies</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.validation_strategies" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Hypothesis strategies for the stencil parameters used at run-time (fields and parameters)
+- <code class="docutils literal notranslate"><span class="pre">field_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).
+- <code class="docutils literal notranslate"><span class="pre">parameter_name</span></code>: Hypothesis strategy (<cite>strategy</cite>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.ndims">
+<span class="sig-name descname"><span class="pre">ndims</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.ndims" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Constant of dimensions (1-3). If the name of class ends in [“1D”, “2D”, “3D”],
+this attribute needs to match the name or an assertion error will be raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>int</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite.global_boundaries">
+<span class="sig-name descname"><span class="pre">global_boundaries</span></span><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite.global_boundaries" title="Permalink to this definition"></a></dt>
+<dd><p>Automatically generated.
+Expected global boundaries for the input fields.
+- <code class="docutils literal notranslate"><span class="pre">field_name</span></code>: ‘list’ of <code class="docutils literal notranslate"><span class="pre">ndim</span></code> ‘tuple`s  (<code class="docutils literal notranslate"><span class="pre">(lower_boundary,</span> <span class="pre">upper_boundary)</span></code>).
+Example (3D): <cite>[(1, 3), (2, 2), (0, 0)]</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><cite>dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite._test_generation">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_test_generation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">externals_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite._test_generation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite._test_generation" title="Permalink to this definition"></a></dt>
+<dd><p>Test source code generation for all <em>backends</em> and <em>stencil suites</em>.</p>
+<p>The generated implementations are cached in a <code class="xref py py-class docutils literal notranslate"><span class="pre">utils.ImplementationsDB</span></code>
+instance, to avoid duplication of (potentially expensive) compilations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.StencilTestSuite._test_implementation">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_test_implementation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/suites.html#StencilTestSuite._test_implementation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.StencilTestSuite._test_implementation" title="Permalink to this definition"></a></dt>
+<dd><p>Test computed values for implementations generated for all <em>backends</em> and <em>stencil suites</em>.</p>
+<p>The generated implementations are reused from previous tests by means of a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">utils.ImplementationsDB</span></code> instance shared at module scope.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.field">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.</span></span><span class="sig-name descname"><span class="pre">field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_dims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#field"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.field" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>field</em> symbol.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.global_name">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.</span></span><span class="sig-name descname"><span class="pre">global_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">singleton</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symbol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_of</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#global_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.global_name" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>global</em> symbol.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.none">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.</span></span><span class="sig-name descname"><span class="pre">none</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#none"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.none" title="Permalink to this definition"></a></dt>
+<dd><p>Define the symbol <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.testing.parameter">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.testing.</span></span><span class="sig-name descname"><span class="pre">parameter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_of</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/testing/input_strategies.html#parameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.testing.parameter" title="Permalink to this definition"></a></dt>
+<dd><p>Define a <em>parameter</em> symbol.</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gt4py.cartesian.gtc.passes.oir_optimizations.html" class="btn btn-neutral float-left" title="gt4py.cartesian.gtc.passes.oir_optimizations package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gt4py.cartesian.utils.html" class="btn btn-neutral float-right" title="gt4py.cartesian.utils package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

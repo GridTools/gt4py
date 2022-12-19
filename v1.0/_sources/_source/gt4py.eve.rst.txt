@@ -1,0 +1,109 @@
+gt4py.eve package
+=================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.eve.datamodels
+
+Submodules
+----------
+
+gt4py.eve.codegen module
+------------------------
+
+.. automodule:: gt4py.eve.codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.concepts module
+-------------------------
+
+.. automodule:: gt4py.eve.concepts
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.exceptions module
+---------------------------
+
+.. automodule:: gt4py.eve.exceptions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.extended\_typing module
+---------------------------------
+
+.. automodule:: gt4py.eve.extended_typing
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.pattern\_matching module
+----------------------------------
+
+.. automodule:: gt4py.eve.pattern_matching
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.traits module
+-----------------------
+
+.. automodule:: gt4py.eve.traits
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.trees module
+----------------------
+
+.. automodule:: gt4py.eve.trees
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.type\_definitions module
+----------------------------------
+
+.. automodule:: gt4py.eve.type_definitions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.type\_validation module
+---------------------------------
+
+.. automodule:: gt4py.eve.type_validation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.utils module
+----------------------
+
+.. automodule:: gt4py.eve.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.eve.visitors module
+-------------------------
+
+.. automodule:: gt4py.eve.visitors
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.eve
+   :members:
+   :undoc-members:
+   :show-inheritance:

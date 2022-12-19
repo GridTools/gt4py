@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.expansion.utils &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.expansion.utils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.expansion.utils</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.library</span>
+<span class="kn">import</span> <span class="nn">dace.subsets</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.nodes</span> <span class="kn">import</span> <span class="n">StencilComputation</span>
+
+
+<div class="viewcode-block" id="get_dace_debuginfo"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.get_dace_debuginfo">[docs]</a><span class="k">def</span> <span class="nf">get_dace_debuginfo</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LocNode</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dace</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="o">.</span><span class="n">line</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="o">.</span><span class="n">column</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="o">.</span><span class="n">line</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="o">.</span><span class="n">column</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dace</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="HorizontalIntervalRemover"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalIntervalRemover">[docs]</a><span class="k">class</span> <span class="nc">HorizontalIntervalRemover</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+<div class="viewcode-block" id="HorizontalIntervalRemover.visit_HorizontalMask"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalIntervalRemover.visit_HorizontalMask">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalMask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="s2">&quot;dcir.Axis&quot;</span><span class="p">):</span>
+        <span class="n">mask_attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">j</span><span class="p">)</span>
+        <span class="n">mask_attrs</span><span class="p">[</span><span class="n">axis</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">axis</span><span class="o">.</span><span class="n">lower</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">(</span><span class="o">**</span><span class="n">mask_attrs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalIntervalRemover.visit_HorizontalInterval"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalIntervalRemover.visit_HorizontalInterval">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalInterval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalInterval</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalInterval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalMaskRemover"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalMaskRemover">[docs]</a><span class="k">class</span> <span class="nc">HorizontalMaskRemover</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+<div class="viewcode-block" id="HorizontalMaskRemover.visit_Tasklet"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalMaskRemover.visit_Tasklet">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Tasklet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;dcir.Tasklet&quot;</span><span class="p">):</span>
+
+        <span class="n">res_body</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">stmts</span><span class="p">:</span>
+            <span class="n">newstmt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">newstmt</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">res_body</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">newstmt</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">newstmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Tasklet</span><span class="p">(</span>
+            <span class="n">stmts</span><span class="o">=</span><span class="n">res_body</span><span class="p">,</span>
+            <span class="n">decls</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">decls</span><span class="p">,</span>
+            <span class="n">read_memlets</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">read_memlets</span><span class="p">,</span>
+            <span class="n">write_memlets</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalMaskRemover.visit_MaskStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalMaskRemover.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">i</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">j</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">i</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">j</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="remove_horizontal_region"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.remove_horizontal_region">[docs]</a><span class="k">def</span> <span class="nf">remove_horizontal_region</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+    <span class="n">intervals_removed</span> <span class="o">=</span> <span class="n">HorizontalIntervalRemover</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">HorizontalMaskRemover</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">intervals_removed</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="mask_includes_inner_domain"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.mask_includes_inner_domain">[docs]</a><span class="k">def</span> <span class="nf">mask_includes_inner_domain</span><span class="p">(</span><span class="n">mask</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">mask</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="p">(</span>
+            <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="p">(</span>
+            <span class="n">interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="p">(</span>
+            <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">!=</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="HorizontalExecutionSplitter"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalExecutionSplitter">[docs]</a><span class="k">class</span> <span class="nc">HorizontalExecutionSplitter</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+<div class="viewcode-block" id="HorizontalExecutionSplitter.is_horizontal_execution_splittable"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalExecutionSplitter.is_horizontal_execution_splittable">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">is_horizontal_execution_splittable</span><span class="p">(</span><span class="n">he</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">mask_includes_inner_domain</span><span class="p">(</span>
+                <span class="n">stmt</span><span class="o">.</span><span class="n">mask</span>
+            <span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="c1"># If the regions are not disjoint, then the horizontal executions are not splittable.</span>
+        <span class="n">regions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">he</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">region</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">region</span><span class="o">.</span><span class="n">i</span><span class="o">.</span><span class="n">overlaps</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">i</span><span class="p">)</span> <span class="ow">and</span> <span class="n">region</span><span class="o">.</span><span class="n">j</span><span class="o">.</span><span class="n">overlaps</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">j</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">regions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">mask</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="HorizontalExecutionSplitter.visit_HorizontalExecution"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalExecutionSplitter.visit_HorizontalExecution">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalExecution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">extents</span><span class="p">,</span> <span class="n">library_node</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">HorizontalExecutionSplitter</span><span class="o">.</span><span class="n">is_horizontal_execution_splittable</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="n">extents</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">library_node</span><span class="o">.</span><span class="n">get_extents</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">node</span>
+
+        <span class="n">res_he_stmts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">scalar_writes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">):</span>
+                <span class="n">scalar_writes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">)</span>
+                <span class="n">new_he</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">(</span>
+                    <span class="n">mask</span><span class="o">=</span><span class="n">stmt</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="p">[</span><span class="o">*</span><span class="n">scalar_writes</span><span class="p">,</span> <span class="o">*</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="n">res_he_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">new_he</span><span class="p">])</span>
+
+        <span class="n">res_hes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmts</span> <span class="ow">in</span> <span class="n">res_he_stmts</span><span class="p">:</span>
+            <span class="n">accessed_scalars</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="n">declarations</span> <span class="o">=</span> <span class="p">[</span><span class="n">decl</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span> <span class="k">if</span> <span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">accessed_scalars</span><span class="p">]</span>
+            <span class="n">res_he</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">(</span><span class="n">declarations</span><span class="o">=</span><span class="n">declarations</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">stmts</span><span class="p">)</span>
+            <span class="n">res_hes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">res_he</span><span class="p">)</span>
+            <span class="n">extents</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">library_node</span><span class="o">.</span><span class="n">get_extents</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">res_hes</span></div>
+
+<div class="viewcode-block" id="HorizontalExecutionSplitter.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.HorizontalExecutionSplitter.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">res_hes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">he</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">:</span>
+            <span class="n">new_he</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">he</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">new_he</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">res_hes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">new_he</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">res_hes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_he</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span><span class="n">interval</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span> <span class="n">horizontal_executions</span><span class="o">=</span><span class="n">res_hes</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="split_horizontal_executions_regions"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.utils.split_horizontal_executions_regions">[docs]</a><span class="k">def</span> <span class="nf">split_horizontal_executions_regions</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">):</span>
+
+    <span class="n">extents</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Extent</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span> <span class="o">=</span> <span class="n">HorizontalExecutionSplitter</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="p">,</span> <span class="n">library_node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">extents</span><span class="o">=</span><span class="n">extents</span>
+    <span class="p">)</span>
+    <span class="n">ctr</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">extents</span><span class="p">[</span><span class="n">j</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">sections</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">extents</span><span class="p">[</span><span class="n">ctr</span><span class="p">]</span>
+            <span class="n">ctr</span> <span class="o">+=</span> <span class="mi">1</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

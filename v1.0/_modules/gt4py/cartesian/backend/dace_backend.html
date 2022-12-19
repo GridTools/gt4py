@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.backend.dace_backend &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.backend.dace_backend</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.backend.dace_backend</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pathlib</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">from</span> <span class="nn">dace.sdfg.utils</span> <span class="kn">import</span> <span class="n">inline_sdfgs</span>
+<span class="kn">from</span> <span class="nn">dace.serialize</span> <span class="kn">import</span> <span class="n">dumps</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">storage</span> <span class="k">as</span> <span class="n">gt_storage</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">CLIBackendMixin</span><span class="p">,</span> <span class="n">register</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.gtc_common</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BackendCodegen</span><span class="p">,</span>
+    <span class="n">BaseGTBackend</span><span class="p">,</span>
+    <span class="n">CUDAPyExtModuleGenerator</span><span class="p">,</span>
+    <span class="n">PyExtModuleGenerator</span><span class="p">,</span>
+    <span class="n">bindings_main_template</span><span class="p">,</span>
+    <span class="n">pybuffer_to_sid</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.module_generator</span> <span class="kn">import</span> <span class="n">make_args_data_from_gtir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">gtir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.nodes</span> <span class="kn">import</span> <span class="n">StencilComputation</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.oir_to_dace</span> <span class="kn">import</span> <span class="n">OirSDFGBuilder</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.transformations</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">InlineThreadLocalTransients</span><span class="p">,</span>
+    <span class="n">NoEmptyEdgeTrivialMapElimination</span><span class="p">,</span>
+    <span class="n">nest_sequential_map_scopes</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.utils</span> <span class="kn">import</span> <span class="n">array_dimensions</span><span class="p">,</span> <span class="n">replace_strides</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.gtir_to_oir</span> <span class="kn">import</span> <span class="n">GTIRToOIR</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.gtir_k_boundary</span> <span class="kn">import</span> <span class="n">compute_k_boundary</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.gtir_pipeline</span> <span class="kn">import</span> <span class="n">GtirPipeline</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.inlining</span> <span class="kn">import</span> <span class="n">MaskInlining</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.utils</span> <span class="kn">import</span> <span class="n">compute_fields_extents</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_pipeline</span> <span class="kn">import</span> <span class="n">DefaultPipeline</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.utils</span> <span class="kn">import</span> <span class="n">shash</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">codegen</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">MakoTemplate</span> <span class="k">as</span> <span class="n">as_mako</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_builder</span> <span class="kn">import</span> <span class="n">StencilBuilder</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_object</span> <span class="kn">import</span> <span class="n">StencilObject</span>
+
+
+<span class="k">def</span> <span class="nf">_serialize_sdfg</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumps</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_specialize_transient_strides</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">layout_map</span><span class="p">):</span>
+    <span class="n">repldict</span> <span class="o">=</span> <span class="n">replace_strides</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">array</span> <span class="k">for</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">],</span>
+        <span class="n">layout_map</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">replace_dict</span><span class="p">(</span><span class="n">repldict</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">state</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">repldict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">:</span>
+                        <span class="n">node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">repldict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">sdfg</span><span class="o">.</span><span class="n">remove_symbol</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_get_expansion_priority_cpu</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">StencilComputation</span><span class="p">):</span>
+    <span class="n">expansion_priority</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">has_splittable_regions</span><span class="p">():</span>
+        <span class="n">expansion_priority</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;J&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">])</span>
+    <span class="n">expansion_priority</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="p">[</span><span class="s2">&quot;TileJ&quot;</span><span class="p">,</span> <span class="s2">&quot;TileI&quot;</span><span class="p">,</span> <span class="s2">&quot;IMap&quot;</span><span class="p">,</span> <span class="s2">&quot;JMap&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">],</span>
+            <span class="p">[</span><span class="s2">&quot;TileJ&quot;</span><span class="p">,</span> <span class="s2">&quot;TileI&quot;</span><span class="p">,</span> <span class="s2">&quot;IMap&quot;</span><span class="p">,</span> <span class="s2">&quot;JMap&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">],</span>
+            <span class="p">[</span><span class="s2">&quot;TileJ&quot;</span><span class="p">,</span> <span class="s2">&quot;TileI&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;IMap&quot;</span><span class="p">,</span> <span class="s2">&quot;JMap&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">],</span>
+            <span class="p">[</span><span class="s2">&quot;TileJ&quot;</span><span class="p">,</span> <span class="s2">&quot;TileI&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;JMap&quot;</span><span class="p">,</span> <span class="s2">&quot;IMap&quot;</span><span class="p">],</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">expansion_priority</span>
+
+
+<span class="k">def</span> <span class="nf">_get_expansion_priority_gpu</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">StencilComputation</span><span class="p">):</span>
+    <span class="n">expansion_priority</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">has_splittable_regions</span><span class="p">():</span>
+        <span class="n">expansion_priority</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;J&quot;</span><span class="p">,</span> <span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+        <span class="n">expansion_priority</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">,</span> <span class="s2">&quot;J&quot;</span><span class="p">,</span> <span class="s2">&quot;I&quot;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">expansion_priority</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s2">&quot;J&quot;</span><span class="p">,</span> <span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">])</span>
+    <span class="n">expansion_priority</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s2">&quot;TileJ&quot;</span><span class="p">,</span> <span class="s2">&quot;TileI&quot;</span><span class="p">,</span> <span class="s2">&quot;Sections&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">,</span> <span class="s2">&quot;Stages&quot;</span><span class="p">,</span> <span class="s2">&quot;JMap&quot;</span><span class="p">,</span> <span class="s2">&quot;IMap&quot;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">expansion_priority</span>
+
+
+<span class="k">def</span> <span class="nf">_set_expansion_orders</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">StencilComputation</span><span class="p">),</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_nodes_recursive</span><span class="p">()</span>
+    <span class="p">):</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">GPU</span><span class="p">:</span>
+            <span class="n">expansion_priority</span> <span class="o">=</span> <span class="n">_get_expansion_priority_gpu</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">expansion_priority</span> <span class="o">=</span> <span class="n">_get_expansion_priority_cpu</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">is_set</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">exp</span> <span class="ow">in</span> <span class="n">expansion_priority</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">expansion_specification</span> <span class="o">=</span> <span class="n">exp</span>
+                <span class="n">is_set</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_set</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No expansion compatible&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_set_tile_sizes</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+    <span class="kn">import</span> <span class="nn">gt4py.cartesian.gtc.daceir</span> <span class="k">as</span> <span class="nn">dcir</span>  <span class="c1"># avoid circular import</span>
+
+    <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">StencilComputation</span><span class="p">),</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_nodes_recursive</span><span class="p">()</span>
+    <span class="p">):</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">GPU</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">tile_sizes</span> <span class="o">=</span> <span class="p">{</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span> <span class="mi">8</span><span class="p">}</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">tile_sizes_interpretation</span> <span class="o">=</span> <span class="s2">&quot;shape&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">tile_sizes</span> <span class="o">=</span> <span class="p">{</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">I</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">J</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">K</span><span class="p">:</span> <span class="mi">8</span><span class="p">}</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">tile_sizes_interpretation</span> <span class="o">=</span> <span class="s2">&quot;strides&quot;</span>
+
+
+<div class="viewcode-block" id="_to_device"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend._to_device">[docs]</a><span class="k">def</span> <span class="nf">_to_device</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Update sdfg in place.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">storage</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">GPU_Global</span>
+        <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_nodes_recursive</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">StencilComputation</span><span class="p">):</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">DeviceType</span><span class="o">.</span><span class="n">GPU</span></div>
+
+
+<span class="k">def</span> <span class="nf">_pre_expand_trafos</span><span class="p">(</span><span class="n">gtir_pipeline</span><span class="p">:</span> <span class="n">GtirPipeline</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">layout_map</span><span class="p">):</span>
+
+    <span class="n">args_data</span> <span class="o">=</span> <span class="n">make_args_data_from_gtir</span><span class="p">(</span><span class="n">gtir_pipeline</span><span class="p">)</span>
+
+    <span class="c1"># stencils without effect</span>
+    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">args_data</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+        <span class="n">sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">(</span><span class="n">gtir_pipeline</span><span class="o">.</span><span class="n">gtir</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">(</span><span class="n">gtir_pipeline</span><span class="o">.</span><span class="n">gtir</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sdfg</span>
+
+    <span class="k">for</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">lifetime</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">AllocationLifetime</span><span class="o">.</span><span class="n">Persistent</span>
+
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">_set_expansion_orders</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+    <span class="n">_set_tile_sizes</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+    <span class="n">_specialize_transient_strides</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">layout_map</span><span class="o">=</span><span class="n">layout_map</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">sdfg</span>
+
+
+<span class="k">def</span> <span class="nf">_post_expand_trafos</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+    <span class="c1"># DaCe &quot;standard&quot; clean-up transformations</span>
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">apply_transformations_repeated</span><span class="p">(</span><span class="n">NoEmptyEdgeTrivialMapElimination</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Control the `#pragma omp parallel` statements: Fully collapse parallel loops,</span>
+    <span class="c1"># but set 1D maps to be sequential. (Typical domains are too small to benefit from parallelism)</span>
+    <span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">MapEntry</span><span class="p">),</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_nodes_recursive</span><span class="p">()</span>
+    <span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">collapse</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">range</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">range</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span>
+
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">apply_transformations_repeated</span><span class="p">(</span><span class="n">InlineThreadLocalTransients</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">sdfg</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">nest_sequential_map_scopes</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">sd</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_sdfgs_recursive</span><span class="p">():</span>
+        <span class="n">sd</span><span class="o">.</span><span class="n">openmp_sections</span> <span class="o">=</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">_sdfg_add_arrays_and_edges</span><span class="p">(</span>
+    <span class="n">field_info</span><span class="p">,</span> <span class="n">wrapper_sdfg</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">inner_sdfg</span><span class="p">,</span> <span class="n">nsdfg</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">origins</span>
+<span class="p">):</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Array</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">axes</span>
+
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2">_size&quot;</span> <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span>
+                <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">data_dims</span>
+            <span class="p">]</span>
+
+            <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">add_array</span><span class="p">(</span>
+                <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">strides</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">strides</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">storage</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">storage</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origins</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="p">[</span><span class="n">o</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">o</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">,</span> <span class="n">origins</span><span class="p">)</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">origin</span> <span class="o">=</span> <span class="n">origins</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">origins</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_all_&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">origin</span> <span class="o">=</span> <span class="p">[</span><span class="n">o</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">o</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">]</span>
+
+            <span class="n">ranges</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">(</span><span class="n">o</span> <span class="o">-</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">e</span><span class="p">),</span> <span class="n">o</span> <span class="o">-</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="o">+</span> <span class="n">s</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">o</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                    <span class="n">origin</span><span class="p">,</span>
+                    <span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">lower_indices</span><span class="p">,</span>
+                    <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">]</span>
+            <span class="n">ranges</span> <span class="o">+=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">data_dims</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                    <span class="n">state</span><span class="o">.</span><span class="n">add_read</span><span class="p">(</span><span class="n">name</span><span class="p">),</span>
+                    <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">nsdfg</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">dace</span><span class="o">.</span><span class="n">Memlet</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">Range</span><span class="p">(</span><span class="n">ranges</span><span class="p">)),</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span>
+                    <span class="n">nsdfg</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">state</span><span class="o">.</span><span class="n">add_write</span><span class="p">(</span><span class="n">name</span><span class="p">),</span>
+                    <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">dace</span><span class="o">.</span><span class="n">Memlet</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">Range</span><span class="p">(</span><span class="n">ranges</span><span class="p">)),</span>
+                <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_sdfg_specialize_symbols</span><span class="p">(</span><span class="n">wrapper_sdfg</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]):</span>
+    <span class="n">ival</span><span class="p">,</span> <span class="n">jval</span><span class="p">,</span> <span class="n">kval</span> <span class="o">=</span> <span class="n">domain</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">domain</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">domain</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">sdfg</span> <span class="ow">in</span> <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">all_sdfgs_recursive</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">parent_nsdfg_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">symmap</span> <span class="o">=</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">parent_nsdfg_node</span><span class="o">.</span><span class="n">symbol_mapping</span>
+
+            <span class="k">if</span> <span class="s2">&quot;__I&quot;</span> <span class="ow">in</span> <span class="n">symmap</span><span class="p">:</span>
+                <span class="n">ival</span> <span class="o">=</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__I&quot;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__I&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">&quot;__J&quot;</span> <span class="ow">in</span> <span class="n">symmap</span><span class="p">:</span>
+                <span class="n">jval</span> <span class="o">=</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__J&quot;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__J&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">&quot;__K&quot;</span> <span class="ow">in</span> <span class="n">symmap</span><span class="p">:</span>
+                <span class="n">kval</span> <span class="o">=</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__K&quot;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">symmap</span><span class="p">[</span><span class="s2">&quot;__K&quot;</span><span class="p">]</span>
+
+        <span class="n">sdfg</span><span class="o">.</span><span class="n">replace_dict</span><span class="p">({</span><span class="s2">&quot;__I&quot;</span><span class="p">:</span> <span class="n">ival</span><span class="p">,</span> <span class="s2">&quot;__J&quot;</span><span class="p">:</span> <span class="n">jval</span><span class="p">,</span> <span class="s2">&quot;__K&quot;</span><span class="p">:</span> <span class="n">kval</span><span class="p">})</span>
+        <span class="k">if</span> <span class="s2">&quot;__I&quot;</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">sdfg</span><span class="o">.</span><span class="n">remove_symbol</span><span class="p">(</span><span class="s2">&quot;__I&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;__J&quot;</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">sdfg</span><span class="o">.</span><span class="n">remove_symbol</span><span class="p">(</span><span class="s2">&quot;__J&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;__K&quot;</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">sdfg</span><span class="o">.</span><span class="n">remove_symbol</span><span class="p">(</span><span class="s2">&quot;__K&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">ival</span><span class="p">,</span> <span class="n">jval</span><span class="p">,</span> <span class="n">kval</span><span class="p">:</span>
+            <span class="n">sym</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">fsym</span> <span class="ow">in</span> <span class="n">sym</span><span class="o">.</span><span class="n">free_symbols</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">parent_nsdfg_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">sdfg</span><span class="o">.</span><span class="n">parent_nsdfg_node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">)]</span> <span class="o">=</span> <span class="n">fsym</span>
+                <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">)</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">parent_sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+                        <span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">),</span> <span class="n">stype</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">parent_sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">)])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">fsym</span><span class="p">),</span> <span class="n">stype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="freeze_origin_domain_sdfg"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.freeze_origin_domain_sdfg">[docs]</a><span class="k">def</span> <span class="nf">freeze_origin_domain_sdfg</span><span class="p">(</span><span class="n">inner_sdfg</span><span class="p">,</span> <span class="n">arg_names</span><span class="p">,</span> <span class="n">field_info</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="p">):</span>
+    <span class="n">wrapper_sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">(</span><span class="s2">&quot;frozen_&quot;</span> <span class="o">+</span> <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">add_state</span><span class="p">(</span><span class="s2">&quot;frozen_&quot;</span> <span class="o">+</span> <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;_state&quot;</span><span class="p">)</span>
+
+    <span class="n">inputs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">inner_state</span> <span class="ow">in</span> <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">inner_state</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">AccessNode</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="n">inner_sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">data</span><span class="p">]</span><span class="o">.</span><span class="n">transient</span>
+            <span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">has_reads</span><span class="p">(</span><span class="n">inner_state</span><span class="p">):</span>
+                <span class="n">inputs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">has_writes</span><span class="p">(</span><span class="n">inner_state</span><span class="p">):</span>
+                <span class="n">outputs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="n">nsdfg</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">add_nested_sdfg</span><span class="p">(</span><span class="n">inner_sdfg</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="p">)</span>
+
+    <span class="n">_sdfg_add_arrays_and_edges</span><span class="p">(</span>
+        <span class="n">field_info</span><span class="p">,</span> <span class="n">wrapper_sdfg</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">inner_sdfg</span><span class="p">,</span> <span class="n">nsdfg</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">origins</span><span class="o">=</span><span class="n">origin</span>
+    <span class="p">)</span>
+
+    <span class="c1"># in special case of empty domain, remove entire SDFG.</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">d</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domain</span><span class="p">):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">states</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">states</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">states</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+            <span class="n">state</span><span class="o">.</span><span class="n">remove_node</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+    <span class="c1"># make sure that symbols are passed throught o inner sdfg</span>
+    <span class="k">for</span> <span class="n">symbol</span> <span class="ow">in</span> <span class="n">nsdfg</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">free_symbols</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">symbol</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">nsdfg</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">[</span><span class="n">symbol</span><span class="p">])</span>
+
+    <span class="c1"># Try to inline wrapped SDFG before symbols are specialized to avoid extra views</span>
+    <span class="n">inline_sdfgs</span><span class="p">(</span><span class="n">wrapper_sdfg</span><span class="p">)</span>
+
+    <span class="n">_sdfg_specialize_symbols</span><span class="p">(</span><span class="n">wrapper_sdfg</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">arrays_recursive</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">lifetime</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">AllocationLifetime</span><span class="o">.</span><span class="n">SDFG</span>
+
+    <span class="n">wrapper_sdfg</span><span class="o">.</span><span class="n">arg_names</span> <span class="o">=</span> <span class="n">arg_names</span>
+
+    <span class="k">return</span> <span class="n">wrapper_sdfg</span></div>
+
+
+<div class="viewcode-block" id="SDFGManager"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.SDFGManager">[docs]</a><span class="k">class</span> <span class="nc">SDFGManager</span><span class="p">:</span>
+
+    <span class="n">_loaded_sdfgs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">builder</span> <span class="o">=</span> <span class="n">builder</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_strip_history</span><span class="p">(</span><span class="n">sdfg</span><span class="p">):</span>
+        <span class="c1"># strip history from SDFG for faster save/load</span>
+        <span class="k">for</span> <span class="n">tmp_sdfg</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">all_sdfgs_recursive</span><span class="p">():</span>
+            <span class="n">tmp_sdfg</span><span class="o">.</span><span class="n">transformation_hist</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">tmp_sdfg</span><span class="o">.</span><span class="n">orig_sdfg</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_save_sdfg</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="n">SDFGManager</span><span class="o">.</span><span class="n">_strip_history</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+        <span class="n">sdfg</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_unexpanded_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_name</span> <span class="o">+</span> <span class="s2">&quot;.sdfg&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_path</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()))</span>
+            <span class="o">/</span> <span class="n">filename</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">SDFGManager</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">:</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+
+                <span class="n">base_oir</span> <span class="o">=</span> <span class="n">GTIRToOIR</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="p">)</span>
+                <span class="n">oir_pipeline</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">backend_opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s2">&quot;oir_pipeline&quot;</span><span class="p">,</span> <span class="n">DefaultPipeline</span><span class="p">(</span><span class="n">skip</span><span class="o">=</span><span class="p">[</span><span class="n">MaskInlining</span><span class="p">])</span>
+                <span class="p">)</span>
+                <span class="n">oir_node</span> <span class="o">=</span> <span class="n">oir_pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">base_oir</span><span class="p">)</span>
+                <span class="n">sdfg</span> <span class="o">=</span> <span class="n">OirSDFGBuilder</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">oir_node</span><span class="p">)</span>
+
+                <span class="n">_to_device</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">])</span>
+                <span class="n">_pre_expand_trafos</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir_pipeline</span><span class="p">,</span>
+                    <span class="n">sdfg</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;layout_map&quot;</span><span class="p">],</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_save_sdfg</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">=</span> <span class="n">sdfg</span>
+
+        <span class="k">return</span> <span class="n">SDFGManager</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">[</span><span class="n">path</span><span class="p">]</span>
+
+<div class="viewcode-block" id="SDFGManager.unexpanded_sdfg"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.SDFGManager.unexpanded_sdfg">[docs]</a>    <span class="k">def</span> <span class="nf">unexpanded_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_unexpanded_sdfg</span><span class="p">())</span></div>
+
+    <span class="k">def</span> <span class="nf">_expanded_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">sdfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unexpanded_sdfg</span><span class="p">()</span>
+        <span class="n">sdfg</span><span class="o">.</span><span class="n">expand_library_nodes</span><span class="p">()</span>
+        <span class="n">_post_expand_trafos</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sdfg</span>
+
+<div class="viewcode-block" id="SDFGManager.expanded_sdfg"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.SDFGManager.expanded_sdfg">[docs]</a>    <span class="k">def</span> <span class="nf">expanded_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_expanded_sdfg</span><span class="p">())</span></div>
+
+    <span class="k">def</span> <span class="nf">_frozen_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]):</span>
+        <span class="n">frozen_hash</span> <span class="o">=</span> <span class="n">shash</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+        <span class="c1"># check if same sdfg already cached on disk</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_path</span>
+        <span class="n">basename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">path</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">basename</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">frozen_hash</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.sdfg&quot;</span>
+        <span class="k">if</span> <span class="n">path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+                <span class="c1"># otherwise, wrap and save sdfg from scratch</span>
+                <span class="n">inner_sdfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">unexpanded_sdfg</span><span class="p">()</span>
+
+                <span class="n">sdfg</span> <span class="o">=</span> <span class="n">freeze_origin_domain_sdfg</span><span class="p">(</span>
+                    <span class="n">inner_sdfg</span><span class="p">,</span>
+                    <span class="n">arg_names</span><span class="o">=</span><span class="p">[</span><span class="n">arg</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="o">.</span><span class="n">api_signature</span><span class="p">],</span>
+                    <span class="n">field_info</span><span class="o">=</span><span class="n">make_args_data_from_gtir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir_pipeline</span><span class="p">)</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+                    <span class="n">origin</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span>
+                    <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_save_sdfg</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">=</span> <span class="n">sdfg</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_sdfgs</span><span class="p">[</span><span class="n">path</span><span class="p">]</span>
+
+<div class="viewcode-block" id="SDFGManager.frozen_sdfg"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.SDFGManager.frozen_sdfg">[docs]</a>    <span class="k">def</span> <span class="nf">frozen_sdfg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]):</span>
+        <span class="k">return</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_frozen_sdfg</span><span class="p">(</span><span class="n">origin</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="DaCeExtGenerator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeExtGenerator">[docs]</a><span class="k">class</span> <span class="nc">DaCeExtGenerator</span><span class="p">(</span><span class="n">BackendCodegen</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="n">module_name</span><span class="p">,</span> <span class="n">backend</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">class_name</span> <span class="o">=</span> <span class="n">class_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_name</span> <span class="o">=</span> <span class="n">module_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span>
+
+<div class="viewcode-block" id="DaCeExtGenerator.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeExtGenerator.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">SDFGManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="p">)</span>
+        <span class="n">sdfg</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">expanded_sdfg</span><span class="p">()</span>
+
+        <span class="n">sources</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+        <span class="n">implementation</span> <span class="o">=</span> <span class="n">DaCeComputationCodegen</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">)</span>
+
+        <span class="n">bindings</span> <span class="o">=</span> <span class="n">DaCeBindingsCodegen</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+            <span class="n">stencil_ir</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">module_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">module_name</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span>
+        <span class="p">)</span>
+
+        <span class="n">bindings_ext</span> <span class="o">=</span> <span class="s2">&quot;cu&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span> <span class="k">else</span> <span class="s2">&quot;cpp&quot;</span>
+        <span class="n">sources</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;computation&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;computation.hpp&quot;</span><span class="p">:</span> <span class="n">implementation</span><span class="p">},</span>
+            <span class="s2">&quot;bindings&quot;</span><span class="p">:</span> <span class="p">{</span><span class="sa">f</span><span class="s2">&quot;bindings.</span><span class="si">{</span><span class="n">bindings_ext</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">:</span> <span class="n">bindings</span><span class="p">},</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">sources</span></div></div>
+
+
+<div class="viewcode-block" id="DaCeComputationCodegen"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeComputationCodegen">[docs]</a><span class="k">class</span> <span class="nc">DaCeComputationCodegen</span><span class="p">:</span>
+
+    <span class="n">template</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        auto ${name}(const std::array&lt;gt::uint_t, 3&gt;&amp; domain) {</span>
+<span class="sd">            return [domain](${&quot;,&quot;.join(functor_args)}) {</span>
+<span class="sd">                const int __I = domain[0];</span>
+<span class="sd">                const int __J = domain[1];</span>
+<span class="sd">                const int __K = domain[2];</span>
+<span class="sd">                ${name}_t dace_handle;</span>
+<span class="sd">                ${backend_specifics}</span>
+<span class="sd">                auto allocator = gt::sid::cached_allocator(&amp;${allocator}&lt;char[]&gt;);</span>
+<span class="sd">                ${&quot;\\n&quot;.join(tmp_allocs)}</span>
+<span class="sd">                __program_${name}(${&quot;,&quot;.join([&quot;&amp;dace_handle&quot;, *dace_args])});</span>
+<span class="sd">            };</span>
+<span class="sd">        }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="DaCeComputationCodegen.generate_tmp_allocs"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeComputationCodegen.generate_tmp_allocs">[docs]</a>    <span class="k">def</span> <span class="nf">generate_tmp_allocs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">):</span>
+
+        <span class="n">global_fmt</span> <span class="o">=</span> <span class="s2">&quot;dace_handle.__</span><span class="si">{sdfg_id}</span><span class="s2">_</span><span class="si">{name}</span><span class="s2"> = allocate(allocator, gt::meta::lazy::id&lt;</span><span class="si">{dtype}</span><span class="s2">&gt;(), </span><span class="si">{size}</span><span class="s2">)();&quot;</span>
+        <span class="n">threadlocal_fmt</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">{name}</span><span class="s2"> = dace_handle.__</span><span class="si">{sdfg_id}</span><span class="s2">_</span><span class="si">{name}</span><span class="s2"> + omp_get_thread_num() * (</span><span class="si">{local_size}</span><span class="s2">);&quot;</span>
+        <span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">array_sdfg</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays_recursive</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span> <span class="ow">and</span> <span class="n">array</span><span class="o">.</span><span class="n">lifetime</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">AllocationLifetime</span><span class="o">.</span><span class="n">Persistent</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">storage</span> <span class="o">!=</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_ThreadLocal</span><span class="p">:</span>
+                    <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">global_fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                            <span class="n">sdfg_id</span><span class="o">=</span><span class="n">array_sdfg</span><span class="o">.</span><span class="n">sdfg_id</span><span class="p">,</span>
+                            <span class="n">dtype</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">ctype</span><span class="p">,</span>
+                            <span class="n">size</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">total_size</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">fmts</span> <span class="o">=</span> <span class="p">[</span><span class="n">global_fmt</span><span class="p">,</span> <span class="s2">&quot;#pragma omp parallel&quot;</span><span class="p">,</span> <span class="s2">&quot;{{&quot;</span><span class="p">,</span> <span class="n">threadlocal_fmt</span><span class="p">,</span> <span class="s2">&quot;}}&quot;</span><span class="p">]</span>
+                    <span class="n">res</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                        <span class="p">[</span>
+                            <span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                                <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                                <span class="n">sdfg_id</span><span class="o">=</span><span class="n">array_sdfg</span><span class="o">.</span><span class="n">sdfg_id</span><span class="p">,</span>
+                                <span class="n">dtype</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">ctype</span><span class="p">,</span>
+                                <span class="n">size</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;omp_max_threads * (</span><span class="si">{</span><span class="n">array</span><span class="o">.</span><span class="n">total_size</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                                <span class="n">local_size</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">total_size</span><span class="p">,</span>
+                            <span class="p">)</span>
+                            <span class="k">for</span> <span class="n">fmt</span> <span class="ow">in</span> <span class="n">fmts</span>
+                        <span class="p">]</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_postprocess_dace_code</span><span class="p">(</span><span class="n">code_objects</span><span class="p">,</span> <span class="n">is_gpu</span><span class="p">,</span> <span class="n">builder</span><span class="p">):</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">code_objects</span><span class="p">[[</span><span class="n">co</span><span class="o">.</span><span class="n">title</span> <span class="k">for</span> <span class="n">co</span> <span class="ow">in</span> <span class="n">code_objects</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s2">&quot;Frame&quot;</span><span class="p">)]</span><span class="o">.</span><span class="n">clean_code</span><span class="o">.</span><span class="n">split</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">is_gpu</span><span class="p">:</span>
+            <span class="n">regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">&quot;struct [a-zA-Z_][a-zA-Z0-9_]*_t {&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()):</span>
+                    <span class="n">j</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
+                    <span class="k">while</span> <span class="s2">&quot;};&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+                        <span class="n">j</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">lines</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">lines</span><span class="p">[</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span>
+                    <span class="k">break</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+                <span class="k">if</span> <span class="s2">&quot;#include &lt;dace/dace.h&gt;&quot;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                    <span class="n">cuda_code</span> <span class="o">=</span> <span class="p">[</span><span class="n">co</span><span class="o">.</span><span class="n">clean_code</span> <span class="k">for</span> <span class="n">co</span> <span class="ow">in</span> <span class="n">code_objects</span> <span class="k">if</span> <span class="n">co</span><span class="o">.</span><span class="n">title</span> <span class="o">==</span> <span class="s2">&quot;CUDA&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">lines</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">cuda_code</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span>
+                    <span class="k">break</span>
+
+        <span class="k">def</span> <span class="nf">keep_line</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">line</span> <span class="o">==</span> <span class="s1">&#39;#include &quot;../../include/hash.h&quot;&#39;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;DACE_EXPORTED&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">line</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;);&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="n">line</span> <span class="o">==</span> <span class="s2">&quot;#include &lt;cuda_runtime.h&gt;&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="n">lines</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="n">keep_line</span><span class="p">,</span> <span class="n">lines</span><span class="p">)</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">format_source</span><span class="p">:</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">generated_code</span>
+
+<div class="viewcode-block" id="DaCeComputationCodegen.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeComputationCodegen.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">dace</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">temporary_config</span><span class="p">():</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">Config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;compiler&quot;</span><span class="p">,</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;max_concurrent_streams&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">Config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;compiler&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="s2">&quot;openmp_sections&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">code_objects</span> <span class="o">=</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">generate_code</span><span class="p">()</span>
+        <span class="n">is_gpu</span> <span class="o">=</span> <span class="s2">&quot;CUDA&quot;</span> <span class="ow">in</span> <span class="p">{</span><span class="n">co</span><span class="o">.</span><span class="n">title</span> <span class="k">for</span> <span class="n">co</span> <span class="ow">in</span> <span class="n">code_objects</span><span class="p">}</span>
+
+        <span class="n">computations</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_postprocess_dace_code</span><span class="p">(</span><span class="n">code_objects</span><span class="p">,</span> <span class="n">is_gpu</span><span class="p">,</span> <span class="n">builder</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_gpu</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">transient</span> <span class="ow">and</span> <span class="n">array</span><span class="o">.</span><span class="n">lifetime</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">AllocationLifetime</span><span class="o">.</span><span class="n">Persistent</span>
+            <span class="k">for</span> <span class="o">*</span><span class="n">_</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays_recursive</span><span class="p">()</span>
+        <span class="p">):</span>
+            <span class="n">omp_threads</span> <span class="o">=</span> <span class="s2">&quot;int omp_max_threads = omp_get_max_threads();&quot;</span>
+            <span class="n">omp_header</span> <span class="o">=</span> <span class="s2">&quot;#include &lt;omp.h&gt;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">omp_threads</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">omp_header</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">interface</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">definition</span><span class="o">.</span><span class="n">render</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">backend_specifics</span><span class="o">=</span><span class="n">omp_threads</span><span class="p">,</span>
+            <span class="n">dace_args</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_dace_args</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">),</span>
+            <span class="n">functor_args</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_functor_args</span><span class="p">(</span><span class="n">sdfg</span><span class="p">),</span>
+            <span class="n">tmp_allocs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_tmp_allocs</span><span class="p">(</span><span class="n">sdfg</span><span class="p">),</span>
+            <span class="n">allocator</span><span class="o">=</span><span class="s2">&quot;gt::cuda_util::cuda_malloc&quot;</span> <span class="k">if</span> <span class="n">is_gpu</span> <span class="k">else</span> <span class="s2">&quot;std::make_unique&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;#include &lt;gridtools/sid/sid_shift_origin.hpp&gt;</span>
+<span class="s2">                             #include &lt;gridtools/sid/allocator.hpp&gt;</span>
+<span class="s2">                             #include &lt;gridtools/stencil/cartesian.hpp&gt;</span>
+<span class="s2">                             </span><span class="si">{</span><span class="s2">&quot;#include &lt;gridtools/common/cuda_util.hpp&gt;&quot;</span> <span class="k">if</span> <span class="n">is_gpu</span> <span class="k">else</span> <span class="n">omp_header</span><span class="si">}</span><span class="s2"></span>
+<span class="s2">                             namespace gt = gridtools;</span>
+<span class="s2">                             </span><span class="si">{</span><span class="n">computations</span><span class="si">}</span><span class="s2"></span>
+
+<span class="s2">                             </span><span class="si">{</span><span class="n">interface</span><span class="si">}</span><span class="s2"></span>
+<span class="s2">                             &quot;&quot;&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">format_source</span><span class="p">:</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">generated_code</span></div>
+
+<div class="viewcode-block" id="DaCeComputationCodegen.generate_dace_args"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeComputationCodegen.generate_dace_args">[docs]</a>    <span class="k">def</span> <span class="nf">generate_dace_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">oir</span> <span class="o">=</span> <span class="n">GTIRToOIR</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">)</span>
+        <span class="n">field_extents</span> <span class="o">=</span> <span class="n">compute_fields_extents</span><span class="p">(</span><span class="n">oir</span><span class="p">,</span> <span class="n">add_k</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">k_origins</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">field_name</span><span class="p">:</span> <span class="nb">max</span><span class="p">(</span><span class="n">boundary</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">boundary</span> <span class="ow">in</span> <span class="n">compute_k_boundary</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="n">offset_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">k</span><span class="p">:</span> <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">),</span> <span class="n">k_origins</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">k_origins</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">field_extents</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="n">symbols</span> <span class="o">=</span> <span class="p">{</span><span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">var</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">var</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="s2">&quot;IJK&quot;</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># transients are set to expressions based on their shape in _specialize_transient_strides</span>
+            <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="n">dim</span> <span class="k">for</span> <span class="n">dim</span><span class="p">,</span> <span class="n">select</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">,</span> <span class="n">array_dimensions</span><span class="p">(</span><span class="n">array</span><span class="p">))</span> <span class="k">if</span> <span class="n">select</span><span class="p">]</span>
+            <span class="n">data_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">dims</span><span class="p">)</span>
+
+            <span class="c1"># api field strides</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="s2">&quot;gt::sid::get_stride&lt;</span><span class="si">{dim}</span><span class="s2">&gt;(gt::sid::get_strides(__</span><span class="si">{name}</span><span class="s2">_sid))&quot;</span>
+
+            <span class="n">symbols</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2">_stride&quot;</span><span class="p">:</span> <span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">dim</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;gt::stencil::dim::</span><span class="si">{</span><span class="n">dim</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">dims</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+            <span class="n">symbols</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_d</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2">_stride&quot;</span><span class="p">:</span> <span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">dim</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;gt::integral_constant&lt;int, </span><span class="si">{</span><span class="mi">3</span> <span class="o">+</span> <span class="n">dim</span><span class="si">}</span><span class="s2">&gt;&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data_ndim</span><span class="p">)</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+            <span class="c1"># api field pointers</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;gt::sid::multi_shifted(</span>
+<span class="s2">                         gt::sid::get_origin(__</span><span class="si">{name}</span><span class="s2">_sid)(),</span>
+<span class="s2">                         gt::sid::get_strides(__</span><span class="si">{name}</span><span class="s2">_sid),</span>
+<span class="s2">                         std::array&lt;gt::int_t, </span><span class="si">{ndim}</span><span class="s2">&gt;{{</span><span class="si">{origin}</span><span class="s2">}}</span>
+<span class="s2">                     )&quot;&quot;&quot;</span>
+            <span class="n">origin</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                <span class="o">-</span><span class="n">offset_dict</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">var</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+                    <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;__</span><span class="si">{</span><span class="n">var</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">free_symbols</span>
+                    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span>
+                    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="s2">&quot;free_symbols&quot;</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">symbols</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">origin</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="c1"># the remaining arguments are variables and can be passed by name</span>
+        <span class="k">for</span> <span class="n">sym</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">signature_arglist</span><span class="p">(</span><span class="n">with_types</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">for_call</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">sym</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">symbols</span><span class="p">:</span>
+                <span class="n">symbols</span><span class="p">[</span><span class="n">sym</span><span class="p">]</span> <span class="o">=</span> <span class="n">sym</span>
+
+        <span class="c1"># return strings in order of sdfg signature</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">symbols</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">signature_arglist</span><span class="p">(</span><span class="n">with_types</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">for_call</span><span class="o">=</span><span class="kc">True</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="DaCeComputationCodegen.generate_functor_args"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeComputationCodegen.generate_functor_args">[docs]</a>    <span class="k">def</span> <span class="nf">generate_functor_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;auto &amp;&amp; __</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_sid&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">n</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__&quot;</span><span class="p">)):</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">as_arg</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">res</span></div></div>
+
+
+<div class="viewcode-block" id="DaCeBindingsCodegen"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen">[docs]</a><span class="k">class</span> <span class="nc">DaCeBindingsCodegen</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="DaCeBindingsCodegen.unique_index"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen.unique_index">[docs]</a>    <span class="k">def</span> <span class="nf">unique_index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span></div>
+
+    <span class="n">mako_template</span> <span class="o">=</span> <span class="n">bindings_main_template</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DaCeBindingsCodegen.generate_entry_params"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen.generate_entry_params">[docs]</a>    <span class="k">def</span> <span class="nf">generate_entry_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">res</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">signature_arglist</span><span class="p">(</span><span class="n">with_types</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">for_call</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">:</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Array</span><span class="p">)</span>
+                <span class="n">res</span><span class="p">[</span>
+                    <span class="n">name</span>
+                <span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;py::</span><span class="si">{pybind_type}</span><span class="s2"> </span><span class="si">{name}</span><span class="s2">, std::array&lt;gt::int_t,</span><span class="si">{ndim}</span><span class="s2">&gt; </span><span class="si">{name}</span><span class="s2">_origin&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">pybind_type</span><span class="o">=</span><span class="s2">&quot;object&quot;</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span>
+                    <span class="k">else</span> <span class="s2">&quot;buffer&quot;</span><span class="p">,</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">ndim</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__&quot;</span><span class="p">):</span>
+                <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span>
+                <span class="n">res</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2"> </span><span class="si">{name}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">ctype</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">res</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">stencil_ir</span><span class="o">.</span><span class="n">params</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">res</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DaCeBindingsCodegen.generate_sid_params"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen.generate_sid_params">[docs]</a>    <span class="k">def</span> <span class="nf">generate_sid_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">res</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">array</span><span class="o">.</span><span class="n">transient</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">domain_dim_flags</span> <span class="o">=</span> <span class="n">array_dimensions</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+            <span class="n">data_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">-</span> <span class="nb">sum</span><span class="p">(</span><span class="n">domain_dim_flags</span><span class="p">)</span>
+            <span class="n">sid_def</span> <span class="o">=</span> <span class="n">pybuffer_to_sid</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">ctype</span><span class="o">=</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">ctype</span><span class="p">,</span>
+                <span class="n">domain_dim_flags</span><span class="o">=</span><span class="n">domain_dim_flags</span><span class="p">,</span>
+                <span class="n">data_ndim</span><span class="o">=</span><span class="n">data_ndim</span><span class="p">,</span>
+                <span class="n">stride_kind_index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">unique_index</span><span class="p">(),</span>
+                <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sid_def</span><span class="p">)</span>
+        <span class="c1"># pass scalar parameters as variables</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">n</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__&quot;</span><span class="p">)):</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+<div class="viewcode-block" id="DaCeBindingsCodegen.generate_sdfg_bindings"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen.generate_sdfg_bindings">[docs]</a>    <span class="k">def</span> <span class="nf">generate_sdfg_bindings</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">module_name</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mako_template</span><span class="o">.</span><span class="n">render_values</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">sdfg</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">module_name</span><span class="o">=</span><span class="n">module_name</span><span class="p">,</span>
+            <span class="n">entry_params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_entry_params</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">),</span>
+            <span class="n">sid_params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_sid_params</span><span class="p">(</span><span class="n">sdfg</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="DaCeBindingsCodegen.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeBindingsCodegen.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">module_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span><span class="o">.</span><span class="n">generate_sdfg_bindings</span><span class="p">(</span>
+            <span class="n">stencil_ir</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">module_name</span><span class="o">=</span><span class="n">module_name</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">format_source</span><span class="p">:</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">generated_code</span></div></div>
+
+
+<div class="viewcode-block" id="DaCePyExtModuleGenerator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCePyExtModuleGenerator">[docs]</a><span class="k">class</span> <span class="nc">DaCePyExtModuleGenerator</span><span class="p">(</span><span class="n">PyExtModuleGenerator</span><span class="p">):</span>
+<div class="viewcode-block" id="DaCePyExtModuleGenerator.generate_imports"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCePyExtModuleGenerator.generate_imports">[docs]</a>    <span class="k">def</span> <span class="nf">generate_imports</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="o">*</span><span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">generate_imports</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">(),</span>
+                <span class="s2">&quot;import dace&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;import copy&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="DaCePyExtModuleGenerator.generate_base_class_name"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCePyExtModuleGenerator.generate_base_class_name">[docs]</a>    <span class="k">def</span> <span class="nf">generate_base_class_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;DaCeStencilObject&quot;</span></div>
+
+<div class="viewcode-block" id="DaCePyExtModuleGenerator.generate_class_members"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCePyExtModuleGenerator.generate_class_members">[docs]</a>    <span class="k">def</span> <span class="nf">generate_class_members</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">generate_class_members</span><span class="p">()</span>
+        <span class="n">filepath</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_path</span><span class="o">.</span><span class="n">joinpath</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_path</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">module_name</span> <span class="o">+</span> <span class="s2">&quot;.sdfg&quot;</span>
+        <span class="p">)</span>
+        <span class="n">res</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">SDFG_PATH = &quot;</span><span class="si">{</span><span class="n">filepath</span><span class="si">}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="k">return</span> <span class="n">res</span></div></div>
+
+
+<div class="viewcode-block" id="DaCeCUDAPyExtModuleGenerator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaCeCUDAPyExtModuleGenerator">[docs]</a><span class="k">class</span> <span class="nc">DaCeCUDAPyExtModuleGenerator</span><span class="p">(</span><span class="n">DaCePyExtModuleGenerator</span><span class="p">,</span> <span class="n">CUDAPyExtModuleGenerator</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BaseDaceBackend"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.BaseDaceBackend">[docs]</a><span class="k">class</span> <span class="nc">BaseDaceBackend</span><span class="p">(</span><span class="n">BaseGTBackend</span><span class="p">,</span> <span class="n">CLIBackendMixin</span><span class="p">):</span>
+
+    <span class="n">GT_BACKEND_T</span> <span class="o">=</span> <span class="s2">&quot;dace&quot;</span>
+    <span class="n">PYEXT_GENERATOR_CLASS</span> <span class="o">=</span> <span class="n">DaCeExtGenerator</span>  <span class="c1"># type: ignore</span>
+
+<div class="viewcode-block" id="BaseDaceBackend.generate"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.BaseDaceBackend.generate">[docs]</a>    <span class="k">def</span> <span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;StencilObject&quot;</span><span class="p">]:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
+
+        <span class="n">pyext_module_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+        <span class="n">pyext_file_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+        <span class="c1"># TODO(havogt) add bypass if computation has no effect</span>
+        <span class="n">pyext_module_name</span><span class="p">,</span> <span class="n">pyext_file_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_extension</span><span class="p">()</span>
+
+        <span class="c1"># Generate and return the Python wrapper class</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_module</span><span class="p">(</span>
+            <span class="n">pyext_module_name</span><span class="o">=</span><span class="n">pyext_module_name</span><span class="p">,</span>
+            <span class="n">pyext_file_path</span><span class="o">=</span><span class="n">pyext_file_path</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DaceCPUBackend"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaceCPUBackend">[docs]</a><span class="nd">@register</span>
+<span class="k">class</span> <span class="nc">DaceCPUBackend</span><span class="p">(</span><span class="n">BaseDaceBackend</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;dace:cpu&quot;</span>
+    <span class="n">languages</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;computation&quot;</span><span class="p">:</span> <span class="s2">&quot;c++&quot;</span><span class="p">,</span> <span class="s2">&quot;bindings&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;python&quot;</span><span class="p">]}</span>
+    <span class="n">storage_info</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;alignment&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;device&quot;</span><span class="p">:</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;layout_map&quot;</span><span class="p">:</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_maker_factory</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)),</span>
+        <span class="s2">&quot;is_optimal_layout&quot;</span><span class="p">:</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_checker_factory</span><span class="p">(</span>
+            <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_maker_factory</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="p">),</span>
+    <span class="p">}</span>
+    <span class="n">MODULE_GENERATOR_CLASS</span> <span class="o">=</span> <span class="n">DaCePyExtModuleGenerator</span>
+
+    <span class="n">options</span> <span class="o">=</span> <span class="n">BaseGTBackend</span><span class="o">.</span><span class="n">GT_BACKEND_OPTS</span>
+
+<div class="viewcode-block" id="DaceCPUBackend.generate_extension"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaceCPUBackend.generate_extension">[docs]</a>    <span class="k">def</span> <span class="nf">generate_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_extension</span><span class="p">(</span><span class="n">stencil_ir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="p">,</span> <span class="n">uses_cuda</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DaceGPUBackend"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaceGPUBackend">[docs]</a><span class="nd">@register</span>
+<span class="k">class</span> <span class="nc">DaceGPUBackend</span><span class="p">(</span><span class="n">BaseDaceBackend</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;DaCe python backend using gt4py.cartesian.gtc.&quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;dace:gpu&quot;</span>
+    <span class="n">languages</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;computation&quot;</span><span class="p">:</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;bindings&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;python&quot;</span><span class="p">]}</span>
+    <span class="n">storage_info</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;alignment&quot;</span><span class="p">:</span> <span class="mi">32</span><span class="p">,</span>
+        <span class="s2">&quot;device&quot;</span><span class="p">:</span> <span class="s2">&quot;gpu&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;layout_map&quot;</span><span class="p">:</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_maker_factory</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+        <span class="s2">&quot;is_optimal_layout&quot;</span><span class="p">:</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_checker_factory</span><span class="p">(</span>
+            <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">layout_maker_factory</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="p">),</span>
+    <span class="p">}</span>
+    <span class="n">MODULE_GENERATOR_CLASS</span> <span class="o">=</span> <span class="n">DaCeCUDAPyExtModuleGenerator</span>
+    <span class="n">options</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="o">**</span><span class="n">BaseGTBackend</span><span class="o">.</span><span class="n">GT_BACKEND_OPTS</span><span class="p">,</span>
+        <span class="s2">&quot;device_sync&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;versioning&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">},</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="DaceGPUBackend.generate_extension"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_backend.DaceGPUBackend.generate_extension">[docs]</a>    <span class="k">def</span> <span class="nf">generate_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_extension</span><span class="p">(</span><span class="n">stencil_ir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="p">,</span> <span class="n">uses_cuda</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

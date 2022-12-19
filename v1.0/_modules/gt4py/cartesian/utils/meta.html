@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.utils.meta &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.utils.meta</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.utils.meta</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Utilities for runtime: introspection and bytecode.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">ast</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">platform</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span> <span class="nn">packaging</span> <span class="kn">import</span> <span class="n">version</span>
+
+<span class="kn">from</span> <span class="nn">.base</span> <span class="kn">import</span> <span class="n">shashed_id</span>
+
+
+<div class="viewcode-block" id="get_closure"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.get_closure">[docs]</a><span class="k">def</span> <span class="nf">get_closure</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">include_globals</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">included_nonlocals</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_builtins</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">closure_vars</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getclosurevars</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="n">closure</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">unbound</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">unbound</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_globals</span><span class="p">:</span>
+        <span class="n">closure</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">globals</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">unbound</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">globals</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">if</span> <span class="n">included_nonlocals</span><span class="p">:</span>
+        <span class="n">closure</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">nonlocals</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">unbound</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">nonlocals</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">if</span> <span class="n">include_builtins</span><span class="p">:</span>
+        <span class="n">closure</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">builtins</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">unbound</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">closure_vars</span><span class="o">.</span><span class="n">builtins</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">closure</span><span class="p">,</span> <span class="n">unbound</span></div>
+
+
+<div class="viewcode-block" id="get_source"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.get_source">[docs]</a><span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="n">func</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="c1"># Dynamically generated functions using exec() do not contain references</span>
+        <span class="c1"># to the original source code, so we can use the convention of attaching</span>
+        <span class="c1"># the source to the function using the &quot;__exec_source__&quot; attribute</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;__exec_source__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">e</span>
+
+    <span class="k">return</span> <span class="n">source</span></div>
+
+
+<div class="viewcode-block" id="get_ast"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.get_ast">[docs]</a><span class="k">def</span> <span class="nf">get_ast</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">feature_version</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]):</span>
+    <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">):</span>
+        <span class="n">func_or_source_or_ast</span> <span class="o">=</span> <span class="n">get_source</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">func_or_source_or_ast</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span>
+            <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">),</span> <span class="n">feature_version</span><span class="o">=</span><span class="n">feature_version</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">,</span> <span class="nb">list</span><span class="p">)):</span>
+        <span class="n">ast_root</span> <span class="o">=</span> <span class="n">func_or_source_or_ast</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid function definition (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">ast_root</span></div>
+
+
+<div class="viewcode-block" id="ast_dump"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ast_dump">[docs]</a><span class="k">def</span> <span class="nf">ast_dump</span><span class="p">(</span>
+    <span class="n">definition</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">skip_annotations</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">skip_decorators</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">feature_version</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_dump</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">,</span> <span class="n">excluded_names</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">excluded_names</span><span class="p">:</span>
+                <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">_dump</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">excluded_names</span><span class="p">))</span>
+                    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">iter_fields</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">excluded_names</span>
+                <span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">_dump</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">excluded_names</span><span class="p">))</span>
+                    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">iter_fields</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+                <span class="p">]</span>
+
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                    <span class="s2">&quot;(</span><span class="si">{content}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">content</span><span class="o">=</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">)</span>
+                    <span class="p">),</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;[&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">[</span><span class="n">_dump</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">excluded_names</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;,&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">node</span><span class="p">],</span> <span class="s2">&quot;]&quot;</span><span class="p">]</span>
+            <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+    <span class="n">skip_node_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">skip_decorators</span><span class="p">:</span>
+        <span class="n">skip_node_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;decorator_list&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">skip_annotations</span><span class="p">:</span>
+        <span class="n">skip_node_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;annotation&quot;</span><span class="p">)</span>
+
+    <span class="n">dumped_ast</span> <span class="o">=</span> <span class="n">_dump</span><span class="p">(</span><span class="n">get_ast</span><span class="p">(</span><span class="n">definition</span><span class="p">,</span> <span class="n">feature_version</span><span class="o">=</span><span class="n">feature_version</span><span class="p">),</span> <span class="n">skip_node_names</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">dumped_ast</span></div>
+
+
+<div class="viewcode-block" id="ast_unparse"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ast_unparse">[docs]</a><span class="k">def</span> <span class="nf">ast_unparse</span><span class="p">(</span><span class="n">ast_node</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Call ast.unparse, but use astunparse for Python prior to 3.9.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">version</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">python_version</span><span class="p">())</span> <span class="o">&lt;</span> <span class="n">version</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s2">&quot;3.9&quot;</span><span class="p">):</span>
+        <span class="kn">import</span> <span class="nn">astunparse</span>
+
+        <span class="k">return</span> <span class="n">astunparse</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">ast_node</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">ast_node</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ast_shash"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ast_shash">[docs]</a><span class="k">def</span> <span class="nf">ast_shash</span><span class="p">(</span><span class="n">ast_node</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">skip_decorators</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">shashed_id</span><span class="p">(</span><span class="n">ast_dump</span><span class="p">(</span><span class="n">ast_node</span><span class="p">,</span> <span class="n">skip_decorators</span><span class="o">=</span><span class="n">skip_decorators</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="collect_decorators"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.collect_decorators">[docs]</a><span class="k">def</span> <span class="nf">collect_decorators</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">):</span>
+        <span class="n">func_or_source_or_ast</span> <span class="o">=</span> <span class="n">get_source</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;def &quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;@&quot;</span><span class="p">):</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;(&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">end</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">end</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span>
+                <span class="n">decorator</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">:</span><span class="n">end</span><span class="p">]</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">decorator</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">func_or_source_or_ast</span><span class="o">.</span><span class="n">decorator_list</span>
+
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="remove_decorators"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.remove_decorators">[docs]</a><span class="k">def</span> <span class="nf">remove_decorators</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">):</span>
+        <span class="n">func_or_source_or_ast</span> <span class="o">=</span> <span class="n">get_source</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">FunctionDef</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;def &quot;</span><span class="p">):</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">n</span>
+                <span class="k">break</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="n">start</span><span class="p">:])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">ast_root</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">func_or_source_or_ast</span><span class="p">)</span>
+        <span class="n">ast_root</span><span class="o">.</span><span class="n">decorator_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">ast_root</span>
+
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="split_def_decorators"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.split_def_decorators">[docs]</a><span class="k">def</span> <span class="nf">split_def_decorators</span><span class="p">(</span><span class="n">func_or_source</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">callable</span><span class="p">(</span><span class="n">func_or_source</span><span class="p">):</span>
+        <span class="n">func_or_source</span> <span class="o">=</span> <span class="n">get_source</span><span class="p">(</span><span class="n">func_or_source</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_or_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+    <span class="n">source</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span><span class="n">func_or_source</span><span class="p">)</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;def &quot;</span><span class="p">):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">n</span>
+            <span class="k">break</span>
+    <span class="n">definition</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="n">start</span><span class="p">:])</span>
+    <span class="n">decorators</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">[:</span><span class="n">start</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">definition</span><span class="p">,</span> <span class="n">decorators</span></div>
+
+
+<div class="viewcode-block" id="get_qualified_name_from_node"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.get_qualified_name_from_node">[docs]</a><span class="k">def</span> <span class="nf">get_qualified_name_from_node</span><span class="p">(</span><span class="n">name_or_attribute</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">as_list</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name_or_attribute</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">))</span>
+
+    <span class="n">node</span> <span class="o">=</span> <span class="n">name_or_attribute</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="n">get_qualified_name_from_node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">as_list</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="n">components</span> <span class="o">+</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">components</span> <span class="k">if</span> <span class="n">as_list</span> <span class="k">else</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">components</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ASTPass"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTPass">[docs]</a><span class="k">class</span> <span class="nc">ASTPass</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Clone of the ast.NodeVisitor that supports forwarding kwargs.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ASTPass.visit"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTPass.visit">[docs]</a>    <span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Visit a node.&quot;&quot;&quot;</span>
+        <span class="n">method</span> <span class="o">=</span> <span class="s2">&quot;visit_&quot;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">visitor</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">visitor</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ASTPass.generic_visit"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTPass.generic_visit">[docs]</a>    <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Fallback if no explicit visitor function exists for a node.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">iter_fields</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ASTTransformPass"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTTransformPass">[docs]</a><span class="k">class</span> <span class="nc">ASTTransformPass</span><span class="p">(</span><span class="n">ASTPass</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Clone of the ast.NodeTransformer that supports forwarding kwargs.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ASTTransformPass.generic_visit"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTTransformPass.generic_visit">[docs]</a>    <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">old_value</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">iter_fields</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">new_values</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">old_value</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+                        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="k">continue</span>
+                        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+                            <span class="n">new_values</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                            <span class="k">continue</span>
+                    <span class="n">new_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="n">old_value</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">new_values</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+                <span class="n">new_node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">old_value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">new_node</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="nb">delattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">new_node</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">node</span></div></div>
+
+
+<div class="viewcode-block" id="ASTEvaluator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator">[docs]</a><span class="k">class</span> <span class="nc">ASTEvaluator</span><span class="p">(</span><span class="n">ASTPass</span><span class="p">):</span>
+    <span class="n">AST_OP_TO_OP</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># Arithmetic operations</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">UAdd</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">USub</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Add</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Sub</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">sub</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Mult</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">mul</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Div</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">truediv</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Mod</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">mod</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Pow</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pow</span><span class="p">,</span>
+        <span class="c1"># Bitwise operations</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Invert</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">invert</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">BitOr</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">or_</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">BitXor</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">xor</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">BitAnd</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">and_</span><span class="p">,</span>
+        <span class="c1"># Logical operations</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Not</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">not_</span><span class="p">,</span>
+        <span class="c1"># ast.And: lambda a, b: a and b,</span>
+        <span class="c1"># ast.Or: lambda a, b: a or b,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Eq</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">eq</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">NotEq</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ne</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Lt</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">lt</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">LtE</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">le</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">Gt</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">gt</span><span class="p">,</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">GtE</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ge</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="ASTEvaluator.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_root</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">context</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">default</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Name"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Name">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Num"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Num">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Num</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">n</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Constant"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Constant">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Constant</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">n</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_NameConstant"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_NameConstant">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NameConstant</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Tuple"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Tuple">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Tuple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">elem</span><span class="p">)</span> <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_UnaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_UnaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_UnaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">):</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">operand</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">AST_OP_TO_OP</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">)](</span><span class="n">val</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_BinOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_BinOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BinOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BinOp</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">AST_OP_TO_OP</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">)](</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_BoolOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_BoolOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BoolOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">BoolOp</span><span class="p">):</span>
+        <span class="c1"># Use short-circuited evaluation of logical expressions</span>
+        <span class="n">condition</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">And</span><span class="p">)</span> <span class="k">else</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">value</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">condition</span><span class="p">:</span>
+                <span class="k">return</span> <span class="ow">not</span> <span class="n">condition</span>
+
+        <span class="k">return</span> <span class="n">condition</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Attribute"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Attribute">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+        <span class="n">qualified_name</span> <span class="o">=</span> <span class="n">get_qualified_name_from_node</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">qualified_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">qualified_name</span><span class="si">}</span><span class="s2"> not found in context&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="n">qualified_name</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.visit_Compare"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Compare">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Compare</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Compare</span><span class="p">):</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">cmp</span><span class="p">)</span> <span class="k">for</span> <span class="n">cmp</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">comparators</span><span class="p">]</span>
+        <span class="n">comparisons</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">AST_OP_TO_OP</span><span class="p">[</span><span class="nb">type</span><span class="p">(</span><span class="n">op</span><span class="p">)](</span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">op</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ops</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="n">comparisons</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ASTEvaluator.generic_visit"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ASTEvaluator.generic_visit">[docs]</a>    <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid AST node for evaluation: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">node</span><span class="p">)))</span></div></div>
+
+
+<span class="n">ast_eval</span> <span class="o">=</span> <span class="n">ASTEvaluator</span><span class="o">.</span><span class="n">apply</span>
+
+
+<div class="viewcode-block" id="AssignTargetsCollector"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.AssignTargetsCollector">[docs]</a><span class="k">class</span> <span class="nc">AssignTargetsCollector</span><span class="p">(</span><span class="n">ASTPass</span><span class="p">):</span>
+<div class="viewcode-block" id="AssignTargetsCollector.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.AssignTargetsCollector.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_multiple_targets</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_root</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+        <span class="n">collector</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">allow_multiple_targets</span><span class="o">=</span><span class="n">allow_multiple_targets</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">collector</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_multiple_targets</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assign_targets</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allow_multiple_targets</span> <span class="o">=</span> <span class="n">allow_multiple_targets</span>
+
+<div class="viewcode-block" id="AssignTargetsCollector.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.AssignTargetsCollector.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">defs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">assign_targets</span></div>
+
+<div class="viewcode-block" id="AssignTargetsCollector.visit_Assign"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.AssignTargetsCollector.visit_Assign">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">targets</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_multiple_targets</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Multiple targets found in assignment (</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">targets</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">target</span><span class="o">.</span><span class="n">elts</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">assign_targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">assign_targets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target</span><span class="p">)</span></div></div>
+
+
+<span class="n">collect_assign_targets</span> <span class="o">=</span> <span class="n">AssignTargetsCollector</span><span class="o">.</span><span class="n">apply</span>
+
+
+<div class="viewcode-block" id="QualifiedNameCollector"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector">[docs]</a><span class="k">class</span> <span class="nc">QualifiedNameCollector</span><span class="p">(</span><span class="n">ASTPass</span><span class="p">):</span>
+<div class="viewcode-block" id="QualifiedNameCollector.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">,</span> <span class="n">prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">skip_decorators</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">skip_annotations</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_root</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+        <span class="n">collector</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">prefixes</span><span class="o">=</span><span class="n">prefixes</span><span class="p">,</span> <span class="n">skip_decorators</span><span class="o">=</span><span class="n">skip_decorators</span><span class="p">,</span> <span class="n">skip_annotations</span><span class="o">=</span><span class="n">skip_annotations</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">collector</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefixes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">skip_decorators</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">skip_annotations</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">prefixes</span><span class="p">)</span> <span class="k">if</span> <span class="n">prefixes</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skip_decorators</span> <span class="o">=</span> <span class="n">skip_decorators</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skip_annotations</span> <span class="o">=</span> <span class="n">skip_annotations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="QualifiedNameCollector.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span></div>
+
+<div class="viewcode-block" id="QualifiedNameCollector.generic_visit"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector.generic_visit">[docs]</a>    <span class="k">def</span> <span class="nf">generic_visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_decorators</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">_fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">_fields</span> <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="s2">&quot;decorator_list&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_annotations</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">_fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">_fields</span> <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="s2">&quot;annotation&quot;</span><span class="p">]</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="QualifiedNameCollector.visit_Attribute"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Attribute">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+        <span class="n">components</span><span class="p">,</span> <span class="n">valid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_name_components</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">valid</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">item</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">components</span><span class="p">):</span>
+            <span class="n">qualified_name</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">qualified_name</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span><span class="p">[</span><span class="n">qualified_name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="QualifiedNameCollector.visit_Name"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Name">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name_nodes</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_get_name_components</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="n">valid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+            <span class="n">components</span><span class="p">,</span> <span class="n">valid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_name_components</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="n">components</span> <span class="o">+</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">]</span>
+            <span class="n">valid</span> <span class="o">=</span> <span class="n">valid</span> <span class="ow">or</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">components</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefixes</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">components</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+            <span class="n">valid</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">return</span> <span class="n">components</span><span class="p">,</span> <span class="n">valid</span></div>
+
+
+<span class="n">collect_names</span> <span class="o">=</span> <span class="n">QualifiedNameCollector</span><span class="o">.</span><span class="n">apply</span>
+
+
+<div class="viewcode-block" id="ImportsCollector"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ImportsCollector">[docs]</a><span class="k">class</span> <span class="nc">ImportsCollector</span><span class="p">(</span><span class="n">ASTPass</span><span class="p">):</span>
+<div class="viewcode-block" id="ImportsCollector.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ImportsCollector.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_root</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+        <span class="n">collector</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">collector</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bare_imports</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">from_imports</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_imports</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="ImportsCollector.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ImportsCollector.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bare_imports</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">from_imports</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_imports</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bare_imports</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_imports</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_imports</span></div>
+
+<div class="viewcode-block" id="ImportsCollector.visit_Import"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ImportsCollector.visit_Import">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Import</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Import</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">alias</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">as_name</span> <span class="o">=</span> <span class="n">alias</span><span class="o">.</span><span class="n">asname</span> <span class="k">if</span> <span class="n">alias</span><span class="o">.</span><span class="n">asname</span> <span class="k">else</span> <span class="n">name</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bare_imports</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">as_name</span></div>
+
+<div class="viewcode-block" id="ImportsCollector.visit_ImportFrom"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.ImportsCollector.visit_ImportFrom">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ImportFrom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">ImportFrom</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">module</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">imports_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_imports</span>
+            <span class="n">module</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s2">&quot;.&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">node</span><span class="o">.</span><span class="n">level</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">imports_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_imports</span>
+            <span class="n">module</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">module</span>
+
+        <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">names</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">module</span><span class="p">,</span> <span class="n">alias</span><span class="o">.</span><span class="n">name</span><span class="p">])</span>
+            <span class="n">as_name</span> <span class="o">=</span> <span class="n">alias</span><span class="o">.</span><span class="n">asname</span> <span class="k">if</span> <span class="n">alias</span><span class="o">.</span><span class="n">asname</span> <span class="k">else</span> <span class="n">name</span>
+            <span class="n">imports_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">as_name</span></div></div>
+
+
+<span class="n">collect_imported_symbols</span> <span class="o">=</span> <span class="n">ImportsCollector</span><span class="o">.</span><span class="n">apply</span>
+
+
+<div class="viewcode-block" id="SymbolsNameMapper"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.SymbolsNameMapper">[docs]</a><span class="k">class</span> <span class="nc">SymbolsNameMapper</span><span class="p">(</span><span class="n">ASTTransformPass</span><span class="p">):</span>
+<div class="viewcode-block" id="SymbolsNameMapper.apply"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.SymbolsNameMapper.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">,</span> <span class="n">mapping</span><span class="p">,</span> <span class="n">template_fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">skip_names</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_root</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+        <span class="n">collector</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">mapping</span><span class="o">=</span><span class="n">mapping</span><span class="p">,</span> <span class="n">template_fmt</span><span class="o">=</span><span class="n">template_fmt</span><span class="p">,</span> <span class="n">skip_names</span><span class="o">=</span><span class="n">skip_names</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">collector</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mapping</span><span class="p">,</span> <span class="n">template_fmt</span><span class="p">,</span> <span class="n">skip_names</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span> <span class="o">=</span> <span class="n">mapping</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">template_fmt</span> <span class="o">=</span> <span class="n">template_fmt</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skip_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">skip_names</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SymbolsNameMapper.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.SymbolsNameMapper.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ast_root</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">returns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">ast_root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">returns</span></div>
+
+<div class="viewcode-block" id="SymbolsNameMapper.visit_Name"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.meta.SymbolsNameMapper.visit_Name">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_names</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_names</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="p">:</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_fmt</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">node</span></div></div>
+
+
+<span class="n">map_symbol_names</span> <span class="o">=</span> <span class="n">SymbolsNameMapper</span><span class="o">.</span><span class="n">apply</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

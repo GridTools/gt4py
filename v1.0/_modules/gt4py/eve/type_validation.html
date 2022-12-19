@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.type_validation &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.type_validation</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.eve.type_validation</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Generic interface and implementations of run-time type validation for arbitrary values.&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">abc</span>
+<span class="kn">import</span> <span class="nn">collections.abc</span>
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">typing</span> <span class="k">as</span> <span class="nn">_typing</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">extended_typing</span> <span class="k">as</span> <span class="n">xtyping</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">.extended_typing</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Any</span><span class="p">,</span>
+    <span class="n">Dict</span><span class="p">,</span>
+    <span class="n">Final</span><span class="p">,</span>
+    <span class="n">ForwardRef</span><span class="p">,</span>
+    <span class="n">Literal</span><span class="p">,</span>
+    <span class="n">Optional</span><span class="p">,</span>
+    <span class="n">Protocol</span><span class="p">,</span>
+    <span class="n">Sequence</span><span class="p">,</span>
+    <span class="n">Type</span><span class="p">,</span>
+    <span class="n">TypeAnnotation</span><span class="p">,</span>
+    <span class="n">Union</span><span class="p">,</span>
+    <span class="n">cast</span><span class="p">,</span>
+    <span class="n">overload</span><span class="p">,</span>
+    <span class="n">runtime_checkable</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="c1"># Protocols</span>
+<div class="viewcode-block" id="TypeValidator"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.TypeValidator">[docs]</a><span class="nd">@runtime_checkable</span>
+<span class="k">class</span> <span class="nc">TypeValidator</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<div class="viewcode-block" id="TypeValidator.__call__"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.TypeValidator.__call__">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Protocol for callables checking that ``value`` matches ``type_annotation``.</span>
+
+<span class="sd">        Arguments:</span>
+<span class="sd">            value: value to be checked against the typing annotation.</span>
+<span class="sd">            type_annotation: a valid typing annotation.</span>
+<span class="sd">            name: the name of the checked value (used for error messages).</span>
+
+<span class="sd">        Keyword Arguments:</span>
+<span class="sd">            globalns: globals dict used in the evaluation of the annotations.</span>
+<span class="sd">            localns: locals dict used in the evaluation of the annotations.</span>
+<span class="sd">            required: if ``True``, raise ``ValueError`` when provided type annotation is not supported.</span>
+<span class="sd">            **kwargs: arbitrary implementation-defined arguments (e.g. for memoization).</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError: if there is a type mismatch.</span>
+<span class="sd">            ValueError: if ``required is True`` and ``type_annotation`` is not supported.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span></div></div>
+
+
+<div class="viewcode-block" id="FixedTypeValidator"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.FixedTypeValidator">[docs]</a><span class="k">class</span> <span class="nc">FixedTypeValidator</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<div class="viewcode-block" id="FixedTypeValidator.__call__"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.FixedTypeValidator.__call__">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Protocol for callables checking that ``value`` matches a fixed type_annotation.</span>
+
+<span class="sd">        Arguments:</span>
+<span class="sd">            value: value to be checked against the typing annotation.</span>
+
+<span class="sd">        Keyword Arguments:</span>
+<span class="sd">            **kwargs: arbitrary implementation-defined arguments (e.g. for memoization).</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError: if there is a type mismatch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span></div></div>
+
+
+<div class="viewcode-block" id="TypeValidatorFactory"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.TypeValidatorFactory">[docs]</a><span class="nd">@runtime_checkable</span>
+<span class="k">class</span> <span class="nc">TypeValidatorFactory</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="nd">@overload</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="kc">True</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinion of unused member</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]:</span>
+        <span class="o">...</span>
+
+<div class="viewcode-block" id="TypeValidatorFactory.__call__"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.TypeValidatorFactory.__call__">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinion of unused member</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Protocol for :class:`FixedTypeValidator`s.</span>
+
+<span class="sd">        The arguments match the specification in :class:`TypeValidator`.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError: if there is a type mismatch.</span>
+<span class="sd">            ValueError: if ``required is True`` and ``type_annotation`` is not supported.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">...</span></div></div>
+
+
+<span class="c1"># Implementations</span>
+<div class="viewcode-block" id="SimpleTypeValidatorFactory"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SimpleTypeValidatorFactory</span><span class="p">(</span><span class="n">TypeValidatorFactory</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A simple :class:`TypeValidatorFactory` implementation.</span>
+
+<span class="sd">    Check :class:`FixedTypeValidator` and :class:`TypeValidatorFactory` for details.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        strict_int (bool): do not accept ``bool`` values as ``int`` (default: ``True``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="kc">True</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinion of unused member</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]:</span>
+        <span class="o">...</span>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.__call__"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>  <span class="c1"># noqa: F811,C901  # redefinion of unused member / complex but well organized in cases</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]:</span>
+
+        <span class="c1"># TODO(egparedes): if a &quot;typing tree&quot; structure is implemented, refactor this code as a tree traversal.</span>
+        <span class="c1">#</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;&lt;value&gt;&quot;</span>
+
+        <span class="n">make_recursive</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="fm">__call__</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">globalns</span><span class="o">=</span><span class="n">globalns</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="n">localns</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">type_annotation</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">type_annotation</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+
+            <span class="c1"># Non-generic types</span>
+            <span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">is_actual_type</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">):</span>
+                <span class="k">assert</span> <span class="ow">not</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">type_annotation</span> <span class="ow">is</span> <span class="nb">int</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;strict_int&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of_int</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">type_annotation</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">_typing</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">type_annotation</span><span class="o">.</span><span class="n">__bound__</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">type_annotation</span><span class="o">.</span><span class="n">__bound__</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_is_any</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">ForwardRef</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">make_recursive</span><span class="p">(</span>
+                    <span class="n">xtyping</span><span class="o">.</span><span class="n">eval_forward_ref</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">globalns</span><span class="o">=</span><span class="n">globalns</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="n">localns</span><span class="p">)</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">is_Any</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_is_any</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+            <span class="c1"># Generic and parametrized type hints</span>
+            <span class="n">origin_type</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span>
+            <span class="n">type_args</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">origin_type</span> <span class="ow">is</span> <span class="n">Literal</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_literal</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">combine_validators_as_or</span><span class="p">(</span>
+                        <span class="n">name</span><span class="p">,</span>
+                        <span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_is_literal</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">type_args</span><span class="p">),</span>
+                        <span class="n">error_type</span><span class="o">=</span><span class="ne">TypeError</span><span class="p">,</span>
+                    <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">origin_type</span> <span class="ow">is</span> <span class="n">Union</span><span class="p">:</span>
+                <span class="n">has_none</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="n">validators</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_args</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="kc">None</span><span class="p">):</span>
+                        <span class="n">has_none</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">t</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span><span class="p">)</span>
+                        <span class="n">validators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+                <span class="n">validator</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">combine_validators_as_or</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">validators</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">validators</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+                    <span class="k">else</span> <span class="n">validators</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">combine_optional</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">validator</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_none</span> <span class="k">else</span> <span class="n">validator</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin_type</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+                <span class="c1"># Deal with generic collections</span>
+                <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">origin_type</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="p">(</span><span class="n">type_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">Ellipsis</span><span class="p">):</span>
+                        <span class="c1"># Tuple as an immutable sequence type (e.g. Tuple[int, ...])</span>
+                        <span class="k">if</span> <span class="p">(</span><span class="n">member_validator</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span>
+                            <span class="p">)</span>
+
+                        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_iterable_of</span><span class="p">(</span>
+                            <span class="n">name</span><span class="p">,</span>
+                            <span class="n">member_validator</span><span class="p">,</span>
+                            <span class="n">iterable_validator</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">origin_type</span><span class="p">),</span>
+                        <span class="p">)</span>
+
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="c1"># Tuple as a heterogeneous container (e.g. Tuple[int, float])</span>
+                        <span class="n">item_validators</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_args</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">t</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                                <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">t</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span>
+                                <span class="p">)</span>
+                            <span class="n">item_validators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+                        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_tuple_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">item_validators</span><span class="p">),</span> <span class="n">origin_type</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">origin_type</span><span class="p">,</span> <span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Set</span><span class="p">)):</span>
+                    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">member_validator</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span>
+                        <span class="p">)</span>
+
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_iterable_of</span><span class="p">(</span>
+                        <span class="n">name</span><span class="p">,</span>
+                        <span class="n">member_validator</span><span class="p">,</span>
+                        <span class="n">iterable_validator</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">origin_type</span><span class="p">),</span>
+                    <span class="p">)</span>
+
+                <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">origin_type</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Mapping</span><span class="p">):</span>
+                    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">key_validator</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">type_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">value_validator</span> <span class="o">:=</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">type_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">type_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span>
+                        <span class="p">)</span>
+
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_is_mapping_of</span><span class="p">(</span>
+                        <span class="n">name</span><span class="p">,</span>
+                        <span class="n">key_validator</span><span class="p">,</span>
+                        <span class="n">value_validator</span><span class="p">,</span>
+                        <span class="n">mapping_validator</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">origin_type</span><span class="p">),</span>
+                    <span class="p">)</span>
+
+                <span class="c1"># Custom generic type: any regular (not datamodel) user-defined generic types like:</span>
+                <span class="c1">#   class Foo(Generic[T]):</span>
+                <span class="c1">#          ...</span>
+                <span class="c1">#</span>
+                <span class="c1"># Since this can be an arbitrary type (not something regular like a collection) there is</span>
+                <span class="c1"># no way to check if the type parameter is verifed in the actual instance.</span>
+                <span class="c1"># The only check can be done at run-time is to verify that the value is an instance of</span>
+                <span class="c1"># the original type, completely ignoring the annotation. Ideally, the static type checker</span>
+                <span class="c1"># can do a better job to try figure out if the type parameter is ok ...</span>
+
+                <span class="k">return</span> <span class="n">make_recursive</span><span class="p">(</span><span class="n">origin_type</span><span class="p">)</span>
+
+            <span class="c1"># TODO(egparedes): add support for signature checking in Callables</span>
+            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">type_annotation</span><span class="si">}</span><span class="s2"> type annotation is not supported.&quot;</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">required</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">error</span>
+
+        <span class="k">assert</span> <span class="nb">bool</span><span class="p">(</span><span class="n">required</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">False</span>
+
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory._make_is_any"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory._make_is_any">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_make_is_any</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for any type.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_any</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="k">return</span> <span class="n">_is_any</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_instance_of"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_instance_of">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_instance_of</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for a specific type.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_instance_of</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">type_</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; must be </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2"> (got &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; which is a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">).&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_instance_of</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_instance_of_int"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_instance_of_int">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_instance_of_int</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for ``int`` values which fails with ``bool`` values.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_instance_of_int</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; must be </span><span class="si">{</span><span class="nb">int</span><span class="si">}</span><span class="s2"> (got &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; which is a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_instance_of_int</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_literal"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_literal">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_literal</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">literal_value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for a literal value.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">literal_value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+
+            <span class="k">def</span> <span class="nf">_is_literal</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">literal_value</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Provided value &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; does not match literal </span><span class="si">{</span><span class="n">literal_value</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="k">def</span> <span class="nf">_is_literal</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="o">!=</span> <span class="n">literal_value</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Provided value &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; does not match literal </span><span class="si">{</span><span class="n">literal_value</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_literal</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_tuple_of"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_tuple_of">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_tuple_of</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">item_validators</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">],</span> <span class="n">tuple_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for tuple types.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_tuple_of</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">tuple_type</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;In &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; validation, got &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; which is a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> instead of </span><span class="si">{</span><span class="n">tuple_type</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">item_validators</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;In &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; validation, got &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; tuple which contains </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> elements instead of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">item_validators</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+
+            <span class="n">_i</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">item_value</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">_i</span><span class="p">,</span> <span class="p">(</span><span class="n">item_value</span><span class="p">,</span> <span class="n">item_validator</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">item_validators</span><span class="p">)):</span>
+                    <span class="n">item_validator</span><span class="p">(</span><span class="n">item_value</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;In &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; validation, tuple &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; contains invalid value &#39;</span><span class="si">{</span><span class="n">item_value</span><span class="si">}</span><span class="s2">&#39; at position </span><span class="si">{</span><span class="n">_i</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+
+        <span class="k">return</span> <span class="n">_is_tuple_of</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_iterable_of"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_iterable_of">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_iterable_of</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">member_validator</span><span class="p">:</span> <span class="n">FixedTypeValidator</span><span class="p">,</span>
+        <span class="n">iterable_validator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for deep checks of typed iterables.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_iterable_of</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">iterable_validator</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">iterable_validator</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+                <span class="n">member_validator</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_iterable_of</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.make_is_mapping_of"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.make_is_mapping_of">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">make_is_mapping_of</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">key_validator</span><span class="p">:</span> <span class="n">FixedTypeValidator</span><span class="p">,</span>
+        <span class="n">value_validator</span><span class="p">:</span> <span class="n">FixedTypeValidator</span><span class="p">,</span>
+        <span class="n">mapping_validator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for deep checks of typed mappings.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_mapping_of</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">mapping_validator</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">mapping_validator</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+                <span class="n">key_validator</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                <span class="n">value_validator</span><span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_mapping_of</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.combine_optional"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.combine_optional">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">combine_optional</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">actual_validator</span><span class="p">:</span> <span class="n">FixedTypeValidator</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Create an ``FixedTypeValidator`` validator for an optional constraint.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">_is_optional</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">actual_validator</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_is_optional</span></div>
+
+<div class="viewcode-block" id="SimpleTypeValidatorFactory.combine_validators_as_or"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.SimpleTypeValidatorFactory.combine_validators_as_or">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">combine_validators_as_or</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">validators</span><span class="p">:</span> <span class="n">FixedTypeValidator</span><span class="p">,</span> <span class="n">error_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="ne">Exception</span><span class="p">]</span> <span class="o">=</span> <span class="ne">TypeError</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FixedTypeValidator</span><span class="p">:</span>
+        <span class="k">def</span> <span class="nf">_combined_validator</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">validators</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">v</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <span class="k">break</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">error_type</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;In &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; validation, provided value &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; fails for all the possible validators.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">_combined_validator</span></div></div>
+
+
+<span class="n">simple_type_validator_factory</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+    <span class="n">TypeValidatorFactory</span><span class="p">,</span>
+    <span class="n">utils</span><span class="o">.</span><span class="n">optional_lru_cache</span><span class="p">(</span><span class="n">SimpleTypeValidatorFactory</span><span class="p">(),</span> <span class="n">typed</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="simple_type_validator"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.type_validation.simple_type_validator">[docs]</a><span class="k">def</span> <span class="nf">simple_type_validator</span><span class="p">(</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">globalns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Check that value satisfies a type definition (a simple :class:`TypeValidator` implementation).</span>
+
+<span class="sd">    Check :class:`TypeValidator` and :class:`SimpleTypeValidatorFactory` for details.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        strict_int (bool): do not accept ``bool`` values as ``int`` (default: ``True``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">type_validator</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FixedTypeValidator</span><span class="p">]</span> <span class="o">=</span> <span class="n">simple_type_validator_factory</span><span class="p">(</span>
+        <span class="n">type_annotation</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">globalns</span><span class="o">=</span><span class="n">globalns</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="n">localns</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="n">required</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">type_validator</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">type_validator</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<span class="c1"># TODO(egparedes): add other implementations for advanced 3rd-party validators</span>
+<span class="c1">#   e.g. &#39;typeguard&#39; and specially &#39;beartype&#39;</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

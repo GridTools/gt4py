@@ -1,0 +1,37 @@
+gt4py.cartesian.gtc.gtcpp package
+=================================
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.gtcpp.gtcpp module
+--------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.gtcpp.gtcpp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.gtcpp.gtcpp\_codegen module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.gtcpp.gtcpp_codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.gtcpp.oir\_to\_gtcpp module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.gtcpp
+   :members:
+   :undoc-members:
+   :show-inheritance:

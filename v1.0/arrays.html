@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Allocation and Array Interfaces &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Commandline" href="commandline.html" />
+    <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Allocation and Array Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#interfaces">Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#stencil-calls">Stencil Calls</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#supported-buffer-interfaces">Supported Buffer Interfaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dimension-mapping">Dimension Mapping</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#default-origin">Default Origin</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#allocation">Allocation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#optional-keyword-only-parameters">Optional Keyword-Only Parameters</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">Allocation and Array Interfaces</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/arrays.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="allocation-and-array-interfaces">
+<h1>Allocation and Array Interfaces<a class="headerlink" href="#allocation-and-array-interfaces" title="Permalink to this headline"></a></h1>
+<p>GT4Py does not provide its own data container class, but supports established python standards for exposing
+N-dimensional buffers. There is a minimalistic interface allowing to specify the correspondence of buffer dimensions
+to the semantic dimensions assumed in the stencil. This correspondence does not necessarily need to be specified since
+the stencils specify a default ordering.</p>
+<p>GT4Py provides utilities to allocate buffers that have optimal layout and alignment for a given backend.</p>
+<p>In this document, we describe the interfaces for</p>
+<ul class="simple">
+<li><p>supported buffer interfaces</p></li>
+<li><p>exposing dimension labels and the behavior for default values</p></li>
+<li><p>performance-optimal allocation</p></li>
+</ul>
+<section id="interfaces">
+<h2>Interfaces<a class="headerlink" href="#interfaces" title="Permalink to this headline"></a></h2>
+<section id="stencil-calls">
+<h3>Stencil Calls<a class="headerlink" href="#stencil-calls" title="Permalink to this headline"></a></h3>
+<section id="supported-buffer-interfaces">
+<h4>Supported Buffer Interfaces<a class="headerlink" href="#supported-buffer-interfaces" title="Permalink to this headline"></a></h4>
+<p>The user is free to choose a buffer interface (or multiple) as long as it is supported by <code class="code docutils literal notranslate"><span class="pre">numpy.asarray</span></code> in case
+a CPU backend is chosen or <code class="code docutils literal notranslate"><span class="pre">cupy.asarray</span></code> for a GPU backend respectively. If multiple buffer interfaces are
+implemented the provided information needs to agree otherwise the behaviour is undefined. Similarly the backend is also
+free to choose what buffer interface to use in order to retrieve the required information (e.g. pointer, strides, etc.)
+In particular, we support the following interfaces to expose a buffer:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://omz-software.com/pythonista/numpy/reference/arrays.interface.html">__array_interface__</a> (CPU backends)</p></li>
+<li><p><a class="reference external" href="https://numba.pydata.org/numba-doc/dev/cuda/cuda_array_interface.html">__cuda_array_interface__</a> (GPU backends)</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/c-api/buffer.html">python buffer protocol</a> (CPU backends)</p></li>
+</ul>
+<p>Internally, gt4py uses the utilities <code class="code docutils literal notranslate"><span class="pre">gt4py.utils.as_numpy</span></code> and <code class="code docutils literal notranslate"><span class="pre">gt4py.utils.as_cupy</span></code> to retrieve the
+buffers. GT4Py developers are advised to always use those utilities as to guarantee support across gt4py as the
+supported interfaces are extended.</p>
+</section>
+<section id="dimension-mapping">
+<h4>Dimension Mapping<a class="headerlink" href="#dimension-mapping" title="Permalink to this headline"></a></h4>
+<p>The user can optionally implement a <code class="code docutils literal notranslate"><span class="pre">__gt_dims__</span></code> attribute in the object implementing any of the supported buffer
+interfaces. The returned object should be a tuple of strings labeling the dimensions in index order.
+As a fallback if the attribute is not implemented, it is assumed that the buffer contains the dimensions given in the annotations
+(by means of <code class="code docutils literal notranslate"><span class="pre">gtscript.Field</span></code>) exactly in the same order.</p>
+<p>Valid dimension strings are <code class="code docutils literal notranslate"><span class="pre">&quot;I&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code> as well as decimal string representations of integer
+numbers to denote data dimensions.</p>
+<p>Developers are advised to use the utility <code class="code docutils literal notranslate"><span class="pre">gt4py.utils.get_dims(storage,</span> <span class="pre">annotation)</span></code>,
+which implements this lookup.</p>
+<p>Note: Support for xarray can be added manually by the user by means of the mechanism described
+<a class="reference external" href="https://xarray.pydata.org/en/stable/internals/extending-xarray.html">here</a>.</p>
+</section>
+<section id="default-origin">
+<h4>Default Origin<a class="headerlink" href="#default-origin" title="Permalink to this headline"></a></h4>
+<p>A buffer object can optionally implement the <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> attribute which is used as the origin value unless
+overwritten by the <code class="code docutils literal notranslate"><span class="pre">origin</span></code> keyword argument to the stencil call.</p>
+</section>
+</section>
+<section id="allocation">
+<h3>Allocation<a class="headerlink" href="#allocation" title="Permalink to this headline"></a></h3>
+<p>For the performance-optimal allocation and initialization of arrays to be used in GT4Py, we provide the following set of
+functions which closely resemble their NumPy counterparts (meaning of the common parameters is explained below).</p>
+<p>The return type is either a <code class="code docutils literal notranslate"><span class="pre">numpy.ndarray</span></code> or a <code class="code docutils literal notranslate"><span class="pre">cupy.ndarray</span></code>, for CPU and GPU backends, respectively.</p>
+<dl>
+<dt><code class="code docutils literal notranslate"><span class="pre">empty(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">ndarray</span></code></dt><dd><p>Allocate an array with uninitialized (undefined) values.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+<dt>Keyword Arguments:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code>
+The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the deprecated <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. (See <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> interface instead.)</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">zeros(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">ndarray</span></code></dt><dd><p>Allocate an array with values initialized to 0.</p>
+<dl>
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+<dt>Keyword Arguments:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code>
+The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the deprecated <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. (See <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> interface instead.)</p></li>
+</ul>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+</dl>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">ones(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">ndarray</span></code></dt><dd><p>Allocate an array with values initialized to 1.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+<dt>Keyword Arguments:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code>
+The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the deprecated <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. (See <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> interface instead.)</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">full(shape:</span> <span class="pre">Sequence[int],</span> <span class="pre">fill_value:</span> <span class="pre">Number,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">ndarray</span></code></dt><dd><p>Allocate an array with values initialized to the scalar given in <code class="code docutils literal notranslate"><span class="pre">fill_value</span></code>.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">shape:</span> <span class="pre">Sequence[int]</span></code>
+Sequence of length <code class="code docutils literal notranslate"><span class="pre">ndim</span></code> (<code class="code docutils literal notranslate"><span class="pre">ndim</span></code> = number of dimensions) with the
+shape of the storage.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">fill_value:</span> <span class="pre">Number</span></code>. The number to which the storage is initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to
+<code class="code docutils literal notranslate"><span class="pre">np.float64</span></code>.</p></li>
+</ul>
+</dd>
+<dt>Keyword Arguments:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code>
+The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the deprecated <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. (See <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> interface instead.)</p></li>
+</ul>
+</dd>
+</dl>
+<p>For common keyword-only arguments, please see below.</p>
+</dd>
+<dt><code class="code docutils literal notranslate"><span class="pre">from_array(data:</span> <span class="pre">array_like,</span> <span class="pre">*,</span> <span class="pre">dtype:</span> <span class="pre">dtype_like</span> <span class="pre">=</span> <span class="pre">np.float64,</span> <span class="pre">**kwargs)</span> <span class="pre">-&gt;</span> <span class="pre">ndarray</span></code></dt><dd><p>Used to allocate an array with values initialized from the content of a given array.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">data:</span> <span class="pre">array_like</span></code>. The original array from which the storage is initialized.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dtype:</span> <span class="pre">dtype_like</span></code>
+The dtype of the storage (NumPy dtype or accepted by <code class="code docutils literal notranslate"><span class="pre">np.dtype()</span></code>). It defaults to the dtype of
+<code class="code docutils literal notranslate"><span class="pre">data</span></code>.</p></li>
+</ul>
+</dd>
+<dt>Keyword Arguments:</dt><dd><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">aligned_index:</span> <span class="pre">Sequence[int]</span></code>
+The index of the grid point to which the memory is aligned. Note that this only partly takes the
+role of the deprecated <code class="code docutils literal notranslate"><span class="pre">default_origin</span></code> parameter, since it does not imply anything about the
+origin or domain when passed to a stencil. (See <code class="code docutils literal notranslate"><span class="pre">__gt_origin__</span></code> interface instead.)</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+</dl>
+<section id="optional-keyword-only-parameters">
+<h4>Optional Keyword-Only Parameters<a class="headerlink" href="#optional-keyword-only-parameters" title="Permalink to this headline"></a></h4>
+<p>Additionally, these <strong>optional</strong> keyword-only parameters are accepted:</p>
+<dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">dimensions:</span> <span class="pre">Optional[Sequence[str]]</span></code></dt><dd><p>Sequence indicating the semantic meaning of the dimensions of this storage. This is used to
+determine the default layout for the storage. Currently supported will be <code class="code docutils literal notranslate"><span class="pre">&quot;I&quot;</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">&quot;J&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;K&quot;</span></code> and additional dimensions as string representations of integers,
+starting at <code class="code docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code>. (This information is not retained in the resulting array, and needs to be specified instead
+with the <code class="code docutils literal notranslate"><span class="pre">__gt_dims__</span></code> interface. )</p>
+</dd>
+</dl>
+</section>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quick Start Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="commandline.html" class="btn btn-neutral float-right" title="Commandline" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

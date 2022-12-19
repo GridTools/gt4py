@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTScript Language Design &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">GTScript Language Design</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/gt4py/lang_design.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gtscript-language-design">
+<h1>GTScript Language Design<a class="headerlink" href="#gtscript-language-design" title="Permalink to this headline"></a></h1>
+<p>The following principles are a guideline for designing the GTScript DSL. We try to follow these principles if we can. In some cases we cannot fulfill all principles and a trade-off has to be made and justified.</p>
+<p>The principles are not magic, they mainly summarize the obvious.</p>
+<p>Trivia: GTScript is an embedded DSL in Python, therefore language syntax is restricted to valid Python syntax.</p>
+<ol class="arabic">
+<li><p>Language constructs should behave the same as their equivalent in other languages, especially as equivalent concepts in Python or well-known Python libraries (e.g. NumPy).</p>
+<p>Motivation: The DSL should be readable by applying common sense and common programming language knowledge.</p>
+</li>
+<li><p>Semantic differences should be reflected in syntactic differences.</p>
+<p>Motivation: Spotting semantic differences is much harder than spotting syntactic differences.</p>
+</li>
+<li><p>Regular use-cases should be simple, special cases can be complex.</p>
+<p>Motivation: If a trade-off has to be made, the most common, standard use-cases should be expressed in the simplest possible way. To cover all cases, corner cases might require more complex language constructs.</p>
+</li>
+<li><p>Language constructs are required to have an unambiguous translation to parallel code and need to allow translation to efficient code in the regular use-cases.</p>
+<p>Motivation: When translating DSL to executable code, we must not make correctness errors, therefore we cannot allow ambiguous language constructs. If we fail,</p>
+<ul class="simple">
+<li><p>the user will run into hard to debug problems,</p></li>
+<li><p>the toolchain developer cannot reason about the code and will fail in writing correct optimizations.</p></li>
+</ul>
+<p>On purpose, performance is second and, on purpose, the requirement to produce efficient code is restricted to regular use-cases. Obviously, for a performance portable language, the regular use-cases are required to have an efficient translation. But this principle acknowledges that we cannot exclude that for some special cases an efficient translation cannot be found.</p>
+</li>
+</ol>
+<section id="parallel-model">
+<h2>Parallel Model<a class="headerlink" href="#parallel-model" title="Permalink to this headline"></a></h2>
+<p>The iteration domain is a 3d domain: <code class="docutils literal notranslate"><span class="pre">I</span></code> and <code class="docutils literal notranslate"><span class="pre">J</span></code> axes live on the horizontal spatial plane, and axis <code class="docutils literal notranslate"><span class="pre">K</span></code> represents the vertical spatial dimension. Computations on the horizontal plane are always executed in parallel and thus <code class="docutils literal notranslate"><span class="pre">I</span></code> and <code class="docutils literal notranslate"><span class="pre">J</span></code> are called parallel axes, while computations on K are executed sequentially and thus <code class="docutils literal notranslate"><span class="pre">K</span></code> is called a sequential axis.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">gtscript.stencil</span></code> is composed of one or more <code class="docutils literal notranslate"><span class="pre">computation</span></code>. Each <code class="docutils literal notranslate"><span class="pre">computation</span></code> defines an iteration policy <code class="docutils literal notranslate"><span class="pre">(FORWARD,</span> <span class="pre">BACKWARD)</span></code> and is itself composed of one or more non-overlapping vertical <code class="docutils literal notranslate"><span class="pre">interval</span></code> specifications, each one of them representing a vertical loop over the <code class="docutils literal notranslate"><span class="pre">K</span></code> axis with the iteration policy of the computation. Intervals are specified in their order of execution with each interval containing one or more statements.</p>
+<p>The effect of the program is as if statements are executed as follows:</p>
+<ol class="arabic simple">
+<li><p>computations are executed sequentially in the order they appear in the code,</p></li>
+<li><p>vertical intervals are executed sequentially in the order defined by the iteration policy of the computation</p></li>
+<li><p>every vertical interval is executed as a sequential for-loop over the <code class="docutils literal notranslate"><span class="pre">K</span></code>-range following the order defined by the iteration policy,</p></li>
+<li><p>within a computation, it is illegal to write to an external (non-temporary) field (or aliases pointing to the same memory location) if it is also read with horizontal offset; this rule does not apply to temporaries,</p></li>
+<li><p>in an assignment, a field cannot be assigned to, if it’s used in the r.h.s. expression with a horizontal offset; note that this rule only applies to temporaries as this pattern is already excluded for external fields by rule 4,</p></li>
+<li><p>for <code class="docutils literal notranslate"><span class="pre">if-else</span></code> statements, the condition is evaluated first, then the <code class="docutils literal notranslate"><span class="pre">if</span></code> and <code class="docutils literal notranslate"><span class="pre">else</span></code> bodies are evaluated with the same rules as above.</p></li>
+</ol>
+<section id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Permalink to this headline"></a></h3>
+<p>In the following, the code snippets are not always complete GTScript snippets, instead parts are omitted (e.g. by …) to highlight the important parts. The domain is defined by the intervals <code class="docutils literal notranslate"><span class="pre">[i,I]</span></code>, <code class="docutils literal notranslate"><span class="pre">[j,J]</span></code>, <code class="docutils literal notranslate"><span class="pre">[k,K]</span></code>.</p>
+<p>In the following, <code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">&lt;=</span> <span class="pre">K</span></code>,</p>
+<section id="rule-4">
+<h4>Rule 4<a class="headerlink" href="#rule-4" title="Permalink to this headline"></a></h4>
+<p>The following cases are forbidden:</p>
+<p>Write after read with offset</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mf">0.</span>
+</pre></div>
+</div>
+<p>Shifted self-assignment</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>These cases are forbidden as, in general, there is no efficient mapping to a blocked execution.</p>
+</section>
+<section id="no-specific-loop-order-in-k">
+<h4>no specific loop order in k<a class="headerlink" href="#no-specific-loop-order-in-k" title="Permalink to this headline"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>behaves like</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># NumPy semantics</span>
+<span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span><span class="n">K</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span><span class="n">K</span><span class="p">]</span>
+<span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span><span class="n">K</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span><span class="n">K</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="forward-iteration-in-k">
+<h4>forward iteration in k<a class="headerlink" href="#forward-iteration-in-k" title="Permalink to this headline"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>behaves like</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="c1"># extended compute domain</span>
+    <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="backward-computation-in-k-with-interval-specialization">
+<h4>backward computation in k with interval specialization<a class="headerlink" href="#backward-computation-in-k-with-interval-specialization" title="Permalink to this headline"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">BACKWARD</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">):</span> <span class="c1"># lower interval</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span> <span class="c1"># upper interval</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mf">1.1</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mf">2.2</span>
+</pre></div>
+</div>
+<p>behaves like</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">K</span><span class="p">)):</span> <span class="c1"># upper interval</span>
+    <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.1</span>
+    <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.2</span>
+
+<span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="o">-</span><span class="mi">2</span><span class="p">)):</span> <span class="c1"># lower interval</span>
+    <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span>
+    <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Note that intervals where exchanged to match the loop order.</p>
+</section>
+</section>
+</section>
+<section id="variable-declarations">
+<h2>Variable Declarations<a class="headerlink" href="#variable-declarations" title="Permalink to this headline"></a></h2>
+<p>Variable declarations inside a computation are interpreted as temporary field declarations spanning the actual computation domain of the <code class="docutils literal notranslate"><span class="pre">computation</span></code> where they are defined.</p>
+<section id="example">
+<h3>Example<a class="headerlink" href="#example" title="Permalink to this headline"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="mi">3</span>
+</pre></div>
+</div>
+<p>behaves like:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tmp</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">domain_shape</span><span class="p">)</span>  <span class="c1"># Uninitialized field (random data)</span>
+<span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+    <span class="n">tmp</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">3</span>   <span class="c1"># Only this vertical range is properly initialized</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="compute-domain">
+<h2>Compute Domain<a class="headerlink" href="#compute-domain" title="Permalink to this headline"></a></h2>
+<p>The computation domain of every statement is extended to ensure that any required data to execute all stencil statements on the compute domain is present.</p>
+<section id="id1">
+<h3>Example<a class="headerlink" href="#id1" title="Permalink to this headline"></a></h3>
+<p>On an applied example, this means:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="o">...</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>translates into the following pseudo code:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">J</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">I</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">I</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">J</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">J</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">I</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">J</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="conditionals">
+<h2>Conditionals<a class="headerlink" href="#conditionals" title="Permalink to this headline"></a></h2>
+<p>GTScript supports 2 kinds of conditionals:</p>
+<ul class="simple">
+<li><p>conditionals on scalar expressions</p></li>
+<li><p>conditionals on field expressions</p></li>
+</ul>
+<section id="conditionals-on-scalar-expressions">
+<h3>Conditionals on scalar expressions<a class="headerlink" href="#conditionals-on-scalar-expressions" title="Permalink to this headline"></a></h3>
+<ul class="simple">
+<li><p>Each statement inside the if and else branches is executed according to the same rules as statements outside of branches.</p></li>
+<li><p>There is no restriction on the body of the statement.</p></li>
+</ul>
+<section id="example-for-scalar-conditions">
+<h4>Example for scalar conditions<a class="headerlink" href="#example-for-scalar-conditions" title="Permalink to this headline"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">()</span> <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">my_config_var</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>translates to:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">my_config_var</span><span class="p">:</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">my_config_var</span><span class="p">:</span>
+            <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">my_config_var</span><span class="p">:</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">my_config_var</span><span class="p">:</span>
+            <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="conditionals-on-field-expressions">
+<h3>Conditionals on field expressions<a class="headerlink" href="#conditionals-on-field-expressions" title="Permalink to this headline"></a></h3>
+<ul class="simple">
+<li><p>The condition is evaluated for all gridpoints and stored in a mask.</p></li>
+<li><p>Each statement inside the if and else branches is executed according to the same rules as statements outside of branches.</p></li>
+</ul>
+<section id="example-for-conditionals-on-field-expressions">
+<h4>Example for conditionals on field expressions<a class="headerlink" href="#example-for-conditionals-on-field-expressions" title="Permalink to this headline"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">():</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">field</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="mi">2</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>translates to:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">field</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+            <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+            <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>or in Numpy notation</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n">field</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span>
+    <span class="n">a</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">a</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">])</span>
+    <span class="n">b</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">b</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">])</span>
+    <span class="n">a</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">a</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">])</span>
+    <span class="n">b</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">~</span><span class="n">mask</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">k_</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>(if and else branch is on purpose not written as a single <code class="docutils literal notranslate"><span class="pre">np.where</span></code>).
+The following cases are illegal:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">():</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">field</span><span class="p">:</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="c1"># read with offset in &#39;I&#39; from updated field &#39;a&#39;</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="c1"># read with offset in &#39;J&#39; from updated field &#39;a&#39;</span>
+
+<span class="k">with</span> <span class="n">computation</span><span class="p">():</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">field</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="c1"># read with offset in &#39;I&#39; from updated field &#39;a&#39;</span>
+
+<span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">field</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="c1"># self assignment with offset (i.e. a read with offset and write)</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="loops">
+<h2>Loops<a class="headerlink" href="#loops" title="Permalink to this headline"></a></h2>
+<section id="while">
+<h3>While<a class="headerlink" href="#while" title="Permalink to this headline"></a></h3>
+<p>GTScript has limited support for while loops, which iterate a set of statements nested inside it a number of times until all IJ points fail the condition. Note that this means certain IJ indices could execute the statements a different number of iterations. The syntax is:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">a</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">:</span>
+        <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">a</span> <span class="o">+=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>This translates to</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">])</span>
+    <span class="k">while</span> <span class="nb">any</span><span class="p">(</span><span class="n">mask</span><span class="p">):</span>
+        <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+                <span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+                <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+            <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>however due to the blocking model used, there is no way to enforce synchronizations between the nested statements and the mask update. This is a subtle but important point to remember when writing while loops. The final parallel model behaves as</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+    <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+        <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">])</span>
+    <span class="k">while</span> <span class="nb">any</span><span class="p">(</span><span class="n">mask</span><span class="p">):</span>
+        <span class="n">parfor</span> <span class="n">ij</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]:</span>
+                <span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">k_</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The conclusion from this is that the user is not allowed to write to fields in the body of the while loop that are used in the mask or elsewhere in the body with a horizontal offset. The gtscript frontend implemented in gt4py contains checks to ensure that a user cannot write code incompatible with this restriction.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

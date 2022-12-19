@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.backend.dace_lazy_stencil &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.backend.dace_lazy_stencil</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.backend.dace_lazy_stencil</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">from</span> <span class="nn">dace.frontend.python.common</span> <span class="kn">import</span> <span class="n">SDFGConvertible</span>
+
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.dace_backend</span> <span class="kn">import</span> <span class="n">SDFGManager</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.dace_stencil_object</span> <span class="kn">import</span> <span class="n">DaCeStencilObject</span><span class="p">,</span> <span class="n">add_optional_fields</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.module_generator</span> <span class="kn">import</span> <span class="n">make_args_data_from_gtir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.lazy_stencil</span> <span class="kn">import</span> <span class="n">LazyStencil</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_builder</span> <span class="kn">import</span> <span class="n">StencilBuilder</span>
+
+
+<div class="viewcode-block" id="DaCeLazyStencil"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_lazy_stencil.DaCeLazyStencil">[docs]</a><span class="k">class</span> <span class="nc">DaCeLazyStencil</span><span class="p">(</span><span class="n">LazyStencil</span><span class="p">,</span> <span class="n">SDFGConvertible</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builder</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s2">&quot;dace&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">builder</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Trying to build a DaCeLazyStencil for non-dace backend.&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">builder</span><span class="o">=</span><span class="n">builder</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">field_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return same value as compiled stencil object&#39;s `field_info` attribute.</span>
+
+<span class="sd">        Does not trigger a build.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">make_args_data_from_gtir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir_pipeline</span><span class="p">)</span><span class="o">.</span><span class="n">field_info</span>
+
+<div class="viewcode-block" id="DaCeLazyStencil.closure_resolver"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_lazy_stencil.DaCeLazyStencil.closure_resolver">[docs]</a>    <span class="k">def</span> <span class="nf">closure_resolver</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">constant_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">given_args</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">parent_closure</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;dace.frontend.python.common.SDFGClosure&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;dace.frontend.python.common.SDFGClosure&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dace</span><span class="o">.</span><span class="n">frontend</span><span class="o">.</span><span class="n">python</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">SDFGClosure</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__sdfg__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">:</span>
+        <span class="n">sdfg_manager</span> <span class="o">=</span> <span class="n">SDFGManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="p">)</span>
+        <span class="n">args_data</span> <span class="o">=</span> <span class="n">make_args_data_from_gtir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir_pipeline</span><span class="p">)</span>
+        <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">arg</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="o">.</span><span class="n">api_signature</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">args_data</span><span class="o">.</span><span class="n">domain_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">norm_kwargs</span> <span class="o">=</span> <span class="n">DaCeStencilObject</span><span class="o">.</span><span class="n">normalize_args</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+            <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">arg_names</span><span class="o">=</span><span class="n">arg_names</span><span class="p">,</span>
+            <span class="n">domain_info</span><span class="o">=</span><span class="n">args_data</span><span class="o">.</span><span class="n">domain_info</span><span class="p">,</span>
+            <span class="n">field_info</span><span class="o">=</span><span class="n">args_data</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">sdfg</span> <span class="o">=</span> <span class="n">sdfg_manager</span><span class="o">.</span><span class="n">frozen_sdfg</span><span class="p">(</span><span class="n">origin</span><span class="o">=</span><span class="n">norm_kwargs</span><span class="p">[</span><span class="s2">&quot;origin&quot;</span><span class="p">],</span> <span class="n">domain</span><span class="o">=</span><span class="n">norm_kwargs</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">add_optional_fields</span><span class="p">(</span>
+            <span class="n">sdfg</span><span class="p">,</span>
+            <span class="n">field_info</span><span class="o">=</span><span class="n">args_data</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+            <span class="n">parameter_info</span><span class="o">=</span><span class="n">args_data</span><span class="o">.</span><span class="n">parameter_info</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">norm_kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_closure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reevaluate</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_signature__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">arg</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="o">.</span><span class="n">api_signature</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="p">[])</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

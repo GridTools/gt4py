@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.cuir.cuir_codegen &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.cuir.cuir_codegen</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.cuir.cuir_codegen</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BuiltInLiteral</span><span class="p">,</span>
+    <span class="n">DataType</span><span class="p">,</span>
+    <span class="n">LevelMarker</span><span class="p">,</span>
+    <span class="n">NativeFunction</span><span class="p">,</span>
+    <span class="n">UnaryOperator</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.cuir</span> <span class="kn">import</span> <span class="n">cuir</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">codegen</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">FormatTemplate</span> <span class="k">as</span> <span class="n">as_fmt</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">MakoTemplate</span> <span class="k">as</span> <span class="n">as_mako</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.concepts</span> <span class="kn">import</span> <span class="n">LeafNode</span>
+
+
+<div class="viewcode-block" id="CUIRCodegen"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen">[docs]</a><span class="k">class</span> <span class="nc">CUIRCodegen</span><span class="p">(</span><span class="n">codegen</span><span class="o">.</span><span class="n">TemplatedGenerator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+
+    <span class="n">LocalScalar</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2"> </span><span class="si">{name}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+    <span class="n">FieldDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">ScalarDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">Temporary</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">AssignStmt</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{left}</span><span class="s2"> = </span><span class="si">{right}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+    <span class="n">MaskStmt</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        if (${mask}) {</span>
+<span class="sd">            ${&#39;\\n&#39;.join(body)}</span>
+<span class="sd">        }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">While</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        while (${cond}) {</span>
+<span class="sd">            ${&#39;\\n&#39;.join(body)}</span>
+<span class="sd">        }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_FieldAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheAccess</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Decl</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]</span>
+
+        <span class="k">def</span> <span class="nf">maybe_const</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="si">}</span><span class="s2">_c&quot;</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">s</span>
+
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">data_index</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">in_data_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">]</span>
+
+        <span class="n">decl</span> <span class="o">=</span> <span class="n">symtable</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">)</span> <span class="ow">and</span> <span class="n">decl</span><span class="o">.</span><span class="n">data_dims</span><span class="p">:</span>
+            <span class="n">data_index_str</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">*</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">decl</span><span class="o">.</span><span class="n">data_dims</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:],</span> <span class="n">initial</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data_index</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">)[</span><span class="si">{</span><span class="n">data_index_str</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data_index_str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">maybe_const</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">data_index</span><span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">offset</span><span class="si">}{</span><span class="n">data_index_str</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_IJCacheAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_IJCacheAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_IJCacheAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheAccess</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">decl</span> <span class="o">=</span> <span class="n">symtable</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheDecl</span><span class="p">)</span>
+        <span class="n">extent</span> <span class="o">=</span> <span class="n">decl</span><span class="o">.</span><span class="n">extent</span>
+        <span class="k">assert</span> <span class="n">extent</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">extent</span><span class="o">.</span><span class="n">i</span> <span class="o">==</span> <span class="n">extent</span><span class="o">.</span><span class="n">j</span> <span class="o">==</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="c1"># cache is scalar</span>
+            <span class="k">assert</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">if</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;*&quot;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">off</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">o</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">_stride_</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">for</span> <span class="n">o</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">((</span><span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">],</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]),</span> <span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">o</span> <span class="o">!=</span> <span class="mi">0</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;[&quot;</span> <span class="o">+</span> <span class="s2">&quot; + &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">off</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;]&quot;</span></div>
+
+    <span class="n">KCacheAccess</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;${_this_generator.k_cache_var(name, _this_node.offset.k)}&quot;</span><span class="p">)</span>
+
+    <span class="n">ScalarAccess</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">CartesianOffset</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{i}</span><span class="s2">_c, </span><span class="si">{j}</span><span class="s2">_c, </span><span class="si">{k}</span><span class="s2">_c&quot;</span><span class="p">)</span>
+
+    <span class="n">VariableKOffset</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;0_c, 0_c, </span><span class="si">{k}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">BinaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{left}</span><span class="s2"> </span><span class="si">{op}</span><span class="s2"> </span><span class="si">{right}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">UNARY_OPERATOR_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span> <span class="s2">&quot;!&quot;</span><span class="p">,</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NEG</span><span class="p">:</span> <span class="s2">&quot;-&quot;</span><span class="p">,</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">POS</span><span class="p">:</span> <span class="s2">&quot;+&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">UnaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">TernaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{cond}</span><span class="s2"> ? </span><span class="si">{true_expr}</span><span class="s2"> : </span><span class="si">{false_expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">Cast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;static_cast&lt;</span><span class="si">{dtype}</span><span class="s2">&gt;(</span><span class="si">{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">BUILTIN_LITERAL_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">:</span> <span class="s2">&quot;true&quot;</span><span class="p">,</span>
+        <span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">FALSE</span><span class="p">:</span> <span class="s2">&quot;false&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_BuiltInLiteral"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_BuiltInLiteral">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BuiltInLiteral</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builtin</span><span class="p">:</span> <span class="n">BuiltInLiteral</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">BUILTIN_LITERAL_TO_CODE</span><span class="p">[</span><span class="n">builtin</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented BuiltInLiteral encountered.&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_Literal"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_Literal">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Literal</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">in_data_index</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">in_data_index</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;static_cast&lt;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&gt;(</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+    <span class="n">NATIVE_FUNCTION_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ABS</span><span class="p">:</span> <span class="s2">&quot;std::abs&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span> <span class="s2">&quot;std::min&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span> <span class="s2">&quot;std::max&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MOD</span><span class="p">:</span> <span class="s2">&quot;std::fmod&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SIN</span><span class="p">:</span> <span class="s2">&quot;std::sin&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COS</span><span class="p">:</span> <span class="s2">&quot;std::cos&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TAN</span><span class="p">:</span> <span class="s2">&quot;std::tan&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">:</span> <span class="s2">&quot;std::asin&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">:</span> <span class="s2">&quot;std::acos&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">:</span> <span class="s2">&quot;std::atan&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SINH</span><span class="p">:</span> <span class="s2">&quot;std::sinh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COSH</span><span class="p">:</span> <span class="s2">&quot;std::cosh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TANH</span><span class="p">:</span> <span class="s2">&quot;std::tanh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">:</span> <span class="s2">&quot;std::asinh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">:</span> <span class="s2">&quot;std::acosh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">:</span> <span class="s2">&quot;std::atanh&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SQRT</span><span class="p">:</span> <span class="s2">&quot;std::sqrt&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span> <span class="s2">&quot;std::pow&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">EXP</span><span class="p">:</span> <span class="s2">&quot;std::exp&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">LOG</span><span class="p">:</span> <span class="s2">&quot;std::log&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span> <span class="s2">&quot;std::tgamma&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CBRT</span><span class="p">:</span> <span class="s2">&quot;std::cbrt&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">:</span> <span class="s2">&quot;std::isfinite&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">:</span> <span class="s2">&quot;std::isinf&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">:</span> <span class="s2">&quot;std::isnan&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">FLOOR</span><span class="p">:</span> <span class="s2">&quot;std::floor&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CEIL</span><span class="p">:</span> <span class="s2">&quot;std::ceil&quot;</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TRUNC</span><span class="p">:</span> <span class="s2">&quot;std::trunc&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_NativeFunction"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_NativeFunction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFunction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">NativeFunction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">NATIVE_FUNCTION_TO_CODE</span><span class="p">[</span><span class="n">func</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Not implemented NativeFunction &#39;</span><span class="si">{</span><span class="n">func</span><span class="si">}</span><span class="s2">&#39; encountered.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+    <span class="n">NativeFuncCall</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;$</span><span class="si">{func}</span><span class="s2">(${&#39;,&#39;.join(args)})&quot;</span><span class="p">)</span>
+
+    <span class="n">DATA_TYPE_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span> <span class="s2">&quot;bool&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT8</span><span class="p">:</span> <span class="s2">&quot;std::int8_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT16</span><span class="p">:</span> <span class="s2">&quot;std::int16_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">:</span> <span class="s2">&quot;std::int32_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT64</span><span class="p">:</span> <span class="s2">&quot;std::int64_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">:</span> <span class="s2">&quot;double&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_DataType"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_DataType">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DataType</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">DATA_TYPE_TO_CODE</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Not implemented DataType &#39;</span><span class="si">{</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; encountered.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+    <span class="n">IJExtent</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;extent&lt;</span><span class="si">{i[0]}</span><span class="s2">, </span><span class="si">{i[1]}</span><span class="s2">, </span><span class="si">{j[0]}</span><span class="s2">, </span><span class="si">{j[1]}</span><span class="s2">&gt;&quot;</span><span class="p">)</span>
+
+    <span class="n">HorizontalExecution</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        // HorizontalExecution ${id(_this_node)}</span>
+<span class="sd">        if (validator(${extent}())) {</span>
+<span class="sd">            ${&#39;\\n&#39;.join(declarations)}</span>
+<span class="sd">            ${&#39;\\n&#39;.join(body)}</span>
+<span class="sd">        }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_AxisBound"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_AxisBound">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AxisBound</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;k_size + </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot handle dynamic levels&quot;</span><span class="p">)</span></div>
+
+    <span class="n">IJCacheDecl</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        % if _this_node.extent.i == _this_node.extent.j == (0, 0):</span>
+<span class="sd">        // scalar ij-cache</span>
+<span class="sd">        ${dtype} ${name};</span>
+<span class="sd">        % else:</span>
+<span class="sd">        // ij-cache in shared memory</span>
+<span class="sd">        constexpr int ${name}_cache_data_size = (i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]}) * (j_block_size_t() + ${-_this_node.extent.j[0] + _this_node.extent.j[1]});</span>
+<span class="sd">        __shared__ ${dtype} ${name}_cache_data[${name}_cache_data_size];</span>
+<span class="sd">        constexpr int i_stride_${name} = 1;</span>
+<span class="sd">        constexpr int j_stride_${name} = i_block_size_t() + ${-_this_node.extent.i[0] + _this_node.extent.i[1]};</span>
+<span class="sd">        ${dtype} *${name} = ${name}_cache_data + (${-_this_node.extent.i[0]} + _i_block) * i_stride_${name} + (${-_this_node.extent.j[0]} + _j_block) * j_stride_${name};</span>
+<span class="sd">        % endif</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">KCacheDecl</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        % for var in _this_generator.k_cache_vars(_this_node):</span>
+<span class="sd">        ${dtype} ${var};</span>
+<span class="sd">        % endfor</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">VerticalLoopSection</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        &lt;%def name=&quot;sid_shift(step)&quot;&gt;</span>
+<span class="sd">            sid::shift(_ptr, sid::get_stride&lt;dim::k&gt;(m_strides), ${step}_c);</span>
+<span class="sd">        &lt;/%def&gt;</span>
+<span class="sd">        &lt;%def name=&quot;cache_shift(cache_vars)&quot;&gt;</span>
+<span class="sd">            % for dst, src in zip(cache_vars[:-1], cache_vars[1:]):</span>
+<span class="sd">            ${dst} = ${src};</span>
+<span class="sd">            % endfor</span>
+<span class="sd">        &lt;/%def&gt;</span>
+<span class="sd">        // VerticalLoopSection ${id(_this_node)}</span>
+<span class="sd">        % if order == cuir.LoopOrder.FORWARD:</span>
+<span class="sd">        for (int _k_block = ${start}; _k_block &lt; ${end}; ++_k_block) {</span>
+<span class="sd">            ${&#39;\\n__syncthreads();\\n&#39;.join(horizontal_executions)}</span>
+
+<span class="sd">            ${sid_shift(1)}</span>
+<span class="sd">            % for k_cache in k_cache_decls:</span>
+<span class="sd">                ${cache_shift(_this_generator.k_cache_vars(k_cache))}</span>
+<span class="sd">            % endfor</span>
+<span class="sd">        }</span>
+<span class="sd">        % elif order == cuir.LoopOrder.BACKWARD:</span>
+<span class="sd">        for (int _k_block = ${end} - 1; _k_block &gt;= ${start}; --_k_block) {</span>
+<span class="sd">            ${&#39;\\n__syncthreads();\\n&#39;.join(horizontal_executions)}</span>
+
+<span class="sd">            ${sid_shift(-1)}</span>
+<span class="sd">            % for k_cache in k_cache_decls:</span>
+<span class="sd">                ${cache_shift(_this_generator.k_cache_vars(k_cache)[::-1])}</span>
+<span class="sd">            % endfor</span>
+<span class="sd">        }</span>
+<span class="sd">        % else:</span>
+<span class="sd">        if (_k_block &gt;= ${start} &amp;&amp; _k_block &lt; ${end}) {</span>
+<span class="sd">            ${&#39;\\n__syncthreads();\\n&#39;.join(horizontal_executions)}</span>
+<span class="sd">        }</span>
+<span class="sd">        % endif</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="CUIRCodegen.k_cache_var"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.k_cache_var">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">k_cache_var</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">name</span> <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;p</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">offset</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;m</span><span class="si">{</span><span class="o">-</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CUIRCodegen.k_cache_vars"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.k_cache_vars">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">k_cache_vars</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">k_cache</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheDecl</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">assert</span> <span class="n">k_cache</span><span class="o">.</span><span class="n">extent</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">k_cache_var</span><span class="p">(</span><span class="n">k_cache</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k_cache</span><span class="o">.</span><span class="n">extent</span><span class="o">.</span><span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k_cache</span><span class="o">.</span><span class="n">extent</span><span class="o">.</span><span class="n">k</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">]</span></div>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="n">data_dims</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data_dims</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;data_index&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])))</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">fields</span><span class="o">=</span><span class="n">fields</span><span class="p">,</span>
+            <span class="n">k_cache_decls</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">k_caches</span><span class="p">,</span>
+            <span class="n">order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+            <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="n">VerticalLoop</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        template &lt;class Sid&gt;</span>
+<span class="sd">        struct loop_${id(_this_node)}_f {</span>
+<span class="sd">            sid::ptr_holder_type&lt;Sid&gt; m_ptr_holder;</span>
+<span class="sd">            sid::strides_type&lt;Sid&gt; m_strides;</span>
+<span class="sd">            int i_size;</span>
+<span class="sd">            int j_size;</span>
+<span class="sd">            int k_size;</span>
+
+<span class="sd">            template &lt;class Validator&gt;</span>
+<span class="sd">            GT_FUNCTION_DEVICE void operator()(const int _i_block,</span>
+<span class="sd">                                               const int _j_block,</span>
+<span class="sd">                                               Validator validator) const {</span>
+<span class="sd">                auto _ptr = m_ptr_holder();</span>
+<span class="sd">                sid::shift(_ptr,</span>
+<span class="sd">                           sid::get_stride&lt;sid::blocked_dim&lt;dim::i&gt;&gt;(m_strides),</span>
+<span class="sd">                           blockIdx.x);</span>
+<span class="sd">                sid::shift(_ptr,</span>
+<span class="sd">                           sid::get_stride&lt;sid::blocked_dim&lt;dim::j&gt;&gt;(m_strides),</span>
+<span class="sd">                           blockIdx.y);</span>
+<span class="sd">                sid::shift(_ptr,</span>
+<span class="sd">                           sid::get_stride&lt;dim::i&gt;(m_strides),</span>
+<span class="sd">                           _i_block);</span>
+<span class="sd">                sid::shift(_ptr,</span>
+<span class="sd">                           sid::get_stride&lt;dim::j&gt;(m_strides),</span>
+<span class="sd">                           _j_block);</span>
+<span class="sd">                % if order == cuir.LoopOrder.PARALLEL:</span>
+<span class="sd">                const int _k_block = blockIdx.z;</span>
+<span class="sd">                sid::shift(_ptr,</span>
+<span class="sd">                           sid::get_stride&lt;dim::k&gt;(m_strides),</span>
+<span class="sd">                           _k_block);</span>
+<span class="sd">                % endif</span>
+
+<span class="sd">                % for field, data_dims in fields.items():</span>
+<span class="sd">                const auto ${field} = [&amp;](auto i, auto j, auto k</span>
+<span class="sd">                    % if field not in temp_names:</span>
+<span class="sd">                    % for i in range(data_dims):</span>
+<span class="sd">                    , auto dim_${i + 3}</span>
+<span class="sd">                    % endfor</span>
+<span class="sd">                    % endif</span>
+<span class="sd">                    ) -&gt; auto&amp;&amp; {</span>
+<span class="sd">                    return *sid::multi_shifted&lt;tag::${field}&gt;(</span>
+<span class="sd">                        device::at_key&lt;tag::${field}&gt;(_ptr),</span>
+<span class="sd">                        m_strides,</span>
+<span class="sd">                        hymap::keys&lt;dim::i, dim::j, dim::k</span>
+<span class="sd">                        % if field not in temp_names:</span>
+<span class="sd">                        % for i in range(data_dims):</span>
+<span class="sd">                        , integral_constant&lt;int, ${i + 3}&gt;</span>
+<span class="sd">                        % endfor</span>
+<span class="sd">                        % endif</span>
+<span class="sd">                        &gt;::make_values(i, j, k</span>
+<span class="sd">                        % if field not in temp_names:</span>
+<span class="sd">                        % for i in range(data_dims):</span>
+<span class="sd">                        , dim_${i + 3}</span>
+<span class="sd">                        % endfor</span>
+<span class="sd">                        % endif</span>
+<span class="sd">                        ));</span>
+<span class="sd">                };</span>
+<span class="sd">                % endfor</span>
+
+<span class="sd">                % for ij_cache in ij_caches:</span>
+<span class="sd">                ${ij_cache}</span>
+<span class="sd">                % endfor</span>
+
+<span class="sd">                % for k_cache in k_caches:</span>
+<span class="sd">                ${k_cache}</span>
+<span class="sd">                % endfor</span>
+
+<span class="sd">                % for section in sections:</span>
+<span class="sd">                ${section}</span>
+<span class="sd">                % endfor</span>
+<span class="sd">            }</span>
+<span class="sd">        };</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">Kernel</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        % for vertical_loop in vertical_loops:</span>
+<span class="sd">        ${vertical_loop}</span>
+<span class="sd">        % endfor</span>
+
+<span class="sd">        template &lt;${&#39;, &#39;.join(f&#39;class Loop{id(vl)}&#39; for vl in _this_node.vertical_loops)}&gt;</span>
+<span class="sd">        struct kernel_${id(_this_node)}_f {</span>
+<span class="sd">            % for vertical_loop in _this_node.vertical_loops:</span>
+<span class="sd">            Loop${id(vertical_loop)} m_${id(vertical_loop)};</span>
+<span class="sd">            % endfor</span>
+
+<span class="sd">            template &lt;class Validator&gt;</span>
+<span class="sd">            GT_FUNCTION_DEVICE void operator()(const int _i_block,</span>
+<span class="sd">                                               const int _j_block,</span>
+<span class="sd">                                               Validator validator) const {</span>
+<span class="sd">                % for vertical_loop in _this_node.vertical_loops:</span>
+<span class="sd">                m_${id(vertical_loop)}(_i_block, _j_block, validator);</span>
+<span class="sd">                % endfor</span>
+<span class="sd">            }</span>
+<span class="sd">        };</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="CUIRCodegen.visit_Program"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.visit_Program">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Program</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Program</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">def</span> <span class="nf">loop_start</span><span class="p">(</span><span class="n">vertical_loop</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">vertical_loop</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">cuir</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">vertical_loop</span><span class="o">.</span><span class="n">sections</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">vertical_loop</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">cuir</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">vertical_loop</span><span class="o">.</span><span class="n">sections</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; - 1&quot;</span>
+            <span class="k">return</span> <span class="s2">&quot;0&quot;</span>
+
+        <span class="k">def</span> <span class="nf">loop_fields</span><span class="p">(</span><span class="n">vertical_loop</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">vertical_loop</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">ctype</span><span class="p">(</span><span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">decl</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">][</span><span class="n">symbol</span><span class="p">]</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">decl</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">decl</span><span class="o">.</span><span class="n">data_dims</span><span class="p">:</span>
+                <span class="n">total_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">decl</span><span class="o">.</span><span class="n">data_dims</span><span class="p">,</span> <span class="n">initial</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+                <span class="n">dtype</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;array&lt;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">total_size</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="k">return</span> <span class="n">dtype</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">max_extent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                <span class="n">cuir</span><span class="o">.</span><span class="n">IJExtent</span><span class="o">.</span><span class="n">zero</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">cuir</span><span class="o">.</span><span class="n">IJExtent</span><span class="p">)),</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">loop_start</span><span class="o">=</span><span class="n">loop_start</span><span class="p">,</span>
+            <span class="n">loop_fields</span><span class="o">=</span><span class="n">loop_fields</span><span class="p">,</span>
+            <span class="n">ctype</span><span class="o">=</span><span class="n">ctype</span><span class="p">,</span>
+            <span class="n">cuir</span><span class="o">=</span><span class="n">cuir</span><span class="p">,</span>
+            <span class="n">temp_names</span><span class="o">=</span><span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">temporaries</span><span class="p">},</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="n">Positional</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;auto </span><span class="si">{name}</span><span class="s2"> = positional&lt;dim::</span><span class="si">{axis_name}</span><span class="s2">&gt;();&quot;</span><span class="p">)</span>
+
+    <span class="n">Program</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;#include &lt;algorithm&gt;</span>
+<span class="sd">        #include &lt;array&gt;</span>
+<span class="sd">        #include &lt;cstdint&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/array.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/cuda_util.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/host_device.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/hymap.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/integral_constant.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/sid/allocator.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/sid/block.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/sid/composite.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/sid/multi_shift.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/common/dim.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/common/extent.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/gpu/launch_kernel.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/gpu/tmp_storage_sid.hpp&gt;</span>
+<span class="sd">        % if positionals:</span>
+<span class="sd">        #include &lt;gridtools/stencil/positional.hpp&gt;</span>
+<span class="sd">        % endif</span>
+
+<span class="sd">        namespace ${name}_impl_{</span>
+<span class="sd">            using namespace gridtools;</span>
+<span class="sd">            using namespace literals;</span>
+<span class="sd">            using namespace stencil;</span>
+
+<span class="sd">            using domain_t = std::array&lt;unsigned, 3&gt;;</span>
+<span class="sd">            using i_block_size_t = integral_constant&lt;int, 64&gt;;</span>
+<span class="sd">            using j_block_size_t = integral_constant&lt;int, 8&gt;;</span>
+
+<span class="sd">            template &lt;class Storage&gt;</span>
+<span class="sd">            auto block(Storage storage) {</span>
+<span class="sd">                return sid::block(std::move(storage),</span>
+<span class="sd">                    hymap::keys&lt;dim::i, dim::j&gt;::make_values(</span>
+<span class="sd">                        i_block_size_t(), j_block_size_t()));</span>
+<span class="sd">            }</span>
+
+<span class="sd">            namespace tag {</span>
+<span class="sd">                % for p in set().union(*(loop_fields(v) for k in _this_node.kernels for v in k.vertical_loops)):</span>
+<span class="sd">                struct ${p} {};</span>
+<span class="sd">                % endfor</span>
+<span class="sd">            }</span>
+
+<span class="sd">            % for kernel in kernels:</span>
+<span class="sd">            ${kernel}</span>
+<span class="sd">            % endfor</span>
+
+<span class="sd">            auto ${name}(domain_t domain){</span>
+<span class="sd">                return [domain](${&#39;,&#39;.join(f&#39;auto&amp;&amp; {p}&#39; for p in params)}){</span>
+<span class="sd">                    auto tmp_alloc = sid::device::cached_allocator(&amp;cuda_util::cuda_malloc&lt;char[]&gt;);</span>
+<span class="sd">                    const int i_size = domain[0];</span>
+<span class="sd">                    const int j_size = domain[1];</span>
+<span class="sd">                    const int k_size = domain[2];</span>
+<span class="sd">                    const int i_blocks = (i_size + i_block_size_t() - 1) / i_block_size_t();</span>
+<span class="sd">                    const int j_blocks = (j_size + j_block_size_t() - 1) / j_block_size_t();</span>
+
+<span class="sd">                    % for decl in positionals:</span>
+<span class="sd">                    ${decl}</span>
+<span class="sd">                    % endfor</span>
+
+<span class="sd">                    % for tmp in temporaries:</span>
+<span class="sd">                    auto ${tmp} = gpu_backend::make_tmp_storage&lt;${ctype(tmp)}&gt;(</span>
+<span class="sd">                        1_c,</span>
+<span class="sd">                        i_block_size_t(),</span>
+<span class="sd">                        j_block_size_t(),</span>
+<span class="sd">                        ${max_extent}(),</span>
+<span class="sd">                        i_blocks,</span>
+<span class="sd">                        j_blocks,</span>
+<span class="sd">                        k_size,</span>
+<span class="sd">                        tmp_alloc</span>
+<span class="sd">                    );</span>
+<span class="sd">                    % endfor</span>
+
+<span class="sd">                    % for kernel in _this_node.kernels:</span>
+
+<span class="sd">                    // kernel ${id(kernel)}</span>
+
+<span class="sd">                    % for vertical_loop in kernel.vertical_loops:</span>
+<span class="sd">                    // vertical loop ${id(vertical_loop)}</span>
+
+<span class="sd">                    assert((${loop_start(vertical_loop)}) &gt;= 0 &amp;&amp;</span>
+<span class="sd">                           (${loop_start(vertical_loop)}) &lt; k_size);</span>
+<span class="sd">                    auto offset_${id(vertical_loop)} = hymap::keys&lt;dim::k&gt;::make_values(</span>
+<span class="sd">                        ${loop_start(vertical_loop)}</span>
+<span class="sd">                    );</span>
+
+<span class="sd">                    auto composite_${id(vertical_loop)} = sid::composite::keys&lt;</span>
+<span class="sd">                            ${&#39;, &#39;.join(f&#39;tag::{field}&#39; for field in loop_fields(vertical_loop))}</span>
+<span class="sd">                        &gt;::make_values(</span>
+
+<span class="sd">                    % for field in loop_fields(vertical_loop):</span>
+<span class="sd">                        % if field in params:</span>
+<span class="sd">                            block(sid::shift_sid_origin(</span>
+<span class="sd">                                ${field},</span>
+<span class="sd">                                offset_${id(vertical_loop)}</span>
+<span class="sd">                            ))</span>
+<span class="sd">                        % else:</span>
+<span class="sd">                            sid::shift_sid_origin(</span>
+<span class="sd">                                ${field},</span>
+<span class="sd">                                offset_${id(vertical_loop)}</span>
+<span class="sd">                            )</span>
+<span class="sd">                        % endif</span>
+<span class="sd">                        ${&#39;&#39; if loop.last else &#39;,&#39;}</span>
+<span class="sd">                    % endfor</span>
+<span class="sd">                    );</span>
+<span class="sd">                    using composite_${id(vertical_loop)}_t = decltype(composite_${id(vertical_loop)});</span>
+<span class="sd">                    loop_${id(vertical_loop)}_f&lt;composite_${id(vertical_loop)}_t&gt; loop_${id(vertical_loop)}{</span>
+<span class="sd">                        sid::get_origin(composite_${id(vertical_loop)}),</span>
+<span class="sd">                        sid::get_strides(composite_${id(vertical_loop)}),</span>
+<span class="sd">                        i_size,</span>
+<span class="sd">                        j_size,</span>
+<span class="sd">                        k_size</span>
+<span class="sd">                    };</span>
+
+<span class="sd">                    % endfor</span>
+
+<span class="sd">                    kernel_${id(kernel)}_f&lt;${&#39;, &#39;.join(f&#39;decltype(loop_{id(vl)})&#39; for vl in kernel.vertical_loops)}&gt; kernel_${id(kernel)}{</span>
+<span class="sd">                        ${&#39;, &#39;.join(f&#39;loop_{id(vl)}&#39; for vl in kernel.vertical_loops)}</span>
+<span class="sd">                    };</span>
+<span class="sd">                    gpu_backend::launch_kernel&lt;${max_extent},</span>
+<span class="sd">                        i_block_size_t::value, j_block_size_t::value&gt;(</span>
+<span class="sd">                        i_size,</span>
+<span class="sd">                        j_size,</span>
+<span class="sd">                        % if kernel.vertical_loops[0].loop_order == cuir.LoopOrder.PARALLEL:</span>
+<span class="sd">                            k_size,</span>
+<span class="sd">                        % else:</span>
+<span class="sd">                            1,</span>
+<span class="sd">                        %endif</span>
+<span class="sd">                        kernel_${id(kernel)},</span>
+<span class="sd">                        0);</span>
+<span class="sd">                    % endfor</span>
+<span class="sd">                };</span>
+<span class="sd">            }</span>
+<span class="sd">        }</span>
+
+<span class="sd">        using ${name}_impl_::${name};</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="CUIRCodegen.apply"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.cuir_codegen.CUIRCodegen.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">LeafNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Program</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;apply() requires gtcpp.Progam root node&quot;</span><span class="p">)</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;format_source&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">generated_code</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

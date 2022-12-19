@@ -1,0 +1,77 @@
+gt4py.cartesian.gtc.passes.oir\_optimizations package
+=====================================================
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.caches module
+-----------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.caches
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.horizontal\_execution\_merging module
+-----------------------------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.inlining module
+-------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.inlining
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.mask\_stmt\_merging module
+------------------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.mask_stmt_merging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.pruning module
+------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.pruning
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.temporaries module
+----------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.temporaries
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.utils module
+----------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_optimizations.vertical\_loop\_merging module
+----------------------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations.vertical_loop_merging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_optimizations
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,61 @@
+gt4py.cartesian.frontend package
+================================
+
+Submodules
+----------
+
+gt4py.cartesian.frontend.base module
+------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.frontend.defir\_to\_gtir module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.defir_to_gtir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.frontend.exceptions module
+------------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.exceptions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.frontend.gtscript\_frontend module
+--------------------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.gtscript_frontend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.frontend.node\_util module
+------------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.node_util
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.frontend.nodes module
+-------------------------------------
+
+.. automodule:: gt4py.cartesian.frontend.nodes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.frontend
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,93 @@
+gt4py.cartesian.gtc.passes package
+==================================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.cartesian.gtc.passes.oir_optimizations
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.passes.gtir\_definitive\_assignment\_analysis module
+------------------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_definitive_assignment_analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.gtir\_dtype\_resolver module
+-------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_dtype_resolver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.gtir\_k\_boundary module
+---------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_k_boundary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.gtir\_pipeline module
+------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_pipeline
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.gtir\_prune\_unused\_parameters module
+-----------------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_prune_unused_parameters
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.gtir\_upcaster module
+------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.gtir_upcaster
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.horizontal\_masks module
+---------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.horizontal_masks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_access\_kinds module
+----------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_access_kinds
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.passes.oir\_pipeline module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.passes.oir_pipeline
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.passes
+   :members:
+   :undoc-members:
+   :show-inheritance:

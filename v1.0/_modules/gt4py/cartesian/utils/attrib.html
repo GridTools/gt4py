@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.utils.attrib &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.utils.attrib</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.utils.attrib</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">typing</span>
+
+<span class="kn">import</span> <span class="nn">attr</span>
+
+
+<span class="k">class</span> <span class="nc">_TypeDescriptor</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">make_validator_func</span><span class="p">,</span> <span class="n">type_hint</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="k">assert</span> <span class="n">args</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_validator_func</span> <span class="o">=</span> <span class="n">make_validator_func</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">type_hint</span> <span class="o">=</span> <span class="n">type_hint</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+                <span class="n">arg_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">_TypeDescriptor</span><span class="p">):</span>
+                <span class="n">arg_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="s2">&quot;[</span><span class="si">{}</span><span class="s2">]&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arg_names</span><span class="p">))</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arg_names</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">validator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_validator_func</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">_GenericTypeDescriptor</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">n_args</span><span class="p">,</span> <span class="n">make_validator_func</span><span class="p">,</span> <span class="n">generic_type_hint</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n_args</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">n_args</span> <span class="o">=</span> <span class="p">(</span><span class="n">n_args</span><span class="p">,</span> <span class="n">n_args</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">n_args</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_args</span> <span class="o">=</span> <span class="n">n_args</span>
+
+        <span class="k">assert</span> <span class="n">callable</span><span class="p">(</span><span class="n">make_validator_func</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">make_validator_func</span> <span class="o">=</span> <span class="n">make_validator_func</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generic_type_hint</span> <span class="o">=</span> <span class="n">generic_type_hint</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_list</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">type_list</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">type_list</span><span class="p">])</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">_TypeDescriptor</span><span class="p">))</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_list</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_list</span><span class="p">))</span> <span class="ow">and</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">hint_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+                <span class="n">hint_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">hint_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="s2">&quot;type_hint&quot;</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">_TypeDescriptor</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">type_list</span><span class="p">),</span>
+            <span class="n">make_validator_func</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">make_validator_func</span><span class="p">,</span>
+            <span class="n">type_hint</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">generic_type_hint</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">hint_list</span><span class="p">)],</span>
+        <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_make_type_validator</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">_TypeDescriptor</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">attr</span><span class="o">.</span><span class="n">validators</span><span class="o">.</span><span class="n">instance_of</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># isinstance(t, _TypeDescriptor)</span>
+        <span class="k">return</span> <span class="n">t</span><span class="o">.</span><span class="n">validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_sequence_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">,</span> <span class="n">container_types</span><span class="o">=</span><span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+    <span class="k">assert</span> <span class="n">type_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+    <span class="n">item_type</span> <span class="o">=</span> <span class="n">type_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">item_validator</span> <span class="o">=</span> <span class="n">_make_type_validator</span><span class="p">(</span><span class="n">item_type</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_is_sequence_of_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">container_types</span><span class="p">))</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">([</span><span class="n">item_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="p">],</span> <span class="nb">list</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Expr (</span><span class="si">{value}</span><span class="s2">) does not match the &#39;</span><span class="si">{name}</span><span class="s2">&#39; specification&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_is_sequence_of_validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_list_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_make_sequence_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">,</span> <span class="n">container_types</span><span class="o">=</span><span class="p">[</span><span class="nb">list</span><span class="p">])</span>
+
+
+<span class="k">def</span> <span class="nf">_make_set_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_make_sequence_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">,</span> <span class="n">container_types</span><span class="o">=</span><span class="p">[</span><span class="nb">set</span><span class="p">])</span>
+
+
+<span class="k">def</span> <span class="nf">_make_dict_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">type_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+    <span class="n">key_validator</span><span class="p">,</span> <span class="n">value_validator</span> <span class="o">=</span> <span class="p">[</span><span class="n">_make_type_validator</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_list</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_is_dict_of_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">([</span><span class="n">key_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">keys</span><span class="p">()],</span> <span class="nb">list</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">value_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span> <span class="nb">list</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Expr (</span><span class="si">{value}</span><span class="s2">) does not match the &#39;</span><span class="si">{name}</span><span class="s2">&#39; specification&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_is_dict_of_validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_tuple_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">type_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+    <span class="n">validators</span> <span class="o">=</span> <span class="p">[</span><span class="n">_make_type_validator</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_list</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_is_tuple_of_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">validators</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="n">validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">value</span><span class="p">,</span> <span class="n">validator</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">validators</span><span class="p">)</span>
+                <span class="p">],</span>
+                <span class="nb">list</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Expr (</span><span class="si">{value}</span><span class="s2">) does not match the &#39;</span><span class="si">{name}</span><span class="s2">&#39; specification&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_is_tuple_of_validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_union_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">type_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+    <span class="n">validators</span> <span class="o">=</span> <span class="p">[</span><span class="n">_make_type_validator</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_list</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_is_union_of_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">passed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">validator</span> <span class="ow">in</span> <span class="n">validators</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="k">break</span>
+
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">passed</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">passed</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Expr (</span><span class="si">{value}</span><span class="s2">) does not match the &#39;</span><span class="si">{name}</span><span class="s2">&#39; specification&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_is_union_of_validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_any_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_is_any_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">return</span> <span class="n">_is_any_validator</span>
+
+
+<span class="k">def</span> <span class="nf">_make_nothing_validator</span><span class="p">(</span><span class="n">type_list</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_is_nothing_validator</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">_is_nothing_validator</span>
+
+
+<span class="n">Any</span> <span class="o">=</span> <span class="n">_TypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Any&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">_make_any_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">)</span>
+
+<span class="n">Sequence</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Sequence&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_make_sequence_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span>
+<span class="n">List</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;List&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_make_list_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">List</span><span class="p">)</span>
+<span class="n">Dict</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Dict&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">_make_dict_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Dict</span><span class="p">)</span>
+<span class="n">Set</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Set&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_make_set_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Set</span><span class="p">)</span>
+<span class="n">Tuple</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Tuple&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">_make_tuple_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Tuple</span><span class="p">)</span>
+<span class="n">Union</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span><span class="s2">&quot;Union&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">_make_union_validator</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Union</span><span class="p">)</span>
+
+<span class="n">Optional</span> <span class="o">=</span> <span class="n">_GenericTypeDescriptor</span><span class="p">(</span>
+    <span class="s2">&quot;Optional&quot;</span><span class="p">,</span>
+    <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">type_list</span><span class="p">:</span> <span class="n">_make_union_validator</span><span class="p">([</span><span class="o">*</span><span class="n">type_list</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">)]),</span>
+    <span class="n">typing</span><span class="o">.</span><span class="n">Optional</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="attribute"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.attribute">[docs]</a><span class="k">def</span> <span class="nf">attribute</span><span class="p">(</span><span class="n">of</span><span class="p">,</span> <span class="n">optional</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">of</span><span class="p">,</span> <span class="n">_TypeDescriptor</span><span class="p">):</span>
+        <span class="n">attr_validator</span> <span class="o">=</span> <span class="n">of</span><span class="o">.</span><span class="n">validator</span>
+        <span class="n">attr_type_hint</span> <span class="o">=</span> <span class="n">of</span><span class="o">.</span><span class="n">type_hint</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">of</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="c1"># assert of in (bool, float, str, int, enum.Enum)</span>
+        <span class="n">attr_validator</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">validators</span><span class="o">.</span><span class="n">instance_of</span><span class="p">(</span><span class="n">of</span><span class="p">)</span>
+        <span class="n">attr_type_hint</span> <span class="o">=</span> <span class="n">of</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid attribute type &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">of</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">optional</span><span class="p">:</span>
+        <span class="n">attr_validator</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">validators</span><span class="o">.</span><span class="n">optional</span><span class="p">(</span><span class="n">attr_validator</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># kwargs[&quot;kw_only&quot;] = True</span>
+
+    <span class="k">return</span> <span class="n">attr</span><span class="o">.</span><span class="n">ib</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">attr_validator</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">attr_type_hint</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AttributeClassLike"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.AttributeClassLike">[docs]</a><span class="k">class</span> <span class="nc">AttributeClassLike</span><span class="p">:</span>
+<div class="viewcode-block" id="AttributeClassLike.validate"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.AttributeClassLike.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">as_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="attribclass"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.attribclass">[docs]</a><span class="k">def</span> <span class="nf">attribclass</span><span class="p">(</span><span class="n">cls_or_none</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class decorator to convert a regular class into an `AttribClass`.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Validate this instance&#39;s data attributes.&quot;&quot;&quot;</span>
+        <span class="n">attr</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generate a :class:`list` with this class&#39; attribute names.&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attr</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">as_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generate a :class:`dict` with this instance&#39;s data attributes.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">attr</span><span class="o">.</span><span class="n">asdict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="n">extra_members</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">validate</span><span class="o">=</span><span class="n">validate</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="nb">property</span><span class="p">(</span><span class="n">attributes</span><span class="p">),</span> <span class="n">as_dict</span><span class="o">=</span><span class="n">as_dict</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_make_attrs_class_wrapper</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">member</span> <span class="ow">in</span> <span class="n">extra_members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Name clashing with a existing &#39;</span><span class="si">{name}</span><span class="s2">&#39; member&quot;</span>
+                    <span class="s2">&quot; of the decorated class &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">member</span><span class="p">)</span>
+
+        <span class="n">new_cls</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">s</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_cls</span>
+
+    <span class="k">if</span> <span class="n">cls_or_none</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_make_attrs_class_wrapper</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_make_attrs_class_wrapper</span><span class="p">(</span><span class="n">cls_or_none</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="attribkwclass"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.attribkwclass">[docs]</a><span class="k">def</span> <span class="nf">attribkwclass</span><span class="p">(</span><span class="n">cls_or_none</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;kw_only&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">attribclass</span><span class="p">(</span><span class="n">cls_or_none</span><span class="o">=</span><span class="n">cls_or_none</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="attributes_of"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.utils.html#gt4py.cartesian.utils.attrib.attributes_of">[docs]</a><span class="k">def</span> <span class="nf">attributes_of</span><span class="p">(</span><span class="n">an_attribclass</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attr</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">an_attribclass</span><span class="p">)]</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

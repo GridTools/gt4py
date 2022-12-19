@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.traits &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.traits</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.eve.traits</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Definitions of node and visitor trait classes.&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">collections</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">concepts</span><span class="p">,</span> <span class="n">datamodels</span><span class="p">,</span> <span class="n">exceptions</span><span class="p">,</span> <span class="n">visitors</span>
+<span class="kn">from</span> <span class="nn">.extended_typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">no_type_check</span>
+
+
+<span class="c1"># ---  Node Traits ---</span>
+<div class="viewcode-block" id="SymbolTableTrait"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolTableTrait">[docs]</a><span class="nd">@concepts</span><span class="o">.</span><span class="n">register_annex_user</span><span class="p">(</span><span class="s2">&quot;symtable&quot;</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">],</span> <span class="n">shared</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nd">@datamodels</span><span class="o">.</span><span class="n">datamodel</span>
+<span class="k">class</span> <span class="nc">SymbolTableTrait</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Node trait adding an automatically created symbol table to the parent node.</span>
+
+<span class="sd">    The actual symbol table dict will be stored in the `annex.symtable` attribute.</span>
+<span class="sd">    To inject extra symbol definitions, add the nodes to a class attribute</span>
+<span class="sd">    called ``_NODE_SYMBOLS_``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="nd">@no_type_check</span>
+    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_collect_symbol_names</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">SymbolTableTrait</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">collected_symbols</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">SymbolsCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">symtable</span> <span class="o">=</span> <span class="n">collected_symbols</span>
+
+<div class="viewcode-block" id="SymbolTableTrait.SymbolsCollector"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolTableTrait.SymbolsCollector">[docs]</a>    <span class="k">class</span> <span class="nc">SymbolsCollector</span><span class="p">(</span><span class="n">visitors</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+        <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">collected_symbols</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="SymbolTableTrait.SymbolsCollector.visit_Node"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolTableTrait.SymbolsCollector.visit_Node">[docs]</a>        <span class="k">def</span> <span class="nf">visit_Node</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="o">/</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attribute</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span>
+                    <span class="n">attribute</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">SymbolName</span>
+                <span class="p">):</span>
+                    <span class="n">symbol_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">symbol_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">collected_symbols</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Multiple definitions of symbol &#39;</span><span class="si">{</span><span class="n">symbol_name</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+                        <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">collected_symbols</span><span class="p">[</span><span class="n">symbol_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">node</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">SymbolTableTrait</span><span class="p">):</span>
+                <span class="c1"># Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SymbolTableTrait.SymbolsCollector.visit"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolTableTrait.SymbolsCollector.visit">[docs]</a>        <span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="s2">&quot;_NODE_SYMBOLS_&quot;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">_NODE_SYMBOLS_</span><span class="p">)</span>  <span class="c1"># type: ignore[union-attr]  # _NODE_SYMBOLS_ is optional</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SymbolTableTrait.SymbolsCollector.apply"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolTableTrait.SymbolsCollector.apply">[docs]</a>        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">]:</span>
+            <span class="n">collector</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+            <span class="c1"># If the passed root node already contains a symbol table, the check in `visit_Node()`</span>
+            <span class="c1"># will automatically stop the traversal. To avoid this premature stop, we start the</span>
+            <span class="c1"># traversal here calling `generic_visit()` to directly inspect the children (after</span>
+            <span class="c1"># adding any extra node symbols defined in the node class).</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="s2">&quot;_NODE_SYMBOLS_&quot;</span><span class="p">):</span>
+                <span class="n">collector</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">_NODE_SYMBOLS_</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # _NODE_SYMBOLS_ is optional</span>
+            <span class="n">collector</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">collector</span><span class="o">.</span><span class="n">collected_symbols</span></div></div></div>
+
+
+<div class="viewcode-block" id="SymbolRefsValidatorTrait"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolRefsValidatorTrait">[docs]</a><span class="nd">@concepts</span><span class="o">.</span><span class="n">register_annex_user</span><span class="p">(</span><span class="s2">&quot;symtable&quot;</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">],</span> <span class="n">shared</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nd">@datamodels</span><span class="o">.</span><span class="n">datamodel</span>
+<span class="k">class</span> <span class="nc">SymbolRefsValidatorTrait</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Node trait adding automatic validation of symbol references appearing the node tree.</span>
+
+<span class="sd">    It assumes that the symbol table with the actual definitions is stored as</span>
+<span class="sd">    a dict in the `annex.symtable` attribute (like :class:`SymbolTableTrait` does).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="nd">@no_type_check</span>
+    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_validate_symbol_refs</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">SymbolRefsValidatorTrait</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">validator</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">SymbolRefsValidator</span><span class="p">()</span>
+        <span class="n">symtable</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">symtable</span>
+        <span class="k">for</span> <span class="n">child_node</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">iter_children_values</span><span class="p">():</span>
+            <span class="n">validator</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">child_node</span><span class="p">,</span> <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">validator</span><span class="o">.</span><span class="n">missing_symbols</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Symbols </span><span class="si">{}</span><span class="s2"> not found.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">validator</span><span class="o">.</span><span class="n">missing_symbols</span><span class="p">)</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="SymbolRefsValidatorTrait.SymbolRefsValidator"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolRefsValidatorTrait.SymbolRefsValidator">[docs]</a>    <span class="k">class</span> <span class="nc">SymbolRefsValidator</span><span class="p">(</span><span class="n">visitors</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+        <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">missing_symbols</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SymbolRefsValidatorTrait.SymbolRefsValidator.visit_Node"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolRefsValidatorTrait.SymbolRefsValidator.visit_Node">[docs]</a>        <span class="k">def</span> <span class="nf">visit_Node</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attribute</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span>
+                    <span class="n">attribute</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">SymbolRef</span>
+                <span class="p">):</span>
+                    <span class="n">symbol_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">symbol_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">symtable</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">missing_symbols</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">symbol_name</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">SymbolTableTrait</span><span class="p">):</span>
+                <span class="c1"># Append symbols from nested scope for nested nodes</span>
+                <span class="n">symtable</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">symtable</span><span class="p">,</span> <span class="o">**</span><span class="n">node</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">symtable</span><span class="p">}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SymbolRefsValidatorTrait.SymbolRefsValidator.apply"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.SymbolRefsValidatorTrait.SymbolRefsValidator.apply">[docs]</a>        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="n">validator</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+            <span class="n">validator</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">validator</span><span class="o">.</span><span class="n">missing_symbols</span></div></div></div>
+
+
+<div class="viewcode-block" id="ValidatedSymbolTableTrait"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.ValidatedSymbolTableTrait">[docs]</a><span class="k">class</span> <span class="nc">ValidatedSymbolTableTrait</span><span class="p">(</span><span class="n">SymbolRefsValidatorTrait</span><span class="p">,</span> <span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Node trait adding an automatically created and validated symbol table.</span>
+
+<span class="sd">    It is just the combination of the :class:`SymbolTableTrait` and</span>
+<span class="sd">    :class:`SymbolRefsValidatorTrait` traits.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="k">pass</span></div>
+
+
+<span class="c1"># --- Visitor Traits ---</span>
+<div class="viewcode-block" id="VisitorWithSymbolTableTrait"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.VisitorWithSymbolTableTrait">[docs]</a><span class="k">class</span> <span class="nc">VisitorWithSymbolTableTrait</span><span class="p">(</span><span class="n">visitors</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Visitor trait to update or add the symtable to kwargs in the visitor calls.</span>
+
+<span class="sd">    Visitors inhering from this trait will automatically pass the active</span>
+<span class="sd">    symbol table to visitor methods as the &#39;symtable&#39; keyword argument.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="VisitorWithSymbolTableTrait.visit"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.traits.VisitorWithSymbolTableTrait.visit">[docs]</a>    <span class="k">def</span> <span class="nf">visit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">concepts</span><span class="o">.</span><span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;symtable&quot;</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">ChainMap</span><span class="p">())</span>
+        <span class="n">new_scope</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">concepts</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">new_scope</span> <span class="o">:=</span> <span class="p">(</span><span class="s2">&quot;symtable&quot;</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">annex</span><span class="p">):</span>
+                <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">new_child</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">symtable</span><span class="p">)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">new_scope</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">parents</span>
+
+        <span class="k">return</span> <span class="n">result</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

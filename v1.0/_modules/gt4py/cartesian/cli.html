@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.cli &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.cli</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.cli</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Command line interface.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">importlib</span>
+<span class="kn">import</span> <span class="nn">pathlib</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">ModuleType</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Generator</span><span class="p">,</span> <span class="n">KeysView</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">click</span>
+<span class="kn">import</span> <span class="nn">tabulate</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt4pyc</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian</span> <span class="kn">import</span> <span class="n">gtscript_imports</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">CLIBackendMixin</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.lazy_stencil</span> <span class="kn">import</span> <span class="n">LazyStencil</span>
+
+
+<div class="viewcode-block" id="BackendChoice"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendChoice">[docs]</a><span class="k">class</span> <span class="nc">BackendChoice</span><span class="p">(</span><span class="n">click</span><span class="o">.</span><span class="n">Choice</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Backend commandline option type.</span>
+
+<span class="sd">    Converts from name to backend class.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block: bash</span>
+
+<span class="sd">        $ cmd --backend=&quot;numpy&quot;</span>
+
+<span class="sd">    gets converted to :py:class:`gt4pyc.backend.GTCNumpyBackend`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;backend&quot;</span>
+
+<div class="viewcode-block" id="BackendChoice.convert"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendChoice.convert">[docs]</a>    <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">param</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Parameter</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Context</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">CLIBackendMixin</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Convert a CLI option argument to a backend.&quot;&quot;&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
+        <span class="n">backend_cls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled_backend_cls_from_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="s2">&quot;Backend is not CLI-enabled.&quot;</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">backend_cls</span></div>
+
+<div class="viewcode-block" id="BackendChoice.get_backend_names"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendChoice.get_backend_names">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_backend_names</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">KeysView</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">REGISTRY</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="BackendChoice.enabled_backend_cls_from_name"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendChoice.enabled_backend_cls_from_name">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">enabled_backend_cls_from_name</span><span class="p">(</span><span class="n">backend_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="n">CLIBackendMixin</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Check if a given backend is enabled for CLI.&quot;&quot;&quot;</span>
+        <span class="n">backend_cls</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">backend_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">backend_cls</span><span class="p">,</span> <span class="n">CLIBackendMixin</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">backend_cls</span></div>
+
+<div class="viewcode-block" id="BackendChoice.backend_table"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendChoice.backend_table">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">backend_table</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Build a string with a table of backend compatibilities.&quot;&quot;&quot;</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;computation&quot;</span><span class="p">,</span> <span class="s2">&quot;bindings&quot;</span><span class="p">,</span> <span class="s2">&quot;CLI-enabled&quot;</span><span class="p">]</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">get_backend_names</span><span class="p">()</span>
+        <span class="n">backends</span> <span class="o">=</span> <span class="p">[</span><span class="bp">cls</span><span class="o">.</span><span class="n">enabled_backend_cls_from_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">]</span>
+        <span class="n">comp_langs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">backend</span><span class="o">.</span><span class="n">languages</span><span class="p">[</span><span class="s2">&quot;computation&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">backend</span> <span class="ow">and</span> <span class="n">backend</span><span class="o">.</span><span class="n">languages</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span>
+            <span class="k">for</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">backends</span>
+        <span class="p">]</span>
+        <span class="n">binding_langs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">backend</span><span class="o">.</span><span class="n">languages</span><span class="p">[</span><span class="s2">&quot;bindings&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">backend</span> <span class="ow">and</span> <span class="n">backend</span><span class="o">.</span><span class="n">languages</span> <span class="k">else</span> <span class="s2">&quot;?&quot;</span>
+            <span class="k">for</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">backends</span>
+        <span class="p">]</span>
+        <span class="n">enabled</span> <span class="o">=</span> <span class="p">[</span><span class="n">backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">&quot;Yes&quot;</span> <span class="ow">or</span> <span class="s2">&quot;No&quot;</span> <span class="k">for</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">backends</span><span class="p">]</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">comp_langs</span><span class="p">,</span> <span class="n">binding_langs</span><span class="p">,</span> <span class="n">enabled</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tabulate</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="BackendOption"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendOption">[docs]</a><span class="k">class</span> <span class="nc">BackendOption</span><span class="p">(</span><span class="n">click</span><span class="o">.</span><span class="n">ParamType</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Backend specific build options for commandline usage.</span>
+
+<span class="sd">    convert from ``&quot;key=value&quot;`` strings to ``(key, value)`` tuples, where ``value`` is</span>
+<span class="sd">    converted to the type declared for the chosen backend (looked up in the context).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;option&quot;</span>
+
+    <span class="n">converter_map</span> <span class="o">=</span> <span class="p">{</span><span class="nb">bool</span><span class="p">:</span> <span class="n">click</span><span class="o">.</span><span class="n">BOOL</span><span class="p">,</span> <span class="nb">int</span><span class="p">:</span> <span class="n">click</span><span class="o">.</span><span class="n">INT</span><span class="p">,</span> <span class="nb">float</span><span class="p">:</span> <span class="n">click</span><span class="o">.</span><span class="n">FLOAT</span><span class="p">,</span> <span class="nb">str</span><span class="p">:</span> <span class="n">click</span><span class="o">.</span><span class="n">STRING</span><span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">_convert_value</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">type_spec</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">param</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Parameter</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Context</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">type_spec</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">converter_map</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">converter_map</span><span class="p">[</span><span class="n">type_spec</span><span class="p">]</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">type_spec</span><span class="p">,</span> <span class="s2">&quot;convert&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">type_spec</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">type_spec</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BackendOption._try_split"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendOption._try_split">[docs]</a>    <span class="k">def</span> <span class="nf">_try_split</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Be helpful in case of formatting error.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;name can not be empty&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;value can not be empty&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="s1">&#39;Invalid backend option format: must be &quot;&lt;name&gt;=&lt;value&gt;&quot;&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BackendOption.convert"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.BackendOption.convert">[docs]</a>    <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Parameter</span><span class="p">],</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">click</span><span class="o">.</span><span class="n">Context</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">ctx</span> <span class="k">else</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="s2">&quot;debug&quot;</span><span class="p">)</span>
+        <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_try_split</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">backend</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backend </span><span class="si">{</span><span class="n">backend</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> received unknown option: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">!&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_convert_value</span><span class="p">(</span><span class="n">backend</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="s2">&quot;type&quot;</span><span class="p">],</span> <span class="n">value</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">click</span><span class="o">.</span><span class="n">BadParameter</span> <span class="k">as</span> <span class="n">conversion_error</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s1">&#39;Invalid value for backend option &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot;: </span><span class="si">{</span><span class="n">conversion_error</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s1">&#39;</span>  <span class="c1"># noqa: B306</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Reporter"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.Reporter">[docs]</a><span class="k">class</span> <span class="nc">Reporter</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Wrapper around click echo functions or noops depending on the `silent` constructor param.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">silent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">echo</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">click</span><span class="o">.</span><span class="n">echo</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">secho</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="n">click</span><span class="o">.</span><span class="n">secho</span>
+        <span class="k">if</span> <span class="n">silent</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">echo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_noop</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">secho</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_noop</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">click</span><span class="o">.</span><span class="n">echo</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_noop</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="get_param_by_name"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.get_param_by_name">[docs]</a><span class="k">def</span> <span class="nf">get_param_by_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">click</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">click</span><span class="o">.</span><span class="n">Parameter</span><span class="p">:</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">command</span><span class="o">.</span><span class="n">params</span>
+    <span class="n">by_name</span> <span class="o">=</span> <span class="p">{</span><span class="n">param</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">param</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">by_name</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="GTScriptBuilder"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder">[docs]</a><span class="k">class</span> <span class="nc">GTScriptBuilder</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generate stencil source code from a GTScript module.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    input_path :</span>
+<span class="sd">        path (string or Pathlike) to the GTScript module.</span>
+
+<span class="sd">    output_path :</span>
+<span class="sd">        path (string or Pathlike) to where the generated source files should be written.</span>
+
+<span class="sd">    backend :</span>
+<span class="sd">        class of the backend that should be used.</span>
+
+<span class="sd">    silent :</span>
+<span class="sd">        silence all reporting to stdout if True</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">input_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">output_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">],</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">CLIBackendMixin</span><span class="p">],</span>
+        <span class="n">silent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span> <span class="o">=</span> <span class="n">Reporter</span><span class="p">(</span><span class="n">silent</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_module</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">import_input_module</span><span class="p">(</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">input_path</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_path</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend_cls</span> <span class="o">=</span> <span class="n">backend</span>
+
+<div class="viewcode-block" id="GTScriptBuilder.import_input_module"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder.import_input_module">[docs]</a>    <span class="k">def</span> <span class="nf">import_input_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_path</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModuleType</span><span class="p">:</span>
+        <span class="n">input_module</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">with</span> <span class="n">gtscript_imports</span><span class="o">.</span><span class="n">enabled</span><span class="p">(</span><span class="n">search_path</span><span class="o">=</span><span class="p">[</span><span class="n">input_path</span><span class="o">.</span><span class="n">parent</span><span class="p">]):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;reading input file </span><span class="si">{</span><span class="n">input_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">input_module</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">input_path</span><span class="o">.</span><span class="n">stem</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;input file loaded as module </span><span class="si">{</span><span class="n">input_module</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">input_module</span></div>
+
+<div class="viewcode-block" id="GTScriptBuilder.iterate_stencils"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder.iterate_stencils">[docs]</a>    <span class="k">def</span> <span class="nf">iterate_stencils</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">LazyStencil</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">v</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_module</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span> <span class="o">!=</span> <span class="s2">&quot;_&quot;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">LazyStencil</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GTScriptBuilder.write_computation_src"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder.write_computation_src">[docs]</a>    <span class="k">def</span> <span class="nf">write_computation_src</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">root_path</span><span class="p">:</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">,</span> <span class="n">computation_src</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">path_name</span><span class="p">,</span> <span class="n">content</span> <span class="ow">in</span> <span class="n">computation_src</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">Dict</span><span class="p">):</span>
+                <span class="n">root_path</span><span class="o">.</span><span class="n">joinpath</span><span class="p">(</span><span class="n">path_name</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">write_computation_src</span><span class="p">(</span><span class="n">root_path</span> <span class="o">/</span> <span class="n">path_name</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">file_path</span> <span class="o">=</span> <span class="n">root_path</span> <span class="o">/</span> <span class="n">path_name</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Writing source file: </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">file_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">content</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GTScriptBuilder.generate_stencils"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder.generate_stencils">[docs]</a>    <span class="k">def</span> <span class="nf">generate_stencils</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">build_options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">proto_stencil</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">iterate_stencils</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Building stencil </span><span class="si">{</span><span class="n">proto_stencil</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">builder</span> <span class="o">=</span> <span class="n">proto_stencil</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">with_backend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend_cls</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">build_options</span><span class="p">:</span>
+                <span class="n">builder</span><span class="o">.</span><span class="n">with_changed_options</span><span class="p">(</span><span class="n">impl_opts</span><span class="o">=</span><span class="n">build_options</span><span class="p">)</span>
+            <span class="n">builder</span><span class="o">.</span><span class="n">with_caching</span><span class="p">(</span><span class="s2">&quot;nocaching&quot;</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_path</span><span class="p">)</span>
+            <span class="n">computation_src</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">generate_computation</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">write_computation_src</span><span class="p">(</span><span class="n">builder</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">root_path</span><span class="p">,</span> <span class="n">computation_src</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GTScriptBuilder.report_stencil_names"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.cli.GTScriptBuilder.report_stencil_names">[docs]</a>    <span class="k">def</span> <span class="nf">report_stencil_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">stencils</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iterate_stencils</span><span class="p">())</span>
+        <span class="n">stencils_msg</span> <span class="o">=</span> <span class="s2">&quot;No stencils found.&quot;</span>
+        <span class="k">if</span> <span class="n">stencils</span><span class="p">:</span>
+            <span class="n">stencil_names</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span> <span class="o">+</span> <span class="n">st</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;&quot;&#39;</span> <span class="k">for</span> <span class="n">st</span> <span class="ow">in</span> <span class="n">stencils</span><span class="p">)</span>
+            <span class="n">stencils_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">stencils</span><span class="p">)</span><span class="si">}</span><span class="s2"> stencils: </span><span class="si">{</span><span class="n">stencil_names</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="n">stencils_msg</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@click</span><span class="o">.</span><span class="n">group</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">gtpyc</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    GT4Py (GridTools for Python) stencil generator &amp; compiler.</span>
+
+<span class="sd">    This utility is currently only partially implemented.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+
+<span class="nd">@gtpyc</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">list_backends</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;List available backends.&quot;&quot;&quot;</span>
+    <span class="n">reporter</span> <span class="o">=</span> <span class="n">Reporter</span><span class="p">(</span><span class="n">silent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">reporter</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">BackendChoice</span><span class="o">.</span><span class="n">backend_table</span><span class="p">()</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="nd">@gtpyc</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
+    <span class="s2">&quot;--backend&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;-b&quot;</span><span class="p">,</span>
+    <span class="nb">type</span><span class="o">=</span><span class="n">BackendChoice</span><span class="p">(</span><span class="n">BackendChoice</span><span class="o">.</span><span class="n">get_backend_names</span><span class="p">()),</span>
+    <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Choose a backend&quot;</span><span class="p">,</span>
+    <span class="n">is_eager</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
+    <span class="s2">&quot;--output-path&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+    <span class="n">default</span><span class="o">=</span><span class="s2">&quot;.&quot;</span><span class="p">,</span>
+    <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">file_okay</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+    <span class="n">help</span><span class="o">=</span><span class="s2">&quot;output path for the compiled source.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span>
+    <span class="s2">&quot;--option&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;-O&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;options&quot;</span><span class="p">,</span>
+    <span class="n">multiple</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="nb">type</span><span class="o">=</span><span class="n">BackendOption</span><span class="p">(),</span>
+    <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Backend option (multiple allowed), format: -O key=value&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">option</span><span class="p">(</span><span class="s2">&quot;--silent&quot;</span><span class="p">,</span> <span class="s2">&quot;-s&quot;</span><span class="p">,</span> <span class="n">is_flag</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;suppress console output&quot;</span><span class="p">)</span>
+<span class="nd">@click</span><span class="o">.</span><span class="n">argument</span><span class="p">(</span>
+    <span class="s2">&quot;input_path&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">click</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">file_okay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dir_okay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exists</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="k">def</span> <span class="nf">gen</span><span class="p">(</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">CLIBackendMixin</span><span class="p">],</span>
+    <span class="n">output_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">options</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="n">input_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">silent</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Generate stencils from gtscript modules or packages.&quot;&quot;&quot;</span>
+    <span class="n">GTScriptBuilder</span><span class="p">(</span>
+        <span class="n">input_path</span><span class="o">=</span><span class="n">input_path</span><span class="p">,</span>
+        <span class="n">output_path</span><span class="o">=</span><span class="n">output_path</span><span class="p">,</span>
+        <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+        <span class="n">silent</span><span class="o">=</span><span class="n">silent</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">generate_stencils</span><span class="p">(</span><span class="n">build_options</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">options</span><span class="p">))</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

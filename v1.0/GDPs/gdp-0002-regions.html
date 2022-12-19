@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP 2 — Specializations Near Boundaries &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="GDP 1 — Standalone Compiler CLI" href="gdp-0001-standalone-cli.html" />
+    <link rel="prev" title="GDP X — Template and Instructions" href="gdp-template.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="gdp-index.html">GT4Py Development</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GDP 2 — Specializations Near Boundaries</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#abstract">Abstract</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#motivation-and-scope">Motivation and Scope</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#usage-and-impact">Usage and Impact</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#backward-compatibility">Backward Compatibility</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#detailed-description">Detailed Description</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#implementation">Implementation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fv3-example">FV3 Example</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#copyright">Copyright</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#declined-gdps">Declined GDPs</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="gdp-index.html">GT4Py Development</a></li>
+      <li class="breadcrumb-item active">GDP 2 — Specializations Near Boundaries</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/GDPs/gdp-0002-regions.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gdp-2-specializations-near-boundaries">
+<h1>GDP 2 — Specializations Near Boundaries<a class="headerlink" href="#gdp-2-specializations-near-boundaries" title="Permalink to this headline"></a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>Johann Dahm &lt;<a class="reference external" href="mailto:johannd&#37;&#52;&#48;vulcan&#46;com">johannd<span>&#64;</span>vulcan<span>&#46;</span>com</a>&gt; - Vulcan Climate Modeling</p>
+</dd>
+<dt class="field-even">Status</dt>
+<dd class="field-even"><p>Draft</p>
+</dd>
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Feature</p>
+</dd>
+<dt class="field-even">Created</dt>
+<dd class="field-even"><p>21-04-2020</p>
+</dd>
+<dt class="field-odd">Discussion PR</dt>
+<dd class="field-odd"><p><a class="reference external" href="discussion_pr">https://github.com/GridTools/gt4py/pull/24</a></p>
+</dd>
+<dt class="field-even">Implementation</dt>
+<dd class="field-even"><p><a class="reference external" href="impl_pr">https://github.com/GridTools/gt4py/pull/234</a></p>
+</dd>
+</dl>
+<section id="abstract">
+<h2>Abstract<a class="headerlink" href="#abstract" title="Permalink to this headline"></a></h2>
+<p>GT4Py treats the vertical domain specially so that top and bottom boundary conditions can easily be applied.
+It also has a limited ability to compute on sub-regions of the horizontal iteration space using the <code class="docutils literal notranslate"><span class="pre">domain</span></code> and <code class="docutils literal notranslate"><span class="pre">origin</span></code> keyword arguments to stencil calls.
+Using these offsets and limits the stencil’s iteration relative to fields’ origins.
+This feature however requires that separate stencils are written for boundaries, limiting the possibilities for backend optimization and adding complexity to the application.</p>
+<p>Here we propose a feature to push such regional computation around boundaries into the stencil and in the process add a feature capable of expressing stencil computation on global boundaries of domain-decomposed iterations spaces.
+This additionally has the benefit of locating stencil-specific boundary calculation adjacent to the main stencil code, resulting in a friendlier interface and fewer opportunities for errors.</p>
+</section>
+<section id="motivation-and-scope">
+<h2>Motivation and Scope<a class="headerlink" href="#motivation-and-scope" title="Permalink to this headline"></a></h2>
+<p>Numerical models, especially finite difference methods, commonly have specialized computation near boundaries to facilitate boundary conditions or other grid-specific requirements.
+We are developing a weather model on a cubed-sphere multi-block structured grid, and have many stencils that require such specific treatment on and near the structured block boundaries.</p>
+<p>We are currently using <code class="docutils literal notranslate"><span class="pre">domain</span></code> and <code class="docutils literal notranslate"><span class="pre">origin</span></code> keyword arguments to separate stencil calls for special block boundary computation, but doing so leads to inefficient code (multiplies stencil call overhead) that is difficult for model developers to read.
+To illustrate the need for such a feature, consider a snippet of the model that computes a variable <code class="docutils literal notranslate"><span class="pre">ub</span></code> differently based on location in the grid:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>@gtscript.stencil()​
+def main_ub(uc: Field, vc: Field, cosa: Field, rsina: Field, ub: Field, dt5: float):​
+    with computation(PARALLEL), interval(...):​
+        ub = dt5 * (uc[0, -1, 0] + uc - ​(vc[-1, 0, 0] + vc) * cosa) * rsina​
+
+@gtscript.stencil()​
+def x_edge_ub(ut: Field, ub: Field, dt5: float):
+    with computation(PARALLEL), interval(...):​
+        ub = dt5 * (ut[0, -1, 0] + ut)​
+
+@gtscript.stencil()​
+def y_edge_ub(ut: Field, ub: Field, *, dt4: float):
+    with computation(PARALLEL), interval(...):
+        ub = dt4 * (-ut[0, -2, 0] + 3.0 * (ut[0, -1, 0] + ut) - ut[0, 1, 0])
+
+# Requires a python function to call stencils on each region
+def ubke(uc, vc, ut, ub, dt5, dt4, grid):​
+    domain_y_edge = (grid.ni, 1, grid.nz)
+    domain_x_edge = (1, grid.nj, grid.nz)
+    main_ub(uc, vc, grid.cosa, grid.rsina, ub, dt5=dt5, ​
+            origin=(grid.local_istart, grid.local_jstart, 0),
+            domain=(grid.ni, grid.nj, grid.nz))​
+    if grid.west_edge:​
+        x_edge_ub(ut, ub, dt5=dt5, ​origin=(grid.local_istart, grid.local_jstart, 0), ​domain=domain_x_edge)​
+    if grid.south_edge:
+        y_edge(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jstart, 0), domain=domain_y_edge)
+    if grid.north_edge:
+        y_edge_ub(ut, ub, dt4=dt4, origin=(grid.local_istart, grid.local_jend, 0), domain=domain_y_edge)
+    if grid.east_edge:
+        x_edge_ub(ut, ub, dt5=dt5, origin=(grid.local_iend, grid.local_jstart, 0), domain=domain_x_edge)
+</pre></div>
+</div>
+<p>The specific feature that we are proposing is the addition of a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">horizontal()</span></code> context that specifies the horizontal iteration space (over parallel axes) using <code class="docutils literal notranslate"><span class="pre">region</span></code> objects.
+The arguments of <code class="docutils literal notranslate"><span class="pre">region</span></code> object’s <code class="docutils literal notranslate"><span class="pre">__getitem__</span></code> method use <em>axis offsets</em> to define a subregion of the stencil computational domain in the parallel <code class="docutils literal notranslate"><span class="pre">I</span></code> and <code class="docutils literal notranslate"><span class="pre">J</span></code> axes.</p>
+<p>Using this specification, the example is transformed into (for an <code class="docutils literal notranslate"><span class="pre">NxN</span></code> processor layout):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">row</span> <span class="o">=</span> <span class="p">(</span><span class="n">procid</span> <span class="o">/</span> <span class="n">N</span><span class="p">)</span>
+<span class="n">col</span> <span class="o">=</span> <span class="p">(</span><span class="n">procid</span> <span class="o">%</span> <span class="n">N</span><span class="p">)</span>
+<span class="n">istart</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">np_local</span> <span class="o">*</span> <span class="n">col</span>
+<span class="n">jstart</span> <span class="o">=</span> <span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">np_local</span> <span class="o">*</span> <span class="n">row</span>
+<span class="n">iend</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">np_global</span> <span class="o">-</span> <span class="n">col</span> <span class="o">*</span> <span class="p">(</span><span class="n">np_local</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">jend</span> <span class="o">=</span> <span class="n">J</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">np_global</span> <span class="o">-</span> <span class="n">row</span> <span class="o">*</span> <span class="p">(</span><span class="n">np_local</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">stencil</span><span class="p">(</span><span class="n">uc</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">vc</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">cosa</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">rsina</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ut</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ub</span><span class="p">:</span> <span class="n">Field</span><span class="p">,</span> <span class="n">dt5</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">dt4</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">__externals__</span> <span class="kn">import</span> <span class="n">istart</span><span class="p">,</span> <span class="n">iend</span><span class="p">,</span> <span class="n">jstart</span><span class="p">,</span> <span class="n">jend</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">ub</span> <span class="o">=</span> <span class="n">dt5</span> <span class="o">*</span> <span class="p">(</span><span class="n">uc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">uc</span> <span class="o">-</span> <span class="p">(</span><span class="n">vc</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">vc</span><span class="p">)</span> <span class="o">*</span> <span class="n">cosa</span><span class="p">)</span> <span class="o">*</span> <span class="n">rsina</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[</span><span class="n">istart</span><span class="p">,</span> <span class="p">:],</span> <span class="n">region</span><span class="p">[</span><span class="n">iend</span><span class="p">,</span> <span class="p">:]):</span>
+            <span class="n">ub</span> <span class="o">=</span> <span class="n">dt5</span> <span class="o">*</span> <span class="p">(</span><span class="n">ut</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">ut</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[:,</span> <span class="n">jstart</span><span class="p">],</span> <span class="n">region</span><span class="p">[:,</span> <span class="n">jend</span><span class="p">]):</span>
+            <span class="n">ub</span> <span class="o">=</span> <span class="n">dt4</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="n">ut</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="p">(</span><span class="n">ut</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">ut</span><span class="p">)</span> <span class="o">-</span> <span class="n">ut</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">np_local</span></code> and <code class="docutils literal notranslate"><span class="pre">np_global</span></code> are the local and global number of horizontal cells in either direction.
+For a <code class="docutils literal notranslate"><span class="pre">256x256</span></code> horizontal grid using <code class="docutils literal notranslate"><span class="pre">4</span></code> processors in a <code class="docutils literal notranslate"><span class="pre">2x2</span></code> grid, <code class="docutils literal notranslate"><span class="pre">np_local</span></code> and <code class="docutils literal notranslate"><span class="pre">np_global</span></code> would be <code class="docutils literal notranslate"><span class="pre">128</span></code> and <code class="docutils literal notranslate"><span class="pre">256</span></code>, respectively.
+GT4Py is given all the information it needs to reason about where a computation occurs, without overspecification.
+This information is encoded in the offsets relative to the start or stop of the stencil compute domain when it runs.</p>
+<p>This greatly reduces the complexity of the code and consolidates operations on <code class="docutils literal notranslate"><span class="pre">ub</span></code> - it is now immediately clear what the stencil is filling into <code class="docutils literal notranslate"><span class="pre">ub</span></code> everywhere.</p>
+</section>
+<section id="usage-and-impact">
+<h2>Usage and Impact<a class="headerlink" href="#usage-and-impact" title="Permalink to this headline"></a></h2>
+<p>This is an optional feature, but will be the accepted approach to specialize computation at points in the horizontal iteration space.</p>
+</section>
+<section id="backward-compatibility">
+<h2>Backward Compatibility<a class="headerlink" href="#backward-compatibility" title="Permalink to this headline"></a></h2>
+<p>This GDP aims to be fully backward-compatible.</p>
+</section>
+<section id="detailed-description">
+<h2>Detailed Description<a class="headerlink" href="#detailed-description" title="Permalink to this headline"></a></h2>
+<p>As introduced above, we propose adding a new <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">horizontal()</span></code> context that specializes the stencil on a region of the horizontal axes bounds using <code class="docutils literal notranslate"><span class="pre">region</span></code> objects, which pass information to GT4Py about the horizontal iteration space through the indexing operator, similar to numpy arrays.</p>
+<section id="axis-offsets">
+<h3>Axis Offsets<a class="headerlink" href="#axis-offsets" title="Permalink to this headline"></a></h3>
+<p>Regions computation is specified using <cite>Axis Offsets</cite>, which are defined in GT4Py by subscripting the axes (<code class="docutils literal notranslate"><span class="pre">I</span></code>, <code class="docutils literal notranslate"><span class="pre">J</span></code>, and <code class="docutils literal notranslate"><span class="pre">K</span></code>).
+These may be indexed and returns the specific indices within a stencil relative to the compute origin.
+For example: <code class="docutils literal notranslate"><span class="pre">I[0]</span></code> is the first compute point, <code class="docutils literal notranslate"><span class="pre">I[1]</span></code> the second, and finally <code class="docutils literal notranslate"><span class="pre">I[-1]</span></code> is the last point in the stencil compute domain along the <code class="docutils literal notranslate"><span class="pre">I</span></code> axis.</p>
+<p>Stencil computation in the horizontal axes behaves differently than in the vertical because statements execute over an index space that may extend beyond the limits defined in the stencil compute domain.
+Such <code class="docutils literal notranslate"><span class="pre">extents</span></code> cannot be represented by merely subscripting axes, since for example <code class="docutils literal notranslate"><span class="pre">I[-1]</span></code> referes to the last compute domain index along the <code class="docutils literal notranslate"><span class="pre">I</span></code> axis, not the point before the beginning of it.
+Axis Offsets therefore internally hold an offset which is added or subtracted from the indexed point in the axis.
+For example <code class="docutils literal notranslate"><span class="pre">I[0]</span> <span class="pre">-</span> <span class="pre">2</span></code> is itself an Axis Offset that refers to 2 points before the start of the compute domain in <code class="docutils literal notranslate"><span class="pre">I</span></code>.</p>
+<p>Axis Offsets may be manipulated in Python or in a stencil and can be used as externals in GT4Py to be used in <code class="docutils literal notranslate"><span class="pre">region</span></code> subscripts.</p>
+</section>
+<section id="region-specification">
+<h3>Region Specification<a class="headerlink" href="#region-specification" title="Permalink to this headline"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">region</span></code> is a keyword in GT4Py that, when subscripted using slices of axis offsets, defines the restricted computation.
+These form the arguments to <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">horizontal()</span></code>.</p>
+<p>As an example, <code class="docutils literal notranslate"><span class="pre">region[I[0],</span> <span class="pre">:]</span></code> specifies a restriction to the first compute point on the <code class="docutils literal notranslate"><span class="pre">I</span></code> axis, and no restriction in the <code class="docutils literal notranslate"><span class="pre">J</span></code> axis.
+<code class="docutils literal notranslate"><span class="pre">I[0]</span></code> is a single point, so when converted to a slice is still the single point.
+The <code class="docutils literal notranslate"><span class="pre">J</span></code> axis simply has <code class="docutils literal notranslate"><span class="pre">:</span></code>, which is an unrestricted slice, which GT4Py interprets as an unrestricted axis (behaves normally).</p>
+<p>The previous example introduced a key element of regional computation: There must not only be a way of specifying axis offsets outside the compute domain, but slices that extend to infinity in each direction (or alternatively, unrestricted endpoints of axes).
+GTScript interprets an unrestricted start or stop element as extending to infinity (or, unrestricted).
+This is useful in the case when writing a stencil and requiring that an edge condition be made without knowing how far the statements needs to be extended.
+For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[:</span><span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">:]):</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="mi">0</span>
+</pre></div>
+</div>
+<p>This will set <code class="docutils literal notranslate"><span class="pre">u=0</span></code> in all extended computation points to the left of the compute domain.</p>
+<p>Examples of this are shown in the image below.
+The blue line shows the compute domain along the <code class="docutils literal notranslate"><span class="pre">I</span></code> axis, and two examples of region axis slices are shown in red.</p>
+<img alt="../_images/axis_offsets.svg" src="../_images/axis_offsets.svg" /></section>
+<section id="execution">
+<h3>Execution<a class="headerlink" href="#execution" title="Permalink to this headline"></a></h3>
+<p>Another key feature to remember when using regions is that these should be thought of as specifying specialized computation at points.
+These are therefore not guaranteed to execute, except where inside the compute domain.
+The statements inside a block with <code class="docutils literal notranslate"><span class="pre">region[:I[0]-1,</span> <span class="pre">:]</span></code> will only execute where the outputs from that block are necessary to compute something else with an extent.
+For example, the following will execute</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[</span><span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]):</span>
+        <span class="n">field_in</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">field_out</span> <span class="o">=</span> <span class="n">field_in</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">field_in</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>since the <code class="docutils literal notranslate"><span class="pre">field_in</span></code> value at <code class="docutils literal notranslate"><span class="pre">I[0]-1</span></code> is being consumed to compute a value of an output field inside the compute domain.
+If the region were defined using <code class="docutils literal notranslate"><span class="pre">I[0]-2</span></code>, the code would be ignored.</p>
+</section>
+</section>
+<section id="implementation">
+<h2>Implementation<a class="headerlink" href="#implementation" title="Permalink to this headline"></a></h2>
+<p>The implementation in GT4Py involves</p>
+<ol class="arabic simple">
+<li><p>Correctly parse <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">horizontal()</span></code> in the frontend, and add ability for IRs to represent this computation</p></li>
+<li><p>Add parsing tests</p></li>
+<li><p>Add code generation support</p></li>
+<li><p>Code generation tests</p></li>
+<li><p>Create at least one demo that incorporates this feature</p></li>
+</ol>
+</section>
+<section id="fv3-example">
+<h2>FV3 Example<a class="headerlink" href="#fv3-example" title="Permalink to this headline"></a></h2>
+<div class="highlight-Fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">divergence_corner</span><span class="p">(</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">ua</span><span class="p">,</span><span class="w"> </span><span class="n">va</span><span class="p">,</span><span class="w"> </span><span class="n">divg_d</span><span class="p">,</span><span class="w"> </span><span class="p">...)</span><span class="w"></span>
+
+<span class="c">! arguments</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ua</span><span class="p">(</span><span class="n">isd</span><span class="p">:</span><span class="n">ied</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">:</span><span class="n">jed</span><span class="p">)</span><span class="w">          </span><span class="c">! cell-center</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">va</span><span class="p">(</span><span class="n">isd</span><span class="p">:</span><span class="n">ied</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">:</span><span class="n">jed</span><span class="p">)</span><span class="w">          </span><span class="c">! cell-center</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">isd</span><span class="p">:</span><span class="n">ied</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">:</span><span class="n">jed</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="w">         </span><span class="c">! staggered in y-direction</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">isd</span><span class="p">:</span><span class="n">ied</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">:</span><span class="n">jed</span><span class="p">)</span><span class="w">         </span><span class="c">! staggered in x-direction</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="n">isd</span><span class="p">:</span><span class="n">ied</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">:</span><span class="n">jed</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="w">  </span><span class="c">! corner (staggered both in x- and y-direction)</span>
+
+<span class="c">! locals</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uf</span><span class="p">(</span><span class="k">is</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">ie</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">je</span><span class="o">+</span><span class="mi">2</span><span class="p">)</span><span class="w">      </span><span class="c">! staggered in y-direction</span>
+<span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="k">is</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">ie</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="o">-</span><span class="mi">2</span><span class="p">:</span><span class="n">je</span><span class="o">+</span><span class="mi">2</span><span class="p">)</span><span class="w">      </span><span class="c">! staggered in y-direction</span>
+
+<span class="c">! indices</span>
+<span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">is</span><span class="p">,</span><span class="w">  </span><span class="n">ie</span><span class="p">,</span><span class="w">  </span><span class="n">js</span><span class="p">,</span><span class="w">  </span><span class="n">je</span><span class="w">   </span><span class="c">! compute domain</span>
+<span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">isd</span><span class="p">,</span><span class="w"> </span><span class="n">ied</span><span class="p">,</span><span class="w"> </span><span class="n">jsd</span><span class="p">,</span><span class="w"> </span><span class="n">jed</span><span class="w">  </span><span class="c">! data domain = compute domain + halo zone</span>
+
+<span class="n">is2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="k">is</span><span class="p">)</span><span class="w">         </span><span class="c">! restrict computation to exclude west-edge</span>
+<span class="n">ie1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">npx</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="w">   </span><span class="c">! restrict computation to exclude east-edge</span>
+
+<span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">je</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">npy</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">    do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">is</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">      </span><span class="n">uf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
+<span class="w">        </span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dyc</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span><span class="w"></span>
+<span class="w">    </span><span class="k">end do</span>
+<span class="k">  else</span>
+<span class="k">    do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">is</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">      </span><span class="n">uf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">          </span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.25</span><span class="o">*</span><span class="p">(</span><span class="n">va</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">va</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">))</span><span class="o">*</span><span class="p">(</span><span class="n">cos_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cos_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">2</span><span class="p">)))</span><span class="w">  </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">                                  </span><span class="o">*</span><span class="n">dyc</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span><span class="w"></span>
+<span class="w">    </span><span class="k">end do</span>
+<span class="k">  end if</span>
+<span class="k">end do</span>
+
+<span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">js</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">je</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">  </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">is2</span><span class="p">,</span><span class="w"> </span><span class="n">ie1</span><span class="w">     </span><span class="c">! inner domain (full compute domain for ranks without edges)</span>
+<span class="w">    </span><span class="n">vf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">      </span><span class="p">(</span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.25</span><span class="o">*</span><span class="p">(</span><span class="n">ua</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ua</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="o">*</span><span class="p">(</span><span class="n">cos_sg</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cos_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">)))</span><span class="w">  </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">                            </span><span class="o">*</span><span class="n">dxc</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sin_sg</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span><span class="w"></span>
+<span class="w">  </span><span class="k">end do</span>
+<span class="k">  if</span><span class="w"> </span><span class="p">(</span><span class="k">is</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w">      </span><span class="c">! west-edge</span>
+<span class="w">    </span><span class="n">vf</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">      </span><span class="n">v</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dxc</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sin_sg</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"></span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">npx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w">  </span><span class="c">! east-edge</span>
+<span class="w">    </span><span class="n">vf</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">      </span><span class="n">v</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dxc</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg</span><span class="p">(</span><span class="n">npx</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sin_sg</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"></span>
+<span class="k">end do</span>
+
+<span class="k">do </span><span class="n">j</span><span class="o">=</span><span class="n">js</span><span class="p">,</span><span class="n">je</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">  </span><span class="k">do </span><span class="n">i</span><span class="o">=</span><span class="k">is</span><span class="p">,</span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">    </span><span class="n">divg_d</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">uf</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">uf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">end do</span>
+<span class="k">end do</span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">gridstruct</span><span class="p">%</span><span class="n">sw_corner</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">  </span><span class="n">divg_d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">    </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">    </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">    </span><span class="mi">0</span><span class="p">)</span><span class="w"></span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">gridstruct</span><span class="p">%</span><span class="n">se_corner</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">  </span><span class="n">divg_d</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w">  </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w">  </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="w">  </span><span class="mi">0</span><span class="p">)</span><span class="w"></span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">gridstruct</span><span class="p">%</span><span class="n">ne_corner</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">  </span><span class="n">divg_d</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="n">npy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="n">npy</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="n">npx</span><span class="p">,</span><span class="n">npy</span><span class="p">)</span><span class="w"></span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">gridstruct</span><span class="p">%</span><span class="n">nw_corner</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span><span class="w"></span>
+<span class="w">  </span><span class="n">divg_d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">  </span><span class="n">npy</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">  </span><span class="n">npy</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">vf</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w">  </span><span class="n">npy</span><span class="p">)</span><span class="w"></span>
+
+<span class="k">do </span><span class="n">j</span><span class="o">=</span><span class="n">js</span><span class="p">,</span><span class="n">je</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">  </span><span class="k">do </span><span class="n">i</span><span class="o">=</span><span class="k">is</span><span class="p">,</span><span class="n">ie</span><span class="o">+</span><span class="mi">1</span><span class="w"></span>
+<span class="w">    </span><span class="n">divg_d</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rarea_c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">divg_d</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">)</span><span class="w"></span>
+<span class="w">  </span><span class="k">end do</span>
+<span class="k">end do</span><span class="w"></span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">row</span> <span class="o">=</span> <span class="p">(</span><span class="n">procid</span> <span class="o">/</span> <span class="n">N</span><span class="p">)</span>
+<span class="n">col</span> <span class="o">=</span> <span class="p">(</span><span class="n">procid</span> <span class="o">%</span> <span class="n">N</span><span class="p">)</span>
+<span class="n">istart</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">np_local</span> <span class="o">*</span> <span class="n">col</span>
+<span class="n">jstart</span> <span class="o">=</span> <span class="n">J</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">np_local</span> <span class="o">*</span> <span class="n">row</span>
+<span class="n">iend</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">np_global</span> <span class="o">-</span> <span class="n">col</span> <span class="o">*</span> <span class="p">(</span><span class="n">np_local</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">jend</span> <span class="o">=</span> <span class="n">J</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">np_global</span> <span class="o">-</span> <span class="n">row</span> <span class="o">*</span> <span class="p">(</span><span class="n">np_local</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">divergence_corner</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">__externals__</span> <span class="kn">import</span> <span class="n">istart</span><span class="p">,</span> <span class="n">iend</span><span class="p">,</span> <span class="n">jstart</span><span class="p">,</span> <span class="n">jend</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">uf</span> <span class="o">=</span> <span class="p">(</span><span class="n">u</span> <span class="o">-</span> <span class="mf">0.25</span><span class="o">*</span><span class="p">(</span><span class="n">va</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">va</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">cos_sg4</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">cos_sg2</span><span class="p">))</span>  \
+                                  <span class="o">*</span><span class="n">dyc</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg4</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sin_sg2</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[:,</span> <span class="n">jstart</span><span class="p">],</span> <span class="n">region</span><span class="p">[:,</span> <span class="n">jend</span><span class="p">)):</span>
+            <span class="n">uf</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">dyc</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg4</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sin_sg2</span><span class="p">)</span>
+
+        <span class="n">vf</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span> <span class="o">-</span> <span class="mf">0.25</span><span class="o">*</span><span class="p">(</span><span class="n">ua</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">ua</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">cos_sg3</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">cos_sg1</span><span class="p">))</span>  \
+                                  <span class="o">*</span><span class="n">dxc</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg3</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sin_sg1</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[</span><span class="n">istart</span><span class="p">,</span> <span class="p">:],</span> <span class="n">region</span><span class="p">[</span><span class="n">iend</span><span class="p">,</span> <span class="p">:]):</span>
+            <span class="n">vf</span> <span class="o">=</span> <span class="n">v</span><span class="o">*</span><span class="n">dxc</span><span class="o">*</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">sin_sg3</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">sin_sg1</span><span class="p">)</span>
+
+        <span class="n">divg_d</span> <span class="o">=</span> <span class="n">rarea_c</span> <span class="o">*</span> <span class="p">(</span><span class="n">vf</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">vf</span> <span class="o">+</span> <span class="n">uf</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">uf</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[</span><span class="n">istart</span><span class="p">,</span> <span class="n">jstart</span><span class="p">],</span> <span class="n">region</span><span class="p">[</span><span class="n">istart</span><span class="p">,</span> <span class="n">jend</span><span class="p">]):</span>
+            <span class="n">divg_d</span> <span class="o">=</span> <span class="n">rarea_c</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="n">vf</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">uf</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">uf</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">horizontal</span><span class="p">(</span><span class="n">region</span><span class="p">[</span><span class="n">iend</span><span class="p">,</span> <span class="n">jstart</span><span class="p">],</span> <span class="n">region</span><span class="p">[</span><span class="n">iend</span><span class="p">,</span> <span class="n">jend</span><span class="p">]):</span>
+            <span class="n">divg_d</span> <span class="o">=</span> <span class="n">rarea_c</span> <span class="o">*</span> <span class="p">(</span><span class="n">vf</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">uf</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">uf</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="copyright">
+<h2>Copyright<a class="headerlink" href="#copyright" title="Permalink to this headline"></a></h2>
+<p>This document has been placed in the public domain.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gdp-template.html" class="btn btn-neutral float-left" title="GDP X — Template and Instructions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gdp-0001-standalone-cli.html" class="btn btn-neutral float-right" title="GDP 1 — Standalone Compiler CLI" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

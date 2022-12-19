@@ -1,0 +1,69 @@
+gt4py.cartesian.gtc.dace package
+================================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.cartesian.gtc.dace.expansion
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.dace.expansion\_specification module
+--------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion_specification
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.nodes module
+-------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.nodes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.oir\_to\_dace module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.oir_to_dace
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.symbol\_utils module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.symbol_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.transformations module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.transformations
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.utils module
+-------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.dace
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.oir &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.oir</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.oir</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Optimizable Intermediate Representation (working title).</span>
+
+<span class="sd">OIR represents a computation at the level of GridTools stages and multistages,</span>
+<span class="sd">e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="n">AxisBound</span><span class="p">,</span> <span class="n">LocNode</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">datamodels</span>
+
+
+<div class="viewcode-block" id="Expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Expr">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Expr</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Stmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Stmt">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Stmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Literal"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Literal">[docs]</a><span class="k">class</span> <span class="nc">Literal</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ScalarAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.ScalarAccess">[docs]</a><span class="k">class</span> <span class="nc">ScalarAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VariableKOffset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VariableKOffset">[docs]</a><span class="k">class</span> <span class="nc">VariableKOffset</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">[</span><span class="n">Expr</span><span class="p">]):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="FieldAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.FieldAccess">[docs]</a><span class="k">class</span> <span class="nc">FieldAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">[</span><span class="n">Expr</span><span class="p">,</span> <span class="n">VariableKOffset</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="AssignStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.AssignStmt">[docs]</a><span class="k">class</span> <span class="nc">AssignStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">],</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+<div class="viewcode-block" id="AssignStmt.no_horizontal_offset_in_assignment"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.AssignStmt.no_horizontal_offset_in_assignment">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">no_horizontal_offset_in_assignment</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">):</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Lhs of assignment must not have a horizontal offset.&quot;</span><span class="p">)</span></div>
+
+    <span class="n">_dtype_validation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">assign_stmt_dtype_validation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MaskStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.MaskStmt">[docs]</a><span class="k">class</span> <span class="nc">MaskStmt</span><span class="p">(</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="n">mask</span><span class="p">:</span> <span class="n">Expr</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+
+<div class="viewcode-block" id="MaskStmt.mask_is_boolean_field_expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.MaskStmt.mask_is_boolean_field_expr">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;mask&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">mask_is_boolean_field_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Mask must be a boolean expression.&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalRestriction"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.HorizontalRestriction">[docs]</a><span class="k">class</span> <span class="nc">HorizontalRestriction</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">[</span><span class="n">Stmt</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="UnaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnaryOp">[docs]</a><span class="k">class</span> <span class="nc">UnaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BinaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.BinaryOp">[docs]</a><span class="k">class</span> <span class="nc">BinaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">binary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="TernaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.TernaryOp">[docs]</a><span class="k">class</span> <span class="nc">TernaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ternary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Cast"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Cast">[docs]</a><span class="k">class</span> <span class="nc">Cast</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Cast</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="NativeFuncCall"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.NativeFuncCall">[docs]</a><span class="k">class</span> <span class="nc">NativeFuncCall</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">native_func_call_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="While"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.While">[docs]</a><span class="k">class</span> <span class="nc">While</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">While</span><span class="p">[</span><span class="n">Stmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Decl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Decl">[docs]</a><span class="k">class</span> <span class="nc">Decl</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolName</span><span class="p">]</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Decl</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Trying to instantiate `Decl` abstract class.&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FieldDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.FieldDecl">[docs]</a><span class="k">class</span> <span class="nc">FieldDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="n">dimensions</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span>
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ScalarDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.ScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">ScalarDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="LocalScalar"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.LocalScalar">[docs]</a><span class="k">class</span> <span class="nc">LocalScalar</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Temporary"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Temporary">[docs]</a><span class="k">class</span> <span class="nc">Temporary</span><span class="p">(</span><span class="n">FieldDecl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<span class="k">def</span> <span class="nf">_check_interval</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Interval&quot;</span><span class="p">,</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">end</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span>
+        <span class="ow">and</span> <span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Start level must be smaller or equal end level&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">end</span><span class="o">.</span><span class="n">level</span>
+        <span class="ow">and</span> <span class="ow">not</span> <span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">&lt;</span> <span class="n">end</span><span class="o">.</span><span class="n">offset</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;Start offset must be smaller than end offset if start and end levels are equal&quot;</span>
+        <span class="p">)</span>
+
+
+<div class="viewcode-block" id="Interval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval">[docs]</a><span class="k">class</span> <span class="nc">Interval</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">start</span><span class="p">:</span> <span class="n">AxisBound</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">AxisBound</span>
+
+<div class="viewcode-block" id="Interval.check"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval.check">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">check</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;Interval&quot;</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="s2">&quot;Interval&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_check_interval</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interval.covers"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval.covers">[docs]</a>    <span class="k">def</span> <span class="nf">covers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;Interval&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">outer_starts_lower</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span>
+        <span class="n">outer_ends_higher</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">&gt;</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span>
+        <span class="k">return</span> <span class="n">outer_starts_lower</span> <span class="ow">and</span> <span class="n">outer_ends_higher</span></div>
+
+<div class="viewcode-block" id="Interval.intersects"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval.intersects">[docs]</a>    <span class="k">def</span> <span class="nf">intersects</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">&quot;Interval&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interval.shifted"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval.shifted">[docs]</a>    <span class="k">def</span> <span class="nf">shifted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Interval&quot;</span><span class="p">,</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">UnboundedInterval</span><span class="p">()</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Interval.full"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Interval.full">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">full</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">end</span><span class="p">())</span></div></div>
+
+
+<div class="viewcode-block" id="UnboundedInterval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval">[docs]</a><span class="k">class</span> <span class="nc">UnboundedInterval</span><span class="p">:</span>
+    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxisBound</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxisBound</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="UnboundedInterval.check"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval.check">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">check</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_check_interval</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UnboundedInterval.covers"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval.covers">[docs]</a>    <span class="k">def</span> <span class="nf">covers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Interval</span><span class="p">,</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="c1"># at this point, we know self is actually bounded, so can&#39;t cover unbounded intervals</span>
+        <span class="k">if</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Interval</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="p">)</span><span class="o">.</span><span class="n">covers</span><span class="p">(</span><span class="n">other</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UnboundedInterval.intersects"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval.intersects">[docs]</a>    <span class="k">def</span> <span class="nf">intersects</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Interval</span><span class="p">,</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">no_overlap_high</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span>
+        <span class="p">)</span>
+        <span class="n">no_overlap_low</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">end</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="p">(</span><span class="n">no_overlap_low</span> <span class="ow">or</span> <span class="n">no_overlap_high</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UnboundedInterval.shifted"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval.shifted">[docs]</a>    <span class="k">def</span> <span class="nf">shifted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;UnboundedInterval&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">UnboundedInterval</span><span class="p">()</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="kc">None</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="kc">None</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">UnboundedInterval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+
+<div class="viewcode-block" id="UnboundedInterval.full"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.UnboundedInterval.full">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">full</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">()</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalExecution"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.HorizontalExecution">[docs]</a><span class="k">class</span> <span class="nc">HorizontalExecution</span><span class="p">(</span><span class="n">LocNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">):</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+    <span class="n">declarations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LocalScalar</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="CacheDesc"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.CacheDesc">[docs]</a><span class="k">class</span> <span class="nc">CacheDesc</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="IJCache"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.IJCache">[docs]</a><span class="k">class</span> <span class="nc">IJCache</span><span class="p">(</span><span class="n">CacheDesc</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="KCache"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.KCache">[docs]</a><span class="k">class</span> <span class="nc">KCache</span><span class="p">(</span><span class="n">CacheDesc</span><span class="p">):</span>
+    <span class="n">fill</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">flush</span><span class="p">:</span> <span class="nb">bool</span></div>
+
+
+<div class="viewcode-block" id="VerticalLoopSection"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoopSection">[docs]</a><span class="k">class</span> <span class="nc">VerticalLoopSection</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">interval</span><span class="p">:</span> <span class="n">Interval</span>
+    <span class="n">horizontal_executions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">HorizontalExecution</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="VerticalLoop"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoop">[docs]</a><span class="k">class</span> <span class="nc">VerticalLoop</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span>
+    <span class="n">sections</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">VerticalLoopSection</span><span class="p">]</span>
+    <span class="n">caches</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CacheDesc</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="VerticalLoop.nonempty_loop"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoop.nonempty_loop">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;sections&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">nonempty_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">VerticalLoopSection</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Empty vertical loop is not allowed&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="VerticalLoop.valid_section_intervals"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoop.valid_section_intervals">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">valid_section_intervals</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;VerticalLoop&quot;</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="s2">&quot;VerticalLoop&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">starts</span><span class="p">,</span> <span class="n">ends</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="p">((</span><span class="n">s</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">sections</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span>
+            <span class="n">starts</span><span class="p">,</span> <span class="n">ends</span> <span class="o">=</span> <span class="n">starts</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">ends</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">starts</span><span class="p">,</span> <span class="n">ends</span> <span class="o">=</span> <span class="n">starts</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">ends</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">end</span><span class="o">.</span><span class="n">level</span> <span class="ow">and</span> <span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">==</span> <span class="n">end</span><span class="o">.</span><span class="n">offset</span>
+            <span class="k">for</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">starts</span><span class="p">,</span> <span class="n">ends</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Loop intervals not contiguous or in wrong order&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Stencil"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Stencil">[docs]</a><span class="k">class</span> <span class="nc">Stencil</span><span class="p">(</span><span class="n">LocNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">ValidatedSymbolTableTrait</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="c1"># TODO: fix to be List[Union[ScalarDecl, FieldDecl]]</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Decl</span><span class="p">]</span>
+    <span class="n">vertical_loops</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">VerticalLoop</span><span class="p">]</span>
+    <span class="n">declarations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Temporary</span><span class="p">]</span>
+
+    <span class="n">_validate_dtype_is_set</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">validate_dtype_is_set</span><span class="p">()</span>
+    <span class="n">_validate_lvalue_dims</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">validate_lvalue_dims</span><span class="p">(</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="n">FieldDecl</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

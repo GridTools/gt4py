@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.common &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.common</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.common</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">enum</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.special</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.utils</span> <span class="kn">import</span> <span class="n">dimension_flags_to_names</span><span class="p">,</span> <span class="n">flatten_list</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">datamodels</span>
+
+
+<div class="viewcode-block" id="GTCPreconditionError"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.GTCPreconditionError">[docs]</a><span class="k">class</span> <span class="nc">GTCPreconditionError</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">):</span>
+    <span class="n">message_template</span> <span class="o">=</span> <span class="s2">&quot;GTC pass precondition error: [</span><span class="si">{info}</span><span class="s2">]&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">expected</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">expected</span><span class="o">=</span><span class="n">expected</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+
+
+<div class="viewcode-block" id="GTCPostconditionError"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.GTCPostconditionError">[docs]</a><span class="k">class</span> <span class="nc">GTCPostconditionError</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">EveError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">):</span>
+    <span class="n">message_template</span> <span class="o">=</span> <span class="s2">&quot;GTC pass postcondition error: [</span><span class="si">{info}</span><span class="s2">]&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">expected</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">expected</span><span class="o">=</span><span class="n">expected</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+
+
+<div class="viewcode-block" id="AssignmentKind"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AssignmentKind">[docs]</a><span class="k">class</span> <span class="nc">AssignmentKind</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Kind of assignment: plain or combined with operations.&quot;&quot;&quot;</span>
+
+    <span class="n">PLAIN</span> <span class="o">=</span> <span class="s2">&quot;=&quot;</span>
+    <span class="n">ADD</span> <span class="o">=</span> <span class="s2">&quot;+=&quot;</span>
+    <span class="n">SUB</span> <span class="o">=</span> <span class="s2">&quot;-=&quot;</span>
+    <span class="n">MUL</span> <span class="o">=</span> <span class="s2">&quot;*=&quot;</span>
+    <span class="n">DIV</span> <span class="o">=</span> <span class="s2">&quot;/=&quot;</span></div>
+
+
+<div class="viewcode-block" id="UnaryOperator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.UnaryOperator">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">UnaryOperator</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Unary operator indentifier.&quot;&quot;&quot;</span>
+
+    <span class="n">POS</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span>
+    <span class="n">NEG</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+    <span class="n">NOT</span> <span class="o">=</span> <span class="s2">&quot;not&quot;</span></div>
+
+
+<div class="viewcode-block" id="ArithmeticOperator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.ArithmeticOperator">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">ArithmeticOperator</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Arithmetic operators.&quot;&quot;&quot;</span>
+
+    <span class="n">ADD</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span>
+    <span class="n">SUB</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+    <span class="n">MUL</span> <span class="o">=</span> <span class="s2">&quot;*&quot;</span>
+    <span class="n">DIV</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span>
+    <span class="n">MATMULT</span> <span class="o">=</span> <span class="s2">&quot;@&quot;</span></div>
+
+
+<div class="viewcode-block" id="ComparisonOperator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.ComparisonOperator">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">ComparisonOperator</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Comparison operators.&quot;&quot;&quot;</span>
+
+    <span class="n">GT</span> <span class="o">=</span> <span class="s2">&quot;&gt;&quot;</span>
+    <span class="n">LT</span> <span class="o">=</span> <span class="s2">&quot;&lt;&quot;</span>
+    <span class="n">GE</span> <span class="o">=</span> <span class="s2">&quot;&gt;=&quot;</span>
+    <span class="n">LE</span> <span class="o">=</span> <span class="s2">&quot;&lt;=&quot;</span>
+    <span class="n">EQ</span> <span class="o">=</span> <span class="s2">&quot;==&quot;</span>
+    <span class="n">NE</span> <span class="o">=</span> <span class="s2">&quot;!=&quot;</span></div>
+
+
+<div class="viewcode-block" id="LogicalOperator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.LogicalOperator">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">LogicalOperator</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Logical operators.&quot;&quot;&quot;</span>
+
+    <span class="n">AND</span> <span class="o">=</span> <span class="s2">&quot;and&quot;</span>
+    <span class="n">OR</span> <span class="o">=</span> <span class="s2">&quot;or&quot;</span></div>
+
+
+<div class="viewcode-block" id="DataType"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.DataType">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">DataType</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Data type identifier.&quot;&quot;&quot;</span>
+
+    <span class="c1"># IDs from gt4py.cartesian</span>
+    <span class="n">INVALID</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="n">AUTO</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">DEFAULT</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">BOOL</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">INT8</span> <span class="o">=</span> <span class="mi">11</span>
+    <span class="n">INT16</span> <span class="o">=</span> <span class="mi">12</span>
+    <span class="n">INT32</span> <span class="o">=</span> <span class="mi">14</span>
+    <span class="n">INT64</span> <span class="o">=</span> <span class="mi">18</span>
+    <span class="n">FLOAT32</span> <span class="o">=</span> <span class="mi">104</span>
+    <span class="n">FLOAT64</span> <span class="o">=</span> <span class="mi">108</span>
+
+<div class="viewcode-block" id="DataType.isbool"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.DataType.isbool">[docs]</a>    <span class="k">def</span> <span class="nf">isbool</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">BOOL</span></div>
+
+<div class="viewcode-block" id="DataType.isinteger"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.DataType.isinteger">[docs]</a>    <span class="k">def</span> <span class="nf">isinteger</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">INT8</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">INT32</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">INT64</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataType.isfloat"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.DataType.isfloat">[docs]</a>    <span class="k">def</span> <span class="nf">isfloat</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="LoopOrder"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.LoopOrder">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">LoopOrder</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Loop order identifier.&quot;&quot;&quot;</span>
+
+    <span class="n">PARALLEL</span> <span class="o">=</span> <span class="s2">&quot;parallel&quot;</span>
+    <span class="n">FORWARD</span> <span class="o">=</span> <span class="s2">&quot;forward&quot;</span>
+    <span class="n">BACKWARD</span> <span class="o">=</span> <span class="s2">&quot;backward&quot;</span></div>
+
+
+<div class="viewcode-block" id="BuiltInLiteral"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.BuiltInLiteral">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">BuiltInLiteral</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">MAX_VALUE</span> <span class="o">=</span> <span class="s2">&quot;max&quot;</span>
+    <span class="n">MIN_VALUE</span> <span class="o">=</span> <span class="s2">&quot;min&quot;</span>
+    <span class="n">ZERO</span> <span class="o">=</span> <span class="s2">&quot;zero&quot;</span>
+    <span class="n">ONE</span> <span class="o">=</span> <span class="s2">&quot;one&quot;</span>
+    <span class="n">TRUE</span> <span class="o">=</span> <span class="s2">&quot;true&quot;</span>
+    <span class="n">FALSE</span> <span class="o">=</span> <span class="s2">&quot;false&quot;</span></div>
+
+
+<div class="viewcode-block" id="NativeFunction"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.NativeFunction">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">NativeFunction</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">ABS</span> <span class="o">=</span> <span class="s2">&quot;abs&quot;</span>
+    <span class="n">MIN</span> <span class="o">=</span> <span class="s2">&quot;min&quot;</span>
+    <span class="n">MAX</span> <span class="o">=</span> <span class="s2">&quot;max&quot;</span>
+    <span class="n">MOD</span> <span class="o">=</span> <span class="s2">&quot;mod&quot;</span>
+
+    <span class="n">SIN</span> <span class="o">=</span> <span class="s2">&quot;sin&quot;</span>
+    <span class="n">COS</span> <span class="o">=</span> <span class="s2">&quot;cos&quot;</span>
+    <span class="n">TAN</span> <span class="o">=</span> <span class="s2">&quot;tan&quot;</span>
+    <span class="n">ARCSIN</span> <span class="o">=</span> <span class="s2">&quot;arcsin&quot;</span>
+    <span class="n">ARCCOS</span> <span class="o">=</span> <span class="s2">&quot;arccos&quot;</span>
+    <span class="n">ARCTAN</span> <span class="o">=</span> <span class="s2">&quot;arctan&quot;</span>
+    <span class="n">SINH</span> <span class="o">=</span> <span class="s2">&quot;sinh&quot;</span>
+    <span class="n">COSH</span> <span class="o">=</span> <span class="s2">&quot;cosh&quot;</span>
+    <span class="n">TANH</span> <span class="o">=</span> <span class="s2">&quot;tanh&quot;</span>
+    <span class="n">ARCSINH</span> <span class="o">=</span> <span class="s2">&quot;arcsinh&quot;</span>
+    <span class="n">ARCCOSH</span> <span class="o">=</span> <span class="s2">&quot;arccosh&quot;</span>
+    <span class="n">ARCTANH</span> <span class="o">=</span> <span class="s2">&quot;arctanh&quot;</span>
+
+    <span class="n">SQRT</span> <span class="o">=</span> <span class="s2">&quot;sqrt&quot;</span>
+    <span class="n">POW</span> <span class="o">=</span> <span class="s2">&quot;pow&quot;</span>
+    <span class="n">EXP</span> <span class="o">=</span> <span class="s2">&quot;exp&quot;</span>
+    <span class="n">LOG</span> <span class="o">=</span> <span class="s2">&quot;log&quot;</span>
+    <span class="n">GAMMA</span> <span class="o">=</span> <span class="s2">&quot;gamma&quot;</span>
+    <span class="n">CBRT</span> <span class="o">=</span> <span class="s2">&quot;cbrt&quot;</span>
+
+    <span class="n">ISFINITE</span> <span class="o">=</span> <span class="s2">&quot;isfinite&quot;</span>
+    <span class="n">ISINF</span> <span class="o">=</span> <span class="s2">&quot;isinf&quot;</span>
+    <span class="n">ISNAN</span> <span class="o">=</span> <span class="s2">&quot;isnan&quot;</span>
+    <span class="n">FLOOR</span> <span class="o">=</span> <span class="s2">&quot;floor&quot;</span>
+    <span class="n">CEIL</span> <span class="o">=</span> <span class="s2">&quot;ceil&quot;</span>
+    <span class="n">TRUNC</span> <span class="o">=</span> <span class="s2">&quot;trunc&quot;</span>
+
+    <span class="n">IR_OP_TO_NUM_ARGS</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="s2">&quot;NativeFunction&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">arity</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">IR_OP_TO_NUM_ARGS</span><span class="p">[</span><span class="bp">self</span><span class="p">]</span></div>
+
+
+<span class="n">NativeFunction</span><span class="o">.</span><span class="n">IR_OP_TO_NUM_ARGS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">NativeFunction</span><span class="p">(</span><span class="n">f</span><span class="p">):</span> <span class="n">v</span>  <span class="c1"># instead of noqa on every line</span>
+    <span class="k">for</span> <span class="n">f</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">{</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ABS</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MOD</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SIN</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COS</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TAN</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SINH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COSH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TANH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SQRT</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">EXP</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">LOG</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CBRT</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">FLOOR</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CEIL</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TRUNC</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">}</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="LevelMarker"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.LevelMarker">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">LevelMarker</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">START</span> <span class="o">=</span> <span class="s2">&quot;start&quot;</span>
+    <span class="n">END</span> <span class="o">=</span> <span class="s2">&quot;end&quot;</span></div>
+
+
+<div class="viewcode-block" id="ExprKind"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.ExprKind">[docs]</a><span class="nd">@enum</span><span class="o">.</span><span class="n">unique</span>
+<span class="k">class</span> <span class="nc">ExprKind</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">SCALAR</span><span class="p">:</span> <span class="s2">&quot;ExprKind&quot;</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;ExprKind&quot;</span><span class="p">,</span> <span class="n">enum</span><span class="o">.</span><span class="n">auto</span><span class="p">())</span>
+    <span class="n">FIELD</span><span class="p">:</span> <span class="s2">&quot;ExprKind&quot;</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;ExprKind&quot;</span><span class="p">,</span> <span class="n">enum</span><span class="o">.</span><span class="n">auto</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="LocNode"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.LocNode">[docs]</a><span class="k">class</span> <span class="nc">LocNode</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">loc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SourceLocation</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.Expr">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Expr</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Expression base class.</span>
+
+<span class="sd">    All expressions have</span>
+<span class="sd">    - an optional `dtype`</span>
+<span class="sd">    - an expression `kind` (scalar or field)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Both kind and dtype are set to default here and root validators propagate the correct value after the __init__ is called.</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">ExprKind</span> <span class="o">=</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span> <span class="o">=</span> <span class="n">DataType</span><span class="o">.</span><span class="n">AUTO</span></div>
+
+
+<div class="viewcode-block" id="Stmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.Stmt">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Stmt</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="verify_condition_is_boolean"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.verify_condition_is_boolean">[docs]</a><span class="k">def</span> <span class="nf">verify_condition_is_boolean</span><span class="p">(</span><span class="n">parent_node_cls</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">cond</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">and</span> <span class="n">cond</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Condition in `</span><span class="si">{}</span><span class="s2">` must be boolean.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">parent_node_cls</span><span class="p">)))</span></div>
+
+
+<div class="viewcode-block" id="verify_and_get_common_dtype"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.verify_and_get_common_dtype">[docs]</a><span class="k">def</span> <span class="nf">verify_and_get_common_dtype</span><span class="p">(</span>
+    <span class="n">node_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">],</span> <span class="n">exprs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataType</span><span class="p">]:</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">exprs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DataType</span><span class="o">.</span><span class="n">AUTO</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">exprs</span><span class="p">):</span>
+        <span class="n">dtypes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DataType</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">dtype</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">exprs</span><span class="p">]</span>  <span class="c1"># type: ignore # guaranteed to be not None</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtypes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">dt</span> <span class="o">==</span> <span class="n">dtype</span> <span class="k">for</span> <span class="n">dt</span> <span class="ow">in</span> <span class="n">dtypes</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">dtype</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Type mismatch in `</span><span class="si">{</span><span class="n">node_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">`. Types are &quot;</span>
+                    <span class="o">+</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">dt</span> <span class="ow">in</span> <span class="n">dtypes</span><span class="p">)</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># upcasting</span>
+            <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">dt</span> <span class="k">for</span> <span class="n">dt</span> <span class="ow">in</span> <span class="n">dtypes</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="compute_kind"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.compute_kind">[docs]</a><span class="k">def</span> <span class="nf">compute_kind</span><span class="p">(</span><span class="o">*</span><span class="n">values</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ExprKind</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span></div>
+
+
+<div class="viewcode-block" id="Literal"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.Literal">[docs]</a><span class="k">class</span> <span class="nc">Literal</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="c1"># TODO(havogt) reconsider if `str` is a good representation for value,</span>
+    <span class="c1"># maybe it should be Union[float,int,str] etc?</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">BuiltInLiteral</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">ExprKind</span> <span class="o">=</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span></div>
+
+
+<span class="n">StmtT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;StmtT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Stmt</span><span class="p">)</span>
+<span class="n">ExprT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;ExprT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Expr</span><span class="p">)</span>
+<span class="n">TargetT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;TargetT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Expr</span><span class="p">)</span>
+<span class="n">VariableKOffsetT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;VariableKOffsetT&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="CartesianOffset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.CartesianOffset">[docs]</a><span class="k">class</span> <span class="nc">CartesianOffset</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">i</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">j</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span>
+
+<div class="viewcode-block" id="CartesianOffset.zero"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.CartesianOffset.zero">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">zero</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;CartesianOffset&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">j</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CartesianOffset.to_dict"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.CartesianOffset.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;i&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="VariableKOffset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.VariableKOffset">[docs]</a><span class="k">class</span> <span class="nc">VariableKOffset</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="n">k</span><span class="p">:</span> <span class="n">ExprT</span>
+
+<div class="viewcode-block" id="VariableKOffset.to_dict"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.VariableKOffset.to_dict">[docs]</a>    <span class="k">def</span> <span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;i&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;k&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="VariableKOffset.offset_expr_is_int"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.VariableKOffset.offset_expr_is_int">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;k&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">offset_expr_is_int</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">Expr</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DataType</span><span class="o">.</span><span class="n">AUTO</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">value</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">isinteger</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Variable vertical index must be an integer expression&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ScalarAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.ScalarAccess">[docs]</a><span class="k">class</span> <span class="nc">ScalarAccess</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">ExprKind</span> <span class="o">=</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span></div>
+
+
+<div class="viewcode-block" id="FieldAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.FieldAccess">[docs]</a><span class="k">class</span> <span class="nc">FieldAccess</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">,</span> <span class="n">VariableKOffsetT</span><span class="p">]):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">]</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">CartesianOffset</span><span class="p">,</span> <span class="n">VariableKOffsetT</span><span class="p">]</span>
+    <span class="n">data_index</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">ExprKind</span> <span class="o">=</span> <span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span>
+
+<div class="viewcode-block" id="FieldAccess.centered"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.FieldAccess.centered">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">centered</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">loc</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">SourceLocation</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;FieldAccess&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="FieldAccess.data_index_exprs_are_int"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.FieldAccess.data_index_exprs_are_int">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;data_index&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">data_index_exprs_are_int</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">List</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">index</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DataType</span><span class="o">.</span><span class="n">AUTO</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">index</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">isinteger</span><span class="p">()</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">value</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Data indices must be integer expressions&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="BlockStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.BlockStmt">[docs]</a><span class="k">class</span> <span class="nc">BlockStmt</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]):</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="IfStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.IfStmt">[docs]</a><span class="k">class</span> <span class="nc">IfStmt</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">StmtT</span><span class="p">,</span> <span class="n">ExprT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generic if statement.</span>
+
+<span class="sd">    Verifies that `cond` is a boolean expr (if `dtype` is set).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">cond</span><span class="p">:</span> <span class="n">ExprT</span>
+    <span class="n">true_branch</span><span class="p">:</span> <span class="n">StmtT</span>
+    <span class="n">false_branch</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="IfStmt.condition_is_boolean"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.IfStmt.condition_is_boolean">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;cond&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">verify_condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="While"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.While">[docs]</a><span class="k">class</span> <span class="nc">While</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">StmtT</span><span class="p">,</span> <span class="n">ExprT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generic while loop.</span>
+
+<span class="sd">    Verifies that `cond` is a boolean expr (if `dtype` is set).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">cond</span><span class="p">:</span> <span class="n">ExprT</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]</span>
+
+<div class="viewcode-block" id="While.condition_is_boolean"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.While.condition_is_boolean">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;cond&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">verify_condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="AssignStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AssignStmt">[docs]</a><span class="k">class</span> <span class="nc">AssignStmt</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">TargetT</span><span class="p">,</span> <span class="n">ExprT</span><span class="p">]):</span>
+    <span class="n">left</span><span class="p">:</span> <span class="n">TargetT</span>
+    <span class="n">right</span><span class="p">:</span> <span class="n">ExprT</span></div>
+
+
+<span class="k">def</span> <span class="nf">_make_root_validator</span><span class="p">(</span><span class="n">impl</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">root_validator</span><span class="p">(</span><span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">,</span> <span class="nb">classmethod</span><span class="p">(</span><span class="n">impl</span><span class="p">)))</span>
+
+
+<div class="viewcode-block" id="assign_stmt_dtype_validation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.assign_stmt_dtype_validation">[docs]</a><span class="k">def</span> <span class="nf">assign_stmt_dtype_validation</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">],</span>
+        <span class="n">instance</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">AssignStmt</span><span class="p">)</span>
+        <span class="n">verify_and_get_common_dtype</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">right</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="UnaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.UnaryOp">[docs]</a><span class="k">class</span> <span class="nc">UnaryOp</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generic unary operation with type propagation.</span>
+
+<span class="sd">    The generic `UnaryOp` already contains logic for type propagation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">op</span><span class="p">:</span> <span class="n">UnaryOperator</span>
+    <span class="n">expr</span><span class="p">:</span> <span class="n">ExprT</span>
+
+<div class="viewcode-block" id="UnaryOp.dtype_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.UnaryOp.dtype_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">dtype_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">UnaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">UnaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">dtype</span>  <span class="c1"># type: ignore[attr-defined]</span></div>
+
+<div class="viewcode-block" id="UnaryOp.kind_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.UnaryOp.kind_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">kind_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">UnaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">UnaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">kind</span>  <span class="c1"># type: ignore[attr-defined]</span></div>
+
+<div class="viewcode-block" id="UnaryOp.op_to_dtype_check"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.UnaryOp.op_to_dtype_check">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">op_to_dtype_check</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">UnaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">UnaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">dtype</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unary operator `NOT` only allowed with boolean expression.&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Unary operator `</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` not allowed with boolean expression.&quot;</span>
+                    <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="BinaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.BinaryOp">[docs]</a><span class="k">class</span> <span class="nc">BinaryOp</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;Generic binary operation with type propagation.</span>
+
+<span class="sd">    The generic BinaryOp already contains logic for</span>
+<span class="sd">    - strict type checking if the `dtype` for `left` and `right` is set.</span>
+<span class="sd">    - type propagation (taking `operator` type into account).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># consider parametrizing on op</span>
+    <span class="n">op</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">ArithmeticOperator</span><span class="p">,</span> <span class="n">ComparisonOperator</span><span class="p">,</span> <span class="n">LogicalOperator</span><span class="p">]</span>
+    <span class="n">left</span><span class="p">:</span> <span class="n">ExprT</span>
+    <span class="n">right</span><span class="p">:</span> <span class="n">ExprT</span>
+
+<div class="viewcode-block" id="BinaryOp.kind_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.BinaryOp.kind_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">kind_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">BinaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">BinaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">compute_kind</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span></div></div>
+
+
+<div class="viewcode-block" id="binary_op_dtype_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.binary_op_dtype_propagation">[docs]</a><span class="k">def</span> <span class="nf">binary_op_dtype_propagation</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">BinaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">BinaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">common_dtype</span> <span class="o">=</span> <span class="n">verify_and_get_common_dtype</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">right</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">common_dtype</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">ArithmeticOperator</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">common_dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+                    <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">common_dtype</span>  <span class="c1"># type: ignore[attr-defined]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Boolean expression is not allowed with arithmetic operation.&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">LogicalOperator</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">common_dtype</span> <span class="ow">is</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+                    <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span>  <span class="c1"># type: ignore[attr-defined]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Arithmetic expression is not allowed in boolean operation.&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">ComparisonOperator</span><span class="p">):</span>
+                <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span>  <span class="c1"># type: ignore[attr-defined]</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="TernaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.TernaryOp">[docs]</a><span class="k">class</span> <span class="nc">TernaryOp</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generic ternary operation with type propagation.</span>
+
+<span class="sd">    The generic TernaryOp already contains logic for</span>
+<span class="sd">    - strict type checking if the `dtype` for `true_expr` and `false_expr` is set.</span>
+<span class="sd">    - type checking for `cond`</span>
+<span class="sd">    - type propagation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># consider parametrizing cond type and expr separately</span>
+    <span class="n">cond</span><span class="p">:</span> <span class="n">ExprT</span>
+    <span class="n">true_expr</span><span class="p">:</span> <span class="n">ExprT</span>
+    <span class="n">false_expr</span><span class="p">:</span> <span class="n">ExprT</span>
+
+<div class="viewcode-block" id="TernaryOp.condition_is_boolean"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.TernaryOp.condition_is_boolean">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;cond&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">verify_condition_is_boolean</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TernaryOp.kind_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.TernaryOp.kind_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">kind_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">TernaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">TernaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">compute_kind</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">true_expr</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">false_expr</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span></div></div>
+
+
+<div class="viewcode-block" id="ternary_op_dtype_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.ternary_op_dtype_propagation">[docs]</a><span class="k">def</span> <span class="nf">ternary_op_dtype_propagation</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">TernaryOp</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">TernaryOp</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">common_dtype</span> <span class="o">=</span> <span class="n">verify_and_get_common_dtype</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span> <span class="p">[</span><span class="n">instance</span><span class="o">.</span><span class="n">true_expr</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">false_expr</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">common_dtype</span><span class="p">:</span>
+            <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">common_dtype</span>  <span class="c1"># type: ignore[attr-defined]</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Cast"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.Cast">[docs]</a><span class="k">class</span> <span class="nc">Cast</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span>
+    <span class="n">expr</span><span class="p">:</span> <span class="n">ExprT</span>
+
+<div class="viewcode-block" id="Cast.kind_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.Cast.kind_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">kind_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">Cast</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">Cast</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">compute_kind</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span></div></div>
+
+
+<div class="viewcode-block" id="NativeFuncCall"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.NativeFuncCall">[docs]</a><span class="k">class</span> <span class="nc">NativeFuncCall</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]):</span>
+    <span class="n">func</span><span class="p">:</span> <span class="n">NativeFunction</span>
+    <span class="n">args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]</span>
+
+<div class="viewcode-block" id="NativeFuncCall.arity_check"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.NativeFuncCall.arity_check">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">arity_check</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">NativeFuncCall</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">NativeFuncCall</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arity</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">func</span><span class="si">}</span><span class="s2"> accepts </span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arity</span><span class="si">}</span><span class="s2"> arguments, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> where passed.&quot;</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="NativeFuncCall.kind_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.NativeFuncCall.kind_propagation">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">kind_propagation</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">NativeFuncCall</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">NativeFuncCall</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">compute_kind</span><span class="p">(</span><span class="o">*</span><span class="n">instance</span><span class="o">.</span><span class="n">args</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span></div></div>
+
+
+<div class="viewcode-block" id="native_func_call_dtype_propagation"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.native_func_call_dtype_propagation">[docs]</a><span class="k">def</span> <span class="nf">native_func_call_dtype_propagation</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">NativeFuncCall</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">NativeFuncCall</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">func</span> <span class="ow">in</span> <span class="p">(</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">,</span> <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">,</span> <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">):</span>
+            <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># assumes all NativeFunction args have a common dtype</span>
+            <span class="n">common_dtype</span> <span class="o">=</span> <span class="n">verify_and_get_common_dtype</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">instance</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">common_dtype</span><span class="p">:</span>
+                <span class="n">instance</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">common_dtype</span>  <span class="c1"># type: ignore[attr-defined]</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="validate_dtype_is_set"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.validate_dtype_is_set">[docs]</a><span class="k">def</span> <span class="nf">validate_dtype_is_set</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">ExprT</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">ExprT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">dtype_nodes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ExprT</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">flatten_list</span><span class="p">(</span><span class="n">datamodels</span><span class="o">.</span><span class="n">astuple</span><span class="p">(</span><span class="n">instance</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+                <span class="n">dtype_nodes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_hasattr</span><span class="p">(</span><span class="s2">&quot;dtype&quot;</span><span class="p">))</span>
+
+        <span class="n">nodes_without_dtype</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">dtype_nodes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">:</span>
+                <span class="n">nodes_without_dtype</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">nodes_without_dtype</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Nodes without dtype detected </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nodes_without_dtype</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<span class="k">class</span> <span class="nc">_LvalueDimsValidator</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vertical_loop_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">],</span> <span class="n">decl_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">vertical_loop_type</span><span class="o">.</span><span class="vm">__annotations__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;loop_order&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="n">LoopOrder</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Vertical loop type </span><span class="si">{</span><span class="n">vertical_loop_type</span><span class="si">}</span><span class="s2"> has no `loop_order` attribute&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">decl_type</span><span class="o">.</span><span class="vm">__annotations__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dimensions&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Field decl type </span><span class="si">{</span><span class="n">decl_type</span><span class="si">}</span><span class="s2"> must have a `dimensions` &quot;</span>
+                <span class="s2">&quot;attribute of type `Tuple[bool, bool, bool]`.&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vertical_loop_type</span> <span class="o">=</span> <span class="n">vertical_loop_type</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decl_type</span> <span class="o">=</span> <span class="n">decl_type</span>
+
+    <span class="k">def</span> <span class="nf">visit_Node</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">loop_order</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">LoopOrder</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_loop_type</span><span class="p">):</span>
+            <span class="n">loop_order</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span>  <span class="c1"># type: ignore[attr-defined]  # cannot narrow based on `vertical_loop_type`</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">loop_order</span><span class="o">=</span><span class="n">loop_order</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">AssignStmt</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">loop_order</span><span class="p">:</span> <span class="n">LoopOrder</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">decl</span> <span class="o">=</span> <span class="n">symtable</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">decl</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Symbol </span><span class="si">{}</span><span class="s2"> not found.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">decl_type</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">allowed_flags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_allowed_flags</span><span class="p">(</span><span class="n">loop_order</span><span class="p">)</span>
+        <span class="n">flags</span> <span class="o">=</span> <span class="n">decl</span><span class="o">.</span><span class="n">dimensions</span>  <span class="c1"># type: ignore[attr-defined]  # Decls are defined on derived IRs, not common, so `dimensions` is unknown.</span>
+        <span class="k">if</span> <span class="n">flags</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_flags</span><span class="p">:</span>
+            <span class="n">dims</span> <span class="o">=</span> <span class="n">dimension_flags_to_names</span><span class="p">(</span><span class="n">flags</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Not allowed to assign to </span><span class="si">{</span><span class="n">dims</span><span class="si">}</span><span class="s2">-field `</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">` in </span><span class="si">{</span><span class="n">loop_order</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">_allowed_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">loop_order</span><span class="p">:</span> <span class="n">LoopOrder</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]]:</span>
+        <span class="n">allowed_flags</span> <span class="o">=</span> <span class="p">[(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">)]</span>  <span class="c1"># ijk always allowed</span>
+        <span class="k">if</span> <span class="n">loop_order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+            <span class="n">allowed_flags</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>  <span class="c1"># ij only allowed in FORWARD and BACKWARD</span>
+        <span class="k">return</span> <span class="n">allowed_flags</span>
+
+
+<span class="c1"># TODO(ricoh) consider making gtir.Decl &amp; oir.Decl common and / or adding a VerticalLoop baseclass</span>
+<span class="c1"># TODO(ricoh) in common instead of passing type arguments</span>
+<div class="viewcode-block" id="validate_lvalue_dims"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.validate_lvalue_dims">[docs]</a><span class="k">def</span> <span class="nf">validate_lvalue_dims</span><span class="p">(</span>
+    <span class="n">vertical_loop_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">],</span> <span class="n">decl_type</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">RootValidator</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Validate lvalue dimensions using the root node symbol table.</span>
+
+<span class="sd">    The following tree structure is expected::</span>
+
+<span class="sd">        Root(`SymTableTrait`)</span>
+<span class="sd">        |- *</span>
+<span class="sd">           |- `vertical_loop_type`</span>
+<span class="sd">               |- loop_order: `LoopOrder`</span>
+<span class="sd">               |- *</span>
+<span class="sd">                  |- AssignStmt(`AssignStmt`)</span>
+<span class="sd">                  |- left: `Node`, validated only if reference to `decl_type` in symtable</span>
+<span class="sd">        |- symtable_: Symtable[name, Union[`decl_type`, *]]</span>
+
+<span class="sd">        DeclType</span>
+<span class="sd">        |- dimensions: `Tuple[bool, bool, bool]`</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    vertical_loop_type:</span>
+<span class="sd">        A node type with an `LoopOrder` attribute named `loop_order`</span>
+<span class="sd">    decl_type:</span>
+<span class="sd">        A declaration type with field dimension information in the format</span>
+<span class="sd">        `Tuple[bool, bool, bool]` in an attribute named `dimensions`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">_impl</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_LvalueDimsValidator</span><span class="p">(</span><span class="n">vertical_loop_type</span><span class="p">,</span> <span class="n">decl_type</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_make_root_validator</span><span class="p">(</span><span class="n">_impl</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AxisBound"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AxisBound">[docs]</a><span class="k">class</span> <span class="nc">AxisBound</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">level</span><span class="p">:</span> <span class="n">LevelMarker</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="AxisBound.from_start"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AxisBound.from_start">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_start</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisBound</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AxisBound.from_end"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AxisBound.from_end">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_end</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisBound</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AxisBound.start"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AxisBound.start">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisBound</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_start</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AxisBound.end"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.AxisBound.end">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisBound</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">from_end</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">level</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">offset</span>
+
+    <span class="k">def</span> <span class="fm">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">AxisBound</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">level</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">offset</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">AxisBound</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">return</span> <span class="bp">self</span> <span class="o">&lt;</span> <span class="n">other</span> <span class="ow">or</span> <span class="bp">self</span> <span class="o">==</span> <span class="n">other</span>
+
+    <span class="k">def</span> <span class="fm">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">AxisBound</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span> <span class="o">&lt;</span> <span class="n">other</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span> <span class="o">==</span> <span class="n">other</span>
+
+    <span class="k">def</span> <span class="fm">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">AxisBound</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">AxisBound</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span> <span class="o">&lt;</span> <span class="n">other</span></div>
+
+
+<div class="viewcode-block" id="HorizontalInterval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval">[docs]</a><span class="k">class</span> <span class="nc">HorizontalInterval</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Represents an interval of the index space in the horizontal.</span>
+
+<span class="sd">    This is separate from `gtir.Interval` because the endpoints may</span>
+<span class="sd">    be outside the compute domain.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxisBound</span><span class="p">]</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxisBound</span><span class="p">]</span>
+
+<div class="viewcode-block" id="HorizontalInterval.compute_domain"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.compute_domain">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">compute_domain</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">start_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">end_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;HorizontalInterval&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="n">start_offset</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">end</span><span class="p">(</span><span class="n">end_offset</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="HorizontalInterval.full"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.full">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">full</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HorizontalInterval</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalInterval.at_endpt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.at_endpt">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">at_endpt</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="n">LevelMarker</span><span class="p">,</span> <span class="n">start_offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">end_offset</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;HorizontalInterval&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">end_offset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">start_offset</span><span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">AxisBound</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">end_offset</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalInterval.check_start_before_end"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.check_start_before_end">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">check_start_before_end</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">HorizontalInterval</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="n">HorizontalInterval</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">start</span> <span class="ow">and</span> <span class="n">instance</span><span class="o">.</span><span class="n">end</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;=</span> <span class="n">instance</span><span class="o">.</span><span class="n">end</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;End (</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">end</span><span class="si">}</span><span class="s2">) is not after or equal to start (</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">start</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalInterval.is_single_index"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.is_single_index">[docs]</a>    <span class="k">def</span> <span class="nf">is_single_index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">return</span> <span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="HorizontalInterval.overlaps"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalInterval.overlaps">[docs]</a>    <span class="k">def</span> <span class="nf">overlaps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">HorizontalInterval</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">left_interval</span> <span class="o">=</span> <span class="bp">self</span>
+            <span class="n">right_interval</span> <span class="o">=</span> <span class="n">other</span>
+        <span class="k">elif</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">):</span>
+            <span class="n">left_interval</span> <span class="o">=</span> <span class="n">other</span>
+            <span class="n">right_interval</span> <span class="o">=</span> <span class="bp">self</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span><span class="p">:</span>
+            <span class="n">left_interval</span> <span class="o">=</span> <span class="bp">self</span>
+            <span class="n">right_interval</span> <span class="o">=</span> <span class="n">other</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">start</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">if</span> <span class="n">left_interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="n">right_interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">right_interval</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">left_interval</span><span class="o">.</span><span class="n">end</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">return</span> <span class="kc">False</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalMask"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalMask">[docs]</a><span class="k">class</span> <span class="nc">HorizontalMask</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Expr to represent a convex portion of the horizontal iteration space.&quot;&quot;&quot;</span>
+
+    <span class="n">i</span><span class="p">:</span> <span class="n">HorizontalInterval</span>
+    <span class="n">j</span><span class="p">:</span> <span class="n">HorizontalInterval</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">HorizontalInterval</span><span class="p">,</span> <span class="n">HorizontalInterval</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="HorizontalRestriction"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.HorizontalRestriction">[docs]</a><span class="k">class</span> <span class="nc">HorizontalRestriction</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">GenericNode</span><span class="p">,</span> <span class="n">Generic</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;A specialization of the horizontal space.&quot;&quot;&quot;</span>
+
+    <span class="n">mask</span><span class="p">:</span> <span class="n">HorizontalMask</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StmtT</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="data_type_to_typestr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.data_type_to_typestr">[docs]</a><span class="k">def</span> <span class="nf">data_type_to_typestr</span><span class="p">(</span><span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+
+    <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span> <span class="s2">&quot;bool&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT8</span><span class="p">:</span> <span class="s2">&quot;int8&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT16</span><span class="p">:</span> <span class="s2">&quot;int16&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">:</span> <span class="s2">&quot;int32&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT64</span><span class="p">:</span> <span class="s2">&quot;int64&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">:</span> <span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">:</span> <span class="s2">&quot;float64&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">DataType</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Can only convert instances of DataType to typestr.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">dtype</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Can not convert INVALID, AUTO or DEFAULT to typestr.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">table</span><span class="p">[</span><span class="n">dtype</span><span class="p">])</span><span class="o">.</span><span class="n">str</span></div>
+
+
+<div class="viewcode-block" id="op_to_ufunc"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.op_to_ufunc">[docs]</a><span class="nd">@functools</span><span class="o">.</span><span class="n">lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">typed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># typed since uniqueness is only guaranteed per enum</span>
+<span class="k">def</span> <span class="nf">op_to_ufunc</span><span class="p">(</span>
+    <span class="n">op</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span>
+        <span class="n">UnaryOperator</span><span class="p">,</span> <span class="n">ArithmeticOperator</span><span class="p">,</span> <span class="n">ComparisonOperator</span><span class="p">,</span> <span class="n">LogicalOperator</span><span class="p">,</span> <span class="n">NativeFunction</span>
+    <span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ufunc</span><span class="p">:</span>
+    <span class="n">table</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span>
+        <span class="n">Union</span><span class="p">[</span>
+            <span class="n">UnaryOperator</span><span class="p">,</span> <span class="n">ArithmeticOperator</span><span class="p">,</span> <span class="n">ComparisonOperator</span><span class="p">,</span> <span class="n">LogicalOperator</span><span class="p">,</span> <span class="n">NativeFunction</span>
+        <span class="p">],</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">ufunc</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="c1"># Can&#39;t put all in single table since UnaryOperator.POS == BinaryOperator.ADD</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">UnaryOperator</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">POS</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">positive</span><span class="p">,</span>
+            <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NEG</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">negative</span><span class="p">,</span>
+            <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_not</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">ArithmeticOperator</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">ADD</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span>
+            <span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">SUB</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">subtract</span><span class="p">,</span>
+            <span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">MUL</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">,</span>
+            <span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">DIV</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">true_divide</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">ComparisonOperator</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">GT</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">greater</span><span class="p">,</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">LT</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">less</span><span class="p">,</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">GE</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">greater_equal</span><span class="p">,</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">LE</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">less_equal</span><span class="p">,</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">EQ</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">equal</span><span class="p">,</span>
+            <span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">NE</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">not_equal</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">LogicalOperator</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">LogicalOperator</span><span class="o">.</span><span class="n">AND</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">,</span>
+            <span class="n">LogicalOperator</span><span class="o">.</span><span class="n">OR</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_or</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">NativeFunction</span><span class="p">):</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ABS</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MOD</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">remainder</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SIN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COS</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TAN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tan</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arcsin</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SINH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sinh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COSH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cosh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TANH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arcsinh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arccosh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arctanh</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SQRT</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">EXP</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">LOG</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gamma</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CBRT</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cbrt</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">FLOOR</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CEIL</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">,</span>
+            <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TRUNC</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">trunc</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="s2">&quot;Can only convert instances of GTC operators and supported native functions to typestr.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">table</span><span class="p">[</span><span class="n">op</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="typestr_to_data_type"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.typestr_to_data_type">[docs]</a><span class="nd">@functools</span><span class="o">.</span><span class="n">lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">typestr_to_data_type</span><span class="p">(</span><span class="n">typestr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataType</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">typestr</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">typestr</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">typestr</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">isnumeric</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INVALID</span>  <span class="c1"># type: ignore</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="p">(</span><span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INT8</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INT16</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="mi">4</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INT64</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;f&quot;</span><span class="p">,</span> <span class="mi">4</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;f&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">):</span> <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">typestr</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">typestr</span><span class="p">[</span><span class="mi">2</span><span class="p">:]))</span>
+    <span class="k">return</span> <span class="n">table</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">DataType</span><span class="o">.</span><span class="n">INVALID</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

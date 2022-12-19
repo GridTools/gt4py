@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AccessCollector</span><span class="p">,</span>
+    <span class="n">collect_symbol_names</span><span class="p">,</span>
+    <span class="n">compute_horizontal_block_extents</span><span class="p">,</span>
+    <span class="n">symbol_name_creator</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="HorizontalExecutionMerging"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.HorizontalExecutionMerging">[docs]</a><span class="k">class</span> <span class="nc">HorizontalExecutionMerging</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+<div class="viewcode-block" id="HorizontalExecutionMerging.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.HorizontalExecutionMerging.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="n">all_names</span> <span class="o">=</span> <span class="n">collect_symbol_names</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">block_extents</span><span class="o">=</span><span class="n">compute_horizontal_block_extents</span><span class="p">(</span><span class="n">node</span><span class="p">),</span>
+            <span class="n">new_symbol_name</span><span class="o">=</span><span class="n">symbol_name_creator</span><span class="p">(</span><span class="n">all_names</span><span class="p">),</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalExecutionMerging.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.HorizontalExecutionMerging.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">block_extents</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Extent</span><span class="p">],</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">:</span>
+        <span class="nd">@dataclass</span>
+        <span class="k">class</span> <span class="nc">UncheckedHorizontalExecution</span><span class="p">:</span>
+            <span class="c1"># local replacement without type checking for type-checked oir node</span>
+            <span class="c1"># required to reach reasonable run times for large node counts</span>
+            <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Stmt</span><span class="p">]</span>
+            <span class="n">declarations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">]</span>
+            <span class="n">loc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SourceLocation</span><span class="p">]</span>
+
+            <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="p">{</span>
+                <span class="s2">&quot;loc&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;body&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;declarations&quot;</span><span class="p">,</span>
+            <span class="p">},</span> <span class="p">(</span>
+                <span class="s2">&quot;Unexpected field in oir.HorizontalExecution, &quot;</span>
+                <span class="s2">&quot;probably UncheckedHorizontalExecution needs an update&quot;</span>
+            <span class="p">)</span>
+
+            <span class="nd">@classmethod</span>
+            <span class="k">def</span> <span class="nf">from_oir</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">hexec</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">body</span><span class="o">=</span><span class="n">hexec</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">declarations</span><span class="o">=</span><span class="n">hexec</span><span class="o">.</span><span class="n">declarations</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">hexec</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span>
+
+            <span class="k">def</span> <span class="nf">to_oir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">(</span>
+                    <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">declarations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">declarations</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">loc</span>
+                <span class="p">)</span>
+
+        <span class="n">horizontal_executions</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">UncheckedHorizontalExecution</span><span class="o">.</span><span class="n">from_oir</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="p">]</span>
+        <span class="n">new_block_extents</span> <span class="o">=</span> <span class="p">[</span><span class="n">block_extents</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="mi">0</span><span class="p">])]]</span>
+        <span class="n">last_writes</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">this_hexec</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">last_extent</span> <span class="o">=</span> <span class="n">new_block_extents</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+            <span class="n">this_offset_reads</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">name</span>
+                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">this_hexec</span><span class="p">)</span><span class="o">.</span><span class="n">read_offsets</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">off</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">off</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">off</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">)</span>
+            <span class="p">}</span>
+
+            <span class="n">reads_with_offset_after_write</span> <span class="o">=</span> <span class="n">last_writes</span> <span class="o">&amp;</span> <span class="n">this_offset_reads</span>
+            <span class="n">this_extent</span> <span class="o">=</span> <span class="n">block_extents</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">this_hexec</span><span class="p">)]</span>
+
+            <span class="k">if</span> <span class="n">reads_with_offset_after_write</span> <span class="ow">or</span> <span class="n">last_extent</span> <span class="o">!=</span> <span class="n">this_extent</span><span class="p">:</span>
+                <span class="c1"># Cannot merge: simply append to list</span>
+                <span class="n">horizontal_executions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">UncheckedHorizontalExecution</span><span class="o">.</span><span class="n">from_oir</span><span class="p">(</span><span class="n">this_hexec</span><span class="p">))</span>
+                <span class="n">new_block_extents</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">this_extent</span><span class="p">)</span>
+                <span class="n">last_writes</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">this_hexec</span><span class="p">)</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Merge</span>
+                <span class="n">duplicated_locals</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">horizontal_executions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">declarations</span>
+                <span class="p">}</span> <span class="o">&amp;</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">this_hexec</span><span class="o">.</span><span class="n">declarations</span><span class="p">}</span>
+                <span class="c1"># Map from old to new scalar names applied to the second horizontal execution</span>
+                <span class="n">scalar_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">duplicated_locals</span><span class="p">}</span>
+                <span class="n">locals_symtable</span> <span class="o">=</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">decl</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">this_hexec</span><span class="o">.</span><span class="n">declarations</span><span class="p">}</span>
+
+                <span class="n">new_body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">this_hexec</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">scalar_map</span><span class="o">=</span><span class="n">scalar_map</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+                <span class="n">this_not_duplicated</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">decl</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">this_hexec</span><span class="o">.</span><span class="n">declarations</span> <span class="k">if</span> <span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">duplicated_locals</span>
+                <span class="p">]</span>
+                <span class="n">this_mapped</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">scalar_map</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">locals_symtable</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">duplicated_locals</span>
+                <span class="p">]</span>
+
+                <span class="n">horizontal_executions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">UncheckedHorizontalExecution</span><span class="p">(</span>
+                    <span class="n">body</span><span class="o">=</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">body</span> <span class="o">+</span> <span class="n">new_body</span><span class="p">,</span>
+                    <span class="n">declarations</span><span class="o">=</span><span class="p">(</span>
+                        <span class="n">horizontal_executions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">declarations</span> <span class="o">+</span> <span class="n">this_not_duplicated</span> <span class="o">+</span> <span class="n">this_mapped</span>
+                    <span class="p">),</span>
+                    <span class="n">loc</span><span class="o">=</span><span class="n">horizontal_executions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">last_writes</span> <span class="o">|=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">new_body</span><span class="p">)</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span>
+            <span class="n">interval</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span>
+            <span class="n">horizontal_executions</span><span class="o">=</span><span class="p">[</span><span class="n">hexec</span><span class="o">.</span><span class="n">to_oir</span><span class="p">()</span> <span class="k">for</span> <span class="n">hexec</span> <span class="ow">in</span> <span class="n">horizontal_executions</span><span class="p">],</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="HorizontalExecutionMerging.visit_ScalarAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.HorizontalExecutionMerging.visit_ScalarAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scalar_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">scalar_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">scalar_map</span> <span class="k">else</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="OnTheFlyMerging"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">OnTheFlyMerging</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Merges consecutive horizontal executions inside parallel vertical loops by introducing redundant computations.</span>
+
+<span class="sd">    Limitations:</span>
+<span class="sd">    * Works on the level of whole horizontal executions, no full dependency analysis is performed (common subexpression and dead code eliminitation at a later stage can work around this limitation).</span>
+<span class="sd">    * The chosen default merge limits are totally arbitrary.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">max_horizontal_execution_body_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">allow_expensive_function_duplication</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_CartesianOffset"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_CartesianOffset">[docs]</a>    <span class="k">def</span> <span class="nf">visit_CartesianOffset</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">shift</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">shift</span><span class="p">:</span>
+            <span class="n">di</span><span class="p">,</span> <span class="n">dj</span><span class="p">,</span> <span class="n">dk</span> <span class="o">=</span> <span class="n">shift</span>
+            <span class="k">return</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">i</span> <span class="o">+</span> <span class="n">di</span><span class="p">,</span> <span class="n">j</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">j</span> <span class="o">+</span> <span class="n">dj</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">k</span> <span class="o">+</span> <span class="n">dk</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_FieldAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">offset_symbol_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">offset_symbol_map</span><span class="p">:</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">offset</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">offset</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">offset</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">offset_symbol_map</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">offset_symbol_map</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_ScalarAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_ScalarAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scalar_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">scalar_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">scalar_map</span> <span class="k">else</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging._merge"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging._merge">[docs]</a>    <span class="k">def</span> <span class="nf">_merge</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">horizontal_executions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">],</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">protected_fields</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Recursively merge horizontal executions.</span>
+
+<span class="sd">        Uses the following algorithm:</span>
+<span class="sd">        1. Get output fields of the first horizontal execution.</span>
+<span class="sd">        2. Check in which following h. execs. the outputs are read.</span>
+<span class="sd">        3. Duplicate the body of the first h. exec. for each read access (with corresponding offset) and prepend it to the depending h. execs.</span>
+<span class="sd">        4. Recurse on the resulting h. execs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">horizontal_executions</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">horizontal_executions</span>
+        <span class="n">first</span><span class="p">,</span> <span class="o">*</span><span class="n">others</span> <span class="o">=</span> <span class="n">horizontal_executions</span>
+        <span class="n">first_accesses</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
+        <span class="n">other_accesses</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">others</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">first_fields_rewritten_later</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">first_accesses</span><span class="o">.</span><span class="n">fields</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">other_accesses</span><span class="o">.</span><span class="n">write_fields</span><span class="p">())</span>
+
+        <span class="k">def</span> <span class="nf">first_has_large_body</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">body</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_horizontal_execution_body_size</span>
+
+        <span class="k">def</span> <span class="nf">first_writes_protected</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">protected_fields</span> <span class="o">&amp;</span> <span class="n">first_accesses</span><span class="o">.</span><span class="n">write_fields</span><span class="p">())</span>
+
+        <span class="k">def</span> <span class="nf">first_has_expensive_function_call</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_expensive_function_duplication</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">nf</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span>
+            <span class="n">expensive_calls</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">SIN</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">COS</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">TAN</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">SINH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">COSH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">TANH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">SQRT</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">EXP</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">LOG</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">,</span>
+                <span class="n">nf</span><span class="o">.</span><span class="n">CBRT</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="n">calls</span> <span class="o">=</span> <span class="n">first</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;func&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">call</span> <span class="ow">in</span> <span class="n">expensive_calls</span> <span class="k">for</span> <span class="n">call</span> <span class="ow">in</span> <span class="n">calls</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">first_has_variable_access</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">first_accesses</span><span class="o">.</span><span class="n">has_variable_access</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">first_has_horizontal_restriction</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">first_fields_rewritten_later</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">first_writes_protected</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">first_has_large_body</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">first_has_expensive_function_call</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">first_has_variable_access</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="n">first_has_horizontal_restriction</span><span class="p">()</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">first</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_merge</span><span class="p">(</span><span class="n">others</span><span class="p">,</span> <span class="n">symtable</span><span class="p">,</span> <span class="n">new_symbol_name</span><span class="p">,</span> <span class="n">protected_fields</span><span class="p">)</span>
+
+        <span class="n">first_scalars</span> <span class="o">=</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">first</span><span class="o">.</span><span class="n">declarations</span><span class="p">}</span>
+        <span class="n">writes</span> <span class="o">=</span> <span class="n">first_accesses</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+        <span class="n">others_otf</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">horizontal_execution</span> <span class="ow">in</span> <span class="n">others</span><span class="p">:</span>
+            <span class="n">read_offsets</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="n">read_offsets</span> <span class="o">=</span> <span class="n">read_offsets</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+                <span class="o">*</span><span class="p">(</span>
+                    <span class="n">offsets</span>
+                    <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">horizontal_execution</span><span class="p">)</span>
+                    <span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span>
+                    <span class="o">.</span><span class="n">read_offsets</span><span class="p">()</span>
+                    <span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">writes</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">read_offsets</span><span class="p">:</span>
+                <span class="n">others_otf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">horizontal_execution</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">duplicated_locals</span> <span class="o">=</span> <span class="n">first_scalars</span> <span class="o">&amp;</span> <span class="p">{</span>
+                <span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">horizontal_execution</span><span class="o">.</span><span class="n">declarations</span>
+            <span class="p">}</span>
+            <span class="n">scalar_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">duplicated_locals</span><span class="p">}</span>
+
+            <span class="n">offset_symbol_map</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">o</span><span class="p">):</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">writes</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">read_offsets</span>
+            <span class="p">}</span>
+
+            <span class="c1"># 4 contributions to the new declarations list</span>
+            <span class="n">combined_symtable</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">symtable</span><span class="p">,</span> <span class="o">**</span><span class="n">first</span><span class="o">.</span><span class="n">annex</span><span class="o">.</span><span class="n">symtable</span><span class="p">}</span>
+            <span class="n">decls_from_later</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">horizontal_execution</span><span class="o">.</span><span class="n">declarations</span> <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">duplicated_locals</span>
+            <span class="p">]</span>
+            <span class="n">decls_from_first</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">d</span>
+                <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">first</span><span class="o">.</span><span class="n">declarations</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">horizontal_execution</span><span class="o">.</span><span class="n">declarations</span> <span class="ow">or</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">duplicated_locals</span>
+            <span class="p">]</span>
+            <span class="n">decls_renamed_locals_in_later</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">new_name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">combined_symtable</span><span class="p">[</span><span class="n">old_name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span> <span class="ow">in</span> <span class="n">scalar_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">]</span>
+            <span class="n">new_decls</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">new_name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">combined_symtable</span><span class="p">[</span><span class="n">old_name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+                <span class="k">for</span> <span class="p">(</span><span class="n">old_name</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">new_name</span> <span class="ow">in</span> <span class="n">offset_symbol_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">]</span>
+
+            <span class="n">declarations</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">decls_from_later</span> <span class="o">+</span> <span class="n">decls_from_first</span> <span class="o">+</span> <span class="n">decls_renamed_locals_in_later</span> <span class="o">+</span> <span class="n">new_decls</span>
+            <span class="p">)</span>
+
+            <span class="n">merged</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">(</span>
+                <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                    <span class="n">horizontal_execution</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
+                    <span class="n">offset_symbol_map</span><span class="o">=</span><span class="n">offset_symbol_map</span><span class="p">,</span>
+                    <span class="n">scalar_map</span><span class="o">=</span><span class="n">scalar_map</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">declarations</span><span class="o">=</span><span class="n">declarations</span><span class="p">,</span>
+                <span class="n">loc</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="n">read_offsets</span><span class="p">:</span>
+                <span class="n">merged</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                        <span class="n">first</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
+                        <span class="n">shift</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
+                        <span class="n">offset_symbol_map</span><span class="o">=</span><span class="n">offset_symbol_map</span><span class="p">,</span>
+                        <span class="n">scalar_map</span><span class="o">=</span><span class="p">{},</span>
+                    <span class="p">)</span>
+                    <span class="o">+</span> <span class="n">merged</span><span class="o">.</span><span class="n">body</span>
+                <span class="p">)</span>
+            <span class="n">others_otf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">merged</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_merge</span><span class="p">(</span><span class="n">others_otf</span><span class="p">,</span> <span class="n">symtable</span><span class="p">,</span> <span class="n">new_symbol_name</span><span class="p">,</span> <span class="n">protected_fields</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">:</span>
+
+        <span class="n">last_vls</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">next_vls</span> <span class="o">=</span> <span class="n">node</span>
+        <span class="n">applied</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">while</span> <span class="n">applied</span><span class="p">:</span>
+            <span class="n">last_vls</span> <span class="o">=</span> <span class="n">next_vls</span>
+            <span class="n">next_vls</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span>
+                <span class="n">interval</span><span class="o">=</span><span class="n">last_vls</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span>
+                <span class="n">horizontal_executions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_merge</span><span class="p">(</span><span class="n">last_vls</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+                <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">applied</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">next_vls</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">last_vls</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">next_vls</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">node</span>
+        <span class="n">sections</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">accessed</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">sections</span><span class="p">)</span><span class="o">.</span><span class="n">fields</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">(</span>
+            <span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+            <span class="n">sections</span><span class="o">=</span><span class="n">sections</span><span class="p">,</span>
+            <span class="n">caches</span><span class="o">=</span><span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">accessed</span><span class="p">],</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OnTheFlyMerging.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.horizontal_execution_merging.OnTheFlyMerging.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="n">protected_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">new_symbol_name</span> <span class="o">=</span> <span class="n">symbol_name_creator</span><span class="p">(</span><span class="n">collect_symbol_names</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+        <span class="n">vertical_loops</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">vl</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">):</span>
+            <span class="n">vl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                <span class="n">vl</span><span class="p">,</span> <span class="n">new_symbol_name</span><span class="o">=</span><span class="n">new_symbol_name</span><span class="p">,</span> <span class="n">protected_fields</span><span class="o">=</span><span class="n">protected_fields</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+            <span class="p">)</span>
+            <span class="n">vertical_loops</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vl</span><span class="p">)</span>
+            <span class="n">protected_fields</span> <span class="o">|=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">vl</span><span class="p">)</span><span class="o">.</span><span class="n">read_fields</span><span class="p">()</span>
+        <span class="n">vertical_loops</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">vertical_loops</span><span class="p">))</span>
+
+        <span class="n">accessed</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">vertical_loops</span><span class="p">)</span><span class="o">.</span><span class="n">fields</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
+            <span class="n">vertical_loops</span><span class="o">=</span><span class="n">vertical_loops</span><span class="p">,</span>
+            <span class="n">declarations</span><span class="o">=</span><span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span> <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">accessed</span><span class="p">],</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

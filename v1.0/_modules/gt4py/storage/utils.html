@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.storage.utils &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.storage.utils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.storage.utils</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">collections.abc</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">numbers</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+
+<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">lib</span><span class="o">.</span><span class="n">NumpyVersion</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="s2">&quot;1.20.0&quot;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">numpy.typing</span> <span class="kn">import</span> <span class="n">ArrayLike</span><span class="p">,</span> <span class="n">DTypeLike</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">ArrayLike</span> <span class="o">=</span> <span class="n">Any</span>
+    <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">Any</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">cupy</span> <span class="k">as</span> <span class="nn">cp</span>
+    <span class="kn">from</span> <span class="nn">cupy.lib.stride_tricks</span> <span class="kn">import</span> <span class="n">as_strided</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">cp</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="ArrayInterfaceType"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.ArrayInterfaceType">[docs]</a><span class="k">class</span> <span class="nc">ArrayInterfaceType</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__array_interface__</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="CudaArrayInterfaceType"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.CudaArrayInterfaceType">[docs]</a><span class="k">class</span> <span class="nc">CudaArrayInterfaceType</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__cuda_array_interface__</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="GtDimsInterface"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.GtDimsInterface">[docs]</a><span class="k">class</span> <span class="nc">GtDimsInterface</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__gt_dims__</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="GtOriginInterface"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.GtOriginInterface">[docs]</a><span class="k">class</span> <span class="nc">GtOriginInterface</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__gt_origin__</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+
+
+<span class="n">FieldLike</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;cp.ndarray&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">ArrayInterfaceType</span><span class="p">,</span> <span class="n">CudaArrayInterfaceType</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="idx_from_order"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.idx_from_order">[docs]</a><span class="k">def</span> <span class="nf">idx_from_order</span><span class="p">(</span><span class="n">order</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">order</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="dimensions_to_mask"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.dimensions_to_mask">[docs]</a><span class="k">def</span> <span class="nf">dimensions_to_mask</span><span class="p">(</span><span class="n">dimensions</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+    <span class="n">ndata_dims</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">)</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="p">[(</span><span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="s2">&quot;IJK&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="kc">True</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ndata_dims</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="normalize_storage_spec"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.normalize_storage_spec">[docs]</a><span class="k">def</span> <span class="nf">normalize_storage_spec</span><span class="p">(</span>
+    <span class="n">aligned_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
+    <span class="n">dimensions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">DTypeLike</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;Normalize the fields of the storage spec in a homogeneous representation.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    tuple(aligned_index, shape, dtype, mask)</span>
+<span class="sd">        The output tuple fields verify the following semantics:</span>
+<span class="sd">            - aligned_index: tuple of ints with default origin values for the non-masked dimensions</span>
+<span class="sd">            - shape: tuple of ints with shape values for the non-masked dimensions</span>
+<span class="sd">            - dtype: scalar numpy.dtype (non-structured and without subarrays)</span>
+<span class="sd">            - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)</span>
+<span class="sd">            - dimensions: a tuple of dimension identifier strings</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">dimensions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">dimensions</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">list</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">[:</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)])</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">3</span>
+            <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="s2">&quot;IJK&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">-</span> <span class="mi">3</span><span class="p">)]</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">aligned_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">aligned_index</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="n">dimensions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="s2">&quot;__gt_axis_name__&quot;</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="ow">or</span> <span class="n">d</span> <span class="ow">in</span> <span class="s2">&quot;IJK&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid dimensions definition: &#39;</span><span class="si">{</span><span class="n">dimensions</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dimensions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Integral</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;shape must be an iterable of ints.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dimensions</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Dimensions (</span><span class="si">{</span><span class="n">dimensions</span><span class="si">}</span><span class="s2">) and shape (</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">) have non-matching sizes.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;len(shape)(=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">) must be equal to len(dimensions)(=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dimensions</span><span class="p">)</span><span class="si">}</span><span class="s2">).&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;shape (</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">) contains non-positive value.&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;shape must be an iterable of ints.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">aligned_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Integral</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">aligned_index</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;aligned_index must be an iterable of ints.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Shape (</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">) and aligned_index (</span><span class="si">{</span><span class="n">aligned_index</span><span class="si">}</span><span class="s2">) have non-matching sizes.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;len(aligned_index)(=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">)</span><span class="si">}</span><span class="s2">) must be equal to len(shape)(=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">).&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">aligned_index</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">i</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">aligned_index</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;aligned_index (</span><span class="si">{}</span><span class="s2">) contains negative value.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;aligned_index must be an iterable of ints.&quot;</span><span class="p">)</span>
+
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dtype</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+        <span class="c1"># Subarray dtype</span>
+        <span class="n">aligned_index</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">aligned_index</span><span class="p">,</span> <span class="o">*</span><span class="p">((</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="n">dtype</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">subdtype</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="n">dimensions</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">dimensions</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">ndim</span><span class="p">)))</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">subdtype</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">aligned_index</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">dimensions</span></div>
+
+
+<div class="viewcode-block" id="compute_padded_shape"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.compute_padded_shape">[docs]</a><span class="k">def</span> <span class="nf">compute_padded_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">items_per_alignment</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">):</span>
+    <span class="n">padded_shape</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">order_idx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">padded_shape</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">/</span> <span class="n">items_per_alignment</span><span class="p">)</span> <span class="o">*</span> <span class="n">items_per_alignment</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">padded_shape</span></div>
+
+
+<div class="viewcode-block" id="strides_from_padded_shape"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.strides_from_padded_shape">[docs]</a><span class="k">def</span> <span class="nf">strides_from_padded_shape</span><span class="p">(</span><span class="n">padded_size</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">,</span> <span class="n">itemsize</span><span class="p">):</span>
+    <span class="n">stride_accumulator</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">strides</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">padded_size</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">order_idx</span><span class="p">):</span>
+        <span class="n">strides</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">stride_accumulator</span> <span class="o">*</span> <span class="n">itemsize</span>
+        <span class="n">stride_accumulator</span> <span class="o">=</span> <span class="n">stride_accumulator</span> <span class="o">*</span> <span class="n">padded_size</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">strides</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="allocate"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.allocate">[docs]</a><span class="k">def</span> <span class="nf">allocate</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">layout_map</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">alignment_bytes</span><span class="p">,</span> <span class="n">allocate_f</span><span class="p">):</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">alignment_bytes</span> <span class="o">%</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Alignment must be a multiple of byte-width of dtype.&quot;</span><span class="p">)</span>
+    <span class="n">itemsize</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span>
+    <span class="n">items_per_alignment</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">alignment_bytes</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+
+    <span class="n">order_idx</span> <span class="o">=</span> <span class="n">idx_from_order</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">layout_map</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">])</span>
+    <span class="n">padded_shape</span> <span class="o">=</span> <span class="n">compute_padded_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">items_per_alignment</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">)</span>
+
+    <span class="n">strides</span> <span class="o">=</span> <span class="n">strides_from_padded_shape</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">,</span> <span class="n">itemsize</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">order_idx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">/</span> <span class="n">items_per_alignment</span><span class="p">))</span> <span class="o">*</span> <span class="n">items_per_alignment</span>
+            <span class="o">-</span> <span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">padded_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">))</span>
+    <span class="n">buffer_size</span> <span class="o">=</span> <span class="n">padded_size</span> <span class="o">+</span> <span class="n">items_per_alignment</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">array</span><span class="p">,</span> <span class="n">raw_buffer</span> <span class="o">=</span> <span class="n">allocate_f</span><span class="p">(</span><span class="n">buffer_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="n">allocation_mismatch</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">array</span><span class="o">.</span><span class="n">ctypes</span><span class="o">.</span><span class="n">data</span> <span class="o">%</span> <span class="n">alignment_bytes</span><span class="p">)</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+
+    <span class="n">alignment_offset</span> <span class="o">=</span> <span class="p">(</span><span class="n">halo_offset</span> <span class="o">-</span> <span class="n">allocation_mismatch</span><span class="p">)</span> <span class="o">%</span> <span class="n">items_per_alignment</span>
+
+    <span class="n">field</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">array</span><span class="p">[</span><span class="n">alignment_offset</span> <span class="p">:</span> <span class="n">alignment_offset</span> <span class="o">+</span> <span class="n">padded_size</span><span class="p">],</span> <span class="n">padded_shape</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">field</span><span class="o">.</span><span class="n">strides</span> <span class="o">=</span> <span class="n">strides</span>
+        <span class="n">field</span> <span class="o">=</span> <span class="n">field</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">raw_buffer</span><span class="p">,</span> <span class="n">field</span></div>
+
+
+<div class="viewcode-block" id="allocate_gpu"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.allocate_gpu">[docs]</a><span class="k">def</span> <span class="nf">allocate_gpu</span><span class="p">(</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">layout_map</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
+    <span class="n">alignment_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">aligned_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="s2">&quot;cp.ndarray&quot;</span><span class="p">,</span> <span class="s2">&quot;cp.ndarray&quot;</span><span class="p">]:</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span>
+        <span class="n">alignment_bytes</span> <span class="o">%</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span>
+    <span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Alignment must be a multiple of byte-width of dtype.&quot;</span>
+    <span class="n">itemsize</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span>
+    <span class="n">items_per_alignment</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">alignment_bytes</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+
+    <span class="n">order_idx</span> <span class="o">=</span> <span class="n">idx_from_order</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">layout_map</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">])</span>
+    <span class="n">padded_shape</span> <span class="o">=</span> <span class="n">compute_padded_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">items_per_alignment</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">aligned_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">aligned_index</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="n">strides</span> <span class="o">=</span> <span class="n">strides_from_padded_shape</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">,</span> <span class="n">itemsize</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">order_idx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">/</span> <span class="n">items_per_alignment</span><span class="p">))</span> <span class="o">*</span> <span class="n">items_per_alignment</span>
+            <span class="o">-</span> <span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">padded_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">))</span>
+    <span class="n">buffer_size</span> <span class="o">=</span> <span class="n">padded_size</span> <span class="o">+</span> <span class="n">items_per_alignment</span> <span class="o">-</span> <span class="mi">1</span>
+
+    <span class="n">device_raw_buffer</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">buffer_size</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="n">allocation_mismatch</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">device_raw_buffer</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">ptr</span> <span class="o">%</span> <span class="n">alignment_bytes</span><span class="p">)</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+    <span class="n">alignment_offset</span> <span class="o">=</span> <span class="p">(</span><span class="n">halo_offset</span> <span class="o">-</span> <span class="n">allocation_mismatch</span><span class="p">)</span> <span class="o">%</span> <span class="n">items_per_alignment</span>
+
+    <span class="n">device_field</span> <span class="o">=</span> <span class="n">as_strided</span><span class="p">(</span>
+        <span class="n">device_raw_buffer</span><span class="p">[</span><span class="n">alignment_offset</span> <span class="p">:</span> <span class="n">alignment_offset</span> <span class="o">+</span> <span class="n">padded_size</span><span class="p">],</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">padded_shape</span><span class="p">,</span>
+        <span class="n">strides</span><span class="o">=</span><span class="n">strides</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">device_field</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">device_field</span> <span class="o">=</span> <span class="n">device_field</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)]</span>
+
+    <span class="k">return</span> <span class="n">device_raw_buffer</span><span class="p">,</span> <span class="n">device_field</span></div>
+
+
+<div class="viewcode-block" id="allocate_cpu"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.allocate_cpu">[docs]</a><span class="k">def</span> <span class="nf">allocate_cpu</span><span class="p">(</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">layout_map</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
+    <span class="n">alignment_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">aligned_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span>
+        <span class="n">alignment_bytes</span> <span class="o">%</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span>
+    <span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Alignment must be a multiple of byte-width of dtype.&quot;</span>
+    <span class="n">itemsize</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span>
+    <span class="n">items_per_alignment</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">alignment_bytes</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+
+    <span class="n">order_idx</span> <span class="o">=</span> <span class="n">idx_from_order</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">layout_map</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">])</span>
+    <span class="n">padded_shape</span> <span class="o">=</span> <span class="n">compute_padded_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">items_per_alignment</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">aligned_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">aligned_index</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="n">strides</span> <span class="o">=</span> <span class="n">strides_from_padded_shape</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">,</span> <span class="n">order_idx</span><span class="p">,</span> <span class="n">itemsize</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">order_idx</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">/</span> <span class="n">items_per_alignment</span><span class="p">))</span> <span class="o">*</span> <span class="n">items_per_alignment</span>
+            <span class="o">-</span> <span class="n">aligned_index</span><span class="p">[</span><span class="n">order_idx</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">halo_offset</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">padded_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">padded_shape</span><span class="p">))</span>
+    <span class="n">buffer_size</span> <span class="o">=</span> <span class="n">padded_size</span> <span class="o">+</span> <span class="n">items_per_alignment</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">raw_buffer</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">buffer_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="n">allocation_mismatch</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">raw_buffer</span><span class="o">.</span><span class="n">ctypes</span><span class="o">.</span><span class="n">data</span> <span class="o">%</span> <span class="n">alignment_bytes</span><span class="p">)</span> <span class="o">/</span> <span class="n">itemsize</span><span class="p">)</span>
+
+    <span class="n">alignment_offset</span> <span class="o">=</span> <span class="p">(</span><span class="n">halo_offset</span> <span class="o">-</span> <span class="n">allocation_mismatch</span><span class="p">)</span> <span class="o">%</span> <span class="n">items_per_alignment</span>
+
+    <span class="n">field</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">raw_buffer</span><span class="p">[</span><span class="n">alignment_offset</span> <span class="p">:</span> <span class="n">alignment_offset</span> <span class="o">+</span> <span class="n">padded_size</span><span class="p">],</span> <span class="n">padded_shape</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">field</span><span class="o">.</span><span class="n">strides</span> <span class="o">=</span> <span class="n">strides</span>
+        <span class="n">field</span> <span class="o">=</span> <span class="n">field</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">raw_buffer</span><span class="p">,</span> <span class="n">field</span></div>
+
+
+<div class="viewcode-block" id="cpu_copy"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.cpu_copy">[docs]</a><span class="k">def</span> <span class="nf">cpu_copy</span><span class="p">(</span><span class="n">array</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">&quot;cp.ndarray&quot;</span><span class="p">]):</span>
+    <span class="k">if</span> <span class="n">cp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># it&#39;s not clear from the documentation if cp.asnumpy guarantees a copy.</span>
+        <span class="c1"># worst case, this copies twice.</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cp</span><span class="o">.</span><span class="n">asnumpy</span><span class="p">(</span><span class="n">array</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">array</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="as_numpy"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.as_numpy">[docs]</a><span class="k">def</span> <span class="nf">as_numpy</span><span class="p">(</span><span class="n">array</span><span class="p">:</span> <span class="n">FieldLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">array</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="as_cupy"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.as_cupy">[docs]</a><span class="k">def</span> <span class="nf">as_cupy</span><span class="p">(</span><span class="n">array</span><span class="p">:</span> <span class="n">FieldLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;cp.ndarray&quot;</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">cp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">array</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_dims"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.get_dims">[docs]</a><span class="k">def</span> <span class="nf">get_dims</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">GtDimsInterface</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+    <span class="n">dims</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;__gt_dims__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dims</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dims</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dims</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_origin"><a class="viewcode-back" href="../../../_source/gt4py.storage.html#gt4py.storage.utils.get_origin">[docs]</a><span class="k">def</span> <span class="nf">get_origin</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">GtOriginInterface</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+    <span class="n">origin</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;__gt_origin__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">origin</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">origin</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

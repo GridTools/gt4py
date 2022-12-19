@@ -1,0 +1,37 @@
+gt4py.storage package
+=====================
+
+Submodules
+----------
+
+gt4py.storage.interface module
+------------------------------
+
+.. automodule:: gt4py.storage.interface
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.storage.layout module
+---------------------------
+
+.. automodule:: gt4py.storage.layout
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.storage.utils module
+--------------------------
+
+.. automodule:: gt4py.storage.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.storage
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.numpy.npir_codegen &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.numpy.npir_codegen</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.numpy.npir_codegen</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">numbers</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.numpy</span> <span class="kn">import</span> <span class="n">npir</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">codegen</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">FormatTemplate</span> <span class="k">as</span> <span class="n">as_fmt</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">JinjaTemplate</span> <span class="k">as</span> <span class="n">as_jinja</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;NpirCodegen&quot;</span><span class="p">]</span>
+
+
+<span class="k">def</span> <span class="nf">_offset_to_str</span><span class="p">(</span><span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">offset</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot; + </span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">elif</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot; - </span><span class="si">{</span><span class="o">-</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">_slice_string</span><span class="p">(</span><span class="n">ch</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">start_ch</span> <span class="o">=</span> <span class="n">ch</span> <span class="k">if</span> <span class="n">interval</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span> <span class="k">else</span> <span class="n">ch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">end_ch</span> <span class="o">=</span> <span class="n">ch</span> <span class="k">if</span> <span class="n">interval</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span> <span class="k">else</span> <span class="n">ch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start_ch</span><span class="si">}{</span><span class="n">_offset_to_str</span><span class="p">(</span><span class="n">interval</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="s2">&quot;:&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">end_ch</span><span class="si">}{</span><span class="n">_offset_to_str</span><span class="p">(</span><span class="n">interval</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_make_slice_access</span><span class="p">(</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]]],</span>
+    <span class="n">is_serial</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">npir</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="n">axes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">interval</span> <span class="o">=</span> <span class="n">npir</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">(</span>
+            <span class="n">i</span><span class="o">=</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">end</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+            <span class="n">j</span><span class="o">=</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">end</span><span class="p">(</span><span class="mi">0</span><span class="p">)),</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">offset</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_slice_string</span><span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="n">offset</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">interval</span><span class="o">.</span><span class="n">i</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">offset</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_slice_string</span><span class="p">(</span><span class="s2">&quot;j&quot;</span><span class="p">,</span> <span class="n">offset</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">interval</span><span class="o">.</span><span class="n">j</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">is_serial</span>
+            <span class="k">else</span> <span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="o">.</span><span class="n">end</span><span class="p">())</span>
+        <span class="p">)</span>
+        <span class="n">k_str</span> <span class="o">=</span> <span class="s2">&quot;k_&quot;</span> <span class="k">if</span> <span class="n">is_serial</span> <span class="k">else</span> <span class="s2">&quot;k&quot;</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_slice_string</span><span class="p">(</span><span class="n">k_str</span><span class="p">,</span> <span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">bounds</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">axes</span>
+
+
+<span class="n">ORIGIN_CORRECTED_VIEW_CLASS</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+    <span class="sd">&quot;&quot;&quot;\</span>
+<span class="sd">    class Field:</span>
+<span class="sd">        def __init__(self, field, offsets: Tuple[int, ...], dimensions: Tuple[bool, bool, bool]):</span>
+<span class="sd">            ii = iter(range(3))</span>
+<span class="sd">            self.idx_to_data = tuple(</span>
+<span class="sd">                [next(ii) if has_dim else None for has_dim in dimensions]</span>
+<span class="sd">                + list(range(sum(dimensions), len(field.shape)))</span>
+<span class="sd">            )</span>
+
+<span class="sd">            shape = [field.shape[i] if i is not None else 1 for i in self.idx_to_data]</span>
+<span class="sd">            self.field_view = np.reshape(field.data, shape).view(np.ndarray)</span>
+
+<span class="sd">            self.offsets = offsets</span>
+
+<span class="sd">        @classmethod</span>
+<span class="sd">        def empty(cls, shape, dtype, offset):</span>
+<span class="sd">            return cls(np.empty(shape, dtype=dtype), offset, (True, True, True))</span>
+
+<span class="sd">        def shim_key(self, key):</span>
+<span class="sd">            new_args = []</span>
+<span class="sd">            if not isinstance(key, tuple):</span>
+<span class="sd">                key = (key, )</span>
+<span class="sd">            for index in self.idx_to_data:</span>
+<span class="sd">                if index is None:</span>
+<span class="sd">                    new_args.append(slice(None, None))</span>
+<span class="sd">                else:</span>
+<span class="sd">                    idx = key[index]</span>
+<span class="sd">                    offset = self.offsets[index]</span>
+<span class="sd">                    if isinstance(idx, slice):</span>
+<span class="sd">                        new_args.append(</span>
+<span class="sd">                            slice(idx.start + offset, idx.stop + offset, idx.step) if offset else idx</span>
+<span class="sd">                        )</span>
+<span class="sd">                    else:</span>
+<span class="sd">                        new_args.append(idx + offset)</span>
+<span class="sd">            if not isinstance(new_args[2], (numbers.Integral, slice)):</span>
+<span class="sd">                new_args = self.broadcast_and_clip_variable_k(new_args)</span>
+<span class="sd">            return tuple(new_args)</span>
+
+<span class="sd">        def broadcast_and_clip_variable_k(self, new_args: tuple):</span>
+<span class="sd">            assert isinstance(new_args[0], slice) and isinstance(new_args[1], slice)</span>
+<span class="sd">            if np.max(new_args[2]) &gt;= self.field_view.shape[2] or np.min(new_args[2]) &lt; 0:</span>
+<span class="sd">                new_args[2] = np.clip(new_args[2].copy(), 0, self.field_view.shape[2]-1)</span>
+<span class="sd">            new_args[:2] = np.broadcast_arrays(</span>
+<span class="sd">                np.expand_dims(</span>
+<span class="sd">                    np.arange(new_args[0].start, new_args[0].stop),</span>
+<span class="sd">                    axis=tuple(i for i in range(self.field_view.ndim) if i != 0)</span>
+<span class="sd">                ),</span>
+<span class="sd">                np.expand_dims(</span>
+<span class="sd">                    np.arange(new_args[1].start, new_args[1].stop),</span>
+<span class="sd">                    axis=tuple(i for i in range(self.field_view.ndim) if i != 1)</span>
+<span class="sd">                ),</span>
+<span class="sd">            )</span>
+<span class="sd">            return new_args</span>
+
+<span class="sd">        def __getitem__(self, key):</span>
+<span class="sd">            return self.field_view.__getitem__(self.shim_key(key))</span>
+
+<span class="sd">        def __setitem__(self, key, value):</span>
+<span class="sd">            return self.field_view.__setitem__(self.shim_key(key), value)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="NpirCodegen"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen">[docs]</a><span class="k">class</span> <span class="nc">NpirCodegen</span><span class="p">(</span><span class="n">codegen</span><span class="o">.</span><span class="n">TemplatedGenerator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+<div class="viewcode-block" id="NpirCodegen.BlockContext"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.BlockContext">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">BlockContext</span><span class="p">:</span>
+        <span class="n">locals_declared</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">set</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.BlockContext.add_declared"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.BlockContext.add_declared">[docs]</a>        <span class="k">def</span> <span class="nf">add_declared</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">locals_declared</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">args</span><span class="p">)</span></div></div>
+
+    <span class="n">FieldDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2"> = Field(</span><span class="si">{name}</span><span class="s2">, _origin_[&#39;</span><span class="si">{name}</span><span class="s2">&#39;], ({&#39;, &#39;.join(dimensions)}))&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_TemporaryDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_TemporaryDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_TemporaryDecl</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">TemporaryDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;_dI_ + </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;_dJ_ + </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">padding</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;_dK_&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span> <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">data_dims</span>
+        <span class="p">]</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">off</span><span class="p">)</span> <span class="k">for</span> <span class="n">off</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;0&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">))</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> = Field.empty((</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">), </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, (</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">))&quot;</span></div>
+
+    <span class="n">LocalScalarDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span>
+        <span class="s2">&quot;</span><span class="si">{name}</span><span class="s2"> = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, </span><span class="si">{ksize}</span><span class="s2">), </span><span class="si">{dtype}</span><span class="s2">, ({&#39;, &#39;.join(str(l) for l in lower)}, 0))&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">VarKOffset</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;lk + </span><span class="si">{k}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_FieldSlice"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_FieldSlice">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldSlice</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">FieldSlice</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">k_offset</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">k_offset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">k_offset</span><span class="p">,</span> <span class="n">npir</span><span class="o">.</span><span class="n">VarKOffset</span><span class="p">)</span>
+            <span class="k">else</span> <span class="n">node</span><span class="o">.</span><span class="n">k_offset</span>
+        <span class="p">)</span>
+        <span class="n">offsets</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">i_offset</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">j_offset</span><span class="p">,</span>
+            <span class="n">k_offset</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># To determine: when is the symbol name not in the symtable?</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;symtable&quot;</span><span class="p">,</span> <span class="p">{}):</span>
+            <span class="n">decl</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">][</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">dimensions</span> <span class="o">=</span> <span class="n">decl</span><span class="o">.</span><span class="n">dimensions</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">npir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="kc">True</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+                <span class="n">Tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]],</span>
+                <span class="nb">tuple</span><span class="p">(</span><span class="n">off</span> <span class="k">if</span> <span class="n">has_dim</span> <span class="k">else</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">has_dim</span><span class="p">,</span> <span class="n">off</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">offsets</span><span class="p">)),</span>
+            <span class="p">)</span>
+
+        <span class="n">args</span> <span class="o">=</span> <span class="n">_make_slice_access</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;is_serial&quot;</span><span class="p">],</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;horizontal_mask&quot;</span><span class="p">))</span>
+        <span class="n">data_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span> <span class="n">inside_slice</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">access_slice</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">data_index</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">access_slice</span><span class="si">}</span><span class="s2">]&quot;</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_LocalScalarAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_LocalScalarAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LocalScalarAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">LocalScalarAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">is_serial</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">horizontal_mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">npir</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">_make_slice_access</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">is_serial</span><span class="p">,</span> <span class="n">horizontal_mask</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_serial</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;:&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span></div>
+
+    <span class="n">ParamAccess</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_DataType"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_DataType">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DataType</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="c1"># `np.bool` is a deprecated alias for the builtin `bool` or `np.bool_`.</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">}:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;np.</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_BuiltInLiteral"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_BuiltInLiteral">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BuiltInLiteral</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;True&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span> <span class="ow">is</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">FALSE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;False&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_ScalarLiteral"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_ScalarLiteral">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarLiteral</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">ScalarLiteral</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">inside_slice</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="c1"># This could be trivial, but it&#39;s convenient for reading if the dtype is omitted in slices.</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">inside_slice</span><span class="o">=</span><span class="n">inside_slice</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">inside_slice</span><span class="o">=</span><span class="n">inside_slice</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">inside_slice</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+    <span class="n">ScalarCast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2">(</span><span class="si">{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">VectorCast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{expr}</span><span class="s2">.astype(</span><span class="si">{dtype}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_NativeFunction"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_NativeFunction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFunction</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;np.minimum&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;np.maximum&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;np.power&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;scipy.special.gamma&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;np.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_NativeFuncCall"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_NativeFuncCall">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFuncCall</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">):</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;mask_arg&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;, where=</span><span class="si">{</span><span class="n">mask</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">mask</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">NativeFuncCall</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{func}</span><span class="s2">({&#39;, &#39;.join(arg for arg in args)}</span><span class="si">{mask_arg}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_VectorAssign"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_VectorAssign">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VectorAssign</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">VectorAssign</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;BlockContext&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">left</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">horizontal_mask</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">horizontal_mask</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">right</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+    <span class="n">VectorArithmetic</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{left}</span><span class="s2"> </span><span class="si">{op}</span><span class="s2"> </span><span class="si">{right}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">VectorLogic</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;np.bitwise_</span><span class="si">{op}</span><span class="s2">(</span><span class="si">{left}</span><span class="s2">, </span><span class="si">{right}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_UnaryOperator"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_UnaryOperator">[docs]</a>    <span class="k">def</span> <span class="nf">visit_UnaryOperator</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;np.bitwise_not&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">VectorUnaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{op}</span><span class="s2">(</span><span class="si">{expr}</span><span class="s2">))&quot;</span><span class="p">)</span>
+
+    <span class="n">VectorTernaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;np.where(</span><span class="si">{cond}</span><span class="s2">, </span><span class="si">{true_expr}</span><span class="s2">, </span><span class="si">{false_expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_LevelMarker"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_LevelMarker">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LevelMarker</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="s2">&quot;K&quot;</span> <span class="k">if</span> <span class="n">node</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span> <span class="k">else</span> <span class="s2">&quot;k&quot;</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_AxisBound"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_AxisBound">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AxisBound</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">voffset</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; + </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">voffset</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">voffset</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; - </span><span class="si">{</span><span class="o">-</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">voffset</span><span class="o">=</span><span class="n">voffset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">AxisBound</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;_d</span><span class="si">{level}</span><span class="s2">_</span><span class="si">{voffset}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_LoopOrder"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_LoopOrder">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LoopOrder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;for k_ in range(k, K):&quot;</span>
+        <span class="k">elif</span> <span class="n">node</span> <span class="ow">is</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;for k_ in range(K-1, k-1, -1):&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span></div>
+
+    <span class="n">Broadcast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{expr}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">While</span> <span class="o">=</span> <span class="n">as_jinja</span><span class="p">(</span>
+        <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+            <span class="sd">&quot;&quot;&quot;\</span>
+<span class="sd">            while np.any({{ cond }}):</span>
+<span class="sd">                {% for stmt in body %}{{ stmt }}</span>
+<span class="sd">                {% endfor %}</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_While"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_While">[docs]</a>    <span class="k">def</span> <span class="nf">visit_While</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">While</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">cond</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+            <span class="n">body</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">While</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">cond</span><span class="o">=</span><span class="n">cond</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NpirCodegen.visit_VerticalPass"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_VerticalPass">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalPass</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">VerticalPass</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">is_serial</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">direction</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span>
+        <span class="n">has_variable_k</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">npir</span><span class="o">.</span><span class="n">VarKOffset</span><span class="p">)</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">is_serial</span><span class="o">=</span><span class="n">is_serial</span><span class="p">,</span>
+            <span class="n">has_variable_k</span><span class="o">=</span><span class="n">has_variable_k</span><span class="p">,</span>
+            <span class="n">ksize</span><span class="o">=</span><span class="s2">&quot;_dK_&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">is_serial</span> <span class="k">else</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+            <span class="n">lk_stmt</span><span class="o">=</span><span class="s2">&quot;lk = &quot;</span> <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;k_&quot;</span> <span class="k">if</span> <span class="n">is_serial</span> <span class="k">else</span> <span class="s2">&quot;np.arange(k, K)[np.newaxis, np.newaxis, :]&quot;</span><span class="p">),</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="n">VerticalPass</span> <span class="o">=</span> <span class="n">as_jinja</span><span class="p">(</span>
+        <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+            <span class="sd">&quot;&quot;&quot;\</span>
+<span class="sd">            # --- begin vertical block ---{% set body_indent = 0 %}</span>
+<span class="sd">            k, K = {{ lower }}, {{ upper }}</span>
+<span class="sd">            {%- if direction %}</span>
+<span class="sd">            {{ direction }}{% set body_indent = 4 %}{% endif %}</span>
+<span class="sd">            {% if has_variable_k %}</span>
+<span class="sd">            {{ lk_stmt | indent(body_indent, first=True) }}</span>
+<span class="sd">            {% endif -%}</span>
+<span class="sd">            {% for hblock in body %}</span>
+<span class="sd">            {{ hblock | indent(body_indent, first=True) }}</span>
+<span class="sd">            {% endfor %}# --- end vertical block ---</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_HorizontalBlock"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_HorizontalBlock">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalBlock</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">HorizontalBlock</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">lower</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">node</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">node</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">upper</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">node</span><span class="o">.</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="n">lower</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="n">upper</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">BlockContext</span><span class="p">(),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">HorizontalBlock</span> <span class="o">=</span> <span class="n">as_jinja</span><span class="p">(</span>
+        <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+            <span class="sd">&quot;&quot;&quot;\</span>
+<span class="sd">            # --- begin horizontal block --</span>
+<span class="sd">            i, I = _di_ - {{ lower[0] }}, _dI_ + {{ upper[0] }}</span>
+<span class="sd">            j, J = _dj_ - {{ lower[1] }}, _dJ_ + {{ upper[1] }}</span>
+
+<span class="sd">            {% for stmt in body %}{{ stmt }}</span>
+<span class="sd">            {% endfor -%}</span>
+<span class="sd">            # --- end horizontal block --</span>
+
+<span class="sd">            &quot;&quot;&quot;</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="NpirCodegen.visit_Computation"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.numpy.html#gt4py.cartesian.gtc.numpy.npir_codegen.NpirCodegen.visit_Computation">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Computation</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">npir</span><span class="o">.</span><span class="n">Computation</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ignore_np_errstate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">signature</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;*&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span> <span class="s2">&quot;_domain_&quot;</span><span class="p">,</span> <span class="s2">&quot;_origin_&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">signature</span><span class="o">=</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">signature</span><span class="p">),</span>
+            <span class="n">data_view_class</span><span class="o">=</span><span class="n">ORIGIN_CORRECTED_VIEW_CLASS</span><span class="p">,</span>
+            <span class="n">ignore_np_errstate</span><span class="o">=</span><span class="n">ignore_np_errstate</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="n">Computation</span> <span class="o">=</span> <span class="n">as_jinja</span><span class="p">(</span>
+        <span class="n">textwrap</span><span class="o">.</span><span class="n">dedent</span><span class="p">(</span>
+            <span class="sd">&quot;&quot;&quot;\</span>
+<span class="sd">            import numbers</span>
+<span class="sd">            from typing import Tuple</span>
+
+<span class="sd">            import numpy as np</span>
+<span class="sd">            import scipy.special</span>
+
+<span class="sd">            {{ data_view_class }}</span>
+
+<span class="sd">            def run({{ signature }}):</span>
+
+<span class="sd">                # --- begin domain boundary shortcuts ---</span>
+<span class="sd">                _di_, _dj_, _dk_ = 0, 0, 0</span>
+<span class="sd">                _dI_, _dJ_, _dK_ = _domain_</span>
+<span class="sd">                # --- end domain padding ---</span>
+
+<span class="sd">                {% for decl in api_field_decls %}{{ decl | indent(4) }}</span>
+<span class="sd">                {% endfor %}</span>
+<span class="sd">                {% for decl in temp_decls %}{{ decl | indent(4) }}</span>
+<span class="sd">                {% endfor %}</span>
+
+<span class="sd">                {% if ignore_np_errstate -%}</span>
+<span class="sd">                with np.errstate(divide=&#39;ignore&#39;, over=&#39;ignore&#39;, under=&#39;ignore&#39;, invalid=&#39;ignore&#39;):</span>
+<span class="sd">                {%- else -%}</span>
+<span class="sd">                with np.errstate():</span>
+<span class="sd">                {%- endif %}</span>
+
+<span class="sd">                {% for pass in vertical_passes %}</span>
+<span class="sd">                {{ pass | indent(8) }}</span>
+<span class="sd">                {% else %}</span>
+<span class="sd">                    pass</span>
+<span class="sd">                {% endfor %}</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

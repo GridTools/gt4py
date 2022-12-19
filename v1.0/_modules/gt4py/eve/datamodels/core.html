@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.datamodels.core &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.datamodels.core</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.eve.datamodels.core</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Data Model class creation and other utils.</span>
+
+<span class="sd">Check :mod:`eve.datamodels` for additional information.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">import</span> <span class="nn">attr</span>
+<span class="kn">import</span> <span class="nn">attrs</span>
+
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># For perfomance reasons, try to use cytoolz when possible (using cython)</span>
+    <span class="kn">import</span> <span class="nn">cytoolz</span> <span class="k">as</span> <span class="nn">toolz</span>  <span class="c1"># type: ignore[import]</span>
+<span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
+    <span class="c1"># Fall back to pure Python toolz</span>
+    <span class="kn">import</span> <span class="nn">toolz</span>  <span class="c1"># type: ignore[import] # noqa: F401</span>
+
+<span class="kn">from</span> <span class="nn">..</span> <span class="kn">import</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">..</span> <span class="kn">import</span> <span class="n">extended_typing</span> <span class="k">as</span> <span class="n">xtyping</span>
+<span class="kn">from</span> <span class="nn">..</span> <span class="kn">import</span> <span class="n">type_validation</span> <span class="k">as</span> <span class="n">type_val</span>
+<span class="kn">from</span> <span class="nn">..</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">..extended_typing</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Any</span><span class="p">,</span>
+    <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">ClassVar</span><span class="p">,</span>
+    <span class="n">Dict</span><span class="p">,</span>
+    <span class="n">Final</span><span class="p">,</span>
+    <span class="n">ForwardRef</span><span class="p">,</span>
+    <span class="n">Generator</span><span class="p">,</span>
+    <span class="n">List</span><span class="p">,</span>
+    <span class="n">Literal</span><span class="p">,</span>
+    <span class="n">Mapping</span><span class="p">,</span>
+    <span class="n">Optional</span><span class="p">,</span>
+    <span class="n">Protocol</span><span class="p">,</span>
+    <span class="n">Sequence</span><span class="p">,</span>
+    <span class="n">Tuple</span><span class="p">,</span>
+    <span class="n">Type</span><span class="p">,</span>
+    <span class="n">TypeAlias</span><span class="p">,</span>
+    <span class="n">TypeAnnotation</span><span class="p">,</span>
+    <span class="n">TypeVar</span><span class="p">,</span>
+    <span class="n">Union</span><span class="p">,</span>
+    <span class="n">cast</span><span class="p">,</span>
+    <span class="n">overload</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">..type_definitions</span> <span class="kn">import</span> <span class="n">NOTHING</span><span class="p">,</span> <span class="n">NothingType</span>
+
+
+<span class="c1"># Typing</span>
+<span class="c1"># TODO(egparedes): these typing definitions are not perfect, but they provide</span>
+<span class="c1">#   some help until more advanced features are added to typing, like</span>
+<span class="c1">#   PEP 681 - Data Class Transforms (https://peps.python.org/pep-0681/)</span>
+<span class="c1">#   or intersection types.</span>
+<span class="n">_T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_T&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># TODO(egparedes): since these protocols are used instead of the actual classes</span>
+<span class="c1">#   for type checking, we assign empty tuples and None values to its members</span>
+<span class="c1">#   to avoid errors from mypy complaining about instantiation of abstract classes</span>
+
+
+<span class="k">class</span> <span class="nc">_AttrsClassTP</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__attrs_attrs__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">attr</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="p">()</span>
+
+
+<span class="n">Attribute</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">Attribute</span>
+
+
+<div class="viewcode-block" id="DataModelTP"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.DataModelTP">[docs]</a><span class="k">class</span> <span class="nc">DataModelTP</span><span class="p">(</span><span class="n">_AttrsClassTP</span><span class="p">,</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">DevToolsPrettyPrintable</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="o">...</span>
+
+    <span class="n">__datamodel_fields__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">[</span><span class="n">Attribute</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">[</span><span class="n">Attribute</span><span class="p">],</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="n">__datamodel_params__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">[</span><span class="n">Attribute</span><span class="p">],</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="n">__datamodel_root_validators__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span>
+        <span class="n">Tuple</span><span class="p">[</span><span class="n">xtyping</span><span class="o">.</span><span class="n">NonDataDescriptor</span><span class="p">[</span><span class="s2">&quot;DataModelTP&quot;</span><span class="p">,</span> <span class="s2">&quot;BoundRootValidator&quot;</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span>
+    <span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="c1"># Optional</span>
+    <span class="n">__auto_init__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">__pre_init__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">DataModelTP</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+        <span class="n">Callable</span><span class="p">[[</span><span class="s2">&quot;DataModelTP&quot;</span><span class="p">],</span> <span class="kc">None</span><span class="p">],</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="n">__post_init__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">DataModelTP</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+        <span class="n">Callable</span><span class="p">[[</span><span class="s2">&quot;DataModelTP&quot;</span><span class="p">],</span> <span class="kc">None</span><span class="p">],</span> <span class="kc">None</span>
+    <span class="p">)</span></div>
+
+
+<span class="n">DataModelT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;DataModelT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">DataModelTP</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="GenericDataModelTP"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.GenericDataModelTP">[docs]</a><span class="k">class</span> <span class="nc">GenericDataModelTP</span><span class="p">(</span><span class="n">DataModelTP</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">__args__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">],</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="n">__parameters__</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">TypeVar</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">__class_getitem__</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelTP</span><span class="p">],</span> <span class="n">args</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">DataModelTP</span><span class="p">,</span> <span class="n">GenericDataModelTP</span><span class="p">]:</span>
+        <span class="o">...</span></div>
+
+
+<span class="n">_DM</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_DM&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">&quot;DataModel&quot;</span><span class="p">)</span>
+
+<span class="n">GenericDataModelT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;GenericDataModelT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">GenericDataModelTP</span><span class="p">)</span>
+
+<span class="n">AttrsValidator</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Attribute</span><span class="p">,</span> <span class="n">_T</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span>
+<span class="n">FieldValidator</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">_DM</span><span class="p">,</span> <span class="n">Attribute</span><span class="p">,</span> <span class="n">_T</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span>
+<span class="n">BoundFieldValidator</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">_T</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span>
+
+<span class="n">RootValidator</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Type</span><span class="p">[</span><span class="n">_DM</span><span class="p">],</span> <span class="n">_DM</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span>
+<span class="n">BoundRootValidator</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">_DM</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span>
+
+<span class="n">FieldTypeValidatorFactory</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">TypeAnnotation</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">FieldValidator</span><span class="p">]</span>
+
+<span class="n">TypeConverter</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">_T</span><span class="p">]</span>
+
+<span class="c1"># Implementation</span>
+<span class="n">_DATAMODEL_TAG</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__DATAMODEL_TAG&quot;</span>
+<span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__DATAMODEL_FIELD_VALIDATOR_TAG&quot;</span>
+<span class="n">_ROOT_VALIDATOR_TAG</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__DATAMODEL_ROOT_VALIDATOR_TAG&quot;</span>
+<span class="n">_COERCED_TYPE_TAG</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__DATAMODEL_COERCED_TYPE_TAG&quot;</span>
+<span class="n">_UNCHECKED_TYPE_TAG</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__DATAMODEL_UNCHECKED_TYPE_TAG&quot;</span>
+
+<span class="n">_DM_OPTS</span> <span class="o">=</span> <span class="s2">&quot;__dm_opts&quot;</span>
+<span class="n">_GENERIC_DATAMODEL_ROOT_DM_OPT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;_GENERIC_DATAMODEL_ROOT_DM_OPT&quot;</span>
+
+<span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__datamodel_fields__&quot;</span>
+<span class="n">MODEL_PARAM_DEFINITIONS_ATTR</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__datamodel_params__&quot;</span>
+<span class="n">MODEL_ROOT_VALIDATORS_ATTR</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="s2">&quot;__datamodel_root_validators__&quot;</span>
+
+
+<span class="n">Coerced</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">Annotated</span><span class="p">[</span><span class="n">_T</span><span class="p">,</span> <span class="n">_COERCED_TYPE_TAG</span><span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;Type hint marker to define fields that should be coerced at initialization.&quot;&quot;&quot;</span>
+
+
+<span class="n">Unchecked</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">Annotated</span><span class="p">[</span><span class="n">_T</span><span class="p">,</span> <span class="n">_UNCHECKED_TYPE_TAG</span><span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;Type hint marker to define fields that should NOT be type-checked at initialization.&quot;&quot;&quot;</span>
+
+
+<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
+    <span class="n">_dataclass_opts</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;slots&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">_dataclass_opts</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<div class="viewcode-block" id="ForwardRefValidator"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.ForwardRefValidator">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="o">**</span><span class="n">_dataclass_opts</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ForwardRefValidator</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Implementation of ``attrs`` field validator for ``ForwardRef`` typings.</span>
+
+<span class="sd">    The first time is called it will update the class&#39; field type annotations</span>
+<span class="sd">    and then create the actual type validator for the field.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">factory</span><span class="p">:</span> <span class="n">type_val</span><span class="o">.</span><span class="n">TypeValidatorFactory</span>
+    <span class="sd">&quot;&quot;&quot;Type factory used to create the actual field validator.&quot;&quot;&quot;</span>
+
+    <span class="n">validator</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">type_val</span><span class="o">.</span><span class="n">FixedTypeValidator</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">NothingType</span><span class="p">]</span> <span class="o">=</span> <span class="n">NOTHING</span>
+    <span class="sd">&quot;&quot;&quot;Actual type validator created after resolving the forward references.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ForwardRefValidator.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.ForwardRefValidator.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">validator</span> <span class="ow">is</span> <span class="n">NOTHING</span><span class="p">:</span>
+            <span class="n">model_cls</span> <span class="o">=</span> <span class="n">instance</span><span class="o">.</span><span class="vm">__class__</span>
+            <span class="n">update_forward_refs</span><span class="p">(</span><span class="n">model_cls</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factory</span><span class="p">(</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">model_cls</span><span class="p">,</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">),</span> <span class="n">attribute</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+                <span class="n">attribute</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">validator</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ValidatorAdapter"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.ValidatorAdapter">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">_dataclass_opts</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ValidatorAdapter</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Adapter to use :class:`eve.type_validation.FixedTypeValidator`s as field validators.&quot;&quot;&quot;</span>
+
+    <span class="n">validator</span><span class="p">:</span> <span class="n">type_val</span><span class="o">.</span><span class="n">FixedTypeValidator</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span>
+
+<div class="viewcode-block" id="ValidatorAdapter.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.ValidatorAdapter.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_instance</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">,</span> <span class="n">_attribute</span><span class="p">:</span> <span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span></div>
+
+
+<div class="viewcode-block" id="field_type_validator_factory"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.field_type_validator_factory">[docs]</a><span class="k">def</span> <span class="nf">field_type_validator_factory</span><span class="p">(</span>
+    <span class="n">factory</span><span class="p">:</span> <span class="n">type_val</span><span class="o">.</span><span class="n">TypeValidatorFactory</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">use_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FieldTypeValidatorFactory</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Create a factory of field type validators from a factory of regular type validators.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">use_cache</span><span class="p">:</span>
+        <span class="n">factory</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+            <span class="n">type_val</span><span class="o">.</span><span class="n">TypeValidatorFactory</span><span class="p">,</span>
+            <span class="n">utils</span><span class="o">.</span><span class="n">optional_lru_cache</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">factory</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_field_type_validator_factory</span><span class="p">(</span>
+        <span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FieldValidator</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Field type validator for datamodels, supporting forward references.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">ForwardRef</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">ForwardRefValidator</span><span class="p">(</span><span class="n">factory</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">simple_validator</span> <span class="o">=</span> <span class="n">factory</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ValidatorAdapter</span><span class="p">(</span>
+                <span class="n">simple_validator</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">simple_validator</span><span class="p">,</span><span class="s1">&#39;__name__&#39;</span><span class="p">,</span> <span class="s1">&#39;TypeValidator&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_field_type_validator_factory</span></div>
+
+
+<span class="n">simple_type_validator_factory</span> <span class="o">=</span> <span class="n">field_type_validator_factory</span><span class="p">(</span><span class="n">type_val</span><span class="o">.</span><span class="n">simple_type_validator_factory</span><span class="p">)</span>
+
+<span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">simple_type_validator_factory</span> <span class="k">if</span> <span class="n">__debug__</span> <span class="k">else</span> <span class="kc">None</span>
+<span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Default type validator factory used by datamodels classes. `None` by default if running in optimized mode.&quot;&quot;&quot;</span>
+
+<span class="n">_REPR_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">_EQ_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">_ORDER_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_FROZEN_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">_KW_ONLY_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_SLOTS_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_COERCE_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">_GENERIC_DEFAULT</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="n">DEFAULT_OPTIONS</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">]</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">(</span>
+    <span class="nb">repr</span><span class="o">=</span><span class="n">_REPR_DEFAULT</span><span class="p">,</span>
+    <span class="n">eq</span><span class="o">=</span><span class="n">_EQ_DEFAULT</span><span class="p">,</span>
+    <span class="n">order</span><span class="o">=</span><span class="n">_ORDER_DEFAULT</span><span class="p">,</span>
+    <span class="n">unsafe_hash</span><span class="o">=</span><span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">,</span>
+    <span class="n">frozen</span><span class="o">=</span><span class="n">_FROZEN_DEFAULT</span><span class="p">,</span>
+    <span class="n">match_args</span><span class="o">=</span><span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="o">=</span><span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+    <span class="n">slots</span><span class="o">=</span><span class="n">_SLOTS_DEFAULT</span><span class="p">,</span>
+    <span class="n">coerce</span><span class="o">=</span><span class="n">_COERCE_DEFAULT</span><span class="p">,</span>
+    <span class="n">generic</span><span class="o">=</span><span class="n">_GENERIC_DEFAULT</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Convenient public namespace to expose default values to users.&quot;&quot;&quot;</span>
+
+
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">datamodel</span><span class="p">(</span>
+    <span class="bp">cls</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">/</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_REPR_DEFAULT</span><span class="p">,</span>  <span class="c1"># noqa: A002  # shadowing &#39;repr&#39; python builtin</span>
+    <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_EQ_DEFAULT</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_ORDER_DEFAULT</span><span class="p">,</span>
+    <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">,</span>
+    <span class="n">frozen</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_FROZEN_DEFAULT</span><span class="p">,</span>
+    <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+    <span class="n">slots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_SLOTS_DEFAULT</span><span class="p">,</span>
+    <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_COERCE_DEFAULT</span><span class="p">,</span>
+    <span class="n">generic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_GENERIC_DEFAULT</span><span class="p">,</span>
+    <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">]</span> <span class="o">=</span> <span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]],</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]]:</span>
+    <span class="o">...</span>
+
+
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">datamodel</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinion of unused symbol</span>
+    <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">],</span>
+    <span class="o">/</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_REPR_DEFAULT</span><span class="p">,</span>  <span class="c1"># noqa: A002  # shadowing &#39;repr&#39; python builtin</span>
+    <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_EQ_DEFAULT</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_ORDER_DEFAULT</span><span class="p">,</span>
+    <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">,</span>
+    <span class="n">frozen</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_FROZEN_DEFAULT</span><span class="p">,</span>
+    <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+    <span class="n">slots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_SLOTS_DEFAULT</span><span class="p">,</span>
+    <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_COERCE_DEFAULT</span><span class="p">,</span>
+    <span class="n">generic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_GENERIC_DEFAULT</span><span class="p">,</span>
+    <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">]</span> <span class="o">=</span> <span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]:</span>
+    <span class="o">...</span>
+
+
+<span class="c1"># TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=(&quot;field&quot;,))</span>
+<div class="viewcode-block" id="datamodel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.datamodel">[docs]</a><span class="k">def</span> <span class="nf">datamodel</span><span class="p">(</span>  <span class="c1"># noqa: F811  # redefinion of unused symbol</span>
+    <span class="bp">cls</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">/</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_REPR_DEFAULT</span><span class="p">,</span>  <span class="c1"># noqa: A002  # shadowing &#39;repr&#39; python builtin</span>
+    <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_EQ_DEFAULT</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_ORDER_DEFAULT</span><span class="p">,</span>
+    <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">,</span>
+    <span class="n">frozen</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_FROZEN_DEFAULT</span><span class="p">,</span>
+    <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+    <span class="n">slots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_SLOTS_DEFAULT</span><span class="p">,</span>
+    <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_COERCE_DEFAULT</span><span class="p">,</span>
+    <span class="n">generic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_GENERIC_DEFAULT</span><span class="p">,</span>
+    <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">]</span> <span class="o">=</span> <span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">],</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]],</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]]]:</span>
+    <span class="sd">&quot;&quot;&quot;Add generated special methods to classes according to the specified attributes (class decorator).</span>
+
+<span class="sd">    It converts the class to an `attrs &lt;https://www.attrs.org/&gt;`_ with some extra features.</span>
+<span class="sd">    Adding strict type validation functions for the fields is done by means of</span>
+<span class="sd">    the ``type_validation_factory`` argument, falling back to the default factory</span>
+<span class="sd">        (:class:`DefaultFieldTypeValidatorFactory`). The generated field type</span>
+<span class="sd">    validators are generated by using PEP 526 ``__annotations__`` to determine field</span>
+<span class="sd">    types and creating validation functions for them.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        cls: Original class definition.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        repr: If ``True`` (default), a ``__repr__()`` method will be generated if it does</span>
+<span class="sd">            not overwrite a custom implementation defined in this class (not inherited).</span>
+<span class="sd">        eq: If ``True`` (default), ``__eq__()`` and ``__ne__()`` methods will be generated</span>
+<span class="sd">            if they do not overwrite custom implementations defined in this class (not inherited).</span>
+<span class="sd">            The generated method compares the class as if it were a tuple of its fields, but both</span>
+<span class="sd">            instances in the comparison must be of identical type.</span>
+<span class="sd">        order:  If ``True`` (default is ``False``), add ``__lt__()``, ``__le__()``, ``__gt__()``,</span>
+<span class="sd">            and ``__ge__()`` methods that behave like `eq` above and allow instances</span>
+<span class="sd">            to be ordered. If ``None`` mirror value of `eq`.</span>
+<span class="sd">        unsafe_hash: If ``False``, a ``__hash__()`` method is generated in a safe way</span>
+<span class="sd">            according to how ``eq`` and ``frozen`` are set, or set to ``None`` (disabled)</span>
+<span class="sd">            otherwise. If ``True``, a ``__hash__()`` method is generated anyway</span>
+<span class="sd">            (use with care). See :func:`dataclasses.dataclass` for the complete explanation</span>
+<span class="sd">            (or other sources like: `&lt;https://hynek.me/articles/hashes-and-equality/&gt;`_).</span>
+<span class="sd">        frozen: If ``True`` (default is ``False``), assigning to fields will generate an exception.</span>
+<span class="sd">            This emulates read-only frozen instances. The ``__setattr__()`` and</span>
+<span class="sd">            ``__delattr__()`` methods should not be defined in the class.</span>
+<span class="sd">        match_args: If ``True`` (default) and ``__match_args__`` is not already defined in the class,</span>
+<span class="sd">            set ``__match_args__`` on the class to support PEP 634 (Structural Pattern Matching).</span>
+<span class="sd">            It is a tuple of all positional-only ``__init__`` parameter names on</span>
+<span class="sd">            Python 3.10 and later. Ignored on older Python versions.</span>
+<span class="sd">        kw_only: If ``True`` (default is ``False``), make all fields keyword-only in the generated</span>
+<span class="sd">            ``__init__`` (if ``init`` is ``False``, this parameter is ignored).</span>
+<span class="sd">        slots: slots: If ``True`` (the default is ``False``), ``__slots__`` attribute will be generated</span>
+<span class="sd">            and a new slotted class will be returned instead of the original one.</span>
+<span class="sd">        coerce: If ``True`` (default is ``False``), an automatic type converter will be generated</span>
+<span class="sd">            for all fields.</span>
+<span class="sd">        generic: If ``True`` (default is ``False``) the class should be a ``Generic[]`` class,</span>
+<span class="sd">            and the generated Data Model will support creation of new Data Model subclasses</span>
+<span class="sd">            when using concrete types as arguments of ``DataModelClass[some_concret_type]``.</span>
+<span class="sd">        type_validation_factory: Type validation factory used to build the field type validators.</span>
+<span class="sd">            If ``None``, type validators will not be generators.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">datamodel_options</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;repr&quot;</span><span class="p">:</span> <span class="nb">repr</span><span class="p">,</span>
+        <span class="s2">&quot;eq&quot;</span><span class="p">:</span> <span class="n">eq</span><span class="p">,</span>
+        <span class="s2">&quot;order&quot;</span><span class="p">:</span> <span class="n">order</span><span class="p">,</span>
+        <span class="s2">&quot;unsafe_hash&quot;</span><span class="p">:</span> <span class="n">unsafe_hash</span><span class="p">,</span>
+        <span class="s2">&quot;frozen&quot;</span><span class="p">:</span> <span class="n">frozen</span><span class="p">,</span>
+        <span class="s2">&quot;match_args&quot;</span><span class="p">:</span> <span class="n">match_args</span><span class="p">,</span>
+        <span class="s2">&quot;kw_only&quot;</span><span class="p">:</span> <span class="n">kw_only</span><span class="p">,</span>
+        <span class="s2">&quot;slots&quot;</span><span class="p">:</span> <span class="n">slots</span><span class="p">,</span>
+        <span class="s2">&quot;coerce&quot;</span><span class="p">:</span> <span class="n">coerce</span><span class="p">,</span>
+        <span class="s2">&quot;generic&quot;</span><span class="p">:</span> <span class="n">generic</span><span class="p">,</span>
+        <span class="s2">&quot;type_validation_factory&quot;</span><span class="p">:</span> <span class="n">type_validation_factory</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span> <span class="bp">cls</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># called as: @datamodel()</span>
+        <span class="k">return</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">_make_datamodel</span><span class="p">,</span> <span class="o">**</span><span class="n">datamodel_options</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c1"># called as: @datamodel</span>
+        <span class="k">return</span> <span class="n">_make_datamodel</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span>
+            <span class="n">_stacklevel_offset</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">datamodel_options</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
+        <span class="p">)</span></div>
+
+
+<span class="k">class</span> <span class="nc">_DataModelDecoratorTP</span><span class="p">(</span><span class="n">Protocol</span><span class="p">[</span><span class="n">_T</span><span class="p">]):</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">/</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_REPR_DEFAULT</span><span class="p">,</span>  <span class="c1"># noqa: A002  # shadowing &#39;repr&#39; python builtin</span>
+        <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_EQ_DEFAULT</span><span class="p">,</span>
+        <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_ORDER_DEFAULT</span><span class="p">,</span>
+        <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">,</span>
+        <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">,</span>
+        <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+        <span class="n">slots</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_SLOTS_DEFAULT</span><span class="p">,</span>
+        <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_COERCE_DEFAULT</span><span class="p">,</span>
+        <span class="n">generic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_GENERIC_DEFAULT</span><span class="p">,</span>
+        <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span>
+            <span class="n">FieldTypeValidatorFactory</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">],</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]],</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]]]:</span>
+        <span class="o">...</span>
+
+
+<span class="n">frozenmodel</span><span class="p">:</span> <span class="n">_DataModelDecoratorTP</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">datamodel</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Data Model definition function using ``frozen=True``.&quot;&quot;&quot;</span>
+
+<span class="n">frozen_model</span> <span class="o">=</span> <span class="n">frozenmodel</span>
+
+
+<span class="c1"># Typing protocols are used instead of the actual classes for type checks</span>
+<span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">TYPE_CHECKING</span><span class="p">:</span>
+
+    <span class="k">class</span> <span class="nc">DataModel</span><span class="p">(</span><span class="n">DataModelTP</span><span class="p">):</span>
+        <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="o">...</span>
+
+        <span class="k">def</span> <span class="nf">__pretty__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+            <span class="o">...</span>
+
+<span class="k">else</span><span class="p">:</span>
+
+    <span class="c1"># TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=(&quot;field&quot;,))</span>
+<div class="viewcode-block" id="DataModel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.DataModel">[docs]</a>    <span class="k">class</span> <span class="nc">DataModel</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Base class to automatically convert any subclass into a Data Model.</span>
+
+<span class="sd">        Inheriting from this class is equivalent to apply the :func:`datamodel`</span>
+<span class="sd">        decorator to a class, except that the ``slots`` option is always ``False``</span>
+<span class="sd">        (since it generates a new class) and all descendants will be also converted</span>
+<span class="sd">        automatically in Data Models with the same options of the parent class</span>
+<span class="sd">        (which does not happen when explicitly applying the decorator).</span>
+
+<span class="sd">        See :func:`datamodel` for the description of the parameters.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">__init_subclass__</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">,</span>
+            <span class="o">/</span><span class="p">,</span>
+            <span class="o">*</span><span class="p">,</span>
+            <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span>  <span class="c1"># noqa: A002  # shadowing &#39;repr&#39; python builtin</span>
+            <span class="o">|</span> <span class="kc">None</span>
+            <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">frozen</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">,</span> <span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">]</span>
+            <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;inherited&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;inherited&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dm_opts</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">_DM_OPTS</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="nb">super</span><span class="p">(</span><span class="n">DataModel</span><span class="p">,</span> <span class="bp">cls</span><span class="p">)</span><span class="o">.</span><span class="n">__init_subclass__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">cls_params</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">MODEL_PARAM_DEFINITIONS_ATTR</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="n">generic</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">&quot;True_no_checks&quot;</span>
+                <span class="k">if</span> <span class="n">_GENERIC_DATAMODEL_ROOT_DM_OPT</span> <span class="ow">in</span> <span class="n">dm_opts</span>
+                <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls_params</span><span class="p">,</span> <span class="s2">&quot;generic&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="n">locals_</span> <span class="o">=</span> <span class="nb">locals</span><span class="p">()</span>
+            <span class="n">datamodel_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">arg_name</span><span class="p">,</span> <span class="n">default_value</span> <span class="ow">in</span> <span class="p">[</span>
+                <span class="p">(</span><span class="s2">&quot;repr&quot;</span><span class="p">,</span> <span class="n">_REPR_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;eq&quot;</span><span class="p">,</span> <span class="n">_EQ_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;order&quot;</span><span class="p">,</span> <span class="n">_ORDER_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;unsafe_hash&quot;</span><span class="p">,</span> <span class="n">_UNSAFE_HASH_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;frozen&quot;</span><span class="p">,</span> <span class="n">_FROZEN_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;match_args&quot;</span><span class="p">,</span> <span class="n">_MATCH_ARGS_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;kw_only&quot;</span><span class="p">,</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;coerce&quot;</span><span class="p">,</span> <span class="n">_COERCE_DEFAULT</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;type_validation_factory&quot;</span><span class="p">,</span> <span class="n">DefaultFieldTypeValidatorFactory</span><span class="p">),</span>
+            <span class="p">]:</span>
+                <span class="n">arg_value</span> <span class="o">=</span> <span class="n">locals_</span><span class="p">[</span><span class="n">arg_name</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">arg_value</span> <span class="o">==</span> <span class="s2">&quot;inherited&quot;</span><span class="p">:</span>
+                    <span class="n">datamodel_kwargs</span><span class="p">[</span><span class="n">arg_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls_params</span><span class="p">,</span> <span class="n">arg_name</span><span class="p">,</span> <span class="n">default_value</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">datamodel_kwargs</span><span class="p">[</span><span class="n">arg_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg_value</span>
+
+            <span class="k">if</span> <span class="n">cls_params</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cls_params</span><span class="o">.</span><span class="n">frozen</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">datamodel_kwargs</span><span class="p">[</span><span class="s2">&quot;frozen&quot;</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Subclasses of a frozen DataModel cannot be unfrozen.&quot;</span><span class="p">)</span>
+
+            <span class="n">_make_datamodel</span><span class="p">(</span>
+                <span class="bp">cls</span><span class="p">,</span>
+                <span class="n">slots</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">generic</span><span class="o">=</span><span class="n">generic</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">datamodel_kwargs</span><span class="p">,</span>
+                <span class="n">_stacklevel_offset</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="field"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.field">[docs]</a><span class="k">def</span> <span class="nf">field</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">default</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">NOTHING</span><span class="p">,</span>
+    <span class="n">default_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[],</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">init</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>  <span class="c1"># noqa: A002   # shadowing &#39;repr&#39; python builtin</span>
+    <span class="nb">hash</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># noqa: A002   # shadowing &#39;hash&#39; python builtin</span>
+    <span class="n">compare</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Mapping</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">_KW_ONLY_DEFAULT</span><span class="p">,</span>
+    <span class="n">converter</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;coerce&quot;</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">validator</span><span class="p">:</span> <span class="n">AttrsValidator</span>
+    <span class="o">|</span> <span class="n">FieldValidator</span>
+    <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">AttrsValidator</span> <span class="o">|</span> <span class="n">FieldValidator</span><span class="p">]</span>
+    <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>  <span class="c1"># attr.s lies in some typings</span>
+    <span class="sd">&quot;&quot;&quot;Define a new attribute on a class with advanced options.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        default: If provided, this will be the default value for this field.</span>
+<span class="sd">            This is needed because the ``field()`` call itself replaces the</span>
+<span class="sd">            normal position of the default value.</span>
+<span class="sd">        default_factory: If provided, it must be a zero-argument callable that will</span>
+<span class="sd">            be called when a default value is needed for this field. Among other</span>
+<span class="sd">            purposes, this can be used to specify fields with mutable default values.</span>
+<span class="sd">            It is an error to specify both `default` and `default_factory`.</span>
+<span class="sd">        init: If ``True`` (default), this field is included as a parameter to the</span>
+<span class="sd">            generated ``__init__()`` method.</span>
+<span class="sd">        repr: If ``True`` (default), this field is included in the string returned</span>
+<span class="sd">            by the generated ``__repr__()`` method.</span>
+<span class="sd">        hash: This can be a ``bool`` or ``None`` (default). If ``True``, this field is</span>
+<span class="sd">            included in the generated ``__hash__()`` method. If ``None``, use the value</span>
+<span class="sd">            of `compare`, which would normally be the expected behavior: a field</span>
+<span class="sd">            should be considered in the `hash` if it is used for comparisons.</span>
+<span class="sd">            Setting this value to anything other than ``None`` is `discouraged`.</span>
+<span class="sd">        compare: If ``True`` (default), this field is included in the generated equality and</span>
+<span class="sd">            comparison methods (__eq__(), __gt__(), et al.).</span>
+<span class="sd">        metadata: An arbitrary mapping, not used at all by Data Models, and provided</span>
+<span class="sd">            only as a third-party extension mechanism. Multiple third-parties can each</span>
+<span class="sd">            have their own key, to use as a namespace in the metadata.</span>
+<span class="sd">        kw_only: If ``True`` (default is ``False``), make this field keyword-only in the</span>
+<span class="sd">            generated ``__init__`` (if ``init`` is ``False``, this parameter is ignored).</span>
+<span class="sd">        converter: Callable that is automatically called to convert attribute’s value.</span>
+<span class="sd">            It is given the passed-in value, and the returned value will be used as the</span>
+<span class="sd">            new value of the attribute before being passed to the validator, if any.</span>
+<span class="sd">            If ``&quot;coerce&quot;`` is passed, a naive coercer converter will be generated.</span>
+<span class="sd">            The automatic converter basically calls the constructor of the type indicated</span>
+<span class="sd">            in the type hint, so it is assumed that new instances of this type can be created</span>
+<span class="sd">            like ``type_name(value)``. For collection types, there is not attempt to convert</span>
+<span class="sd">            its items, only the collection type.</span>
+<span class="sd">        validator: FieldValidator or list of FieldValidators to be used with this field.</span>
+<span class="sd">            (Note that validators can also be set using decorator notation).</span>
+
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; from typing import List</span>
+<span class="sd">        &gt;&gt;&gt; @datamodel</span>
+<span class="sd">        ... class C:</span>
+<span class="sd">        ...     mylist: List[int] = field(default_factory=lambda : [1, 2, 3])</span>
+<span class="sd">        &gt;&gt;&gt; c = C()</span>
+<span class="sd">        &gt;&gt;&gt; c.mylist</span>
+<span class="sd">        [1, 2, 3]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">default</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">NOTHING</span> <span class="ow">and</span> <span class="n">default_factory</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot specify both &#39;default&#39; and &#39;default_factory&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">default</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">NOTHING</span><span class="p">:</span>
+        <span class="n">defaults_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="n">default</span><span class="p">}</span>
+    <span class="k">elif</span> <span class="n">default_factory</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">defaults_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;factory&quot;</span><span class="p">:</span> <span class="n">default_factory</span><span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">defaults_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">return</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+        <span class="o">**</span><span class="n">defaults_kwargs</span><span class="p">,</span>
+        <span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span>
+        <span class="nb">repr</span><span class="o">=</span><span class="nb">repr</span><span class="p">,</span>
+        <span class="nb">hash</span><span class="o">=</span><span class="nb">hash</span><span class="p">,</span>
+        <span class="n">eq</span><span class="o">=</span><span class="n">compare</span><span class="p">,</span>
+        <span class="n">order</span><span class="o">=</span><span class="n">compare</span><span class="p">,</span>
+        <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span><span class="p">,</span>
+        <span class="n">kw_only</span><span class="o">=</span><span class="n">kw_only</span><span class="p">,</span>
+        <span class="n">converter</span><span class="o">=</span><span class="n">converter</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
+        <span class="n">validator</span><span class="o">=</span><span class="n">validator</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
+    <span class="p">)</span></div>
+
+
+<span class="n">coerced_field</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">converter</span><span class="o">=</span><span class="s2">&quot;coerce&quot;</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Field definition function using ``converter=&quot;coerce&quot;``.&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="validator"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.validator">[docs]</a><span class="k">def</span> <span class="nf">validator</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">FieldValidator</span><span class="p">],</span> <span class="n">FieldValidator</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Define a custom field validator for a specific field (decorator function).</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        name: Name of the field to be validated by the decorated function.</span>
+
+<span class="sd">    The decorated functions should have the following signature:</span>
+<span class="sd">    ``def _validator_function(self, attribute, value):``</span>
+<span class="sd">    where ``self`` will be the model instance being validated, ``attribute``</span>
+<span class="sd">    the definition information of the attribute (the value of</span>
+<span class="sd">    ``__datamodel_fields__.field_name``) and ``value`` the actual value</span>
+<span class="sd">    received for this field.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_field_validator_maker</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">FieldValidator</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FieldValidator</span><span class="p">:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">,</span> <span class="p">())</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">([</span><span class="o">*</span><span class="n">names</span><span class="p">,</span> <span class="n">name</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">func</span>
+
+    <span class="k">return</span> <span class="n">_field_validator_maker</span></div>
+
+
+<span class="n">_RV</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_RV&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">RootValidator</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="root_validator"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.root_validator">[docs]</a><span class="k">def</span> <span class="nf">root_validator</span><span class="p">(</span><span class="n">cls_method</span><span class="p">:</span> <span class="n">_RV</span><span class="p">,</span> <span class="o">/</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_RV</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Define a custom root validator (decorator function).</span>
+
+<span class="sd">    The decorated functions should have the following signature:</span>
+<span class="sd">    ``def _root_validator_function(cls, instance):``</span>
+<span class="sd">    where ``cls`` will be the class of the model and ``instance`` the</span>
+<span class="sd">    actual instance being validated.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">cls_method</span><span class="p">,</span> <span class="n">_ROOT_VALIDATOR_TAG</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cls_method</span></div>
+
+
+<span class="c1"># -- Utils --</span>
+<div class="viewcode-block" id="is_datamodel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.is_datamodel">[docs]</a><span class="k">def</span> <span class="nf">is_datamodel</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Return True if `obj` is a Data Model class or an instance of a Data Model.&quot;&quot;&quot;</span>
+    <span class="bp">cls</span> <span class="o">=</span> <span class="n">obj</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="k">else</span> <span class="n">obj</span><span class="o">.</span><span class="vm">__class__</span>
+    <span class="k">return</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="is_generic_datamodel_class"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.is_generic_datamodel_class">[docs]</a><span class="k">def</span> <span class="nf">is_generic_datamodel_class</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Return ``True`` if `obj` is a generic Data Model class with type parameters.&quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="ow">and</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">has_type_parameters</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_fields"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.get_fields">[docs]</a><span class="k">def</span> <span class="nf">get_fields</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModel</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Return the field meta-information of a Data Model.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        model: A Data Model class or instance.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; from typing import List</span>
+<span class="sd">        &gt;&gt;&gt; @datamodel</span>
+<span class="sd">        ... class Model:</span>
+<span class="sd">        ...     name: str</span>
+<span class="sd">        ...     amount: int = 1</span>
+<span class="sd">        ...     numbers: List[float] = field(default_factory=list)</span>
+<span class="sd">        &gt;&gt;&gt; fields(Model)  # doctest:+ELLIPSIS</span>
+<span class="sd">        FrozenNamespace(...name=Attribute(name=&#39;name&#39;, default=NOTHING, ...</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>  <span class="c1"># noqa: RST201  # doctest conventions confuse RST validator</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid datamodel instance or class: &#39;</span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="vm">__class__</span>
+
+    <span class="n">ns</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ns</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ns</span></div>
+
+
+<span class="n">fields</span> <span class="o">=</span> <span class="n">get_fields</span>
+
+
+<div class="viewcode-block" id="asdict"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.asdict">[docs]</a><span class="k">def</span> <span class="nf">asdict</span><span class="p">(</span>
+    <span class="n">instance</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">value_serializer</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">Type</span><span class="p">[</span><span class="n">DataModel</span><span class="p">],</span> <span class="n">Attribute</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Return the contents of a Data Model instance as a new mapping from field names to values.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        instance: Data Model instance.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        value_serializer: A hook that is called for every attribute or dict key/value and must</span>
+<span class="sd">            return the (updated) value.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; @datamodel</span>
+<span class="sd">        ... class C:</span>
+<span class="sd">        ...     x: int</span>
+<span class="sd">        ...     y: int</span>
+<span class="sd">        &gt;&gt;&gt; c = C(x=1, y=2)</span>
+<span class="sd">        &gt;&gt;&gt; assert asdict(c) == {&#39;x&#39;: 1, &#39;y&#39;: 2}</span>
+<span class="sd">    &quot;&quot;&quot;</span>  <span class="c1"># noqa: RST301  # sphinx.napoleon conventions confuse RST validator</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid datamodel instance: &#39;</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">attrs</span><span class="o">.</span><span class="n">asdict</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="astuple"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.astuple">[docs]</a><span class="k">def</span> <span class="nf">astuple</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Return the contents of a Data Model instance as a new tuple of field values.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        instance: Data Model instance.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; @datamodel</span>
+<span class="sd">        ... class C:</span>
+<span class="sd">        ...     x: int</span>
+<span class="sd">        ...     y: int</span>
+<span class="sd">        &gt;&gt;&gt; c = C(x=1, y=2)</span>
+<span class="sd">        &gt;&gt;&gt; assert astuple(c) == (1, 2)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid datamodel instance: &#39;</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">attrs</span><span class="o">.</span><span class="n">astuple</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<span class="n">evolve</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">evolve</span>
+<span class="sd">&quot;&quot;&quot;Create a new instance, based on inst with changes applied.&quot;&quot;&quot;</span>
+
+<span class="n">validate</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">validate</span>
+<span class="sd">&quot;&quot;&quot;Validate all attributes on inst that have a validator.&quot;&quot;&quot;</span>
+
+<span class="n">_DataModelT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_DataModelT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">DataModel</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="update_forward_refs"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.update_forward_refs">[docs]</a><span class="k">def</span> <span class="nf">update_forward_refs</span><span class="p">(</span>
+    <span class="n">model_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">_DataModelT</span><span class="p">],</span>
+    <span class="n">localns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">_DataModelT</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Update Data Model class meta-information replacing forwarded type annotations with actual types.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        localns: locals ``dict`` used in the evaluation of the annotations</span>
+<span class="sd">            (globals are automatically taken from ``model.__module__``).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The provided class (so it can be used as a decorator too).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">model_cls</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">model_cls</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid datamodel class: &#39;</span><span class="si">{</span><span class="n">model_cls</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># attrs.resolve_types() caches the exact class (in the MRO) whose types have been already resolved</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model_cls</span><span class="p">,</span> <span class="s2">&quot;__attrs_types_resolved__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="n">model_cls</span><span class="p">:</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">model_cls</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">current_datamodel_fields</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model_cls</span><span class="p">,</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">field_name</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">current_datamodel_fields</span><span class="p">,</span> <span class="n">field_name</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">model_cls</span><span class="si">}</span><span class="s2"> does not contain a field named &#39;</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+
+            <span class="n">field_attr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">current_datamodel_fields</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field_attr</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">ForwardRef</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">actual_type</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">eval_forward_ref</span><span class="p">(</span>
+                        <span class="n">field_attr</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+                        <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">model_cls</span><span class="o">.</span><span class="vm">__module__</span><span class="p">]</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">,</span>
+                        <span class="n">localns</span><span class="p">,</span>
+                        <span class="n">include_extras</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">field_attr</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="n">actual_type</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Unexpected error trying to solve &#39;</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">&#39; field annotation (&#39;</span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">field_attr</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;)&quot;</span>
+                    <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span>
+
+            <span class="c1"># update resolved cache as attrs.resolve_types() would do</span>
+            <span class="n">model_cls</span><span class="o">.</span><span class="n">__attrs_types_resolved__</span> <span class="o">=</span> <span class="n">model_cls</span>  <span class="c1"># type: ignore[attr-defined]  # adding a new class attribute</span>
+
+    <span class="k">return</span> <span class="n">model_cls</span></div>
+
+
+<div class="viewcode-block" id="concretize"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.concretize">[docs]</a><span class="k">def</span> <span class="nf">concretize</span><span class="p">(</span>
+    <span class="n">datamodel_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelT</span><span class="p">],</span>
+    <span class="o">/</span><span class="p">,</span>
+    <span class="o">*</span><span class="n">type_args</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span>
+    <span class="n">class_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">module</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">support_pickling</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>  <span class="c1"># noqa</span>
+    <span class="n">overwrite_definition</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModelT</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Generate a new concrete subclass of a generic Data Model.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        datamodel_cls: Generic Data Model to be subclassed.</span>
+<span class="sd">        type_args: Type definitions replacing the `TypeVars` in</span>
+<span class="sd">            ``datamodel_cls.__parameters__``.</span>
+
+<span class="sd">    Keyword Arguments:</span>
+<span class="sd">        class_name: Name of the new concrete class. The default value is the</span>
+<span class="sd">            same of the generic Data Model replacing the `TypeVars` by the provided</span>
+<span class="sd">            `type_args` in the name.</span>
+<span class="sd">        module: Value of the ``__module__`` attribute of the new class.</span>
+<span class="sd">            The default value is the name of the module containing the generic Data Model.</span>
+<span class="sd">        support_pickling: If ``True``, support for pickling will be added</span>
+<span class="sd">            by actually inserting the new class into the target `module`.</span>
+<span class="sd">        overwrite_definition: If ``True``, a previous definition of the class in</span>
+<span class="sd">            the target module will be overwritten.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>  <span class="c1"># noqa: RST301  # doctest conventions confuse RST validator</span>
+    <span class="n">concrete_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModelT</span><span class="p">]</span> <span class="o">=</span> <span class="n">_make_concrete_with_cache</span><span class="p">(</span>
+        <span class="n">datamodel_cls</span><span class="p">,</span> <span class="o">*</span><span class="n">type_args</span><span class="p">,</span> <span class="n">class_name</span><span class="o">=</span><span class="n">class_name</span><span class="p">,</span> <span class="n">module</span><span class="o">=</span><span class="n">module</span>
+    <span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">concrete_cls</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">concrete_cls</span><span class="p">)</span>
+
+    <span class="c1"># For pickling to work, the new class has to be added to the proper module</span>
+    <span class="k">if</span> <span class="n">support_pickling</span><span class="p">:</span>
+        <span class="n">class_name</span> <span class="o">=</span> <span class="n">concrete_cls</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">reference_module_globals</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">concrete_cls</span><span class="o">.</span><span class="vm">__module__</span><span class="p">]</span><span class="o">.</span><span class="vm">__dict__</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cls_in_module</span> <span class="o">:=</span> <span class="p">(</span><span class="n">class_name</span> <span class="ow">in</span> <span class="n">reference_module_globals</span><span class="p">))</span> <span class="ow">or</span> <span class="n">overwrite_definition</span><span class="p">:</span>
+            <span class="n">reference_module_globals</span><span class="p">[</span><span class="n">class_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">concrete_cls</span>
+        <span class="k">elif</span> <span class="n">cls_in_module</span> <span class="ow">and</span> <span class="n">reference_module_globals</span><span class="p">[</span><span class="n">class_name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">concrete_cls</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="ne">RuntimeWarning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Existing &#39;</span><span class="si">{</span><span class="n">class_name</span><span class="si">}</span><span class="s2">&#39; symbol in module &#39;</span><span class="si">{</span><span class="n">module</span><span class="si">}</span><span class="s2">&#39; contains a reference&quot;</span>
+                    <span class="s2">&quot;to a different object.&quot;</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">concrete_cls</span></div>
+
+
+<span class="c1"># -- Helpers --</span>
+<span class="k">def</span> <span class="nf">_collect_field_validators</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldValidator</span><span class="p">]:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">field_name</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">):</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">member</span>
+            <span class="nb">delattr</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">_FIELD_VALIDATOR_TAG</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">def</span> <span class="nf">_collect_root_validators</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RootValidator</span><span class="p">]:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__mro__</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+        <span class="k">for</span> <span class="n">validator</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">MODEL_ROOT_VALIDATORS_ATTR</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">validator</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">validator</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">_ROOT_VALIDATOR_TAG</span><span class="p">):</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
+            <span class="nb">delattr</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">_ROOT_VALIDATOR_TAG</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">def</span> <span class="nf">_get_attribute_from_bases</span><span class="p">(</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">mro</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">annotations</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Attribute</span><span class="p">]:</span>
+    <span class="k">for</span> <span class="n">base</span> <span class="ow">in</span> <span class="n">mro</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">base_field_attrib</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="s2">&quot;__attrs_attrs__&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">base_field_attrib</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">annotations</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">annotations</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="vm">__annotations__</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">base_field_attrib</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="k">def</span> <span class="nf">_substitute_typevars</span><span class="p">(</span>
+    <span class="n">type_hint</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span> <span class="n">type_params_map</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="n">TypeVar</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_hint</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">type_hint</span> <span class="ow">in</span> <span class="n">type_params_map</span>
+        <span class="k">return</span> <span class="n">type_params_map</span><span class="p">[</span><span class="n">type_hint</span><span class="p">],</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">type_hint</span><span class="p">,</span> <span class="s2">&quot;__parameters__&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+        <span class="k">return</span> <span class="n">type_hint</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">type_params_map</span><span class="p">[</span><span class="n">tp</span><span class="p">]</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="n">type_hint</span><span class="o">.</span><span class="n">__parameters__</span><span class="p">)],</span> <span class="kc">True</span>
+        <span class="c1"># TODO(egparedes): WIP fix for partial specialization</span>
+        <span class="c1"># # Type hint is a generic model: replace all the concretized type vars</span>
+        <span class="c1"># noqa: e800 replaced = False</span>
+        <span class="c1"># noqa: e800 new_args = []</span>
+        <span class="c1"># noqa: e800 for tp in type_hint.__parameters__:</span>
+        <span class="c1"># noqa: e800     if tp in type_params_map:</span>
+        <span class="c1"># noqa: e800         new_args.append(type_params_map[tp])</span>
+        <span class="c1"># noqa: e800         replaced = True</span>
+        <span class="c1"># noqa: e800     else:</span>
+        <span class="c1"># noqa: e800         new_args.append(type_params_map[tp])</span>
+        <span class="c1"># noqa: e800 return type_hint[tuple(new_args)], replaced</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">type_hint</span><span class="p">,</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">_make_counting_attr_from_attribute</span><span class="p">(</span>
+    <span class="n">field_attrib</span><span class="p">:</span> <span class="n">Attribute</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">include_type</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>  <span class="c1"># attr.s lies a bit in some typing definitons</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;default&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;validator&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;repr&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;eq&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;order&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;hash&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;init&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;metadata&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;converter&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;kw_only&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;on_setattr&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">include_type</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">ib</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field_attrib</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">args</span><span class="p">},</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;eq_key&quot;</span><span class="p">,</span> <span class="s2">&quot;order_key&quot;</span><span class="p">):</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field_attrib</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">def</span> <span class="nf">_make_post_init</span><span class="p">(</span><span class="n">has_post_init</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DataModel</span><span class="p">],</span> <span class="kc">None</span><span class="p">]:</span>
+    <span class="c1"># Duplicated code to facilitate the source inspection of the generated `__init__()` method</span>
+    <span class="k">if</span> <span class="n">has_post_init</span><span class="p">:</span>
+
+        <span class="k">def</span> <span class="nf">__attrs_post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">attr</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">_run_validators</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>  <span class="c1"># type: ignore[attr-defined]  # attr._config is not visible for mypy</span>
+                <span class="k">for</span> <span class="n">validator</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__datamodel_root_validators__</span><span class="p">:</span>
+                    <span class="n">validator</span><span class="o">.</span><span class="fm">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">__post_init__</span><span class="p">()</span>
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="k">def</span> <span class="nf">__attrs_post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">attr</span><span class="o">.</span><span class="n">_config</span><span class="o">.</span><span class="n">_run_validators</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>  <span class="c1"># type: ignore[attr-defined]  # attr._config is not visible for mypy</span>
+                <span class="k">for</span> <span class="n">validator</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__datamodel_root_validators__</span><span class="p">:</span>
+                    <span class="n">validator</span><span class="o">.</span><span class="fm">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">)(</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">__attrs_post_init__</span><span class="p">,</span> <span class="n">_DATAMODEL_TAG</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">__attrs_post_init__</span>
+
+
+<span class="k">def</span> <span class="nf">_make_devtools_pretty</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span>
+    <span class="p">[</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+<span class="p">]:</span>
+    <span class="k">def</span> <span class="nf">__pretty__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="n">DataModel</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Provide a human readable representation for `devtools &lt;https://python-devtools.helpmanual.io/&gt;`_.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            Adapted from `pydantic &lt;https://github.com/samuelcolvin/pydantic&gt;`_.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s2">&quot;(&quot;</span>
+        <span class="k">yield</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span>
+            <span class="k">yield</span> <span class="n">fmt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+            <span class="k">yield</span> <span class="s2">&quot;,&quot;</span>
+            <span class="k">yield</span> <span class="mi">0</span>
+        <span class="k">yield</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">yield</span> <span class="s2">&quot;)&quot;</span>
+
+    <span class="k">return</span> <span class="n">__pretty__</span>
+
+
+<span class="k">def</span> <span class="nf">_make_data_model_class_getitem</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">classmethod</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__class_getitem__</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelT</span><span class="p">],</span> <span class="n">args</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModelT</span><span class="p">]</span> <span class="o">|</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelT</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Return an instance compatible with aliases created by :class:`typing.Generic` classes.</span>
+
+<span class="sd">        See :class:`GenericDataModelAlias` for further information.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">type_args</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">args</span><span class="p">,)</span>
+        <span class="n">concrete_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModelT</span><span class="p">]</span> <span class="o">=</span> <span class="n">concretize</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">StdGenericAliasType</span><span class="p">(</span><span class="n">concrete_cls</span><span class="p">,</span> <span class="n">type_args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">9</span><span class="p">):</span>
+            <span class="c1"># in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)</span>
+            <span class="c1"># does not copy all required `__dict__` entries, so do it manually</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">concrete_cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">res</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+                    <span class="n">res</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="k">return</span> <span class="nb">classmethod</span><span class="p">(</span><span class="n">__class_getitem__</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_make_type_converter</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">:</span> <span class="n">TypeAnnotation</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TypeConverter</span><span class="p">[</span><span class="n">_T</span><span class="p">]:</span>
+    <span class="c1"># TODO(egparedes): if a &quot;typing tree&quot; structure is implemented, refactor this code as a tree traversal.</span>
+    <span class="c1">#</span>
+    <span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">is_actual_type</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_annotation</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="ow">not</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">_type_converter</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_T</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">value</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">type_annotation</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+                    <span class="k">else</span> <span class="n">type_annotation</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Error during coertion of given value &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; for field &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span>
+
+        <span class="k">return</span> <span class="n">_type_converter</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_make_type_converter</span><span class="p">(</span><span class="n">type_annotation</span><span class="o">.</span><span class="n">__bound__</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">type_annotation</span><span class="o">.</span><span class="n">__bound__</span>
+            <span class="k">else</span> <span class="n">toolz</span><span class="o">.</span><span class="n">identity</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">type_annotation</span> <span class="ow">is</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">toolz</span><span class="o">.</span><span class="n">identity</span>
+
+    <span class="n">origin_type</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">origin_type</span> <span class="ow">is</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">Union</span>
+        <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="n">args</span> <span class="o">:=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">type_annotation</span><span class="p">))</span>
+        <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+    <span class="p">):</span>
+        <span class="c1"># Optional type</span>
+        <span class="n">_inner_type_converter</span><span class="p">:</span> <span class="n">TypeConverter</span><span class="p">[</span><span class="n">_T</span><span class="p">]</span> <span class="o">=</span> <span class="n">_make_type_converter</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">name</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">TypeConverter</span><span class="p">[</span><span class="n">_T</span><span class="p">],</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_inner_type_converter</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">is_actual_type</span><span class="p">(</span><span class="n">origin_type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_make_type_converter</span><span class="p">(</span><span class="n">origin_type</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveTypeError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Automatic type coertion for </span><span class="si">{</span><span class="n">type_annotation</span><span class="si">}</span><span class="s2"> types is not supported.&quot;</span>
+    <span class="p">)</span>
+
+
+<span class="n">_KNOWN_MUTABLE_TYPES</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">set</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="_make_datamodel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts._make_datamodel">[docs]</a><span class="k">def</span> <span class="nf">_make_datamodel</span><span class="p">(</span>  <span class="c1"># noqa: C901  # too complex but still readable and documented</span>
+    <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="nb">repr</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>  <span class="c1"># noqa: A002   # shadowing &#39;repr&#39; python builtin</span>
+    <span class="n">eq</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">unsafe_hash</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">frozen</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;strict&quot;</span><span class="p">],</span>
+    <span class="n">match_args</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">kw_only</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">slots</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">coerce</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">generic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;True_no_checks&quot;</span><span class="p">],</span>
+    <span class="n">type_validation_factory</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldTypeValidatorFactory</span><span class="p">],</span>
+    <span class="n">_stacklevel_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">_T</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Actual implementation of the Data Model creation.</span>
+
+<span class="sd">    See :func:`datamodel` for the description of the parameters.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mro_bases</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__mro__</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+    <span class="k">if</span> <span class="s2">&quot;__annotations__&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="vm">__annotations__</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">[</span><span class="s2">&quot;__annotations__&quot;</span><span class="p">]</span>
+    <span class="n">resolved_annotations</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_partial_type_hints</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+    <span class="n">annotations_with_extras</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_partial_type_hints</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">include_extras</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">frozen</span><span class="p">,</span> <span class="n">strict_frozen</span> <span class="o">=</span> <span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frozen</span> <span class="o">==</span> <span class="s2">&quot;strict&quot;</span> <span class="k">else</span> <span class="p">(</span><span class="n">frozen</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Create attrib definitions with automatic type validators and converters</span>
+    <span class="c1"># for the annotated fields. The keys in the original annotations are used for</span>
+    <span class="c1"># iteration, since the resolved annotations also contain superclasses&#39; annotations</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">type_hint</span> <span class="o">=</span> <span class="n">annotations</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">resolved_annotations</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+        <span class="c1"># Skip members annotated as class variables</span>
+        <span class="k">if</span> <span class="n">type_hint</span> <span class="ow">is</span> <span class="n">ClassVar</span> <span class="ow">or</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">type_hint</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ClassVar</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">annotations_with_extras</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="o">==</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">Annotated</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="o">*</span><span class="n">type_extras</span> <span class="o">=</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">annotations_with_extras</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">type_extras</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">coerce_field</span> <span class="o">=</span> <span class="n">coerce</span> <span class="ow">or</span> <span class="n">_COERCED_TYPE_TAG</span> <span class="ow">in</span> <span class="n">type_extras</span>
+        <span class="n">qualified_field_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Create type validator if validation is enabled</span>
+        <span class="k">if</span> <span class="n">type_validation_factory</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">_UNCHECKED_TYPE_TAG</span> <span class="ow">in</span> <span class="n">type_extras</span><span class="p">:</span>
+            <span class="n">type_validator</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="kc">None</span>  <span class="c1"># noqa: E731</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">type_validator</span> <span class="o">=</span> <span class="n">type_validation_factory</span><span class="p">(</span><span class="n">type_hint</span><span class="p">,</span> <span class="n">qualified_field_name</span><span class="p">)</span>
+
+        <span class="c1"># Declare an attrs.field() for this field with the right options.</span>
+        <span class="c1"># There are different cases depending on the current value of the attribute in the class dict.</span>
+        <span class="n">attr_value_in_cls</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">NOTHING</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_value_in_cls</span><span class="p">,</span> <span class="n">attr</span><span class="o">.</span><span class="n">_make</span><span class="o">.</span><span class="n">_CountingAttr</span><span class="p">):</span>  <span class="c1"># type: ignore[attr-defined]  # _make is private</span>
+            <span class="c1"># A field() function has already been used to customize the definition of the field.</span>
+            <span class="c1"># In this case, we need to:</span>
+            <span class="c1">#  - prepend the type validator to the list of provided validators (if any)</span>
+            <span class="c1">#  - add the converter if the field needs to be converted and another custom converter</span>
+            <span class="c1">#      has not been defined</span>
+            <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">_validator</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">type_validator</span>
+                <span class="k">if</span> <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">_validator</span> <span class="ow">is</span> <span class="kc">None</span>
+                <span class="k">else</span> <span class="n">attr</span><span class="o">.</span><span class="n">_make</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">type_validator</span><span class="p">,</span> <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">_validator</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # attr._make is not visible for mypy</span>
+            <span class="p">)</span>
+            <span class="n">coerce_field</span> <span class="o">=</span> <span class="n">coerce_field</span> <span class="ow">or</span> <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">converter</span> <span class="o">==</span> <span class="s2">&quot;coerce&quot;</span>
+            <span class="k">if</span> <span class="n">coerce_field</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">converter</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;coerce&quot;</span><span class="p">):</span>
+                    <span class="n">attr_value_in_cls</span><span class="o">.</span><span class="n">converter</span> <span class="o">=</span> <span class="n">_make_type_converter</span><span class="p">(</span>
+                        <span class="n">type_hint</span><span class="p">,</span> <span class="n">qualified_field_name</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Impossible to add automatic type converter to field &#39;</span><span class="si">{</span><span class="n">qualified_field_name</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="s2">&quot;which already defines a custom converter.&quot;</span>
+                    <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Create field converter if automatic coertion is enabled</span>
+            <span class="n">converter</span><span class="p">:</span> <span class="n">TypeConverter</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+                <span class="n">TypeConverter</span><span class="p">,</span>
+                <span class="n">_make_type_converter</span><span class="p">(</span><span class="n">type_hint</span><span class="p">,</span> <span class="n">qualified_field_name</span><span class="p">)</span> <span class="k">if</span> <span class="n">coerce_field</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">attr_value_in_cls</span> <span class="ow">is</span> <span class="n">NOTHING</span><span class="p">:</span>
+                <span class="c1"># The field has no definition in the class dict, it&#39;s only an annotation</span>
+                <span class="nb">setattr</span><span class="p">(</span>
+                    <span class="bp">cls</span><span class="p">,</span>
+                    <span class="n">key</span><span class="p">,</span>
+                    <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">converter</span><span class="o">=</span><span class="n">converter</span><span class="p">,</span> <span class="n">validator</span><span class="o">=</span><span class="n">type_validator</span><span class="p">),</span>
+                <span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># The field contains the default value in the class dict</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_value_in_cls</span><span class="p">,</span> <span class="n">_KNOWN_MUTABLE_TYPES</span><span class="p">):</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">attr_value_in_cls</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; value used as default in &#39;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39;.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                        <span class="s2">&quot;Mutable types should not defbe normally used as field defaults (use &#39;default_factory&#39; instead).&quot;</span><span class="p">,</span>
+                        <span class="n">stacklevel</span><span class="o">=</span><span class="n">_stacklevel_offset</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="nb">setattr</span><span class="p">(</span>
+                    <span class="bp">cls</span><span class="p">,</span>
+                    <span class="n">key</span><span class="p">,</span>
+                    <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+                        <span class="n">converter</span><span class="o">=</span><span class="n">converter</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">attr_value_in_cls</span><span class="p">,</span> <span class="n">validator</span><span class="o">=</span><span class="n">type_validator</span>
+                    <span class="p">),</span>
+                <span class="p">)</span>
+
+    <span class="c1"># All fields should be annotated with type hints</span>
+    <span class="n">num_attrs</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">attr</span><span class="o">.</span><span class="n">_make</span><span class="o">.</span><span class="n">_CountingAttr</span><span class="p">):</span>  <span class="c1"># type: ignore[attr-defined]  # attr._make is not visible for mypy</span>
+            <span class="n">num_attrs</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">annotations</span>
+                <span class="ow">and</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">resolved_annotations</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">ClassVar</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing type annotation in &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Validator processing</span>
+    <span class="n">root_validators</span> <span class="o">=</span> <span class="n">_collect_root_validators</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+    <span class="n">field_validators</span> <span class="o">=</span> <span class="n">_collect_field_validators</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">qualified_field_name</span><span class="p">,</span> <span class="n">field_validator</span> <span class="ow">in</span> <span class="n">field_validators</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">field_c_attr</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">qualified_field_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">field_c_attr</span><span class="p">:</span>
+            <span class="c1"># Field has not been defined in the current class namespace,</span>
+            <span class="c1"># look for field definition in the base classes.</span>
+            <span class="n">base_field_attr</span> <span class="o">=</span> <span class="n">_get_attribute_from_bases</span><span class="p">(</span>
+                <span class="n">qualified_field_name</span><span class="p">,</span> <span class="n">mro_bases</span><span class="p">,</span> <span class="n">annotations</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">base_field_attr</span><span class="p">:</span>
+                <span class="c1"># Create a new field in the current class cloning the existing</span>
+                <span class="c1"># definition and add the new validator (attrs recommendation)</span>
+                <span class="n">field_c_attr</span> <span class="o">=</span> <span class="n">_make_counting_attr_from_attribute</span><span class="p">(</span>
+                    <span class="n">base_field_attr</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">qualified_field_name</span><span class="p">,</span> <span class="n">field_c_attr</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Validator assigned to non existing &#39;</span><span class="si">{</span><span class="n">qualified_field_name</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># Add field validator using field_attr.validator</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field_c_attr</span><span class="p">,</span> <span class="n">attr</span><span class="o">.</span><span class="n">_make</span><span class="o">.</span><span class="n">_CountingAttr</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # attr._make is not visible for mypy</span>
+        <span class="n">field_c_attr</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="n">field_validator</span><span class="p">)</span>
+
+    <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">MODEL_ROOT_VALIDATORS_ATTR</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">root_validators</span><span class="p">))</span>
+
+    <span class="c1"># Apply attrs.define() to enhance the class once all datamodels features</span>
+    <span class="c1"># have been converted into attrs options</span>
+    <span class="k">if</span> <span class="s2">&quot;__pre_init__&quot;</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">&quot;__attrs_pre_init__&quot;</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; class contains custom &#39;__attrs_pre_init__&#39;, which conflicts with `__pre_init__` .&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">__attrs_pre_init__</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">__pre_init__</span>  <span class="c1"># type: ignore[attr-defined]  # adding new attribute</span>
+
+    <span class="k">if</span> <span class="s2">&quot;__attrs_post_init__&quot;</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">__attrs_post_init__</span><span class="p">,</span> <span class="n">_DATAMODEL_TAG</span>  <span class="c1"># type: ignore[attr-defined]  # mypy doesn&#39;t know about __attr_post_init__</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; class contains forbidden custom &#39;__attrs_post_init__&#39;.&quot;</span><span class="p">)</span>
+    <span class="bp">cls</span><span class="o">.</span><span class="n">__attrs_post_init__</span> <span class="o">=</span> <span class="n">_make_post_init</span><span class="p">(</span><span class="n">has_post_init</span><span class="o">=</span><span class="s2">&quot;__post_init__&quot;</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # adding new attribute</span>
+
+    <span class="k">if</span> <span class="n">generic</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">generic</span> <span class="o">==</span> <span class="s2">&quot;True_no_checks&quot;</span><span class="p">:</span>
+            <span class="c1"># For the root GenericDataModel class, only set the attribute in __datamodel_params__ to True</span>
+            <span class="n">generic</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># For any other subclass, add the proper __class_getitem__ method</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="p">(</span><span class="n">typing</span><span class="o">.</span><span class="n">Generic</span><span class="p">,</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">Generic</span><span class="p">)):</span>  <span class="c1"># type: ignore[arg-type]  # Generic is not considered a type</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; cannot be converted to a GenericDataModel because it is not a generic class.&quot;</span>
+                <span class="p">)</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">__class_getitem__</span> <span class="o">=</span> <span class="n">_make_data_model_class_getitem</span><span class="p">()</span>  <span class="c1"># type: ignore[attr-defined]  # adding new attribute</span>
+
+    <span class="c1"># TODO(egparedes): consider the use of the field_transformer hook available in attrs:</span>
+    <span class="c1">#   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification</span>
+    <span class="n">new_cls</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">define</span><span class="p">(</span>  <span class="c1"># type: ignore[call-overload]</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">auto_attribs</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">auto_detect</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">init</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="nb">repr</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="nb">repr</span> <span class="k">else</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">eq</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">eq</span> <span class="k">else</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">order</span><span class="o">=</span><span class="n">order</span><span class="p">,</span>
+        <span class="nb">hash</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">unsafe_hash</span> <span class="k">else</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">frozen</span><span class="o">=</span><span class="n">frozen</span><span class="p">,</span>
+        <span class="n">match_args</span><span class="o">=</span><span class="n">match_args</span><span class="p">,</span>
+        <span class="n">kw_only</span><span class="o">=</span><span class="n">kw_only</span><span class="p">,</span>
+        <span class="n">slots</span><span class="o">=</span><span class="n">slots</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">new_cls</span> <span class="ow">is</span> <span class="bp">cls</span><span class="p">)</span> <span class="ow">or</span> <span class="n">slots</span>
+
+    <span class="c1"># Final checks and postprocessing</span>
+    <span class="k">if</span> <span class="n">strict_frozen</span><span class="p">:</span>
+        <span class="n">unhashable_fields</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">f_attr</span> <span class="ow">in</span> <span class="n">new_cls</span><span class="o">.</span><span class="n">__attrs_attrs__</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">is_datamodel</span><span class="p">(</span><span class="n">f_attr</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">f_attr</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">MODEL_PARAM_DEFINITIONS_ATTR</span><span class="p">)</span><span class="o">.</span><span class="n">strict_frozen</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">continue</span>
+            <span class="k">elif</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">is_hashable_type</span><span class="p">(</span><span class="n">f_attr</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">unhashable_fields</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f_attr</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">unhashable_fields</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveTypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Some fields (</span><span class="si">{</span><span class="n">unhashable_fields</span><span class="si">}</span><span class="s2">) can not be considered strictly immutable.&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">if</span> <span class="s2">&quot;__attrs_init__&quot;</span> <span class="ow">in</span> <span class="n">new_cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="s2">&quot;__auto_init__&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span>
+        <span class="n">new_cls</span><span class="o">.</span><span class="n">__auto_init__</span> <span class="o">=</span> <span class="n">new_cls</span><span class="o">.</span><span class="n">__attrs_init__</span>
+
+    <span class="n">new_cls</span><span class="o">.</span><span class="n">__pretty__</span> <span class="o">=</span> <span class="n">_make_devtools_pretty</span><span class="p">()</span>
+    <span class="nb">setattr</span><span class="p">(</span>
+        <span class="n">new_cls</span><span class="p">,</span>
+        <span class="n">MODEL_PARAM_DEFINITIONS_ATTR</span><span class="p">,</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">(</span>
+            <span class="nb">repr</span><span class="o">=</span><span class="nb">repr</span><span class="p">,</span>
+            <span class="n">eq</span><span class="o">=</span><span class="n">eq</span><span class="p">,</span>
+            <span class="n">order</span><span class="o">=</span><span class="n">order</span><span class="p">,</span>
+            <span class="n">unsafe_hash</span><span class="o">=</span><span class="n">unsafe_hash</span><span class="p">,</span>
+            <span class="n">frozen</span><span class="o">=</span><span class="n">frozen</span><span class="p">,</span>
+            <span class="n">strict_frozen</span><span class="o">=</span><span class="n">strict_frozen</span><span class="p">,</span>
+            <span class="n">match_args</span><span class="o">=</span><span class="n">match_args</span><span class="p">,</span>
+            <span class="n">kw_only</span><span class="o">=</span><span class="n">kw_only</span><span class="p">,</span>
+            <span class="n">slots</span><span class="o">=</span><span class="n">slots</span><span class="p">,</span>
+            <span class="n">coerce</span><span class="o">=</span><span class="n">coerce</span><span class="p">,</span>
+            <span class="n">generic</span><span class="o">=</span><span class="n">generic</span><span class="p">,</span>
+            <span class="n">type_validation_factory</span><span class="o">=</span><span class="n">type_validation_factory</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="nb">setattr</span><span class="p">(</span>
+        <span class="n">new_cls</span><span class="p">,</span>
+        <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">,</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">FrozenNamespace</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">f_attr</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">f_attr</span> <span class="k">for</span> <span class="n">f_attr</span> <span class="ow">in</span> <span class="n">new_cls</span><span class="o">.</span><span class="n">__attrs_attrs__</span><span class="p">}),</span>
+    <span class="p">)</span>
+    <span class="n">new_cls</span><span class="o">.</span><span class="n">update_forward_refs</span> <span class="o">=</span> <span class="nb">classmethod</span><span class="p">(</span><span class="n">update_forward_refs</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">new_cls</span></div>
+
+
+<span class="nd">@utils</span><span class="o">.</span><span class="n">optional_lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">typed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_make_concrete_with_cache</span><span class="p">(</span>
+    <span class="n">datamodel_cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelT</span><span class="p">],</span>
+    <span class="o">*</span><span class="n">type_args</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span>
+    <span class="n">class_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">module</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="n">DataModelT</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_generic_datamodel_class</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; is not a generic model class.&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">type_args</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">StdGenericAliasType</span><span class="p">))</span>
+            <span class="ow">or</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="s2">&quot;__module__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;typing&quot;</span><span class="p">,</span> <span class="s2">&quot;typing_extensions&quot;</span><span class="p">))</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Only &#39;type&#39; and &#39;typing&#39; definitions can be passed as arguments &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;to instantiate a generic model class (received: </span><span class="si">{</span><span class="n">type_args</span><span class="si">}</span><span class="s2">).&quot;</span>
+            <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="n">__parameters__</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Instantiating &#39;</span><span class="si">{</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&#39; generic model with a wrong number of parameters &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">type_args</span><span class="p">)</span><span class="si">}</span><span class="s2"> used, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="n">__parameters__</span><span class="p">)</span><span class="si">}</span><span class="s2"> expected).&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Replace field definitions with the new actual types for generic fields</span>
+    <span class="n">type_params_map</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="n">__parameters__</span><span class="p">,</span> <span class="n">type_args</span><span class="p">))</span>
+    <span class="n">model_fields</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="p">,</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span><span class="p">)</span>
+    <span class="n">new_annotations</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># TODO(egparedes): ?</span>
+        <span class="c1"># noqa: e800 &quot;__args__&quot;: &quot;ClassVar[Tuple[Union[Type, TypeVar], ...]]&quot;,</span>
+        <span class="c1"># noqa: e800 &quot;__parameters__&quot;: &quot;ClassVar[Tuple[TypeVar, ...]]&quot;,</span>
+    <span class="p">}</span>
+
+    <span class="n">new_field_c_attrs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">field_type</span> <span class="ow">in</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">get_type_hints</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">new_annotation</span><span class="p">,</span> <span class="n">replaced</span> <span class="o">=</span> <span class="n">_substitute_typevars</span><span class="p">(</span><span class="n">field_type</span><span class="p">,</span> <span class="n">type_params_map</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">replaced</span><span class="p">:</span>
+            <span class="n">new_annotations</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_annotation</span>
+            <span class="n">field_attrib</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model_fields</span><span class="p">,</span> <span class="n">field_name</span><span class="p">)</span>
+            <span class="n">new_field_c_attrs</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">_make_counting_attr_from_attribute</span><span class="p">(</span><span class="n">field_attrib</span><span class="p">)</span>
+
+    <span class="c1"># Create new concrete class</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">class_name</span><span class="p">:</span>
+        <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">tp_var</span> <span class="ow">in</span> <span class="n">datamodel_cls</span><span class="o">.</span><span class="n">__parameters__</span><span class="p">:</span>
+            <span class="n">arg_string</span> <span class="o">=</span> <span class="n">tp_var</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="k">if</span> <span class="n">tp_var</span> <span class="ow">in</span> <span class="n">type_params_map</span><span class="p">:</span>
+                <span class="n">concrete_arg</span> <span class="o">=</span> <span class="n">type_params_map</span><span class="p">[</span><span class="n">tp_var</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">concrete_arg</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+                    <span class="n">arg_string</span> <span class="o">=</span> <span class="n">concrete_arg</span><span class="o">.</span><span class="vm">__name__</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">arg_string</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">slugify</span><span class="p">(</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="n">concrete_arg</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;typing.&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="s2">&quot;ellipsis&quot;</span><span class="p">)</span>
+                    <span class="p">)</span>
+
+            <span class="n">arg_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg_string</span><span class="p">)</span>
+
+        <span class="n">class_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">datamodel_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">__</span><span class="si">{</span><span class="s1">&#39;_&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arg_names</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;__annotations__&quot;</span><span class="p">:</span> <span class="n">new_annotations</span><span class="p">,</span>
+        <span class="s2">&quot;__module__&quot;</span><span class="p">:</span> <span class="n">module</span> <span class="k">if</span> <span class="n">module</span> <span class="k">else</span> <span class="n">datamodel_cls</span><span class="o">.</span><span class="vm">__module__</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">new_field_c_attrs</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">concrete_cls</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">class_name</span><span class="p">,</span> <span class="p">(</span><span class="n">datamodel_cls</span><span class="p">,),</span> <span class="n">namespace</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">concrete_cls</span><span class="o">.</span><span class="vm">__module__</span> <span class="o">==</span> <span class="n">module</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">module</span>
+
+    <span class="k">if</span> <span class="n">MODEL_FIELD_DEFINITIONS_ATTR</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">concrete_cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="p">:</span>
+        <span class="c1"># If original model does not inherit from GenericDataModel,</span>
+        <span class="c1"># _make_datamodel() hasn&#39;t been called automatically, so call it now</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">datamodel_cls</span><span class="p">,</span> <span class="n">MODEL_PARAM_DEFINITIONS_ATTR</span><span class="p">)</span>
+        <span class="n">concrete_cls</span> <span class="o">=</span> <span class="n">_make_datamodel</span><span class="p">(</span>
+            <span class="n">concrete_cls</span><span class="p">,</span>
+            <span class="o">**</span><span class="p">{</span>
+                <span class="n">name</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;repr&quot;</span><span class="p">,</span> <span class="s2">&quot;eq&quot;</span><span class="p">,</span> <span class="s2">&quot;order&quot;</span><span class="p">,</span> <span class="s2">&quot;unsafe_hash&quot;</span><span class="p">,</span> <span class="s2">&quot;frozen&quot;</span><span class="p">)</span>
+            <span class="p">},</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">concrete_cls</span>
+
+
+<span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="n">FrozenModel</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="n">DataModel</span>
+
+<span class="k">else</span><span class="p">:</span>
+
+<div class="viewcode-block" id="FrozenModel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.FrozenModel">[docs]</a>    <span class="k">class</span> <span class="nc">FrozenModel</span><span class="p">(</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span></div>
+
+
+<span class="k">if</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">TYPE_CHECKING</span><span class="p">:</span>
+
+    <span class="k">class</span> <span class="nc">GenericDataModel</span><span class="p">(</span><span class="n">GenericDataModelTP</span><span class="p">):</span>
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">__class_getitem__</span><span class="p">(</span>
+            <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">GenericDataModelTP</span><span class="p">],</span> <span class="n">args</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Type</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">DataModelTP</span><span class="p">,</span> <span class="n">GenericDataModelTP</span><span class="p">]:</span>
+            <span class="o">...</span>
+
+<span class="k">else</span><span class="p">:</span>
+
+<div class="viewcode-block" id="GenericDataModel"><a class="viewcode-back" href="../../../../_source/gt4py.eve.datamodels.html#gt4py.eve.concepts.GenericDataModel">[docs]</a>    <span class="k">class</span> <span class="nc">GenericDataModel</span><span class="p">(</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">__dm_opts</span><span class="o">=</span><span class="p">[</span><span class="n">_GENERIC_DATAMODEL_ROOT_DM_OPT</span><span class="p">]):</span>
+        <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

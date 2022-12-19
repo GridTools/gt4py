@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">from</span> <span class="nn">devtools</span> <span class="kn">import</span> <span class="n">debug</span>  <span class="c1"># noqa: F401</span>
+<span class="kn">from</span> <span class="nn">typing_extensions</span> <span class="kn">import</span> <span class="n">Protocol</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="n">CartesianOffset</span><span class="p">,</span> <span class="n">ExprKind</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.gtcpp</span> <span class="kn">import</span> <span class="n">gtcpp</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">collect_symbol_names</span><span class="p">,</span>
+    <span class="n">symbol_name_creator</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="c1"># - Each HorizontalExecution is a Functor (and a Stage)</span>
+<span class="c1"># - Each VerticalLoop is MultiStage</span>
+
+
+<span class="k">def</span> <span class="nf">_extract_accessors</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">,</span> <span class="n">temp_names</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">GTAccessor</span><span class="p">]:</span>
+    <span class="n">extents</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">reduceby</span><span class="p">(</span>
+            <span class="p">(</span><span class="k">lambda</span> <span class="n">extent</span><span class="p">,</span> <span class="n">accessor_ref</span><span class="p">:</span> <span class="n">extent</span> <span class="o">+</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">,</span>
+            <span class="n">init</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">GTExtent</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span>
+            <span class="n">as_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">inout_fields</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="n">ndims</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">map</span><span class="p">(</span>
+            <span class="k">lambda</span> <span class="n">accessor</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">accessor</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="mi">3</span> <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">accessor</span><span class="o">.</span><span class="n">data_index</span><span class="p">)</span> <span class="k">if</span> <span class="n">accessor</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">temp_names</span> <span class="k">else</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTAccessor</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
+            <span class="n">intent</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Intent</span><span class="o">.</span><span class="n">INOUT</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">inout_fields</span> <span class="k">else</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Intent</span><span class="o">.</span><span class="n">IN</span><span class="p">,</span>
+            <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">,</span>
+            <span class="n">ndim</span><span class="o">=</span><span class="n">ndims</span><span class="p">[</span><span class="n">name</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">extent</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">extents</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+    <span class="p">]</span>
+
+
+<span class="k">def</span> <span class="nf">_make_axis_offset_expr</span><span class="p">(</span>
+    <span class="n">bound</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span>
+    <span class="n">axis_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">axis_length_accessor</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">],</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Expr</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">bound</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="n">axis_length_accessor</span><span class="p">(</span><span class="n">axis_index</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">ADD</span><span class="p">,</span>
+            <span class="n">left</span><span class="o">=</span><span class="n">base</span><span class="p">,</span>
+            <span class="n">right</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SymbolNameCreator"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.SymbolNameCreator">[docs]</a><span class="k">class</span> <span class="nc">SymbolNameCreator</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<div class="viewcode-block" id="SymbolNameCreator.__call__"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.SymbolNameCreator.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="o">...</span></div></div>
+
+
+<div class="viewcode-block" id="OIRToGTCpp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp">[docs]</a><span class="k">class</span> <span class="nc">OIRToGTCpp</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+<div class="viewcode-block" id="OIRToGTCpp.ProgramContext"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.ProgramContext">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">ProgramContext</span><span class="p">:</span>
+        <span class="n">functors</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">GTFunctor</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToGTCpp.ProgramContext.add_functor"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.ProgramContext.add_functor">[docs]</a>        <span class="k">def</span> <span class="nf">add_functor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">functor</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTFunctor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;OIRToGTCpp.ProgramContext&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">functors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">functor</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span></div></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.GTComputationContext"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.GTComputationContext">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">GTComputationContext</span><span class="p">:</span>
+        <span class="n">create_symbol_name</span><span class="p">:</span> <span class="n">SymbolNameCreator</span>
+        <span class="n">temporaries</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+        <span class="n">positionals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Positional</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="n">axis_lengths</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AxisLength</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="n">_arguments</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">set</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToGTCpp.GTComputationContext.add_temporaries"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.GTComputationContext.add_temporaries">[docs]</a>        <span class="k">def</span> <span class="nf">add_temporaries</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">temporaries</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">]</span>
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;OIRToGTCpp.GTComputationContext&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">temporaries</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">temporaries</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span></div>
+
+        <span class="nd">@property</span>
+        <span class="k">def</span> <span class="nf">arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Arg</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Arg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_arguments</span><span class="p">]</span>
+
+<div class="viewcode-block" id="OIRToGTCpp.GTComputationContext.add_arguments"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.GTComputationContext.add_arguments">[docs]</a>        <span class="k">def</span> <span class="nf">add_arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arguments</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;OIRToGTCpp.GTComputationContext&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_arguments</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">arguments</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span></div>
+
+        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">_make_scalar_accessor</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span>
+                <span class="n">kind</span><span class="o">=</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">,</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToGTCpp.GTComputationContext.make_positional"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.GTComputationContext.make_positional">[docs]</a>        <span class="k">def</span> <span class="nf">make_positional</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">:</span>
+            <span class="n">axis_name</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;J&quot;</span><span class="p">,</span> <span class="s2">&quot;K&quot;</span><span class="p">][</span><span class="n">axis</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_symbol_name</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ax</span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2">_ind&quot;</span><span class="p">)</span>
+            <span class="n">positional</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">positionals</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="n">axis</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Positional</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">axis_name</span><span class="o">=</span><span class="n">axis_name</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_scalar_accessor</span><span class="p">(</span><span class="n">positional</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.GTComputationContext.make_length"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.GTComputationContext.make_length">[docs]</a>        <span class="k">def</span> <span class="nf">make_length</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_symbol_name</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ax</span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2">_len&quot;</span><span class="p">)</span>
+            <span class="n">length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axis_lengths</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AxisLength</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_scalar_accessor</span><span class="p">(</span><span class="n">length</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+
+        <span class="nd">@property</span>
+        <span class="k">def</span> <span class="nf">extra_decls</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">ComputationDecl</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">positionals</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axis_lengths</span><span class="o">.</span><span class="n">values</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_Literal"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_Literal">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Literal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_UnaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_UnaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_UnaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_BinaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_BinaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BinaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">,</span>
+            <span class="n">left</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_TernaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_TernaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_TernaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">true_expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">true_expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">false_expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">false_expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_NativeFuncCall"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_NativeFuncCall">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFuncCall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_Cast"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_Cast">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Cast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Cast</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Cast</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Cast</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_Temporary"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_Temporary">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Temporary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_VariableKOffset"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_VariableKOffset">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VariableKOffset</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">k</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_FieldAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">offset</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">data_index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_ScalarAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_ScalarAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">LocalAccess</span><span class="p">]:</span>
+        <span class="k">assert</span> <span class="s2">&quot;symtable&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">]:</span>
+            <span class="n">symbol</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">][</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">symbol</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symbol</span><span class="o">.</span><span class="n">dtype</span>
+                <span class="p">)</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">LocalAccess</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_AxisBound"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_AxisBound">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AxisBound</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_start</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTLevel</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">START</span><span class="p">:</span>
+            <span class="n">splitter</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">is_start</span><span class="p">)</span> <span class="k">else</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span>
+        <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+            <span class="n">splitter</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_start</span><span class="p">)</span> <span class="k">else</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot handle dynamic levels&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTLevel</span><span class="p">(</span><span class="n">splitter</span><span class="o">=</span><span class="n">splitter</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_Interval"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_Interval">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Interval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTInterval</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTInterval</span><span class="p">(</span>
+            <span class="n">from_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">is_start</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">to_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">is_start</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_mask_to_expr</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">,</span> <span class="n">comp_ctx</span><span class="p">:</span> <span class="s2">&quot;GTComputationContext&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Expr</span><span class="p">:</span>
+        <span class="n">mask_expr</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Expr</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">axis_index</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">intervals</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">interval</span><span class="o">.</span><span class="n">is_single_index</span><span class="p">():</span>
+                <span class="k">assert</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="n">mask_expr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+                        <span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">EQ</span><span class="p">,</span>
+                        <span class="n">left</span><span class="o">=</span><span class="n">comp_ctx</span><span class="o">.</span><span class="n">make_positional</span><span class="p">(</span><span class="n">axis_index</span><span class="p">),</span>
+                        <span class="n">right</span><span class="o">=</span><span class="n">_make_axis_offset_expr</span><span class="p">(</span>
+                            <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">axis_index</span><span class="p">,</span> <span class="n">comp_ctx</span><span class="o">.</span><span class="n">make_length</span>
+                        <span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">endpt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">GE</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">LT</span><span class="p">),</span>
+                    <span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">),</span>
+                <span class="p">):</span>
+                    <span class="k">if</span> <span class="n">endpt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">mask_expr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+                            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span>
+                            <span class="n">left</span><span class="o">=</span><span class="n">comp_ctx</span><span class="o">.</span><span class="n">make_positional</span><span class="p">(</span><span class="n">axis_index</span><span class="p">),</span>
+                            <span class="n">right</span><span class="o">=</span><span class="n">_make_axis_offset_expr</span><span class="p">(</span><span class="n">endpt</span><span class="p">,</span> <span class="n">axis_index</span><span class="p">,</span> <span class="n">comp_ctx</span><span class="o">.</span><span class="n">make_length</span><span class="p">),</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">functools</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LogicalOperator</span><span class="o">.</span><span class="n">AND</span><span class="p">,</span> <span class="n">left</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="n">b</span><span class="p">),</span>
+                <span class="n">mask_expr</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">mask_expr</span>
+            <span class="k">else</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">)</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_HorizontalRestriction"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_HorizontalRestriction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalRestriction</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">:</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask_to_expr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;comp_ctx&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span> <span class="n">true_branch</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">BlockStmt</span><span class="p">(</span><span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_AssignStmt"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="s2">&quot;symtable&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">(</span>
+            <span class="n">left</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_MaskStmt"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">true_branch</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">BlockStmt</span><span class="p">(</span><span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_While"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_While">[docs]</a>    <span class="k">def</span> <span class="nf">visit_While</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">While</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">While</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">While</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_HorizontalExecution"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_HorizontalExecution">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalExecution</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">prog_ctx</span><span class="p">:</span> <span class="s2">&quot;ProgramContext&quot;</span><span class="p">,</span>
+        <span class="n">comp_ctx</span><span class="p">:</span> <span class="s2">&quot;GTComputationContext&quot;</span><span class="p">,</span>
+        <span class="n">interval</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTInterval</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTStage</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="s2">&quot;symtable&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="n">apply_method</span> <span class="o">=</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTApplyMethod</span><span class="p">(</span>
+            <span class="n">interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">interval</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">comp_ctx</span><span class="o">=</span><span class="n">comp_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">local_variables</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">accessors</span> <span class="o">=</span> <span class="n">_extract_accessors</span><span class="p">(</span><span class="n">apply_method</span><span class="p">,</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">comp_ctx</span><span class="o">.</span><span class="n">temporaries</span><span class="p">})</span>
+        <span class="n">stage_args</span> <span class="o">=</span> <span class="p">[</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">Arg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">accessors</span><span class="p">]</span>
+
+        <span class="n">tmp_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">tmp</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tmp</span> <span class="ow">in</span> <span class="n">comp_ctx</span><span class="o">.</span><span class="n">temporaries</span><span class="p">}</span>
+        <span class="n">param_names_not_tmps</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">param_arg</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">param_arg</span> <span class="ow">in</span> <span class="n">stage_args</span> <span class="k">if</span> <span class="n">param_arg</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tmp_names</span>
+        <span class="p">}</span>
+
+        <span class="n">comp_ctx</span><span class="o">.</span><span class="n">add_arguments</span><span class="p">(</span><span class="n">param_names_not_tmps</span><span class="p">)</span>
+
+        <span class="n">functor_name</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+        <span class="n">prog_ctx</span><span class="o">.</span><span class="n">add_functor</span><span class="p">(</span>
+            <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTFunctor</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">functor_name</span><span class="p">,</span>
+                <span class="n">applies</span><span class="o">=</span><span class="p">[</span><span class="n">apply_method</span><span class="p">],</span>
+                <span class="n">param_list</span><span class="o">=</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">GTParamList</span><span class="p">(</span><span class="n">accessors</span><span class="o">=</span><span class="n">accessors</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTStage</span><span class="p">(</span><span class="n">functor</span><span class="o">=</span><span class="n">functor_name</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">stage_args</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">comp_ctx</span><span class="p">:</span> <span class="n">GTComputationContext</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTMultiStage</span><span class="p">:</span>
+        <span class="c1"># the following visit assumes that temporaries are already available in comp_ctx</span>
+        <span class="n">stages</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="o">*</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                        <span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">,</span>
+                        <span class="n">interval</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="p">,</span>
+                        <span class="n">default</span><span class="o">=</span><span class="p">([],</span> <span class="p">[]),</span>
+                        <span class="n">comp_ctx</span><span class="o">=</span><span class="n">comp_ctx</span><span class="p">,</span>
+                        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">sections</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">caches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">caches</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTMultiStage</span><span class="p">(</span><span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">stages</span><span class="o">=</span><span class="n">stages</span><span class="p">,</span> <span class="n">caches</span><span class="o">=</span><span class="n">caches</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_IJCache"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_IJCache">[docs]</a>    <span class="k">def</span> <span class="nf">visit_IJCache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">IJCache</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IJCache</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">IJCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_KCache"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_KCache">[docs]</a>    <span class="k">def</span> <span class="nf">visit_KCache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">KCache</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">KCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">fill</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">flush</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_FieldDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_FieldDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_ScalarDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_ScalarDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GlobalParamDecl</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GlobalParamDecl</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_LocalScalar"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_LocalScalar">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LocalScalar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">LocalVarDecl</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">LocalVarDecl</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToGTCpp.visit_Stencil"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp.OIRToGTCpp.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Program</span><span class="p">:</span>
+        <span class="n">prog_ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ProgramContext</span><span class="p">()</span>
+        <span class="n">comp_ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GTComputationContext</span><span class="p">(</span>
+            <span class="n">create_symbol_name</span><span class="o">=</span><span class="n">cast</span><span class="p">(</span>
+                <span class="n">SymbolNameCreator</span><span class="p">,</span> <span class="n">symbol_name_creator</span><span class="p">(</span><span class="n">collect_symbol_names</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">decl</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">)</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">])</span>
+        <span class="n">comp_ctx</span><span class="o">.</span><span class="n">add_temporaries</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">))</span>
+
+        <span class="n">multi_stages</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">,</span> <span class="n">prog_ctx</span><span class="o">=</span><span class="n">prog_ctx</span><span class="p">,</span> <span class="n">comp_ctx</span><span class="o">=</span><span class="n">comp_ctx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+
+        <span class="n">gt_computation</span> <span class="o">=</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTComputationCall</span><span class="p">(</span>
+            <span class="n">arguments</span><span class="o">=</span><span class="n">comp_ctx</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span>
+            <span class="n">extra_decls</span><span class="o">=</span><span class="n">comp_ctx</span><span class="o">.</span><span class="n">extra_decls</span><span class="p">,</span>
+            <span class="n">temporaries</span><span class="o">=</span><span class="n">comp_ctx</span><span class="o">.</span><span class="n">temporaries</span><span class="p">,</span>
+            <span class="n">multi_stages</span><span class="o">=</span><span class="n">multi_stages</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Program</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span>
+            <span class="n">functors</span><span class="o">=</span><span class="n">prog_ctx</span><span class="o">.</span><span class="n">functors</span><span class="p">,</span>
+            <span class="n">gt_computation</span><span class="o">=</span><span class="n">gt_computation</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

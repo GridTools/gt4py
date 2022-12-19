@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>attr._funcs &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">attr._funcs</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for attr._funcs</h1><div class="highlight"><pre>
+<span></span><span class="c1"># SPDX-License-Identifier: MIT</span>
+
+
+<span class="kn">import</span> <span class="nn">copy</span>
+
+<span class="kn">from</span> <span class="nn">._make</span> <span class="kn">import</span> <span class="n">NOTHING</span><span class="p">,</span> <span class="n">_obj_setattr</span><span class="p">,</span> <span class="n">fields</span>
+<span class="kn">from</span> <span class="nn">.exceptions</span> <span class="kn">import</span> <span class="n">AttrsAttributeNotFoundError</span>
+
+
+<span class="k">def</span> <span class="nf">asdict</span><span class="p">(</span>
+    <span class="n">inst</span><span class="p">,</span>
+    <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="nb">filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">dict_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span>
+    <span class="n">retain_collection_types</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">value_serializer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the ``attrs`` attribute values of *inst* as a dict.</span>
+
+<span class="sd">    Optionally recurse into other ``attrs``-decorated classes.</span>
+
+<span class="sd">    :param inst: Instance of an ``attrs``-decorated class.</span>
+<span class="sd">    :param bool recurse: Recurse into classes that are also</span>
+<span class="sd">        ``attrs``-decorated.</span>
+<span class="sd">    :param callable filter: A callable whose return code determines whether an</span>
+<span class="sd">        attribute or element is included (``True``) or dropped (``False``).  Is</span>
+<span class="sd">        called with the `attrs.Attribute` as the first argument and the</span>
+<span class="sd">        value as the second argument.</span>
+<span class="sd">    :param callable dict_factory: A callable to produce dictionaries from.  For</span>
+<span class="sd">        example, to produce ordered dictionaries instead of normal Python</span>
+<span class="sd">        dictionaries, pass in ``collections.OrderedDict``.</span>
+<span class="sd">    :param bool retain_collection_types: Do not convert to ``list`` when</span>
+<span class="sd">        encountering an attribute whose type is ``tuple`` or ``set``.  Only</span>
+<span class="sd">        meaningful if ``recurse`` is ``True``.</span>
+<span class="sd">    :param Optional[callable] value_serializer: A hook that is called for every</span>
+<span class="sd">        attribute or dict key/value.  It receives the current instance, field</span>
+<span class="sd">        and value and must return the (updated) value.  The hook is run *after*</span>
+<span class="sd">        the optional *filter* has been applied.</span>
+
+<span class="sd">    :rtype: return type of *dict_factory*</span>
+
+<span class="sd">    :raise attr.exceptions.NotAnAttrsClassError: If *cls* is not an ``attrs``</span>
+<span class="sd">        class.</span>
+
+<span class="sd">    ..  versionadded:: 16.0.0 *dict_factory*</span>
+<span class="sd">    ..  versionadded:: 16.1.0 *retain_collection_types*</span>
+<span class="sd">    ..  versionadded:: 20.3.0 *value_serializer*</span>
+<span class="sd">    ..  versionadded:: 21.3.0 If a dict has a collection for a key, it is</span>
+<span class="sd">        serialized as a tuple.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">attrs</span> <span class="o">=</span> <span class="n">fields</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+    <span class="n">rv</span> <span class="o">=</span> <span class="n">dict_factory</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">filter</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="n">value_serializer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">value_serializer</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">recurse</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">has</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="vm">__class__</span><span class="p">):</span>
+                <span class="n">rv</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">asdict</span><span class="p">(</span>
+                    <span class="n">v</span><span class="p">,</span>
+                    <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                    <span class="n">dict_factory</span><span class="o">=</span><span class="n">dict_factory</span><span class="p">,</span>
+                    <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                    <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">)):</span>
+                <span class="n">cf</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="vm">__class__</span> <span class="k">if</span> <span class="n">retain_collection_types</span> <span class="ow">is</span> <span class="kc">True</span> <span class="k">else</span> <span class="nb">list</span>
+                <span class="n">rv</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">cf</span><span class="p">(</span>
+                    <span class="p">[</span>
+                        <span class="n">_asdict_anything</span><span class="p">(</span>
+                            <span class="n">i</span><span class="p">,</span>
+                            <span class="n">is_key</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                            <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                            <span class="n">dict_factory</span><span class="o">=</span><span class="n">dict_factory</span><span class="p">,</span>
+                            <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                            <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">v</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">df</span> <span class="o">=</span> <span class="n">dict_factory</span>
+                <span class="n">rv</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">(</span>
+                    <span class="p">(</span>
+                        <span class="n">_asdict_anything</span><span class="p">(</span>
+                            <span class="n">kk</span><span class="p">,</span>
+                            <span class="n">is_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                            <span class="n">dict_factory</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+                            <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                            <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                        <span class="p">),</span>
+                        <span class="n">_asdict_anything</span><span class="p">(</span>
+                            <span class="n">vv</span><span class="p">,</span>
+                            <span class="n">is_key</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                            <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                            <span class="n">dict_factory</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+                            <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                            <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                        <span class="p">),</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">kk</span><span class="p">,</span> <span class="n">vv</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">rv</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rv</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+    <span class="k">return</span> <span class="n">rv</span>
+
+
+<span class="k">def</span> <span class="nf">_asdict_anything</span><span class="p">(</span>
+    <span class="n">val</span><span class="p">,</span>
+    <span class="n">is_key</span><span class="p">,</span>
+    <span class="nb">filter</span><span class="p">,</span>
+    <span class="n">dict_factory</span><span class="p">,</span>
+    <span class="n">retain_collection_types</span><span class="p">,</span>
+    <span class="n">value_serializer</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    ``asdict`` only works on attrs instances, this works on anything.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="vm">__class__</span><span class="p">,</span> <span class="s2">&quot;__attrs_attrs__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Attrs class.</span>
+        <span class="n">rv</span> <span class="o">=</span> <span class="n">asdict</span><span class="p">(</span>
+            <span class="n">val</span><span class="p">,</span>
+            <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+            <span class="n">dict_factory</span><span class="o">=</span><span class="n">dict_factory</span><span class="p">,</span>
+            <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+            <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">retain_collection_types</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">cf</span> <span class="o">=</span> <span class="n">val</span><span class="o">.</span><span class="vm">__class__</span>
+        <span class="k">elif</span> <span class="n">is_key</span><span class="p">:</span>
+            <span class="n">cf</span> <span class="o">=</span> <span class="nb">tuple</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cf</span> <span class="o">=</span> <span class="nb">list</span>
+
+        <span class="n">rv</span> <span class="o">=</span> <span class="n">cf</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">_asdict_anything</span><span class="p">(</span>
+                    <span class="n">i</span><span class="p">,</span>
+                    <span class="n">is_key</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                    <span class="n">dict_factory</span><span class="o">=</span><span class="n">dict_factory</span><span class="p">,</span>
+                    <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                    <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">val</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">dict_factory</span>
+        <span class="n">rv</span> <span class="o">=</span> <span class="n">df</span><span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">_asdict_anything</span><span class="p">(</span>
+                    <span class="n">kk</span><span class="p">,</span>
+                    <span class="n">is_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                    <span class="n">dict_factory</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+                    <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                    <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">_asdict_anything</span><span class="p">(</span>
+                    <span class="n">vv</span><span class="p">,</span>
+                    <span class="n">is_key</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                    <span class="n">dict_factory</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+                    <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain_collection_types</span><span class="p">,</span>
+                    <span class="n">value_serializer</span><span class="o">=</span><span class="n">value_serializer</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">kk</span><span class="p">,</span> <span class="n">vv</span> <span class="ow">in</span> <span class="n">val</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">rv</span> <span class="o">=</span> <span class="n">val</span>
+        <span class="k">if</span> <span class="n">value_serializer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">rv</span> <span class="o">=</span> <span class="n">value_serializer</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">rv</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">rv</span>
+
+
+<span class="k">def</span> <span class="nf">astuple</span><span class="p">(</span>
+    <span class="n">inst</span><span class="p">,</span>
+    <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="nb">filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">tuple_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">,</span>
+    <span class="n">retain_collection_types</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the ``attrs`` attribute values of *inst* as a tuple.</span>
+
+<span class="sd">    Optionally recurse into other ``attrs``-decorated classes.</span>
+
+<span class="sd">    :param inst: Instance of an ``attrs``-decorated class.</span>
+<span class="sd">    :param bool recurse: Recurse into classes that are also</span>
+<span class="sd">        ``attrs``-decorated.</span>
+<span class="sd">    :param callable filter: A callable whose return code determines whether an</span>
+<span class="sd">        attribute or element is included (``True``) or dropped (``False``).  Is</span>
+<span class="sd">        called with the `attrs.Attribute` as the first argument and the</span>
+<span class="sd">        value as the second argument.</span>
+<span class="sd">    :param callable tuple_factory: A callable to produce tuples from.  For</span>
+<span class="sd">        example, to produce lists instead of tuples.</span>
+<span class="sd">    :param bool retain_collection_types: Do not convert to ``list``</span>
+<span class="sd">        or ``dict`` when encountering an attribute which type is</span>
+<span class="sd">        ``tuple``, ``dict`` or ``set``.  Only meaningful if ``recurse`` is</span>
+<span class="sd">        ``True``.</span>
+
+<span class="sd">    :rtype: return type of *tuple_factory*</span>
+
+<span class="sd">    :raise attr.exceptions.NotAnAttrsClassError: If *cls* is not an ``attrs``</span>
+<span class="sd">        class.</span>
+
+<span class="sd">    ..  versionadded:: 16.2.0</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">attrs</span> <span class="o">=</span> <span class="n">fields</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+    <span class="n">rv</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">retain</span> <span class="o">=</span> <span class="n">retain_collection_types</span>  <span class="c1"># Very long. :/</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">filter</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">recurse</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">has</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="vm">__class__</span><span class="p">):</span>
+                <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">astuple</span><span class="p">(</span>
+                        <span class="n">v</span><span class="p">,</span>
+                        <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                        <span class="n">tuple_factory</span><span class="o">=</span><span class="n">tuple_factory</span><span class="p">,</span>
+                        <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="p">(</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">set</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">)):</span>
+                <span class="n">cf</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="vm">__class__</span> <span class="k">if</span> <span class="n">retain</span> <span class="ow">is</span> <span class="kc">True</span> <span class="k">else</span> <span class="nb">list</span>
+                <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">cf</span><span class="p">(</span>
+                        <span class="p">[</span>
+                            <span class="n">astuple</span><span class="p">(</span>
+                                <span class="n">j</span><span class="p">,</span>
+                                <span class="n">recurse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                                <span class="nb">filter</span><span class="o">=</span><span class="nb">filter</span><span class="p">,</span>
+                                <span class="n">tuple_factory</span><span class="o">=</span><span class="n">tuple_factory</span><span class="p">,</span>
+                                <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain</span><span class="p">,</span>
+                            <span class="p">)</span>
+                            <span class="k">if</span> <span class="n">has</span><span class="p">(</span><span class="n">j</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+                            <span class="k">else</span> <span class="n">j</span>
+                            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">v</span>
+                        <span class="p">]</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">df</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="vm">__class__</span> <span class="k">if</span> <span class="n">retain</span> <span class="ow">is</span> <span class="kc">True</span> <span class="k">else</span> <span class="nb">dict</span>
+                <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">df</span><span class="p">(</span>
+                        <span class="p">(</span>
+                            <span class="n">astuple</span><span class="p">(</span>
+                                <span class="n">kk</span><span class="p">,</span>
+                                <span class="n">tuple_factory</span><span class="o">=</span><span class="n">tuple_factory</span><span class="p">,</span>
+                                <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain</span><span class="p">,</span>
+                            <span class="p">)</span>
+                            <span class="k">if</span> <span class="n">has</span><span class="p">(</span><span class="n">kk</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+                            <span class="k">else</span> <span class="n">kk</span><span class="p">,</span>
+                            <span class="n">astuple</span><span class="p">(</span>
+                                <span class="n">vv</span><span class="p">,</span>
+                                <span class="n">tuple_factory</span><span class="o">=</span><span class="n">tuple_factory</span><span class="p">,</span>
+                                <span class="n">retain_collection_types</span><span class="o">=</span><span class="n">retain</span><span class="p">,</span>
+                            <span class="p">)</span>
+                            <span class="k">if</span> <span class="n">has</span><span class="p">(</span><span class="n">vv</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+                            <span class="k">else</span> <span class="n">vv</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="k">for</span> <span class="n">kk</span><span class="p">,</span> <span class="n">vv</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rv</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">rv</span> <span class="k">if</span> <span class="n">tuple_factory</span> <span class="ow">is</span> <span class="nb">list</span> <span class="k">else</span> <span class="n">tuple_factory</span><span class="p">(</span><span class="n">rv</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">has</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check whether *cls* is a class with ``attrs`` attributes.</span>
+
+<span class="sd">    :param type cls: Class to introspect.</span>
+<span class="sd">    :raise TypeError: If *cls* is not a class.</span>
+
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;__attrs_attrs__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+
+<span class="k">def</span> <span class="nf">assoc</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="o">**</span><span class="n">changes</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Copy *inst* and apply *changes*.</span>
+
+<span class="sd">    :param inst: Instance of a class with ``attrs`` attributes.</span>
+<span class="sd">    :param changes: Keyword changes in the new copy.</span>
+
+<span class="sd">    :return: A copy of inst with *changes* incorporated.</span>
+
+<span class="sd">    :raise attr.exceptions.AttrsAttributeNotFoundError: If *attr_name* couldn&#39;t</span>
+<span class="sd">        be found on *cls*.</span>
+<span class="sd">    :raise attr.exceptions.NotAnAttrsClassError: If *cls* is not an ``attrs``</span>
+<span class="sd">        class.</span>
+
+<span class="sd">    ..  deprecated:: 17.1.0</span>
+<span class="sd">        Use `attrs.evolve` instead if you can.</span>
+<span class="sd">        This function will not be removed du to the slightly different approach</span>
+<span class="sd">        compared to `attrs.evolve`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">warnings</span>
+
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="s2">&quot;assoc is deprecated and will be removed after 2018/01.&quot;</span><span class="p">,</span>
+        <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">new</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">inst</span><span class="p">)</span>
+    <span class="n">attrs</span> <span class="o">=</span> <span class="n">fields</span><span class="p">(</span><span class="n">inst</span><span class="o">.</span><span class="vm">__class__</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">changes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">attrs</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">NOTHING</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">a</span> <span class="ow">is</span> <span class="n">NOTHING</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AttrsAttributeNotFoundError</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">{k}</span><span class="s2"> is not an attrs attribute on </span><span class="si">{cl}</span><span class="s2">.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span> <span class="n">cl</span><span class="o">=</span><span class="n">new</span><span class="o">.</span><span class="vm">__class__</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="n">_obj_setattr</span><span class="p">(</span><span class="n">new</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">new</span>
+
+
+<div class="viewcode-block" id="evolve"><a class="viewcode-back" href="../../_source/gt4py.eve.datamodels.html#gt4py.eve.datamodels.core.evolve">[docs]</a><span class="k">def</span> <span class="nf">evolve</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="o">**</span><span class="n">changes</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a new instance, based on *inst* with *changes* applied.</span>
+
+<span class="sd">    :param inst: Instance of a class with ``attrs`` attributes.</span>
+<span class="sd">    :param changes: Keyword changes in the new copy.</span>
+
+<span class="sd">    :return: A copy of inst with *changes* incorporated.</span>
+
+<span class="sd">    :raise TypeError: If *attr_name* couldn&#39;t be found in the class</span>
+<span class="sd">        ``__init__``.</span>
+<span class="sd">    :raise attr.exceptions.NotAnAttrsClassError: If *cls* is not an ``attrs``</span>
+<span class="sd">        class.</span>
+
+<span class="sd">    ..  versionadded:: 17.1.0</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">cls</span> <span class="o">=</span> <span class="n">inst</span><span class="o">.</span><span class="vm">__class__</span>
+    <span class="n">attrs</span> <span class="o">=</span> <span class="n">fields</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">a</span><span class="o">.</span><span class="n">init</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">attr_name</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span>  <span class="c1"># To deal with private attributes.</span>
+        <span class="n">init_name</span> <span class="o">=</span> <span class="n">attr_name</span> <span class="k">if</span> <span class="n">attr_name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;_&quot;</span> <span class="k">else</span> <span class="n">attr_name</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="n">init_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">changes</span><span class="p">:</span>
+            <span class="n">changes</span><span class="p">[</span><span class="n">init_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">resolve_types</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">globalns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">attribs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Resolve any strings and forward annotations in type annotations.</span>
+
+<span class="sd">    This is only required if you need concrete types in `Attribute`&#39;s *type*</span>
+<span class="sd">    field. In other words, you don&#39;t need to resolve your types if you only</span>
+<span class="sd">    use them for static type checking.</span>
+
+<span class="sd">    With no arguments, names will be looked up in the module in which the class</span>
+<span class="sd">    was created. If this is not what you want, e.g. if the name only exists</span>
+<span class="sd">    inside a method, you may pass *globalns* or *localns* to specify other</span>
+<span class="sd">    dictionaries in which to look up these names. See the docs of</span>
+<span class="sd">    `typing.get_type_hints` for more details.</span>
+
+<span class="sd">    :param type cls: Class to resolve.</span>
+<span class="sd">    :param Optional[dict] globalns: Dictionary containing global variables.</span>
+<span class="sd">    :param Optional[dict] localns: Dictionary containing local variables.</span>
+<span class="sd">    :param Optional[list] attribs: List of attribs for the given class.</span>
+<span class="sd">        This is necessary when calling from inside a ``field_transformer``</span>
+<span class="sd">        since *cls* is not an ``attrs`` class yet.</span>
+
+<span class="sd">    :raise TypeError: If *cls* is not a class.</span>
+<span class="sd">    :raise attr.exceptions.NotAnAttrsClassError: If *cls* is not an ``attrs``</span>
+<span class="sd">        class and you didn&#39;t pass any attribs.</span>
+<span class="sd">    :raise NameError: If types cannot be resolved because of missing variables.</span>
+
+<span class="sd">    :returns: *cls* so you can use this function also as a class decorator.</span>
+<span class="sd">        Please note that you have to apply it **after** `attrs.define`. That</span>
+<span class="sd">        means the decorator has to come in the line **before** `attrs.define`.</span>
+
+<span class="sd">    ..  versionadded:: 20.1.0</span>
+<span class="sd">    ..  versionadded:: 21.1.0 *attribs*</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Since calling get_type_hints is expensive we cache whether we&#39;ve</span>
+    <span class="c1"># done it already.</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;__attrs_types_resolved__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">cls</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">typing</span>
+
+        <span class="n">hints</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">get_type_hints</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">globalns</span><span class="o">=</span><span class="n">globalns</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="n">localns</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="k">if</span> <span class="n">attribs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">attribs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">hints</span><span class="p">:</span>
+                <span class="c1"># Since fields have been frozen we must work around it.</span>
+                <span class="n">_obj_setattr</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="n">hints</span><span class="p">[</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">])</span>
+        <span class="c1"># We store the class we resolved so that subclasses know they haven&#39;t</span>
+        <span class="c1"># been resolved.</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">__attrs_types_resolved__</span> <span class="o">=</span> <span class="bp">cls</span>
+
+    <span class="c1"># Return the class so you can use it as a decorator too.</span>
+    <span class="k">return</span> <span class="bp">cls</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

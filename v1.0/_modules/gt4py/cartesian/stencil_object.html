@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.stencil_object &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.stencil_object</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.stencil_object</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">abc</span>
+<span class="kn">import</span> <span class="nn">collections.abc</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">numbers</span> <span class="kn">import</span> <span class="n">Number</span>
+<span class="kn">from</span> <span class="nn">pickle</span> <span class="kn">import</span> <span class="n">dumps</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.cartesian.gtc.utils</span> <span class="k">as</span> <span class="nn">gtc_utils</span>
+<span class="kn">import</span> <span class="nn">gt4py.storage.utils</span> <span class="k">as</span> <span class="nn">storage_utils</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt4pyc</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.definitions</span> <span class="kn">import</span> <span class="n">AccessKind</span><span class="p">,</span> <span class="n">DomainInfo</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">,</span> <span class="n">ParameterInfo</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Index</span><span class="p">,</span> <span class="n">Shape</span>
+
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">cupy</span> <span class="k">as</span> <span class="nn">cp</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">cupy</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="n">FieldType</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;cp.ndarray&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>
+<span class="n">OriginType</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span>
+
+
+<span class="k">def</span> <span class="nf">_compute_cache_key</span><span class="p">(</span>
+    <span class="n">field_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldType</span><span class="p">]],</span>
+    <span class="n">parameter_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Number</span><span class="p">]],</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OriginType</span><span class="p">],</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">asarray</span> <span class="o">=</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">as_cupy</span> <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span> <span class="k">else</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">as_numpy</span>
+    <span class="n">field_data</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">asarray</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s2">&quot;__gt_origin__&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)))</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">field_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="nb">hash</span><span class="p">((</span><span class="n">field_data</span><span class="p">,</span> <span class="o">*</span><span class="n">parameter_args</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">dumps</span><span class="p">(</span><span class="n">domain</span><span class="p">),</span> <span class="n">dumps</span><span class="p">(</span><span class="n">origin</span><span class="p">)))</span>
+
+
+<div class="viewcode-block" id="ArgsInfo"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.ArgsInfo">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">ArgsInfo</span><span class="p">:</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">array</span><span class="p">:</span> <span class="n">FieldType</span>
+    <span class="n">original_object</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">dimensions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+<span class="k">def</span> <span class="nf">_extract_array_infos</span><span class="p">(</span>
+    <span class="n">field_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldType</span><span class="p">]],</span> <span class="n">device</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]]:</span>
+    <span class="n">asarray</span> <span class="o">=</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">as_cupy</span> <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;gpu&quot;</span> <span class="k">else</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">as_numpy</span>
+    <span class="n">array_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">field_args</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">arg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">array_infos</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">array</span> <span class="o">=</span> <span class="n">asarray</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+            <span class="n">dimensions</span> <span class="o">=</span> <span class="n">storage_utils</span><span class="o">.</span><span class="n">get_dims</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">dimensions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">sorted_dimensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="s2">&quot;IJK&quot;</span> <span class="k">if</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">]</span>
+                <span class="n">data_dims</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dimensions</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()]</span>
+                <span class="n">sorted_dimensions</span> <span class="o">+=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">data_dims</span><span class="p">)]</span>
+                <span class="n">dimension_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">dimensions</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">sd</span><span class="p">)</span> <span class="k">for</span> <span class="n">sd</span> <span class="ow">in</span> <span class="n">sorted_dimensions</span><span class="p">]</span>
+                <span class="n">array</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">dimension_indices</span><span class="p">)</span>
+                <span class="n">dimensions</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">sorted_dimensions</span><span class="p">)</span>
+            <span class="n">array_infos</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ArgsInfo</span><span class="p">(</span>
+                <span class="n">array</span><span class="o">=</span><span class="n">array</span><span class="p">,</span>
+                <span class="n">original_object</span><span class="o">=</span><span class="n">arg</span><span class="p">,</span>
+                <span class="n">dimensions</span><span class="o">=</span><span class="n">dimensions</span><span class="p">,</span>
+                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+                <span class="n">origin</span><span class="o">=</span><span class="n">storage_utils</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">arg</span><span class="p">),</span>
+            <span class="p">)</span>
+    <span class="k">return</span> <span class="n">array_infos</span>
+
+
+<span class="k">def</span> <span class="nf">_extract_stencil_arrays</span><span class="p">(</span>
+    <span class="n">array_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FieldType</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">info</span><span class="o">.</span><span class="n">array</span> <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">array_infos</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+
+
+<div class="viewcode-block" id="FrozenStencil"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.FrozenStencil">[docs]</a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">FrozenStencil</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Stencil with pre-computed domain and origin for each field argument.&quot;&quot;&quot;</span>
+
+    <span class="n">stencil_object</span><span class="p">:</span> <span class="s2">&quot;StencilObject&quot;</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">field_info</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">origin</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="o">!=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; origin </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}</span><span class="s2"> is not a </span><span class="si">{</span><span class="n">field_info</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">-dimensional integer tuple&quot;</span>
+                <span class="p">)</span>
+
+<div class="viewcode-block" id="FrozenStencil.__call__"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.FrozenStencil.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="s2">&quot;origin&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="s2">&quot;domain&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="n">exec_info</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;exec_info&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">exec_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">exec_info</span><span class="p">[</span><span class="s2">&quot;call_run_start_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+
+        <span class="n">field_args</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()}</span>
+        <span class="n">parameter_args</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">parameter_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="n">_domain_</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span>
+            <span class="n">_origin_</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">origin</span><span class="p">,</span>
+            <span class="n">exec_info</span><span class="o">=</span><span class="n">exec_info</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">field_args</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">parameter_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">exec_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">exec_info</span><span class="p">[</span><span class="s2">&quot;call_run_end_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__sdfg__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_signature__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_closure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StencilObject"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject">[docs]</a><span class="k">class</span> <span class="nc">StencilObject</span><span class="p">(</span><span class="n">abc</span><span class="o">.</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generic singleton implementation of a stencil callable.</span>
+
+<span class="sd">    This class is used as base class for specific subclass generated</span>
+<span class="sd">    at run-time for any stencil definition and a unique set of external symbols.</span>
+<span class="sd">    Instances of this class do not contain state and thus it is</span>
+<span class="sd">    implemented as a singleton: only one instance per subclass is actually</span>
+<span class="sd">    allocated (and it is immutable).</span>
+
+<span class="sd">    The callable interface is the same of the stencil definition function,</span>
+<span class="sd">    with some extra keyword arguments.</span>
+
+<span class="sd">    Keyword Arguments</span>
+<span class="sd">    ------------------</span>
+<span class="sd">    domain : `Sequence` of `int`, optional</span>
+<span class="sd">        Shape of the computation domain. If `None`, it will be used the</span>
+<span class="sd">        largest feasible domain according to the provided input fields</span>
+<span class="sd">        and origin values (`None` by default).</span>
+
+<span class="sd">    origin :  `[int * ndims]` or `{&#39;field_name&#39;: [int * ndims]}`, optional</span>
+<span class="sd">        If a single offset is passed, it will be used for all fields.</span>
+<span class="sd">        If a `dict` is passed, there could be an entry for each field.</span>
+<span class="sd">        A special key *&#39;_all_&#39;* will represent the value to be used for all</span>
+<span class="sd">        the fields not explicitly defined. If `None` is passed or it is</span>
+<span class="sd">        not possible to assign a value to some field according to the</span>
+<span class="sd">        previous rule, the value will be inferred from the `boundary` attribute</span>
+<span class="sd">        of the `field_info` dict. Note that the function checks if the origin values</span>
+<span class="sd">        are at least equal to the `boundary` attribute of that field,</span>
+<span class="sd">        so a 0-based origin will only be acceptable for fields with</span>
+<span class="sd">        a 0-area support region.</span>
+
+<span class="sd">    exec_info : `dict`, optional</span>
+<span class="sd">        Dictionary used to store information about the stencil execution.</span>
+<span class="sd">        (`None` by default). If the dictionary contains the magic key</span>
+<span class="sd">        &#39;__aggregate_data&#39; and it evaluates to `True`, the dictionary is</span>
+<span class="sd">        populated with a nested dictionary per class containing different</span>
+<span class="sd">        performance statistics. These include the stencil calls count, the</span>
+<span class="sd">        cumulative time spent in all stencil calls, and the actual time spent</span>
+<span class="sd">        in carrying out the computations.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Those attributes are added to the class at loading time:</span>
+    <span class="n">_gt_id_</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">definition_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+
+    <span class="n">_domain_origin_cache</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]]]</span>
+    <span class="sd">&quot;&quot;&quot;Stores domain/origin pairs that have been used by hash.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_instance&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">_instance</span> <span class="o">=</span> <span class="nb">object</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">_domain_origin_cache</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_instance</span>
+
+    <span class="k">def</span> <span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Attempting a modification of an attribute in a frozen class&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__delattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Attempting a deletion of an attribute in a frozen class&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">&lt;StencilObject: </span><span class="si">{name}</span><span class="s2">&gt; [backend=&quot;</span><span class="si">{backend}</span><span class="s2">&quot;]</span>
+<span class="s2">    - I/O fields: </span><span class="si">{fields}</span><span class="s2"></span>
+<span class="s2">    - Parameters: </span><span class="si">{params}</span><span class="s2"></span>
+<span class="s2">    - Constants: </span><span class="si">{constants}</span><span class="s2"></span>
+<span class="s2">    - Version: </span><span class="si">{version}</span><span class="s2"></span>
+<span class="s2">    - Definition (</span><span class="si">{func}</span><span class="s2">):</span>
+<span class="si">{source}</span><span class="s2"></span>
+<span class="s2">        &quot;&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;module&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+            <span class="n">version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_gt_id_</span><span class="p">,</span>
+            <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">fields</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">parameter_info</span><span class="p">,</span>
+            <span class="n">constants</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">constants</span><span class="p">,</span>
+            <span class="n">func</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">definition_func</span><span class="p">,</span>
+            <span class="n">source</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_gt_id_</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">byteorder</span><span class="o">=</span><span class="s2">&quot;little&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">backend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">source</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">domain_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DomainInfo</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">field_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">]:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">parameter_info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ParameterInfo</span><span class="p">]:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">constants</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">options</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="StencilObject.run"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject.run">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="StencilObject.__call__"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject.__call__">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_make_origin_dict</span><span class="p">(</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="c1"># This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they</span>
+                <span class="c1"># do not implement comparison methods. Revert this once DaCe is updated.</span>
+                <span class="c1"># See: https://github.com/GridTools/gt4py/issues/927</span>
+                <span class="k">return</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">):</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">origin</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+            <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Iterable</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;_all_&quot;</span><span class="p">:</span> <span class="n">cast</span><span class="p">(</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Index</span><span class="o">.</span><span class="n">from_value</span><span class="p">(</span><span class="n">origin</span><span class="p">))}</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;_all_&quot;</span><span class="p">:</span> <span class="n">cast</span><span class="p">(</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Index</span><span class="o">.</span><span class="n">from_k</span><span class="p">(</span><span class="n">origin</span><span class="p">))}</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid &#39;origin&#39; value (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">origin</span><span class="p">))</span>
+
+<div class="viewcode-block" id="StencilObject._get_max_domain"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject._get_max_domain">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_max_domain</span><span class="p">(</span>
+        <span class="n">array_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]],</span>
+        <span class="n">domain_infos</span><span class="p">:</span> <span class="n">DomainInfo</span><span class="p">,</span>
+        <span class="n">field_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">],</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">squeeze</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Shape</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Return the maximum domain size possible.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">            field_args:</span>
+<span class="sd">                Mapping from field names to actually passed data arrays.</span>
+<span class="sd">            origin:</span>
+<span class="sd">                The origin for each field.</span>
+<span class="sd">            squeeze:</span>
+<span class="sd">                Convert non-used domain dimensions to singleton dimensions.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            `Shape`: the maximum domain size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">domain_ndim</span> <span class="o">=</span> <span class="n">domain_infos</span><span class="o">.</span><span class="n">ndim</span>
+        <span class="n">max_size</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span>
+        <span class="n">max_domain</span> <span class="o">=</span> <span class="n">Shape</span><span class="p">([</span><span class="n">max_size</span><span class="p">]</span> <span class="o">*</span> <span class="n">domain_ndim</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">field_info</span> <span class="ow">in</span> <span class="n">field_infos</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">field_info</span><span class="o">.</span><span class="n">access</span> <span class="o">!=</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">:</span>
+                <span class="n">info</span> <span class="o">=</span> <span class="n">array_infos</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">assert</span> <span class="n">info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Invalid value for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span>
+                <span class="n">api_domain_mask</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_mask</span>
+                <span class="n">api_domain_ndim</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_ndim</span>
+                <span class="n">upper_indices</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">upper_indices</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">api_domain_mask</span><span class="p">)</span>
+                <span class="n">field_origin</span> <span class="o">=</span> <span class="n">Index</span><span class="o">.</span><span class="n">from_value</span><span class="p">(</span><span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                <span class="n">field_domain</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">field_origin</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">upper_indices</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">api_domain_ndim</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">max_domain</span> <span class="o">&amp;=</span> <span class="n">Shape</span><span class="o">.</span><span class="n">from_mask</span><span class="p">(</span><span class="n">field_domain</span><span class="p">,</span> <span class="n">api_domain_mask</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">max_size</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">squeeze</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">Shape</span><span class="p">([</span><span class="n">i</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">max_size</span> <span class="k">else</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">max_domain</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">max_domain</span></div>
+
+<div class="viewcode-block" id="StencilObject._validate_args"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject._validate_args">[docs]</a>    <span class="k">def</span> <span class="nf">_validate_args</span><span class="p">(</span>  <span class="c1"># noqa: C901  # Function is too complex</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">arg_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]],</span>
+        <span class="n">param_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Validate input arguments to _call_run.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        -------</span>
+<span class="sd">            ValueError</span>
+<span class="sd">                If invalid data or inconsistent options are specified.</span>
+
+<span class="sd">            TypeError</span>
+<span class="sd">                If an incorrect field or parameter data type is passed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg_infos</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param_args</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+
+        <span class="c1"># validate domain sizes</span>
+        <span class="n">domain_ndim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="o">.</span><span class="n">ndim</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">!=</span> <span class="n">domain_ndim</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid &#39;domain&#39; value &#39;</span><span class="si">{</span><span class="n">domain</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">Shape</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid &#39;domain&#39; value (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">domain</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">domain</span> <span class="o">&gt;</span> <span class="n">Shape</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">domain_ndim</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Compute domain contains zero sizes &#39;</span><span class="si">{</span><span class="n">domain</span><span class="si">}</span><span class="s2">&#39;)&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">domain</span> <span class="o">&lt;=</span> <span class="p">(</span>
+            <span class="n">max_domain</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_max_domain</span><span class="p">(</span>
+                <span class="n">arg_infos</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">squeeze</span><span class="o">=</span><span class="kc">False</span>
+            <span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Compute domain too large (provided: </span><span class="si">{</span><span class="n">domain</span><span class="si">}</span><span class="s2">, maximum: </span><span class="si">{</span><span class="n">max_domain</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">domain</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="o">.</span><span class="n">min_sequential_axis_size</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Compute domain too small. Sequential axis is </span><span class="si">{</span><span class="n">domain</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">, but must be at least </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="o">.</span><span class="n">min_sequential_axis_size</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">backend_cls</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">)</span>
+
+        <span class="c1"># assert compatibility of fields with stencil</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">field_info</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">field_info</span><span class="o">.</span><span class="n">access</span> <span class="o">!=</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_infos</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing value for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span><span class="p">)</span>
+                <span class="n">arg_info</span> <span class="o">=</span> <span class="n">arg_infos</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="k">assert</span> <span class="n">arg_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+                <span class="n">backend_cls</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">)</span>
+                <span class="k">assert</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">backend_cls</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;is_optimal_layout&quot;</span><span class="p">](</span>
+                    <span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="p">,</span>
+                    <span class="nb">tuple</span><span class="p">(</span>
+                        <span class="nb">list</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">axes</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">))]</span>
+                    <span class="p">),</span>
+                <span class="p">):</span>
+                    <span class="kn">import</span> <span class="nn">warnings</span>
+
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;The layout of the field &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; is not recommended for this backend.&quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;This may lead to performance degradation. Please consider using the&quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;provided allocators in `gt4py.storage`.&quot;</span>
+                    <span class="p">)</span>
+
+                <span class="n">field_dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">field_dtype</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;The dtype of field &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; is &#39;</span><span class="si">{</span><span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&#39; instead of &#39;</span><span class="si">{</span><span class="n">field_dtype</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+                    <span class="p">)</span>
+
+                <span class="c1"># Check: domain + halo vs field size</span>
+                <span class="n">field_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+                <span class="n">field_domain_mask</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_mask</span>
+                <span class="n">field_domain_ndim</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_ndim</span>
+                <span class="n">field_domain_origin</span> <span class="o">=</span> <span class="n">Index</span><span class="o">.</span><span class="n">from_mask</span><span class="p">(</span><span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">field_domain_mask</span><span class="p">[:</span><span class="n">domain_ndim</span><span class="p">])</span>
+
+                <span class="k">if</span> <span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="n">field_domain_ndim</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Storage for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; has </span><span class="si">{</span><span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> dimensions but the API signature &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;expects </span><span class="si">{</span><span class="n">field_domain_ndim</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span><span class="si">}</span><span class="s2"> (&#39;</span><span class="si">{</span><span class="n">field_info</span><span class="o">.</span><span class="n">axes</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="si">}</span><span class="s2">]&#39;)&quot;</span>
+                    <span class="p">)</span>
+
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">arg_info</span><span class="o">.</span><span class="n">dimensions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                    <span class="ow">and</span> <span class="p">(</span><span class="o">*</span><span class="n">field_info</span><span class="o">.</span><span class="n">axes</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">))))</span>
+                    <span class="o">!=</span> <span class="n">arg_info</span><span class="o">.</span><span class="n">dimensions</span>
+                <span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Storage for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; has dimensions &#39;</span><span class="si">{</span><span class="n">arg_info</span><span class="o">.</span><span class="n">dimensions</span><span class="si">}</span><span class="s2">&#39; but the API signature &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;expects &#39;[</span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">axes</span><span class="p">)</span><span class="si">}</span><span class="s2">]&#39;&quot;</span>
+                        <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot; and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                    <span class="p">)</span>
+
+                <span class="c1"># Check: data dimensions shape</span>
+                <span class="k">if</span> <span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">field_domain_ndim</span><span class="p">:]</span> <span class="o">!=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Field &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; expects data dimensions </span><span class="si">{</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="si">}</span><span class="s2"> but got </span><span class="si">{</span><span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">field_domain_ndim</span><span class="p">:]</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+
+                <span class="n">min_origin</span> <span class="o">=</span> <span class="n">gtc_utils</span><span class="o">.</span><span class="n">interpolate_mask</span><span class="p">(</span>
+                    <span class="n">field_info</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">lower_indices</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">field_domain_mask</span><span class="p">),</span>
+                    <span class="n">field_domain_mask</span><span class="p">,</span>
+                    <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">field_domain_origin</span> <span class="o">&lt;</span> <span class="n">min_origin</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Origin for field </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> too small. Must be at least </span><span class="si">{</span><span class="n">min_origin</span><span class="si">}</span><span class="s2">, is </span><span class="si">{</span><span class="n">field_domain_origin</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+
+                <span class="n">spatial_domain</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">Shape</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">field_domain_mask</span><span class="p">)</span>
+                <span class="n">lower_indices</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">lower_indices</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">field_domain_mask</span><span class="p">)</span>
+                <span class="n">upper_indices</span> <span class="o">=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">boundary</span><span class="o">.</span><span class="n">upper_indices</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">field_domain_mask</span><span class="p">)</span>
+                <span class="n">min_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">lb</span> <span class="o">+</span> <span class="n">d</span> <span class="o">+</span> <span class="n">ub</span> <span class="k">for</span> <span class="n">lb</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">ub</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">lower_indices</span><span class="p">,</span> <span class="n">spatial_domain</span><span class="p">,</span> <span class="n">upper_indices</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">min_shape</span> <span class="o">&gt;</span> <span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Shape of field </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> is </span><span class="si">{</span><span class="n">arg_info</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> but must be at least </span><span class="si">{</span><span class="n">min_shape</span><span class="si">}</span><span class="s2"> for given domain and origin.&quot;</span>
+                    <span class="p">)</span>
+
+        <span class="c1"># assert compatibility of parameters with stencil</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parameter_info</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameter_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">parameter_info</span><span class="o">.</span><span class="n">access</span> <span class="o">!=</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">param_args</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Missing value for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; parameter.&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">parameter</span> <span class="o">:=</span> <span class="n">param_args</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="o">!=</span> <span class="n">parameter_info</span><span class="o">.</span><span class="n">dtype</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;The type of parameter &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; is &#39;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">parameter</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39; instead of &#39;</span><span class="si">{</span><span class="n">parameter_info</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+                    <span class="p">)</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_normalize_origins</span><span class="p">(</span>
+        <span class="n">array_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]],</span>
+        <span class="n">field_infos</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">],</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OriginType</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]:</span>
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">StencilObject</span><span class="o">.</span><span class="n">_make_origin_dict</span><span class="p">(</span><span class="n">origin</span><span class="p">)</span>
+        <span class="n">all_origin</span> <span class="o">=</span> <span class="n">origin</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_all_&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># Set an appropriate origin for all fields</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">field_info</span> <span class="ow">in</span> <span class="n">field_infos</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">array_infos</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Missing value for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span>
+
+            <span class="n">field_origin</span> <span class="o">=</span> <span class="n">origin</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">field_origin</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">field_origin_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_origin</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">field_origin_ndim</span> <span class="o">!=</span> <span class="n">field_info</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="p">(</span>
+                        <span class="n">field_origin_ndim</span> <span class="o">==</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_ndim</span>
+                    <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Invalid origin specification (</span><span class="si">{</span><span class="n">field_origin</span><span class="si">}</span><span class="s2">) for &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; field.&quot;</span>
+                    <span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">field_origin</span><span class="p">,</span> <span class="o">*</span><span class="p">((</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)))</span>
+
+            <span class="k">elif</span> <span class="n">all_origin</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="o">*</span><span class="n">gtc_utils</span><span class="o">.</span><span class="n">filter_mask</span><span class="p">(</span><span class="n">all_origin</span><span class="p">,</span> <span class="n">field_info</span><span class="o">.</span><span class="n">domain_mask</span><span class="p">),</span>
+                    <span class="o">*</span><span class="p">((</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_info</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)),</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="p">(</span><span class="n">info_origin</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">array_infos</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="s2">&quot;origin&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">info_origin</span>  <span class="c1"># type: ignore</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">origin</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,)</span> <span class="o">*</span> <span class="n">field_info</span><span class="o">.</span><span class="n">ndim</span>
+
+        <span class="k">return</span> <span class="n">origin</span>
+
+<div class="viewcode-block" id="StencilObject._call_run"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject._call_run">[docs]</a>    <span class="k">def</span> <span class="nf">_call_run</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">field_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldType</span><span class="p">],</span>
+        <span class="n">parameter_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OriginType</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">validate_args</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">exec_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).</span>
+
+<span class="sd">        Note that this function will always try to expand simple parameter values to complete</span>
+<span class="sd">        data structures by repeating the same value as many times as needed.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">            field_args: `dict`</span>
+<span class="sd">                Mapping from field names to actually passed data arrays.</span>
+<span class="sd">                This parameter encapsulates `*args` in the actual stencil subclass</span>
+<span class="sd">                by doing: `{input_name[i]: arg for i, arg in enumerate(args)}`</span>
+
+<span class="sd">            parameter_args: `dict`</span>
+<span class="sd">                Mapping from parameter names to actually passed parameter values.</span>
+<span class="sd">                This parameter encapsulates `**kwargs` in the actual stencil subclass</span>
+<span class="sd">                by doing: `{name: value for name, value in kwargs.items()}`</span>
+
+<span class="sd">        Check :class:`StencilObject` for a full specification of the `domain`,</span>
+<span class="sd">        `origin` and `exec_info` keyword arguments.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            `None`</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        -------</span>
+<span class="sd">            ValueError</span>
+<span class="sd">                If invalid data or inconsistent options are specified.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">exec_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">exec_info</span><span class="p">[</span><span class="s2">&quot;call_run_start_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+        <span class="n">backend_cls</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="n">backend_cls</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">]</span>
+        <span class="n">array_infos</span> <span class="o">=</span> <span class="n">_extract_array_infos</span><span class="p">(</span><span class="n">field_args</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+
+        <span class="n">cache_key</span> <span class="o">=</span> <span class="n">_compute_cache_key</span><span class="p">(</span><span class="n">field_args</span><span class="p">,</span> <span class="n">parameter_args</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cache_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain_origin_cache</span><span class="p">:</span>
+            <span class="n">origin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_origins</span><span class="p">(</span><span class="n">array_infos</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_max_domain</span><span class="p">(</span>
+                    <span class="n">array_infos</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span> <span class="n">origin</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">validate_args</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_validate_args</span><span class="p">(</span><span class="n">array_infos</span><span class="p">,</span> <span class="n">parameter_args</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+
+            <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_domain_origin_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">origin</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_domain_origin_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span>
+
+        <span class="n">permuted_arrays</span> <span class="o">=</span> <span class="n">_extract_stencil_arrays</span><span class="p">(</span><span class="n">array_infos</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="n">_domain_</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span>
+            <span class="n">_origin_</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span>
+            <span class="n">exec_info</span><span class="o">=</span><span class="n">exec_info</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">permuted_arrays</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">parameter_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">exec_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">exec_info</span><span class="p">[</span><span class="s2">&quot;call_run_end_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="StencilObject.freeze"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject.freeze">[docs]</a>    <span class="k">def</span> <span class="nf">freeze</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilObject&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FrozenStencil</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Return a StencilObject wrapper with a fixed domain and origin for each argument.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">            origin: `dict`</span>
+<span class="sd">                The origin for each Field argument.</span>
+
+<span class="sd">            domain: `Sequence` of `int`</span>
+<span class="sd">                The compute domain shape for the frozen stencil.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        ------</span>
+<span class="sd">        Both `origin` and `domain` arguments should be compatible with the domain and origin</span>
+<span class="sd">        specification defined in :class:`StencilObject`.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            `FrozenStencil`</span>
+<span class="sd">                The stencil wrapper. This should be called with the regular stencil arguments,</span>
+<span class="sd">                but the field origins and domain cannot be changed. Note, no checking of origin</span>
+<span class="sd">                or domain occurs at call time so it is the users responsibility to ensure</span>
+<span class="sd">                correct usage.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">FrozenStencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilObject.clean_call_args_cache"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_object.StencilObject.clean_call_args_cache">[docs]</a>    <span class="k">def</span> <span class="nf">clean_call_args_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilObject&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Clean the argument cache.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_domain_origin_cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__deepcopy__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">memodict</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># StencilObjects are singletons.</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_signature__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_closure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;Only dace backends are supported in DaCe-orchestrated programs. (found &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s1">&quot;)&#39;</span>
+        <span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

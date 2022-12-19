@@ -1,0 +1,93 @@
+gt4py.cartesian.backend package
+===============================
+
+Submodules
+----------
+
+gt4py.cartesian.backend.base module
+-----------------------------------
+
+.. automodule:: gt4py.cartesian.backend.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.cuda\_backend module
+--------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.cuda_backend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.dace\_backend module
+--------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.dace_backend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.dace\_lazy\_stencil module
+--------------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.dace_lazy_stencil
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.dace\_stencil\_object module
+----------------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.dace_stencil_object
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.gtc\_common module
+------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.gtc_common
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.gtcpp\_backend module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.gtcpp_backend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.module\_generator module
+------------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.module_generator
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.numpy\_backend module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.numpy_backend
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.backend.pyext\_builder module
+---------------------------------------------
+
+.. automodule:: gt4py.cartesian.backend.pyext_builder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.backend
+   :members:
+   :undoc-members:
+   :show-inheritance:

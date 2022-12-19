@@ -1,0 +1,121 @@
+gt4py.cartesian package
+=======================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.cartesian.backend
+   gt4py.cartesian.frontend
+   gt4py.cartesian.gtc
+   gt4py.cartesian.testing
+   gt4py.cartesian.utils
+
+Submodules
+----------
+
+gt4py.cartesian.caching module
+------------------------------
+
+.. automodule:: gt4py.cartesian.caching
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.cli module
+--------------------------
+
+.. automodule:: gt4py.cartesian.cli
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.config module
+-----------------------------
+
+.. automodule:: gt4py.cartesian.config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.definitions module
+----------------------------------
+
+.. automodule:: gt4py.cartesian.definitions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gt\_cache\_manager module
+-----------------------------------------
+
+.. automodule:: gt4py.cartesian.gt_cache_manager
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtscript module
+-------------------------------
+
+.. automodule:: gt4py.cartesian.gtscript
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtscript\_imports module
+----------------------------------------
+
+.. automodule:: gt4py.cartesian.gtscript_imports
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.lazy\_stencil module
+------------------------------------
+
+.. automodule:: gt4py.cartesian.lazy_stencil
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.loader module
+-----------------------------
+
+.. automodule:: gt4py.cartesian.loader
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.stencil\_builder module
+---------------------------------------
+
+.. automodule:: gt4py.cartesian.stencil_builder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.stencil\_object module
+--------------------------------------
+
+.. automodule:: gt4py.cartesian.stencil_object
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.type\_hints module
+----------------------------------
+
+.. automodule:: gt4py.cartesian.type_hints
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.expansion.expansion &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.expansion.expansion</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.expansion.expansion</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.library</span>
+<span class="kn">import</span> <span class="nn">dace.subsets</span>
+<span class="kn">import</span> <span class="nn">sympy</span>
+
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.expansion.daceir_builder</span> <span class="kn">import</span> <span class="n">DaCeIRBuilder</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.expansion.sdfg_builder</span> <span class="kn">import</span> <span class="n">StencilComputationSDFGBuilder</span>
+
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">split_horizontal_executions_regions</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.nodes</span> <span class="kn">import</span> <span class="n">StencilComputation</span>
+
+
+<div class="viewcode-block" id="StencilComputationExpansion"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.expansion.StencilComputationExpansion">[docs]</a><span class="k">class</span> <span class="nc">StencilComputationExpansion</span><span class="p">(</span><span class="n">dace</span><span class="o">.</span><span class="n">library</span><span class="o">.</span><span class="n">ExpandTransformation</span><span class="p">):</span>
+    <span class="n">environments</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_solve_for_domain</span><span class="p">(</span><span class="n">field_decls</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">],</span> <span class="n">outer_subsets</span><span class="p">):</span>
+        <span class="n">equations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">symbols</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="c1"># Collect equations and symbols from arguments and shapes</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">field_decls</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">inner_shape</span> <span class="o">=</span> <span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">decl</span><span class="o">.</span><span class="n">shape</span><span class="p">]</span>
+            <span class="n">outer_shape</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">outer_subsets</span><span class="p">[</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">bounding_box_size</span><span class="p">()</span>
+            <span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">inner_dim</span><span class="p">,</span> <span class="n">outer_dim</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">inner_shape</span><span class="p">,</span> <span class="n">outer_shape</span><span class="p">):</span>
+                <span class="n">repldict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">for</span> <span class="n">sym</span> <span class="ow">in</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">symlist</span><span class="p">(</span><span class="n">inner_dim</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                    <span class="n">newsym</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">symbol</span><span class="p">(</span><span class="s2">&quot;__SOLVE_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">sym</span><span class="p">))</span>
+                    <span class="n">symbols</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">newsym</span><span class="p">)</span>
+                    <span class="n">repldict</span><span class="p">[</span><span class="n">sym</span><span class="p">]</span> <span class="o">=</span> <span class="n">newsym</span>
+
+                <span class="c1"># Replace symbols with __SOLVE_ symbols so as to allow</span>
+                <span class="c1"># the same symbol in the called SDFG</span>
+                <span class="k">if</span> <span class="n">repldict</span><span class="p">:</span>
+                    <span class="n">inner_dim</span> <span class="o">=</span> <span class="n">inner_dim</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">repldict</span><span class="p">)</span>
+
+                <span class="n">equations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inner_dim</span> <span class="o">-</span> <span class="n">outer_dim</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">symbols</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+
+        <span class="c1"># Solve for all at once</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">sympy</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">equations</span><span class="p">,</span> <span class="o">*</span><span class="n">symbols</span><span class="p">,</span> <span class="nb">dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;__SOLVE_&quot;</span><span class="p">)</span> <span class="p">:]:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+<div class="viewcode-block" id="StencilComputationExpansion._fix_context"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.expansion.StencilComputationExpansion._fix_context">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_fix_context</span><span class="p">(</span>
+        <span class="n">nsdfg</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">parent_state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span><span class="p">,</span> <span class="n">daceir</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">NestedSDFG</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Apply changes to StencilComputation and the SDFG it is embedded in to satisfy post-expansion constraints.</span>
+
+<span class="sd">        * change connector names to match inner array name (before expansion prefixed to satisfy uniqueness)</span>
+<span class="sd">        * change in- and out-edges&#39; subsets so that they have the same shape as the corresponding array inside</span>
+<span class="sd">        * determine the domain size based on edges to StencilComputation</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># change connector names</span>
+        <span class="k">for</span> <span class="n">in_edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">in_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="n">in_edge</span><span class="o">.</span><span class="n">dst_conn</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__in_&quot;</span><span class="p">)</span>
+            <span class="n">in_edge</span><span class="o">.</span><span class="n">dst_conn</span> <span class="o">=</span> <span class="n">in_edge</span><span class="o">.</span><span class="n">dst_conn</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;__in_&quot;</span><span class="p">)</span> <span class="p">:]</span>
+        <span class="k">for</span> <span class="n">out_edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">assert</span> <span class="n">out_edge</span><span class="o">.</span><span class="n">src_conn</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__out_&quot;</span><span class="p">)</span>
+            <span class="n">out_edge</span><span class="o">.</span><span class="n">src_conn</span> <span class="o">=</span> <span class="n">out_edge</span><span class="o">.</span><span class="n">src_conn</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;__out_&quot;</span><span class="p">)</span> <span class="p">:]</span>
+
+        <span class="c1"># union input and output subsets</span>
+        <span class="n">subsets</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">in_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="n">subsets</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">dst_conn</span><span class="p">]</span> <span class="o">=</span> <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">subset</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="n">subsets</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">src_conn</span><span class="p">]</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+                <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">subset</span><span class="p">,</span> <span class="n">subsets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">edge</span><span class="o">.</span><span class="n">src_conn</span><span class="p">,</span> <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">subset</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="c1"># ensure single-use of input and output subset instances</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">in_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">subset</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">subsets</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">dst_conn</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">subset</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">subsets</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">src_conn</span><span class="p">])</span>
+
+        <span class="c1"># determine &quot;__I&quot;, &quot;__J&quot; and &quot;__K&quot; values based on memlets to StencilComputation&#39;s shape</span>
+        <span class="n">symbol_mapping</span> <span class="o">=</span> <span class="n">StencilComputationExpansion</span><span class="o">.</span><span class="n">_solve_for_domain</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">decl</span>
+                <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">daceir</span><span class="o">.</span><span class="n">field_decls</span>
+                <span class="k">if</span> <span class="n">decl</span><span class="o">.</span><span class="n">name</span>
+                <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">memlet</span> <span class="ow">in</span> <span class="n">daceir</span><span class="o">.</span><span class="n">read_memlets</span> <span class="o">+</span> <span class="n">daceir</span><span class="o">.</span><span class="n">write_memlets</span><span class="p">)</span>
+            <span class="p">},</span>
+            <span class="n">subsets</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">nsdfg</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="o">**</span><span class="n">symbol_mapping</span><span class="p">,</span> <span class="o">**</span><span class="n">node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">})</span>
+
+        <span class="c1"># remove unused symbols from symbol_mapping</span>
+        <span class="n">delkeys</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">sym</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">sym</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">nsdfg</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">free_symbols</span><span class="p">:</span>
+                <span class="n">delkeys</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">sym</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">delkeys</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">node</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">nsdfg</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">nsdfg</span><span class="o">.</span><span class="n">symbol_mapping</span><span class="p">[</span><span class="n">key</span><span class="p">]</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_parent_arrays</span><span class="p">(</span>
+        <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">parent_state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span><span class="p">,</span> <span class="n">parent_sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Data</span><span class="p">]:</span>
+        <span class="n">parent_arrays</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="p">(</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">in_edges</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">dst_conn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="n">parent_arrays</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">dst_conn</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;__in_&quot;</span><span class="p">)</span> <span class="p">:]]</span> <span class="o">=</span> <span class="n">parent_sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">data</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="p">(</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">parent_state</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">src_conn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="n">parent_arrays</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">src_conn</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;__out_&quot;</span><span class="p">)</span> <span class="p">:]]</span> <span class="o">=</span> <span class="n">parent_sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">data</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">parent_arrays</span>
+
+<div class="viewcode-block" id="StencilComputationExpansion.expansion"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.expansion.StencilComputationExpansion.expansion">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">expansion</span><span class="p">(</span>
+        <span class="n">node</span><span class="p">:</span> <span class="s2">&quot;StencilComputation&quot;</span><span class="p">,</span> <span class="n">parent_state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span><span class="p">,</span> <span class="n">parent_sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Expand the coarse SDFG in parent_sdfg to a NestedSDFG with all the states.&quot;&quot;&quot;</span>
+        <span class="n">split_horizontal_executions_regions</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">arrays</span> <span class="o">=</span> <span class="n">StencilComputationExpansion</span><span class="o">.</span><span class="n">_get_parent_arrays</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">parent_state</span><span class="p">,</span> <span class="n">parent_sdfg</span><span class="p">)</span>
+
+        <span class="n">daceir</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">NestedSDFG</span> <span class="o">=</span> <span class="n">DaCeIRBuilder</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">oir_node</span><span class="p">,</span> <span class="n">global_ctx</span><span class="o">=</span><span class="n">DaCeIRBuilder</span><span class="o">.</span><span class="n">GlobalContext</span><span class="p">(</span><span class="n">library_node</span><span class="o">=</span><span class="n">node</span><span class="p">,</span> <span class="n">arrays</span><span class="o">=</span><span class="n">arrays</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="n">nsdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span> <span class="o">=</span> <span class="n">StencilComputationSDFGBuilder</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">daceir</span><span class="p">)</span>
+
+        <span class="n">StencilComputationExpansion</span><span class="o">.</span><span class="n">_fix_context</span><span class="p">(</span><span class="n">nsdfg</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">parent_state</span><span class="p">,</span> <span class="n">daceir</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">nsdfg</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

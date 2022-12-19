@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP 0 — Purpose and Process &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="GDP X — Template and Instructions" href="gdp-template.html" />
+    <link rel="prev" title="GT4Py Development" href="gdp-index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="gdp-index.html">GT4Py Development</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GDP 0 — Purpose and Process</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#what-is-a-gdp">What is a GDP?</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#gdp-workflow">GDP Workflow</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#format-and-template">Format and Template</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#copyright">Copyright</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="gdp-template.html">GDP X — Template and Instructions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#declined-gdps">Declined GDPs</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="gdp-index.html">GT4Py Development</a></li>
+      <li class="breadcrumb-item active">GDP 0 — Purpose and Process</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/GDPs/gdp-0000-gdp-process.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gdp-0-purpose-and-process">
+<h1>GDP 0 — Purpose and Process<a class="headerlink" href="#gdp-0-purpose-and-process" title="Permalink to this headline"></a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>Enrique González Paredes &lt;<a class="reference external" href="mailto:enriqueg&#37;&#52;&#48;cscs&#46;ch">enriqueg<span>&#64;</span>cscs<span>&#46;</span>ch</a>&gt;</p>
+</dd>
+<dt class="field-even">Status</dt>
+<dd class="field-even"><p>Draft</p>
+</dd>
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Process</p>
+</dd>
+<dt class="field-even">Created</dt>
+<dd class="field-even"><p>24-03-2020</p>
+</dd>
+<dt class="field-odd">Discussion PR</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://github.com/GridTools/gt4py/pull/18">https://github.com/GridTools/gt4py/pull/18</a></p>
+</dd>
+</dl>
+<section id="what-is-a-gdp">
+<h2>What is a GDP?<a class="headerlink" href="#what-is-a-gdp" title="Permalink to this headline"></a></h2>
+<p>GDP stands for GT4Py Development Proposal. A GDP is a design document
+providing information to the GT4Py developers community, describing
+a new feature for GT4Py (or GTScript) or changes in the development processes.
+The GDP should provide a concise technical specification and a rationale
+of the new feature, possibly with some examples.</p>
+<p>We intend GDPs to be the primary mechanisms for proposing major new
+features, for collecting community input on an issue, and for documenting
+the design decisions that have gone into GT4Py. The GDP author is
+responsible for building consensus within the community and documenting
+dissenting opinions.</p>
+<p>Because the GDPs are maintained as text files in a versioned
+repository, their revision history is the historical record of the
+feature proposal, which is available by the normal git commands for
+retrieving older revisions from the <code class="docutils literal notranslate"><span class="pre">docs/GDPs</span></code> folder.</p>
+<section id="types">
+<h3>Types<a class="headerlink" href="#types" title="Permalink to this headline"></a></h3>
+<p>There are three kinds of GDPs:</p>
+<ol class="arabic simple">
+<li><p>A <strong>Feature</strong> GDP describes a new feature or implementation
+for GT4Py or GTScript.</p></li>
+<li><p>An <strong>Informational</strong> GDP describes a GT4Py design issue, or provides
+general guidelines or information to the community, but does not propose
+a new feature. Informational GDPs do not necessarily represent a GT4Py
+community consensus or recommendation.</p></li>
+<li><p>A <strong>Process</strong> GDP describes a process surrounding GT4Py, or proposes a
+change to a process. Process GDPs are like Feature GDPs but apply to
+areas other than the GT4Py framework itself. Examples include
+procedures, guidelines, changes to the decision-making process, and
+changes to the tools or environment used in GT4Py development.
+Any meta-GDP is also considered a Process GDP.</p></li>
+</ol>
+</section>
+</section>
+<section id="gdp-workflow">
+<h2>GDP Workflow<a class="headerlink" href="#gdp-workflow" title="Permalink to this headline"></a></h2>
+<p>The GDP process begins with a new idea for GT4Py. It is highly
+recommended that a single GDP contains a single key proposal or new
+idea. Small enhancements or patches often don’t need a GDP and can be
+injected into the GT4Py development workflow with a pull request to
+the <a class="reference external" href="https://github.com/GridTools/gt4py">GT4Py repo</a>. The more focused the GDP, the more successful it tends
+to be. If in doubt, split a large GDP into several well-focused ones.</p>
+<p>Each GDP must have a champion—someone who writes the GDP using the style
+and format described below, shepherds the discussions in the appropriate
+forums, and attempts to build community consensus around the idea. The GDP
+champion (a.k.a. Author) should first attempt to ascertain whether the idea is
+suitable for a GDP. Posting to the <a class="reference external" href="https://gridtools.slack.com/archives/C0E0R7LQK">GT4Py Slack channel</a> is the best
+way to start.</p>
+<p>The proposal should be submitted as a draft GDP via a <a class="reference external" href="https://github.com/GridTools/gt4py/pulls">GitHub pull request</a>
+(PR) to the <code class="docutils literal notranslate"><span class="pre">docs/GDPs</span></code> directory with the name <code class="docutils literal notranslate"><span class="pre">gdp-&lt;n&gt;-&lt;name&gt;.rst</span></code> where
+<code class="docutils literal notranslate"><span class="pre">&lt;n&gt;</span></code> is an appropriately assigned four-digit number and <code class="docutils literal notranslate"><span class="pre">&lt;name&gt;</span></code> is a short
+<em>kebab-case name</em> (e.g., <code class="docutils literal notranslate"><span class="pre">gdp-0000-gdp-process.rst</span></code>). The draft must use the
+<a class="reference internal" href="gdp-template.html"><span class="doc">GDP X — Template and Instructions</span></a> file.  The GT4Py core developers may reject a draft GDP (and
+thus avoiding any discussion on the topic) if the draft GDP is considered as
+completely out of the scope of the project or if the PR does not follow the
+conventions documented here.</p>
+<p>Once the PR for the GDP is in place, a message should be posted to the
+<a class="reference external" href="https://gridtools.slack.com/archives/C0E0R7LQK">GT4Py Slack channel</a>  to announce the start of the discussion
+on the new feature. The full GDP discussion should happen on the pull
+request, also including additional implementation details.</p>
+<p>After the discussion is finished, the PR should be merged regardless of
+whether it is accepted or not, to preserve the discussion and the outcome
+of the proposal. Additional PRs may be made by the Author to update
+or expand the GDP, or by maintainers to set its status, etc.</p>
+<p>It is generally recommended that at least a prototype implementation of a
+Feature GDP co-developed together with the GDP, as ideas that sound
+good in principle sometimes turn out to be impractical when subjected to the
+test of implementation. Often it makes sense for the prototype implementation
+to be made available as PR to the GT4Py repo (making sure to appropriately
+mark the PR as a Draft/WIP PR).</p>
+<section id="review-and-resolution">
+<h3>Review and Resolution<a class="headerlink" href="#review-and-resolution" title="Permalink to this headline"></a></h3>
+<p>GDPs are discussed on the pull request review. The possible paths of the
+status of GDPs are as follows:</p>
+<img alt="../_images/workflow.svg" src="../_images/workflow.svg" /><p>All GDPs should be created with the <code class="docutils literal notranslate"><span class="pre">Draft</span></code> status.</p>
+<p>Eventually, after discussion, there may be a consensus that the GDP
+should be accepted—see the next section for details. At this point
+the status becomes <code class="docutils literal notranslate"><span class="pre">Accepted</span></code>.</p>
+<p>Once a GDP has been <code class="docutils literal notranslate"><span class="pre">Accepted</span></code>, the reference implementation must be
+completed. When the reference implementation is complete and incorporated
+into the main source code repository, the status will be changed to <code class="docutils literal notranslate"><span class="pre">Final</span></code>.</p>
+<p>To allow gathering of additional design and interface feedback before
+committing to long term stability for a new feature or API, a GDP may
+also be marked as <code class="docutils literal notranslate"><span class="pre">Provisional</span></code>. This is short for “Provisionally Accepted”,
+and indicates that the proposal has been accepted for inclusion in the GT4Py
+implementation, but additional user feedback is needed before the full
+design can be considered “Final”. Unlike regular accepted GDPs, provisionally
+accepted GDPs may still be <code class="docutils literal notranslate"><span class="pre">Declined</span></code> even after the related changes have
+been included in a GT4Py release.</p>
+<p>Wherever possible, it is considered preferable to reduce the scope of a
+proposal to avoid the need to rely on the <code class="docutils literal notranslate"><span class="pre">Provisional</span></code> status (e.g. by
+deferring some features to later GDPs), as this status can lead to version
+compatibility challenges between GT4Py versions and other libraries of the
+ecosystem.</p>
+<p>A GDP can also be <code class="docutils literal notranslate"><span class="pre">Declined</span></code>. Perhaps after all is said and done it
+was not a good idea, or the GDP author themselves has decided that the
+GDP is actually a bad idea, or has accepted that a competing proposal
+is a better alternative. It is still important to have a record of these
+facts and the discussion which led to that decision.</p>
+<p>When a GDP is <code class="docutils literal notranslate"><span class="pre">Accepted</span></code> or <code class="docutils literal notranslate"><span class="pre">Declined</span></code>, the GDP should be updated
+accordingly, which means updating, at the very least, the <code class="docutils literal notranslate"><span class="pre">Status</span></code> field
+and the <code class="docutils literal notranslate"><span class="pre">Discussion</span> <span class="pre">PR</span></code> header with a link to the relevant pull request
+comment discussion.</p>
+<p>GDPs can also be <code class="docutils literal notranslate"><span class="pre">Replaced</span></code> or superseded by a different GDP, rendering
+the original obsolete. The <code class="docutils literal notranslate"><span class="pre">Replaced-By</span></code> and <code class="docutils literal notranslate"><span class="pre">Replaces</span></code> headers
+should be added to the original and new GDPs respectively.</p>
+<p>Process GDPs may also have a status of <code class="docutils literal notranslate"><span class="pre">Active</span></code> if they are never
+meant to be completed, e.g. GDP 0 (this GDP).</p>
+</section>
+<section id="how-a-gdp-becomes-accepted">
+<h3>How a GDP becomes Accepted<a class="headerlink" href="#how-a-gdp-becomes-accepted" title="Permalink to this headline"></a></h3>
+<p>A GDP is <code class="docutils literal notranslate"><span class="pre">Accepted</span></code> by consensus of all interested contributors. We
+need a concrete way to tell whether consensus has been reached. When
+you think a GDP is ready to be accepted, post a message both to the
+pull request discussion and to the GT4Py Slack channel with a subject
+line like:</p>
+<blockquote>
+<div><p>Proposal to accept GDP #&lt;number&gt;: &lt;title&gt;</p>
+</div></blockquote>
+<p>In the body of the message, you should:</p>
+<ul class="simple">
+<li><p>link to the latest version of the GDP,</p></li>
+<li><p>briefly describe any major points of contention and how they were
+resolved,</p></li>
+<li><p>include a sentence like: “If there are no substantive objections
+within 7 days from this message, then the GDP will be accepted; see
+GDP 0 for more details.”</p></li>
+</ul>
+<p>Generally the GDP author will be the one to send this message, but
+anyone can do it—the important thing is to make sure that everyone
+knows when a GDP is on the verge of acceptance, and give them a final
+chance to respond. If there’s some special reason to extend this final
+comment period beyond 7 days, then that’s fine, just say so in the
+message. You shouldn’t do less than 7 days, because sometimes people are
+travelling or similar and need some time to respond.</p>
+<p>In general, the goal is to make sure that the community has consensus,
+not provide a rigid policy for people to try to game. When in doubt,
+err on the side of asking for more feedback and looking for
+opportunities to compromise.</p>
+<p>If the final comment period passes without any substantive objections,
+then the GDP can officially be marked <code class="docutils literal notranslate"><span class="pre">Accepted</span></code>. You should send a
+followup message notifying the channel (celebratory emoji optional but
+encouraged 🎉✨), and then update the GDP by setting its <code class="docutils literal notranslate"><span class="pre">:Status:</span></code>
+to <code class="docutils literal notranslate"><span class="pre">Accepted</span></code>.</p>
+<p>If there <em>are</em> substantive objections, then the GDP remains in
+<code class="docutils literal notranslate"><span class="pre">Draft</span></code> state, discussion continues as normal, and it can be
+proposed for acceptance again later once the objections are resolved.</p>
+<p>In controversial cases, the GT4Py core developers may decide whether a
+GDP is finally <code class="docutils literal notranslate"><span class="pre">Accepted</span></code> or not.</p>
+</section>
+<section id="maintenance">
+<h3>Maintenance<a class="headerlink" href="#maintenance" title="Permalink to this headline"></a></h3>
+<p>In general, Feature GDPs are no longer modified after they have
+reached the Final state as the code and project documentation are considered
+the ultimate reference for the implemented feature. However, finalized
+Feature GDPs may be updated as needed.</p>
+<p>Process GDPs may be updated over time to reflect changes to development
+practices and other details. The precise process followed in these cases
+will depend on the nature and purpose of the GDP being updated.</p>
+</section>
+</section>
+<section id="format-and-template">
+<h2>Format and Template<a class="headerlink" href="#format-and-template" title="Permalink to this headline"></a></h2>
+<p>GDPs are UTF-8 encoded text files using the <a class="reference external" href="http://docutils.sourceforge.net/rst.html">reStructuredText</a> format. Please
+see the <a class="reference internal" href="gdp-template.html"><span class="doc">GDP X — Template and Instructions</span></a> file and the <a class="reference external" href="http://www.sphinx-doc.org/en/stable/rest.html">reStructuredTextPrimer</a> for more
+information. The <a class="reference external" href="http://www.sphinx-doc.org/en/stable/">Sphinx</a> tools should be used to convert GDPs to HTML or other
+formats.</p>
+<section id="header-preamble">
+<h3>Header Preamble<a class="headerlink" href="#header-preamble" title="Permalink to this headline"></a></h3>
+<p>Each GDP must begin with a header preamble. The headers
+must appear in the following order. Headers marked with <code class="docutils literal notranslate"><span class="pre">*</span></code> are
+optional. All other headers are required.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>  <span class="p">:</span><span class="n">Author</span><span class="p">:</span> <span class="o">&lt;</span><span class="nb">list</span> <span class="n">of</span> <span class="n">authors</span><span class="s1">&#39; real names and optionally, email addresses&gt;</span>
+  <span class="p">:</span><span class="n">Status</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">Draft</span> <span class="o">|</span> <span class="n">Active</span> <span class="o">|</span> <span class="n">Accepted</span> <span class="o">|</span> <span class="n">Declined</span> <span class="o">|</span> <span class="n">Provisional</span> <span class="o">|</span> <span class="n">Final</span> <span class="o">|</span> <span class="n">Replaced</span><span class="o">&gt;</span>
+  <span class="p">:</span><span class="n">Type</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">Feature</span> <span class="o">|</span> <span class="n">Informational</span> <span class="o">|</span> <span class="n">Process</span><span class="o">&gt;</span>
+  <span class="p">:</span><span class="n">Created</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">date</span> <span class="n">created</span> <span class="n">on</span><span class="p">,</span> <span class="ow">in</span> <span class="n">dd</span><span class="o">-</span><span class="n">mmm</span><span class="o">-</span><span class="n">yyyy</span> <span class="nb">format</span><span class="o">&gt;</span>
+  <span class="p">:</span><span class="n">Discussion</span> <span class="n">PR</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">PR</span> <span class="n">url</span><span class="o">&gt;</span>
+<span class="o">*</span> <span class="p">:</span><span class="n">Requires</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">GDP</span> <span class="n">numbers</span><span class="o">&gt;</span>
+<span class="o">*</span> <span class="p">:</span><span class="n">GT4Py</span><span class="o">-</span><span class="n">Version</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">version</span> <span class="n">number</span><span class="o">&gt;</span>
+<span class="o">*</span> <span class="p">:</span><span class="n">Replaces</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">GDP</span> <span class="n">number</span><span class="o">&gt;</span>
+<span class="o">*</span> <span class="p">:</span><span class="n">Replaced</span><span class="o">-</span><span class="n">By</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">GDP</span> <span class="n">number</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>The Author header lists the names, and optionally the email addresses
+of all the authors of the GDP. The format of the Author header
+value must be</p>
+<blockquote>
+<div><p>Random J. User &lt;<a class="reference external" href="mailto:address&#37;&#52;&#48;dom&#46;ain">address<span>&#64;</span>dom<span>&#46;</span>ain</a>&gt;</p>
+</div></blockquote>
+<p>if the email address is included, and just</p>
+<blockquote>
+<div><p>Random J. User</p>
+</div></blockquote>
+<p>if the address is not given. If there are multiple authors, each should be on
+a separate line.</p>
+</section>
+</section>
+<section id="copyright">
+<h2>Copyright<a class="headerlink" href="#copyright" title="Permalink to this headline"></a></h2>
+<p>This document has been placed in the public domain.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gdp-index.html" class="btn btn-neutral float-left" title="GT4Py Development" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gdp-template.html" class="btn btn-neutral float-right" title="GDP X — Template and Instructions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

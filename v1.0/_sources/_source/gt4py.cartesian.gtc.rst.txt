@@ -1,0 +1,81 @@
+gt4py.cartesian.gtc package
+===========================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.cartesian.gtc.cuir
+   gt4py.cartesian.gtc.dace
+   gt4py.cartesian.gtc.gtcpp
+   gt4py.cartesian.gtc.numpy
+   gt4py.cartesian.gtc.passes
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.common module
+---------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.common
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.daceir module
+---------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.daceir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.definitions module
+--------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.definitions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.gtir module
+-------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.gtir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.gtir\_to\_oir module
+----------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.gtir_to_oir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.oir module
+------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.oir
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.utils module
+--------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.passes.oir_optimizations.utils &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.passes.oir_optimizations.utils</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.passes.oir_optimizations.utils</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.eve.utils</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.definitions</span> <span class="kn">import</span> <span class="n">Extent</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.horizontal_masks</span> <span class="kn">import</span> <span class="n">mask_overlap_with_extent</span>
+
+
+<span class="n">OffsetT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;OffsetT&quot;</span><span class="p">)</span>
+
+<span class="n">GeneralOffsetTuple</span> <span class="o">=</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span>
+
+<span class="n">_digits_at_end_pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[0-9]+$&quot;</span><span class="p">)</span>
+<span class="n">_generated_name_pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;.+_gen_[0-9]+&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="GenericAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.GenericAccess">[docs]</a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">GenericAccess</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">OffsetT</span><span class="p">]):</span>
+    <span class="n">field</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="n">OffsetT</span>
+    <span class="n">is_write</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">data_index</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">horizontal_mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_read</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_write</span>
+
+<div class="viewcode-block" id="GenericAccess.to_extent"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.GenericAccess.to_extent">[docs]</a>    <span class="k">def</span> <span class="nf">to_extent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">horizontal_extent</span><span class="p">:</span> <span class="n">Extent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Extent</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert the access to an extent provided a horizontal extent for the access.</span>
+
+<span class="sd">        This returns None if no overlap exists between the horizontal mask and interval.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">offset_as_extent</span> <span class="o">=</span> <span class="n">Extent</span><span class="o">.</span><span class="n">from_offset</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">)[:</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">zeros</span> <span class="o">=</span> <span class="n">Extent</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">ndims</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">horizontal_mask</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">dist_from_edge</span> <span class="o">:=</span> <span class="n">mask_overlap_with_extent</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">horizontal_mask</span><span class="p">,</span> <span class="n">horizontal_extent</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">((</span><span class="n">horizontal_extent</span> <span class="o">-</span> <span class="n">dist_from_edge</span><span class="p">)</span> <span class="o">+</span> <span class="n">offset_as_extent</span><span class="p">)</span> <span class="o">|</span> <span class="n">zeros</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">horizontal_extent</span> <span class="o">+</span> <span class="n">offset_as_extent</span></div></div>
+
+
+<div class="viewcode-block" id="CartesianAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.CartesianAccess">[docs]</a><span class="k">class</span> <span class="nc">CartesianAccess</span><span class="p">(</span><span class="n">GenericAccess</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="GeneralAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.GeneralAccess">[docs]</a><span class="k">class</span> <span class="nc">GeneralAccess</span><span class="p">(</span><span class="n">GenericAccess</span><span class="p">[</span><span class="n">GeneralOffsetTuple</span><span class="p">]):</span>
+    <span class="k">pass</span></div>
+
+
+<span class="n">AccessT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;AccessT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">GenericAccess</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="AccessCollector"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector">[docs]</a><span class="k">class</span> <span class="nc">AccessCollector</span><span class="p">(</span><span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Collects all field accesses and corresponding offsets.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="AccessCollector.visit_FieldAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">accesses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">GeneralAccess</span><span class="p">],</span>
+        <span class="n">is_write</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">horizontal_mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">accesses</span><span class="o">=</span><span class="n">accesses</span><span class="p">,</span> <span class="n">is_write</span><span class="o">=</span><span class="n">is_write</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="n">accesses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">GeneralAccess</span><span class="p">(</span>
+                <span class="n">field</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">]),</span> <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]),</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]),</span>
+                <span class="n">data_index</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span>
+                <span class="n">is_write</span><span class="o">=</span><span class="n">is_write</span><span class="p">,</span>
+                <span class="n">horizontal_mask</span><span class="o">=</span><span class="n">horizontal_mask</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.visit_AssignStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">is_write</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">is_write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.visit_MaskStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">is_write</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.visit_While"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.visit_While">[docs]</a>    <span class="k">def</span> <span class="nf">visit_While</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">While</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="n">is_write</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.visit_HorizontalRestriction"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.visit_HorizontalRestriction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalRestriction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">horizontal_mask</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">GenericAccessCollection</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">AccessT</span><span class="p">,</span> <span class="n">OffsetT</span><span class="p">]):</span>
+        <span class="n">_ordered_accesses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">AccessT</span><span class="p">]</span>
+
+        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">_offset_dict</span><span class="p">(</span><span class="n">accesses</span><span class="p">:</span> <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">OffsetT</span><span class="p">]]:</span>
+            <span class="k">return</span> <span class="n">accesses</span><span class="o">.</span><span class="n">reduceby</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">acc</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">acc</span> <span class="o">|</span> <span class="p">{</span><span class="n">x</span><span class="o">.</span><span class="n">offset</span><span class="p">},</span> <span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="nb">set</span><span class="p">(),</span> <span class="n">as_dict</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.offsets"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.offsets">[docs]</a>        <span class="k">def</span> <span class="nf">offsets</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">OffsetT</span><span class="p">]]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a dictionary, mapping all accessed fields&#39; names to sets of offset tuples.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offset_dict</span><span class="p">(</span><span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.read_offsets"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.read_offsets">[docs]</a>        <span class="k">def</span> <span class="nf">read_offsets</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">OffsetT</span><span class="p">]]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a dictionary, mapping read fields&#39; names to sets of offset tuples.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offset_dict</span><span class="p">(</span>
+                <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">is_read</span><span class="p">)</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.read_accesses"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.read_accesses">[docs]</a>        <span class="k">def</span> <span class="nf">read_accesses</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">AccessT</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get the sub-list of read accesses.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+                <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">is_read</span><span class="p">)</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.write_offsets"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.write_offsets">[docs]</a>        <span class="k">def</span> <span class="nf">write_offsets</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Set</span><span class="p">[</span><span class="n">OffsetT</span><span class="p">]]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a dictionary, mapping written fields&#39; names to sets of offset tuples.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offset_dict</span><span class="p">(</span>
+                <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">is_write</span><span class="p">)</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.write_accesses"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.write_accesses">[docs]</a>        <span class="k">def</span> <span class="nf">write_accesses</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">AccessT</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get the sub-list of write accesses.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+                <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">XIterable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">is_write</span><span class="p">)</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.fields"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.fields">[docs]</a>        <span class="k">def</span> <span class="nf">fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a set of all accessed fields&#39; names.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">acc</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.read_fields"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.read_fields">[docs]</a>        <span class="k">def</span> <span class="nf">read_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a set of all read fields&#39; names.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">acc</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span> <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">is_read</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.write_fields"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.write_fields">[docs]</a>        <span class="k">def</span> <span class="nf">write_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a set of all written fields&#39; names.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">acc</span><span class="o">.</span><span class="n">field</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span> <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">is_write</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GenericAccessCollection.ordered_accesses"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GenericAccessCollection.ordered_accesses">[docs]</a>        <span class="k">def</span> <span class="nf">ordered_accesses</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">AccessT</span><span class="p">]:</span>
+            <span class="sd">&quot;&quot;&quot;Get a list of ordered accesses.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span></div></div>
+
+<div class="viewcode-block" id="AccessCollector.CartesianAccessCollection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.CartesianAccessCollection">[docs]</a>    <span class="k">class</span> <span class="nc">CartesianAccessCollection</span><span class="p">(</span><span class="n">GenericAccessCollection</span><span class="p">[</span><span class="n">CartesianAccess</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]):</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GeneralAccessCollection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GeneralAccessCollection">[docs]</a>    <span class="k">class</span> <span class="nc">GeneralAccessCollection</span><span class="p">(</span><span class="n">GenericAccessCollection</span><span class="p">[</span><span class="n">GeneralAccess</span><span class="p">,</span> <span class="n">GeneralOffsetTuple</span><span class="p">]):</span>
+<div class="viewcode-block" id="AccessCollector.GeneralAccessCollection.cartesian_accesses"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GeneralAccessCollection.cartesian_accesses">[docs]</a>        <span class="k">def</span> <span class="nf">cartesian_accesses</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AccessCollector.CartesianAccessCollection&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">CartesianAccessCollection</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="n">CartesianAccess</span><span class="p">(</span>
+                        <span class="n">field</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">field</span><span class="p">,</span>
+                        <span class="n">offset</span><span class="o">=</span><span class="n">cast</span><span class="p">(</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span>
+                        <span class="n">data_index</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span>
+                        <span class="n">is_write</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">is_write</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span>
+                    <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="p">]</span>
+            <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AccessCollector.GeneralAccessCollection.has_variable_access"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.GeneralAccessCollection.has_variable_access">[docs]</a>        <span class="k">def</span> <span class="nf">has_variable_access</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">)</span></div></div>
+
+<div class="viewcode-block" id="AccessCollector.apply"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.AccessCollector.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">RootNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AccessCollector.GeneralAccessCollection&quot;</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">GeneralAccessCollection</span><span class="p">([])</span>
+        <span class="bp">cls</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">accesses</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">_ordered_accesses</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div></div>
+
+
+<div class="viewcode-block" id="symbol_name_creator"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.symbol_name_creator">[docs]</a><span class="k">def</span> <span class="nf">symbol_name_creator</span><span class="p">(</span><span class="n">used_names</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Create a function that generates symbol names that are not already in use.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        used_names: Symbol names that are already in use and thus should not be generated.</span>
+<span class="sd">                    NOTE: `used_names` will be modified to contain all generated symbols.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A callable to generate new unique symbol names.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">increment_string_suffix</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_generated_name_pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">s</span> <span class="o">+</span> <span class="s2">&quot;_gen_0&quot;</span>
+        <span class="k">return</span> <span class="n">_digits_at_end_pattern</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">group</span><span class="p">())</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">s</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">new_symbol_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">while</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">used_names</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">increment_string_suffix</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">used_names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span>
+
+    <span class="k">return</span> <span class="n">new_symbol_name</span></div>
+
+
+<div class="viewcode-block" id="collect_symbol_names"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.collect_symbol_names">[docs]</a><span class="k">def</span> <span class="nf">collect_symbol_names</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">RootNode</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolTableTrait</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;annex&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;symtable&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">names</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">names</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">symtable</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="n">init</span><span class="o">=</span><span class="nb">set</span><span class="p">())</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StencilExtentComputer"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.StencilExtentComputer">[docs]</a><span class="k">class</span> <span class="nc">StencilExtentComputer</span><span class="p">(</span><span class="n">gt4py</span><span class="o">.</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+<div class="viewcode-block" id="StencilExtentComputer.Context"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.StencilExtentComputer.Context">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">Context</span><span class="p">:</span>
+        <span class="n">fields</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="n">blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">add_k</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_k</span> <span class="o">=</span> <span class="n">add_k</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zero_extent</span> <span class="o">=</span> <span class="n">Extent</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">ndims</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<div class="viewcode-block" id="StencilExtentComputer.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.StencilExtentComputer.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Context&quot;</span><span class="p">:</span>
+        <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Context</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">vloop</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">vloop</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_k</span><span class="p">:</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">Extent</span><span class="p">(</span><span class="o">*</span><span class="n">extent</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">extent</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">params</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">):</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zero_extent</span>
+
+        <span class="k">return</span> <span class="n">ctx</span></div>
+
+<div class="viewcode-block" id="StencilExtentComputer.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.StencilExtentComputer.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">hexec</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">hexec</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilExtentComputer.visit_HorizontalExecution"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.StencilExtentComputer.visit_HorizontalExecution">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalExecution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+        <span class="n">horizontal_extent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">zero_extent</span>
+        <span class="k">for</span> <span class="n">access</span> <span class="ow">in</span> <span class="p">(</span><span class="n">acc</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">ordered_accesses</span><span class="p">()</span> <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">is_write</span><span class="p">):</span>
+            <span class="n">horizontal_extent</span> <span class="o">|=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">access</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">zero_extent</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">blocks</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">node</span><span class="p">)]</span> <span class="o">=</span> <span class="n">horizontal_extent</span>
+
+        <span class="k">for</span> <span class="n">access</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">ordered_accesses</span><span class="p">():</span>
+            <span class="n">extent</span> <span class="o">=</span> <span class="n">access</span><span class="o">.</span><span class="n">to_extent</span><span class="p">(</span><span class="n">horizontal_extent</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">extent</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="n">access</span><span class="o">.</span><span class="n">field</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">:</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">access</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">access</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">|</span> <span class="n">extent</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">[</span><span class="n">access</span><span class="o">.</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">extent</span></div></div>
+
+
+<div class="viewcode-block" id="compute_horizontal_block_extents"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.compute_horizontal_block_extents">[docs]</a><span class="k">def</span> <span class="nf">compute_horizontal_block_extents</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]:</span>
+    <span class="n">ctx</span> <span class="o">=</span> <span class="n">StencilExtentComputer</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">blocks</span></div>
+
+
+<div class="viewcode-block" id="compute_fields_extents"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.compute_fields_extents">[docs]</a><span class="k">def</span> <span class="nf">compute_fields_extents</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]:</span>
+    <span class="n">ctx</span> <span class="o">=</span> <span class="n">StencilExtentComputer</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span></div>
+
+
+<div class="viewcode-block" id="compute_extents"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.utils.compute_extents">[docs]</a><span class="k">def</span> <span class="nf">compute_extents</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Extent</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Extent</span><span class="p">]]:</span>
+    <span class="n">ctx</span> <span class="o">=</span> <span class="n">StencilExtentComputer</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fields</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">blocks</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

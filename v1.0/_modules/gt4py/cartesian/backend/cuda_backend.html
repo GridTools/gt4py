@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.backend.cuda_backend &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.backend.cuda_backend</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.backend.cuda_backend</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">storage</span> <span class="k">as</span> <span class="n">gt_storage</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">CLIBackendMixin</span><span class="p">,</span> <span class="n">register</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.gtc_common</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BackendCodegen</span><span class="p">,</span>
+    <span class="n">bindings_main_template</span><span class="p">,</span>
+    <span class="n">pybuffer_to_sid</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">gtir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="n">DataType</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.cuir</span> <span class="kn">import</span> <span class="n">cuir</span><span class="p">,</span> <span class="n">cuir_codegen</span><span class="p">,</span> <span class="n">extent_analysis</span><span class="p">,</span> <span class="n">kernel_fusion</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.cuir.oir_to_cuir</span> <span class="kn">import</span> <span class="n">OIRToCUIR</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.gtir_to_oir</span> <span class="kn">import</span> <span class="n">GTIRToOIR</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.gtir_pipeline</span> <span class="kn">import</span> <span class="n">GtirPipeline</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.caches</span> <span class="kn">import</span> <span class="n">FillFlushToLocalKCaches</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.pruning</span> <span class="kn">import</span> <span class="n">NoFieldAccessPruning</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_pipeline</span> <span class="kn">import</span> <span class="n">DefaultPipeline</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">codegen</span>
+
+<span class="kn">from</span> <span class="nn">.gtc_common</span> <span class="kn">import</span> <span class="n">BaseGTBackend</span><span class="p">,</span> <span class="n">CUDAPyExtModuleGenerator</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_object</span> <span class="kn">import</span> <span class="n">StencilObject</span>
+
+
+<div class="viewcode-block" id="CudaExtGenerator"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaExtGenerator">[docs]</a><span class="k">class</span> <span class="nc">CudaExtGenerator</span><span class="p">(</span><span class="n">BackendCodegen</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_name</span><span class="p">,</span> <span class="n">module_name</span><span class="p">,</span> <span class="n">backend</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">class_name</span> <span class="o">=</span> <span class="n">class_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_name</span> <span class="o">=</span> <span class="n">module_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span>
+
+<div class="viewcode-block" id="CudaExtGenerator.__call__"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaExtGenerator.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stencil_ir</span><span class="p">:</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">stencil_ir</span> <span class="o">=</span> <span class="n">GtirPipeline</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">stencil_id</span><span class="p">)</span><span class="o">.</span><span class="n">full</span><span class="p">()</span>
+        <span class="n">base_oir</span> <span class="o">=</span> <span class="n">GTIRToOIR</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">stencil_ir</span><span class="p">)</span>
+        <span class="n">oir_pipeline</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">backend_opts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s2">&quot;oir_pipeline&quot;</span><span class="p">,</span>
+            <span class="n">DefaultPipeline</span><span class="p">(</span><span class="n">skip</span><span class="o">=</span><span class="p">[</span><span class="n">NoFieldAccessPruning</span><span class="p">],</span> <span class="n">add_steps</span><span class="o">=</span><span class="p">[</span><span class="n">FillFlushToLocalKCaches</span><span class="p">]),</span>
+        <span class="p">)</span>
+        <span class="n">oir_node</span> <span class="o">=</span> <span class="n">oir_pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">base_oir</span><span class="p">)</span>
+        <span class="n">cuir_node</span> <span class="o">=</span> <span class="n">OIRToCUIR</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">oir_node</span><span class="p">)</span>
+        <span class="n">cuir_node</span> <span class="o">=</span> <span class="n">kernel_fusion</span><span class="o">.</span><span class="n">FuseKernels</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">cuir_node</span><span class="p">)</span>
+        <span class="n">cuir_node</span> <span class="o">=</span> <span class="n">extent_analysis</span><span class="o">.</span><span class="n">CacheExtents</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">cuir_node</span><span class="p">)</span>
+        <span class="n">format_source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">format_source</span>
+        <span class="n">implementation</span> <span class="o">=</span> <span class="n">cuir_codegen</span><span class="o">.</span><span class="n">CUIRCodegen</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">cuir_node</span><span class="p">,</span> <span class="n">format_source</span><span class="o">=</span><span class="n">format_source</span><span class="p">)</span>
+        <span class="n">bindings</span> <span class="o">=</span> <span class="n">CudaBindingsCodegen</span><span class="o">.</span><span class="n">apply_codegen</span><span class="p">(</span>
+            <span class="n">cuir_node</span><span class="p">,</span>
+            <span class="n">module_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">module_name</span><span class="p">,</span>
+            <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">format_source</span><span class="o">=</span><span class="n">format_source</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;computation&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;computation.hpp&quot;</span><span class="p">:</span> <span class="n">implementation</span><span class="p">},</span>
+            <span class="s2">&quot;bindings&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;bindings.cu&quot;</span><span class="p">:</span> <span class="n">bindings</span><span class="p">},</span>
+        <span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="CudaBindingsCodegen"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen">[docs]</a><span class="k">class</span> <span class="nc">CudaBindingsCodegen</span><span class="p">(</span><span class="n">codegen</span><span class="o">.</span><span class="n">TemplatedGenerator</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.unique_index"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.unique_index">[docs]</a>    <span class="k">def</span> <span class="nf">unique_index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unique_index</span></div>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.visit_DataType"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.visit_DataType">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DataType</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">cuir_codegen</span><span class="o">.</span><span class="n">CUIRCodegen</span><span class="p">()</span><span class="o">.</span><span class="n">visit_DataType</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.visit_FieldDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.visit_FieldDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s2">&quot;external_arg&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">domain_ndim</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">dimensions</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">data_ndim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">)</span>
+            <span class="n">sid_ndim</span> <span class="o">=</span> <span class="n">domain_ndim</span> <span class="o">+</span> <span class="n">data_ndim</span>
+            <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;external_arg&quot;</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="s2">&quot;py::object </span><span class="si">{name}</span><span class="s2">, std::array&lt;gt::int_t,</span><span class="si">{sid_ndim}</span><span class="s2">&gt; </span><span class="si">{name}</span><span class="s2">_origin&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">sid_ndim</span><span class="o">=</span><span class="n">sid_ndim</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">pybuffer_to_sid</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">ctype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span>
+                    <span class="n">domain_dim_flags</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dimensions</span><span class="p">,</span>
+                    <span class="n">data_ndim</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">),</span>
+                    <span class="n">stride_kind_index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">unique_index</span><span class="p">(),</span>
+                    <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+                <span class="p">)</span></div>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.visit_ScalarDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.visit_ScalarDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s2">&quot;external_arg&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;external_arg&quot;</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2"> </span><span class="si">{name}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="s2">&quot;gridtools::stencil::global_parameter(</span><span class="si">{name}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.visit_Program"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.visit_Program">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Program</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Program</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="s2">&quot;module_name&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span>
+        <span class="n">entry_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">external_arg</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">sid_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">external_arg</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="p">,</span>
+            <span class="n">entry_params</span><span class="o">=</span><span class="n">entry_params</span><span class="p">,</span>
+            <span class="n">sid_params</span><span class="o">=</span><span class="n">sid_params</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="n">Program</span> <span class="o">=</span> <span class="n">bindings_main_template</span><span class="p">()</span>
+
+<div class="viewcode-block" id="CudaBindingsCodegen.apply_codegen"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBindingsCodegen.apply_codegen">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply_codegen</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;stencil&quot;</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">module_name</span><span class="o">=</span><span class="n">module_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;format_source&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">generated_code</span></div></div>
+
+
+<div class="viewcode-block" id="CudaBackend"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBackend">[docs]</a><span class="nd">@register</span>
+<span class="k">class</span> <span class="nc">CudaBackend</span><span class="p">(</span><span class="n">BaseGTBackend</span><span class="p">,</span> <span class="n">CLIBackendMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;CUDA backend using gtc.&quot;&quot;&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>
+    <span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">BaseGTBackend</span><span class="o">.</span><span class="n">GT_BACKEND_OPTS</span><span class="p">,</span> <span class="s2">&quot;device_sync&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;versioning&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">}}</span>
+    <span class="n">languages</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;computation&quot;</span><span class="p">:</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;bindings&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;python&quot;</span><span class="p">]}</span>
+    <span class="n">storage_info</span> <span class="o">=</span> <span class="n">gt_storage</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">CUDALayout</span>
+    <span class="n">PYEXT_GENERATOR_CLASS</span> <span class="o">=</span> <span class="n">CudaExtGenerator</span>  <span class="c1"># type: ignore</span>
+    <span class="n">MODULE_GENERATOR_CLASS</span> <span class="o">=</span> <span class="n">CUDAPyExtModuleGenerator</span>
+    <span class="n">GT_BACKEND_T</span> <span class="o">=</span> <span class="s2">&quot;gpu&quot;</span>
+
+<div class="viewcode-block" id="CudaBackend.generate_extension"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBackend.generate_extension">[docs]</a>    <span class="k">def</span> <span class="nf">generate_extension</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_extension</span><span class="p">(</span><span class="n">stencil_ir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">gtir</span><span class="p">,</span> <span class="n">uses_cuda</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CudaBackend.generate"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.cuda_backend.CudaBackend.generate">[docs]</a>    <span class="k">def</span> <span class="nf">generate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;StencilObject&quot;</span><span class="p">]:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_options</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
+
+        <span class="n">pyext_module_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+        <span class="n">pyext_file_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+
+        <span class="c1"># TODO(havogt) add bypass if computation has no effect</span>
+        <span class="n">pyext_module_name</span><span class="p">,</span> <span class="n">pyext_file_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_extension</span><span class="p">()</span>
+
+        <span class="c1"># Generate and return the Python wrapper class</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_module</span><span class="p">(</span>
+            <span class="n">pyext_module_name</span><span class="o">=</span><span class="n">pyext_module_name</span><span class="p">,</span>
+            <span class="n">pyext_file_path</span><span class="o">=</span><span class="n">pyext_file_path</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

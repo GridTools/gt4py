@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.backend.pyext_builder &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.backend.pyext_builder</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.backend.pyext_builder</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">distutils</span>
+<span class="kn">import</span> <span class="nn">distutils.sysconfig</span>
+<span class="kn">import</span> <span class="nn">io</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">overload</span>
+
+<span class="kn">import</span> <span class="nn">pybind11</span>
+<span class="kn">import</span> <span class="nn">setuptools</span>
+<span class="kn">from</span> <span class="nn">setuptools.command.build_ext</span> <span class="kn">import</span> <span class="n">build_ext</span>
+
+<span class="kn">from</span> <span class="nn">gt4py.cartesian</span> <span class="kn">import</span> <span class="n">config</span> <span class="k">as</span> <span class="n">gt_config</span>
+
+
+<div class="viewcode-block" id="get_dace_module_path"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.get_dace_module_path">[docs]</a><span class="k">def</span> <span class="nf">get_dace_module_path</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">dace</span>
+
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">dace</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="get_cuda_compute_capability"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.get_cuda_compute_capability">[docs]</a><span class="k">def</span> <span class="nf">get_cuda_compute_capability</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">cupy</span> <span class="k">as</span> <span class="nn">cp</span>
+
+        <span class="k">return</span> <span class="n">cp</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">Device</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">compute_capability</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="get_gt_pyext_build_opts"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.get_gt_pyext_build_opts">[docs]</a><span class="k">def</span> <span class="nf">get_gt_pyext_build_opts</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">debug_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">add_profile_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">uses_openmp</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">uses_cuda</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">gt_version</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]:</span>
+
+    <span class="n">include_dirs</span> <span class="o">=</span> <span class="p">[</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;boost_include_path&quot;</span><span class="p">]]</span>
+    <span class="n">extra_compile_args_from_config</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;extra_compile_args&quot;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">uses_cuda</span><span class="p">:</span>
+        <span class="n">compute_capability</span> <span class="o">=</span> <span class="n">get_cuda_compute_capability</span><span class="p">()</span>
+        <span class="n">cuda_arch</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cuda_arch&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">compute_capability</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cuda_arch</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;CUDA architecture could not be determined&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cuda_arch</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;sm_&quot;</span><span class="p">):</span>
+            <span class="n">cuda_arch</span> <span class="o">=</span> <span class="n">cuda_arch</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;sm_&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">compute_capability</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">compute_capability</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nb">int</span><span class="p">(</span><span class="n">cuda_arch</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;CUDA architecture </span><span class="si">{</span><span class="n">cuda_arch</span><span class="si">}</span><span class="s2"> exceeds compute capability </span><span class="si">{</span><span class="n">compute_capability</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cuda_arch</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="n">gt_include_path</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;gt_include_path&quot;</span><span class="p">]</span>
+
+    <span class="kn">import</span> <span class="nn">os</span>
+
+    <span class="n">extra_compile_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">cxx</span><span class="o">=</span><span class="p">[</span>
+            <span class="s2">&quot;-std=c++17&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-ftemplate-depth=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cpp_template_depth&quot;</span><span class="p">]),</span>
+            <span class="s2">&quot;-fvisibility=hidden&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-fPIC&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-isystem</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_include_path</span><span class="p">),</span>
+            <span class="s2">&quot;-isystem</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;boost_include_path&quot;</span><span class="p">]),</span>
+            <span class="s2">&quot;-DBOOST_PP_VARIADICS&quot;</span><span class="p">,</span>
+            <span class="o">*</span><span class="n">extra_compile_args_from_config</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">],</span>
+        <span class="p">],</span>
+        <span class="n">nvcc</span><span class="o">=</span><span class="p">[</span>
+            <span class="s2">&quot;-std=c++17&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-ftemplate-depth=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cpp_template_depth&quot;</span><span class="p">]),</span>
+            <span class="s2">&quot;-arch=sm_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cuda_arch</span><span class="p">),</span>
+            <span class="s2">&quot;-isystem=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_include_path</span><span class="p">),</span>
+            <span class="s2">&quot;-isystem=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;boost_include_path&quot;</span><span class="p">]),</span>
+            <span class="s2">&quot;-DBOOST_PP_VARIADICS&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--expt-relaxed-constexpr&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--compiler-options&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-fvisibility=hidden&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--compiler-options&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-fPIC&quot;</span><span class="p">,</span>
+            <span class="o">*</span><span class="n">extra_compile_args_from_config</span><span class="p">[</span><span class="s2">&quot;nvcc&quot;</span><span class="p">],</span>
+        <span class="p">],</span>
+    <span class="p">)</span>
+    <span class="n">extra_link_args</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;extra_link_args&quot;</span><span class="p">]</span>
+
+    <span class="n">mode_flags</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;-O0&quot;</span><span class="p">,</span> <span class="s2">&quot;-ggdb&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">debug_mode</span> <span class="k">else</span> <span class="p">[</span><span class="s2">&quot;-O3&quot;</span><span class="p">,</span> <span class="s2">&quot;-DNDEBUG&quot;</span><span class="p">]</span>
+    <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">mode_flags</span><span class="p">)</span>
+    <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;nvcc&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">mode_flags</span><span class="p">)</span>
+    <span class="n">extra_link_args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">mode_flags</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">dace_path</span> <span class="o">:=</span> <span class="n">get_dace_module_path</span><span class="p">():</span>
+        <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="s2">&quot;-isystem</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dace_path</span><span class="p">,</span> <span class="s2">&quot;runtime/include&quot;</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;nvcc&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="s2">&quot;-isystem=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dace_path</span><span class="p">,</span> <span class="s2">&quot;runtime/include&quot;</span><span class="p">))</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">add_profile_info</span><span class="p">:</span>
+        <span class="n">profile_flags</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;-pg&quot;</span><span class="p">]</span>
+        <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">profile_flags</span><span class="p">)</span>
+        <span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;nvcc&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">profile_flags</span><span class="p">)</span>
+        <span class="n">extra_link_args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">profile_flags</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">uses_cuda</span><span class="p">:</span>
+        <span class="n">build_opts</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">include_dirs</span><span class="o">=</span><span class="n">include_dirs</span><span class="p">,</span>
+            <span class="n">extra_compile_args</span><span class="o">=</span><span class="n">extra_compile_args</span><span class="p">,</span>
+            <span class="n">extra_link_args</span><span class="o">=</span><span class="n">extra_link_args</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">build_opts</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">include_dirs</span><span class="o">=</span><span class="n">include_dirs</span><span class="p">,</span>
+            <span class="n">extra_compile_args</span><span class="o">=</span><span class="n">extra_compile_args</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">],</span>
+            <span class="n">extra_link_args</span><span class="o">=</span><span class="n">extra_link_args</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">uses_openmp</span><span class="p">:</span>
+        <span class="n">cpp_flags</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;openmp_cppflags&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">uses_cuda</span><span class="p">:</span>
+            <span class="n">cuda_flags</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">cpp_flag</span> <span class="ow">in</span> <span class="n">cpp_flags</span><span class="p">:</span>
+                <span class="n">cuda_flags</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s2">&quot;--compiler-options&quot;</span><span class="p">,</span> <span class="n">cpp_flag</span><span class="p">])</span>
+            <span class="n">build_opts</span><span class="p">[</span><span class="s2">&quot;extra_compile_args&quot;</span><span class="p">][</span><span class="s2">&quot;nvcc&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">cuda_flags</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">cpp_flags</span><span class="p">:</span>
+            <span class="n">build_opts</span><span class="p">[</span><span class="s2">&quot;extra_compile_args&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">cpp_flags</span><span class="p">)</span>
+
+        <span class="n">ld_flags</span> <span class="o">=</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;openmp_ldflags&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ld_flags</span><span class="p">:</span>
+            <span class="n">build_opts</span><span class="p">[</span><span class="s2">&quot;extra_link_args&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">ld_flags</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">build_opts</span></div>
+
+
+<span class="c1"># The following tells mypy to accept unpacking kwargs</span>
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">build_pybind_ext</span><span class="p">(</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">build_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="build_pybind_ext"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.build_pybind_ext">[docs]</a><span class="k">def</span> <span class="nf">build_pybind_ext</span><span class="p">(</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">build_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">include_dirs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">library_dirs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">libraries</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">extra_compile_args</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">extra_link_args</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">build_ext_class</span><span class="p">:</span> <span class="n">Type</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">clean</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+
+    <span class="c1"># Hack to remove warning about &quot;-Wstrict-prototypes&quot; not having effect in C++</span>
+    <span class="n">replaced_flags_backup</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">distutils</span><span class="o">.</span><span class="n">sysconfig</span><span class="o">.</span><span class="n">_config_vars</span><span class="p">)</span>
+    <span class="n">_clean_build_flags</span><span class="p">(</span><span class="n">distutils</span><span class="o">.</span><span class="n">sysconfig</span><span class="o">.</span><span class="n">_config_vars</span><span class="p">)</span>
+
+    <span class="n">include_dirs</span> <span class="o">=</span> <span class="n">include_dirs</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">library_dirs</span> <span class="o">=</span> <span class="n">library_dirs</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">libraries</span> <span class="o">=</span> <span class="n">libraries</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">extra_compile_args</span> <span class="o">=</span> <span class="n">extra_compile_args</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">extra_link_args</span> <span class="o">=</span> <span class="n">extra_link_args</span> <span class="ow">or</span> <span class="p">[]</span>
+
+    <span class="c1"># Build extension module</span>
+    <span class="n">py_extension</span> <span class="o">=</span> <span class="n">setuptools</span><span class="o">.</span><span class="n">Extension</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">,</span>
+        <span class="n">sources</span><span class="p">,</span>
+        <span class="n">include_dirs</span><span class="o">=</span><span class="p">[</span><span class="n">pybind11</span><span class="o">.</span><span class="n">get_include</span><span class="p">(),</span> <span class="n">pybind11</span><span class="o">.</span><span class="n">get_include</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="o">*</span><span class="n">include_dirs</span><span class="p">],</span>
+        <span class="n">library_dirs</span><span class="o">=</span><span class="p">[</span><span class="o">*</span><span class="n">library_dirs</span><span class="p">],</span>
+        <span class="n">libraries</span><span class="o">=</span><span class="p">[</span><span class="o">*</span><span class="n">libraries</span><span class="p">],</span>
+        <span class="n">language</span><span class="o">=</span><span class="s2">&quot;c++&quot;</span><span class="p">,</span>
+        <span class="n">extra_compile_args</span><span class="o">=</span><span class="n">extra_compile_args</span><span class="p">,</span>
+        <span class="n">extra_link_args</span><span class="o">=</span><span class="n">extra_link_args</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">setuptools_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">ext_modules</span><span class="o">=</span><span class="p">[</span><span class="n">py_extension</span><span class="p">],</span>
+        <span class="n">script_args</span><span class="o">=</span><span class="p">[</span>
+            <span class="s2">&quot;build_ext&quot;</span><span class="p">,</span>
+            <span class="c1"># &quot;--parallel={}&quot;.format(gt_config.build_settings[&quot;parallel_jobs&quot;]),</span>
+            <span class="s2">&quot;--build-temp=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">build_path</span><span class="p">),</span>
+            <span class="s2">&quot;--build-lib=</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">build_path</span><span class="p">),</span>
+            <span class="s2">&quot;--force&quot;</span><span class="p">,</span>
+        <span class="p">],</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">build_ext_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">setuptools_args</span><span class="p">[</span><span class="s2">&quot;cmdclass&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;build_ext&quot;</span><span class="p">:</span> <span class="n">build_ext_class</span><span class="p">}</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">setuptools_args</span><span class="p">[</span><span class="s2">&quot;script_args&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;-v&quot;</span><span class="p">)</span>
+        <span class="n">setuptools</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="o">**</span><span class="n">setuptools_args</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">setuptools_args</span><span class="p">[</span><span class="s2">&quot;script_args&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;-q&quot;</span><span class="p">)</span>
+        <span class="n">io_out</span><span class="p">,</span> <span class="n">io_err</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">(),</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">redirect_stdout</span><span class="p">(</span><span class="n">io_out</span><span class="p">),</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">redirect_stderr</span><span class="p">(</span><span class="n">io_err</span><span class="p">):</span>
+            <span class="n">setuptools</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="o">**</span><span class="n">setuptools_args</span><span class="p">)</span>
+
+    <span class="c1"># Copy extension in target path</span>
+    <span class="n">module_name</span> <span class="o">=</span> <span class="n">py_extension</span><span class="o">.</span><span class="n">_full_name</span>
+    <span class="n">file_path</span> <span class="o">=</span> <span class="n">py_extension</span><span class="o">.</span><span class="n">_file_name</span>
+    <span class="n">src_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">build_path</span><span class="p">,</span> <span class="n">file_path</span><span class="p">)</span>
+    <span class="n">dest_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">target_path</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">file_path</span><span class="p">))</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">dest_path</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">distutils</span><span class="o">.</span><span class="n">file_util</span><span class="o">.</span><span class="n">copy_file</span><span class="p">(</span><span class="n">src_path</span><span class="p">,</span> <span class="n">dest_path</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="c1"># Final cleaning</span>
+    <span class="k">if</span> <span class="n">clean</span><span class="p">:</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">build_path</span><span class="p">)</span>
+
+    <span class="c1"># Restore original distutils flag config to not break functionality with &quot;-Wstrict-prototypes&quot;-hack for other</span>
+    <span class="c1"># tools using distutils.</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">replaced_flags_backup</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">distutils</span><span class="o">.</span><span class="n">sysconfig</span><span class="o">.</span><span class="n">_config_vars</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">return</span> <span class="n">module_name</span><span class="p">,</span> <span class="n">dest_path</span></div>
+
+
+<span class="c1"># The following tells mypy to accept unpacking kwargs</span>
+<span class="nd">@overload</span>
+<span class="k">def</span> <span class="nf">build_pybind_cuda_ext</span><span class="p">(</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">build_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="build_pybind_cuda_ext"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.build_pybind_cuda_ext">[docs]</a><span class="k">def</span> <span class="nf">build_pybind_cuda_ext</span><span class="p">(</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">build_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">include_dirs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">library_dirs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">libraries</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">extra_compile_args</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">extra_link_args</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">clean</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+
+    <span class="n">include_dirs</span> <span class="o">=</span> <span class="n">include_dirs</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">include_dirs</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">include_dirs</span><span class="p">,</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cuda_include_path&quot;</span><span class="p">]]</span>
+    <span class="n">library_dirs</span> <span class="o">=</span> <span class="n">library_dirs</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">library_dirs</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">library_dirs</span><span class="p">,</span> <span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cuda_library_path&quot;</span><span class="p">]]</span>
+    <span class="n">libraries</span> <span class="o">=</span> <span class="n">libraries</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">libraries</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">libraries</span><span class="p">,</span> <span class="s2">&quot;cudart&quot;</span><span class="p">]</span>
+    <span class="n">extra_compile_args</span> <span class="o">=</span> <span class="n">extra_compile_args</span> <span class="ow">or</span> <span class="p">[]</span>
+
+    <span class="k">return</span> <span class="n">build_pybind_ext</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">,</span>
+        <span class="n">sources</span><span class="p">,</span>
+        <span class="n">build_path</span><span class="p">,</span>
+        <span class="n">target_path</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+        <span class="n">clean</span><span class="o">=</span><span class="n">clean</span><span class="p">,</span>
+        <span class="n">include_dirs</span><span class="o">=</span><span class="n">include_dirs</span><span class="p">,</span>
+        <span class="n">library_dirs</span><span class="o">=</span><span class="n">library_dirs</span><span class="p">,</span>
+        <span class="n">libraries</span><span class="o">=</span><span class="n">libraries</span><span class="p">,</span>
+        <span class="n">extra_compile_args</span><span class="o">=</span><span class="n">extra_compile_args</span><span class="p">,</span>
+        <span class="n">extra_link_args</span><span class="o">=</span><span class="n">extra_link_args</span><span class="p">,</span>
+        <span class="n">build_ext_class</span><span class="o">=</span><span class="n">CUDABuildExtension</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">_clean_build_flags</span><span class="p">(</span><span class="n">config_vars</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">config_vars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">value</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">s</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;-Wstrict-prototypes&quot;</span><span class="p">,</span> <span class="s2">&quot;-DNDEBUG&quot;</span><span class="p">,</span> <span class="s2">&quot;-pg&quot;</span><span class="p">]</span>
+                    <span class="ow">or</span> <span class="n">s</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;-O&quot;</span><span class="p">)</span>
+                    <span class="ow">or</span> <span class="n">s</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;-g&quot;</span><span class="p">)</span>
+                <span class="p">):</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">s</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">)</span>
+            <span class="n">config_vars</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+
+
+<div class="viewcode-block" id="CUDABuildExtension"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.CUDABuildExtension">[docs]</a><span class="k">class</span> <span class="nc">CUDABuildExtension</span><span class="p">(</span><span class="n">build_ext</span><span class="p">,</span> <span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># Refs:</span>
+    <span class="c1">#   - https://github.com/pytorch/pytorch/torch/utils/cpp_extension.py</span>
+    <span class="c1">#   - https://github.com/rmcgibbo/npcuda-example/blob/master/cython/setup.py</span>
+    <span class="c1">#</span>
+<div class="viewcode-block" id="CUDABuildExtension.build_extensions"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.pyext_builder.CUDABuildExtension.build_extensions">[docs]</a>    <span class="k">def</span> <span class="nf">build_extensions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Register .cu  source extensions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">src_extensions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;.cu&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Save references to the original methods</span>
+        <span class="n">original_compile</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">_compile</span>
+
+        <span class="k">def</span> <span class="nf">nvcc_compile</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">ext</span><span class="p">,</span> <span class="n">cc_args</span><span class="p">,</span> <span class="n">extra_postargs</span><span class="p">,</span> <span class="n">pp_opts</span><span class="p">):</span>
+            <span class="n">original_compiler_so</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">compiler_so</span>
+            <span class="c1"># Copy before we make any modifications.</span>
+            <span class="n">cflags</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">extra_postargs</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">src</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;.cu&quot;</span><span class="p">:</span>
+                    <span class="n">nvcc_exec</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">gt_config</span><span class="o">.</span><span class="n">build_settings</span><span class="p">[</span><span class="s2">&quot;cuda_bin_path&quot;</span><span class="p">],</span> <span class="s2">&quot;nvcc&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">set_executable</span><span class="p">(</span><span class="s2">&quot;compiler_so&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">nvcc_exec</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cflags</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                        <span class="n">cflags</span> <span class="o">=</span> <span class="n">cflags</span><span class="p">[</span><span class="s2">&quot;nvcc&quot;</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cflags</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">cflags</span> <span class="o">=</span> <span class="n">cflags</span><span class="p">[</span><span class="s2">&quot;cxx&quot;</span><span class="p">]</span>
+
+                <span class="n">original_compile</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">ext</span><span class="p">,</span> <span class="n">cc_args</span><span class="p">,</span> <span class="n">cflags</span><span class="p">,</span> <span class="n">pp_opts</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="c1"># Put the original compiler back in place.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">set_executable</span><span class="p">(</span><span class="s2">&quot;compiler_so&quot;</span><span class="p">,</span> <span class="n">original_compiler_so</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">_compile</span> <span class="o">=</span> <span class="n">nvcc_compile</span>
+        <span class="n">build_ext</span><span class="o">.</span><span class="n">build_extensions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compiler</span><span class="o">.</span><span class="n">_compile</span> <span class="o">=</span> <span class="n">original_compile</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

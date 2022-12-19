@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.cuir.oir_to_cuir &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.cuir.oir_to_cuir</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.cuir.oir_to_cuir</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">from</span> <span class="nn">typing_extensions</span> <span class="kn">import</span> <span class="n">Protocol</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.cuir</span> <span class="kn">import</span> <span class="n">cuir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.oir_optimizations.utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">collect_symbol_names</span><span class="p">,</span>
+    <span class="n">compute_horizontal_block_extents</span><span class="p">,</span>
+    <span class="n">symbol_name_creator</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="SymbolNameCreator"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.SymbolNameCreator">[docs]</a><span class="k">class</span> <span class="nc">SymbolNameCreator</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<div class="viewcode-block" id="SymbolNameCreator.__call__"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.SymbolNameCreator.__call__">[docs]</a>    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="o">...</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">_make_axis_offset_expr</span><span class="p">(</span><span class="n">bound</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">,</span> <span class="n">axis_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Expr</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">bound</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LevelMarker</span><span class="o">.</span><span class="n">END</span><span class="p">:</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="n">cuir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">_size&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">([</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">][</span><span class="n">axis_index</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">ArithmeticOperator</span><span class="o">.</span><span class="n">ADD</span><span class="p">,</span>
+            <span class="n">left</span><span class="o">=</span><span class="n">base</span><span class="p">,</span>
+            <span class="n">right</span><span class="o">=</span><span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="OIRToCUIR"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR">[docs]</a><span class="k">class</span> <span class="nc">OIRToCUIR</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+<div class="viewcode-block" id="OIRToCUIR.Context"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.Context">[docs]</a>    <span class="nd">@dataclass</span>
+    <span class="k">class</span> <span class="nc">Context</span><span class="p">:</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">SymbolNameCreator</span>
+        <span class="n">accessed_fields</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">set</span><span class="p">)</span>
+        <span class="n">positionals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Positional</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToCUIR.Context.make_positional"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.Context.make_positional">[docs]</a>        <span class="k">def</span> <span class="nf">make_positional</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">:</span>
+            <span class="n">axis_name</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">,</span> <span class="s2">&quot;k&quot;</span><span class="p">][</span><span class="n">axis</span><span class="p">]</span>
+            <span class="n">positional</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">positionals</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="n">axis</span><span class="p">,</span>
+                <span class="n">cuir</span><span class="o">.</span><span class="n">Positional</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">new_symbol_name</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;axis_</span><span class="si">{</span><span class="n">axis_name</span><span class="si">}</span><span class="s2">_index&quot;</span><span class="p">),</span> <span class="n">axis_name</span><span class="o">=</span><span class="n">axis_name</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">positional</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">,</span>
+            <span class="p">)</span></div></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_Literal"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_Literal">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Literal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_FieldDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_FieldDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_ScalarDecl"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_ScalarDecl">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarDecl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_LocalScalar"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_LocalScalar">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LocalScalar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_UnaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_UnaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_UnaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_BinaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_BinaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BinaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">,</span>
+            <span class="n">left</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_Temporary"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_Temporary">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Temporary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_VariableKOffset"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_VariableKOffset">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VariableKOffset</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">k</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+    <span class="k">def</span> <span class="nf">_mask_to_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;Context&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Expr</span><span class="p">:</span>
+        <span class="n">mask_expr</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">cuir</span><span class="o">.</span><span class="n">Expr</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">axis_index</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mask</span><span class="o">.</span><span class="n">intervals</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">interval</span><span class="o">.</span><span class="n">is_single_index</span><span class="p">():</span>
+                <span class="k">assert</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="n">mask_expr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+                        <span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">EQ</span><span class="p">,</span>
+                        <span class="n">left</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">make_positional</span><span class="p">(</span><span class="n">axis_index</span><span class="p">),</span>
+                        <span class="n">right</span><span class="o">=</span><span class="n">_make_axis_offset_expr</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">axis_index</span><span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">endpt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">GE</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">ComparisonOperator</span><span class="o">.</span><span class="n">LT</span><span class="p">),</span>
+                    <span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">),</span>
+                <span class="p">):</span>
+                    <span class="k">if</span> <span class="n">endpt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">mask_expr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span>
+                            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span>
+                            <span class="n">left</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">make_positional</span><span class="p">(</span><span class="n">axis_index</span><span class="p">),</span>
+                            <span class="n">right</span><span class="o">=</span><span class="n">_make_axis_offset_expr</span><span class="p">(</span><span class="n">endpt</span><span class="p">,</span> <span class="n">axis_index</span><span class="p">),</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">functools</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">(</span><span class="n">op</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">LogicalOperator</span><span class="o">.</span><span class="n">AND</span><span class="p">,</span> <span class="n">left</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="n">b</span><span class="p">),</span>
+                <span class="n">mask_expr</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">mask_expr</span>
+            <span class="k">else</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Literal</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">)</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_HorizontalRestriction"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_HorizontalRestriction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalRestriction</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">:</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask_to_expr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;ctx&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_FieldAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">ij_caches</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheDecl</span><span class="p">],</span>
+        <span class="n">k_caches</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheDecl</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;Context&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheAccess</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheAccess</span><span class="p">]:</span>
+        <span class="n">data_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span>
+            <span class="n">ij_caches</span><span class="o">=</span><span class="n">ij_caches</span><span class="p">,</span>
+            <span class="n">k_caches</span><span class="o">=</span><span class="n">k_caches</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+            <span class="n">ij_caches</span><span class="o">=</span><span class="n">ij_caches</span><span class="p">,</span>
+            <span class="n">k_caches</span><span class="o">=</span><span class="n">k_caches</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">ij_caches</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheAccess</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">ij_caches</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">data_index</span><span class="o">=</span><span class="n">data_index</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">k_caches</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheAccess</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">k_caches</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">data_index</span><span class="o">=</span><span class="n">data_index</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">accessed_fields</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
+            <span class="n">data_index</span><span class="o">=</span><span class="n">data_index</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_ScalarAccess"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_ScalarAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_ScalarAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">cuir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">symtable</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarDecl</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_AssignStmt"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">(</span>
+            <span class="n">left</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">right</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_MaskStmt"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">(</span>
+            <span class="n">mask</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_While"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_While">[docs]</a>    <span class="k">def</span> <span class="nf">visit_While</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">While</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">While</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">While</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_Cast"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_Cast">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Cast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Cast</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Cast</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Cast</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_NativeFuncCall"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_NativeFuncCall">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFuncCall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">(</span>
+            <span class="n">func</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_TernaryOp"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_TernaryOp">[docs]</a>    <span class="k">def</span> <span class="nf">visit_TernaryOp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">(</span>
+            <span class="n">cond</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">true_expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">true_expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">false_expr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">false_expr</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_HorizontalExecution"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_HorizontalExecution">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalExecution</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">:</span>
+        <span class="n">block_extents</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;block_extents&quot;</span><span class="p">][</span><span class="nb">id</span><span class="p">(</span><span class="n">node</span><span class="p">)]</span>
+        <span class="n">extent</span> <span class="o">=</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJExtent</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="n">block_extents</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">j</span><span class="o">=</span><span class="n">block_extents</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">(</span>
+            <span class="n">body</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">declarations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">),</span>
+            <span class="n">extent</span><span class="o">=</span><span class="n">extent</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">,</span>
+            <span class="n">horizontal_executions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;Context&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Kernel</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">fill</span> <span class="ow">or</span> <span class="n">c</span><span class="o">.</span><span class="n">flush</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">))</span>
+        <span class="n">ij_caches</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">IJCacheDecl</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">new_symbol_name</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">IJCache</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">k_caches</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">cuir</span><span class="o">.</span><span class="n">KCacheDecl</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">new_symbol_name</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Kernel</span><span class="p">(</span>
+            <span class="n">vertical_loops</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">cuir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">(</span>
+                    <span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+                    <span class="n">sections</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                        <span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">,</span>
+                        <span class="n">ij_caches</span><span class="o">=</span><span class="n">ij_caches</span><span class="p">,</span>
+                        <span class="n">k_caches</span><span class="o">=</span><span class="n">k_caches</span><span class="p">,</span>
+                        <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+                        <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+                        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">ij_caches</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">ij_caches</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+                    <span class="n">k_caches</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">k_caches</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+                <span class="p">)</span>
+            <span class="p">],</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="OIRToCUIR.visit_Stencil"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.cuir.html#gt4py.cartesian.gtc.cuir.oir_to_cuir.OIRToCUIR.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Program</span><span class="p">:</span>
+        <span class="n">block_extents</span> <span class="o">=</span> <span class="n">compute_horizontal_block_extents</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Context</span><span class="p">(</span>
+            <span class="n">new_symbol_name</span><span class="o">=</span><span class="n">cast</span><span class="p">(</span><span class="n">SymbolNameCreator</span><span class="p">,</span> <span class="n">symbol_name_creator</span><span class="p">(</span><span class="n">collect_symbol_names</span><span class="p">(</span><span class="n">node</span><span class="p">)))</span>
+        <span class="p">)</span>
+        <span class="n">kernels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">,</span>
+            <span class="n">block_extents</span><span class="o">=</span><span class="n">block_extents</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">temporaries</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span> <span class="k">if</span> <span class="n">d</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">accessed_fields</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">cuir</span><span class="o">.</span><span class="n">Program</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">),</span>
+            <span class="n">positionals</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">positionals</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+            <span class="n">temporaries</span><span class="o">=</span><span class="n">temporaries</span><span class="p">,</span>
+            <span class="n">kernels</span><span class="o">=</span><span class="n">kernels</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

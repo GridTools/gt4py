@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.gtir &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.gtir</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.gtir</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">GridTools Intermediate Representation.</span>
+
+<span class="sd">GTIR represents a computation with the semantics of the</span>
+<span class="sd">`GTScript parallel model &lt;https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model&gt;`.</span>
+
+<span class="sd">Type constraints and validators narrow the IR as much as reasonable to valid (executable) IR.</span>
+
+<span class="sd">Analysis is required to generate valid code (complying with the parallel model)</span>
+<span class="sd">- extent analysis to define the extended compute domain</span>
+<span class="sd">- `FieldIfStmt` expansion to comply with the parallel model</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="n">AxisBound</span><span class="p">,</span> <span class="n">LocNode</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">datamodels</span>
+
+
+<div class="viewcode-block" id="Expr"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Expr">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Expr</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Stmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Stmt">[docs]</a><span class="nd">@eve</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">noninstantiable</span>
+<span class="k">class</span> <span class="nc">Stmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BlockStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.BlockStmt">[docs]</a><span class="k">class</span> <span class="nc">BlockStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BlockStmt</span><span class="p">[</span><span class="n">Stmt</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Literal"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Literal">[docs]</a><span class="k">class</span> <span class="nc">Literal</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VariableKOffset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.VariableKOffset">[docs]</a><span class="k">class</span> <span class="nc">VariableKOffset</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">[</span><span class="n">Expr</span><span class="p">]):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ScalarAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ScalarAccess">[docs]</a><span class="k">class</span> <span class="nc">ScalarAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">,</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="FieldAccess"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.FieldAccess">[docs]</a><span class="k">class</span> <span class="nc">FieldAccess</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">[</span><span class="n">Expr</span><span class="p">,</span> <span class="n">VariableKOffset</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="ParAssignStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ParAssignStmt">[docs]</a><span class="k">class</span> <span class="nc">ParAssignStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">[</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parallel assignment.</span>
+
+<span class="sd">    R.h.s. is evaluated for all points and the resulting field is assigned</span>
+<span class="sd">    (GTScript parallel model).</span>
+<span class="sd">    Scalar variables on the l.h.s. are not allowed,</span>
+<span class="sd">    as the only scalar variables are read-only stencil parameters.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ParAssignStmt.no_horizontal_offset_in_assignment"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ParAssignStmt.no_horizontal_offset_in_assignment">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">no_horizontal_offset_in_assignment</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">FieldAccess</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">offsets</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offsets</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Lhs of assignment must not have a horizontal offset.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ParAssignStmt.no_write_and_read_with_offset_of_same_field"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ParAssignStmt.no_write_and_read_with_offset_of_same_field">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">no_write_and_read_with_offset_of_same_field</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;ParAssignStmt&quot;</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="s2">&quot;ParAssignStmt&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">):</span>
+            <span class="n">offset_reads</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">_cartesian_fieldaccess</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">acc</span><span class="p">:</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">i</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">j</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span> <span class="o">|</span> <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">right</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">_variablek_fieldaccess</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span>
+                <span class="s2">&quot;name&quot;</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">offset_reads</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Self-assignment with offset is illegal.&quot;</span><span class="p">)</span></div>
+
+    <span class="n">_dtype_validation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">assign_stmt_dtype_validation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FieldIfStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.FieldIfStmt">[docs]</a><span class="k">class</span> <span class="nc">FieldIfStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">[</span><span class="n">BlockStmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    If statement with a field expression as condition.</span>
+
+<span class="sd">    - The condition is evaluated for all gridpoints and stored in a mask.</span>
+<span class="sd">    - Each statement inside the if and else branches is executed according</span>
+<span class="sd">      to the same rules as statements outside of branches.</span>
+
+<span class="sd">    The following restriction applies:</span>
+
+<span class="sd">    - Inside the if and else blocks the same field cannot be written to</span>
+<span class="sd">      and read with an offset in the parallel axes (order does not matter).</span>
+
+<span class="sd">    See `parallel model</span>
+<span class="sd">    &lt;https://github.com/GridTools/concepts/wiki/GTScript-Parallel-model#conditionals-on-field-expressions&gt;`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="FieldIfStmt.verify_scalar_condition"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.FieldIfStmt.verify_scalar_condition">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;cond&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">verify_scalar_condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Condition is not a field expression&quot;</span><span class="p">)</span></div></div>
+
+    <span class="c1"># TODO(havogt) add validator for the restriction (it&#39;s a pass over the subtrees...)</span>
+
+
+<div class="viewcode-block" id="ScalarIfStmt"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ScalarIfStmt">[docs]</a><span class="k">class</span> <span class="nc">ScalarIfStmt</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">IfStmt</span><span class="p">[</span><span class="n">BlockStmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    If statement with a scalar expression as condition.</span>
+
+<span class="sd">    No special rules apply.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ScalarIfStmt.verify_scalar_condition"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ScalarIfStmt.verify_scalar_condition">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;cond&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">verify_scalar_condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">ExprKind</span><span class="o">.</span><span class="n">SCALAR</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Condition is not scalar&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="HorizontalRestriction"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.HorizontalRestriction">[docs]</a><span class="k">class</span> <span class="nc">HorizontalRestriction</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">[</span><span class="n">Stmt</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="While"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.While">[docs]</a><span class="k">class</span> <span class="nc">While</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">While</span><span class="p">[</span><span class="n">Stmt</span><span class="p">,</span> <span class="n">Expr</span><span class="p">],</span> <span class="n">Stmt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;While loop with a field or scalar expression as condition.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="While._no_write_and_read_with_horizontal_offset_all"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.While._no_write_and_read_with_horizontal_offset_all">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">validator</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_no_write_and_read_with_horizontal_offset_all</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">:</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">Attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;In a while loop all variables must not be written and read with a horizontal offset.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">names</span> <span class="o">:=</span> <span class="n">_written_and_read_with_offset</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Illegal write and read with horizontal offset detected for </span><span class="si">{</span><span class="n">names</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="UnaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.UnaryOp">[docs]</a><span class="k">class</span> <span class="nc">UnaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">UnaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BinaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.BinaryOp">[docs]</a><span class="k">class</span> <span class="nc">BinaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">BinaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_validator</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">binary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="TernaryOp"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.TernaryOp">[docs]</a><span class="k">class</span> <span class="nc">TernaryOp</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">TernaryOp</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">ternary_op_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Cast"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Cast">[docs]</a><span class="k">class</span> <span class="nc">Cast</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">Cast</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>  <span class="c1"># type: ignore</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="NativeFuncCall"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.NativeFuncCall">[docs]</a><span class="k">class</span> <span class="nc">NativeFuncCall</span><span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">[</span><span class="n">Expr</span><span class="p">],</span> <span class="n">Expr</span><span class="p">):</span>
+    <span class="n">_dtype_propagation</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">native_func_call_dtype_propagation</span><span class="p">(</span><span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Decl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Decl">[docs]</a><span class="k">class</span> <span class="nc">Decl</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>  <span class="c1"># TODO probably Stmt</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Coerced</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolName</span><span class="p">]</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Decl</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Trying to instantiate `Decl` abstract class.&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FieldDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.FieldDecl">[docs]</a><span class="k">class</span> <span class="nc">FieldDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="n">dimensions</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span>
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">eve</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">tuple</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ScalarDecl"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.ScalarDecl">[docs]</a><span class="k">class</span> <span class="nc">ScalarDecl</span><span class="p">(</span><span class="n">Decl</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Interval"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Interval">[docs]</a><span class="k">class</span> <span class="nc">Interval</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">start</span><span class="p">:</span> <span class="n">AxisBound</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">AxisBound</span></div>
+
+
+<span class="c1"># TODO(havogt) should vertical loop open a scope?</span>
+<div class="viewcode-block" id="VerticalLoop"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.VerticalLoop">[docs]</a><span class="k">class</span> <span class="nc">VerticalLoop</span><span class="p">(</span><span class="n">LocNode</span><span class="p">):</span>
+    <span class="n">interval</span><span class="p">:</span> <span class="n">Interval</span>
+    <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span>
+    <span class="n">temporaries</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FieldDecl</span><span class="p">]</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">]</span>
+
+<div class="viewcode-block" id="VerticalLoop._no_write_and_read_with_horizontal_offset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.VerticalLoop._no_write_and_read_with_horizontal_offset">[docs]</a>    <span class="nd">@datamodels</span><span class="o">.</span><span class="n">root_validator</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_no_write_and_read_with_horizontal_offset</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;VerticalLoop&quot;</span><span class="p">],</span> <span class="n">instance</span><span class="p">:</span> <span class="s2">&quot;VerticalLoop&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        In the same VerticalLoop a field must not be written and read with a horizontal offset.</span>
+
+<span class="sd">        Temporaries don&#39;t have this constraint. Backends are required to implement</span>
+<span class="sd">        them using block-private halos.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">intersec</span> <span class="o">=</span> <span class="n">_written_and_read_with_offset</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+        <span class="n">non_tmp_fields</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">acc</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">intersec</span> <span class="k">if</span> <span class="n">acc</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="n">tmp</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tmp</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">temporaries</span><span class="p">}</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">non_tmp_fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Illegal write and read with horizontal offset detected for </span><span class="si">{</span><span class="n">non_tmp_fields</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Argument"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Argument">[docs]</a><span class="k">class</span> <span class="nc">Argument</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">is_keyword</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">default</span><span class="p">:</span> <span class="nb">str</span></div>
+
+
+<div class="viewcode-block" id="Stencil"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir.Stencil">[docs]</a><span class="k">class</span> <span class="nc">Stencil</span><span class="p">(</span><span class="n">LocNode</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">ValidatedSymbolTableTrait</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">api_signature</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Argument</span><span class="p">]</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Decl</span><span class="p">]</span>
+    <span class="n">vertical_loops</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">VerticalLoop</span><span class="p">]</span>
+    <span class="n">externals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Literal</span><span class="p">]</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+    <span class="n">docstring</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">param_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
+
+    <span class="n">_validate_lvalue_dims</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">validate_lvalue_dims</span><span class="p">(</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="n">FieldDecl</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">_cartesian_fieldaccess</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">VariableKOffset</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_variablek_fieldaccess</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">FieldAccess</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">VariableKOffset</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="_written_and_read_with_offset"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.gtir._written_and_read_with_offset">[docs]</a><span class="k">def</span> <span class="nf">_written_and_read_with_offset</span><span class="p">(</span><span class="n">stmts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Return a list of names that are written to and read with offset.&quot;&quot;&quot;</span>
+    <span class="c1"># TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode</span>
+    <span class="k">def</span> <span class="nf">_writes</span><span class="p">(</span><span class="n">stmts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">left</span> <span class="ow">in</span> <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">ParAssignStmt</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;left&quot;</span><span class="p">):</span>
+            <span class="n">result</span> <span class="o">|=</span> <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">left</span><span class="p">)</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">FieldAccess</span><span class="p">)</span><span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">_reads_with_offset</span><span class="p">(</span><span class="n">stmts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">eve</span><span class="o">.</span><span class="n">walk_values</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">_cartesian_fieldaccess</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">acc</span><span class="p">:</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">i</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">acc</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">j</span> <span class="o">!=</span> <span class="mi">0</span>
+            <span class="p">)</span>  <span class="c1"># writes always have zero offset</span>
+            <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="n">writes</span> <span class="o">=</span> <span class="n">_writes</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span>
+    <span class="n">reads_with_offset</span> <span class="o">=</span> <span class="n">_reads_with_offset</span><span class="p">(</span><span class="n">stmts</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">writes</span> <span class="o">&amp;</span> <span class="n">reads_with_offset</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

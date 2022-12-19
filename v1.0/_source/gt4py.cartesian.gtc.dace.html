@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace package &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="gt4py.cartesian.gtc.dace.expansion package" href="gt4py.cartesian.gtc.dace.expansion.html" />
+    <link rel="prev" title="gt4py.cartesian.gtc.cuir package" href="gt4py.cartesian.gtc.cuir.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../apiref.html">API Documentation</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="modules.html">gt4py</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="gt4py.html">gt4py package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="gt4py.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gt4py.html#module-gt4py">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../apiref.html">API Documentation</a></li>
+          <li class="breadcrumb-item"><a href="modules.html">gt4py</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.html">gt4py package</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.cartesian.html">gt4py.cartesian package</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.cartesian.gtc.html">gt4py.cartesian.gtc package</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_source/gt4py.cartesian.gtc.dace.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gt4py-cartesian-gtc-dace-package">
+<h1>gt4py.cartesian.gtc.dace package<a class="headerlink" href="#gt4py-cartesian-gtc-dace-package" title="Permalink to this headline"></a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html">gt4py.cartesian.gtc.dace.expansion package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion.daceir_builder">gt4py.cartesian.gtc.dace.expansion.daceir_builder module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion.expansion">gt4py.cartesian.gtc.dace.expansion.expansion module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion.sdfg_builder">gt4py.cartesian.gtc.dace.expansion.sdfg_builder module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion.tasklet_codegen">gt4py.cartesian.gtc.dace.expansion.tasklet_codegen module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion.utils">gt4py.cartesian.gtc.dace.expansion.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gt4py.cartesian.gtc.dace.expansion.html#module-gt4py.cartesian.gtc.dace.expansion">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.expansion_specification">
+<span id="gt4py-cartesian-gtc-dace-expansion-specification-module"></span><h2>gt4py.cartesian.gtc.dace.expansion_specification module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.expansion_specification" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">ExpansionItem</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#ExpansionItem"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Iteration">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">Iteration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis" title="gt4py.cartesian.gtc.daceir.Axis"><span class="pre">gt4py.cartesian.gtc.daceir.Axis</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#Iteration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Iteration.axis">
+<span class="sig-name descname"><span class="pre">axis</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis" title="gt4py.cartesian.gtc.daceir.Axis"><span class="pre">gt4py.cartesian.gtc.daceir.Axis</span></a></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration.axis" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Iteration.iterations">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">iterations</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="gt4py.cartesian.gtc.dace.expansion_specification.Iteration"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.Iteration</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration.iterations" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Iteration.kind">
+<span class="sig-name descname"><span class="pre">kind</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration.kind" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Iteration.stride">
+<span class="sig-name descname"><span class="pre">stride</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration.stride" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Loop">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">Loop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis" title="gt4py.cartesian.gtc.daceir.Axis"><span class="pre">gt4py.cartesian.gtc.daceir.Axis</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'contiguous'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">storage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dace.dtypes.StorageType</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#Loop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Loop" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="gt4py.cartesian.gtc.dace.expansion_specification.Iteration"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.Iteration</span></code></a>, <a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></code></a></p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Loop.iterations">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">iterations</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="gt4py.cartesian.gtc.dace.expansion_specification.Iteration"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.Iteration</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Loop.iterations" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Loop.kind">
+<span class="sig-name descname"><span class="pre">kind</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'contiguous'</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Loop.kind" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Loop.storage">
+<span class="sig-name descname"><span class="pre">storage</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dace.dtypes.StorageType</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Loop.storage" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Map">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">Map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">iterations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="gt4py.cartesian.gtc.dace.expansion_specification.Iteration"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.Iteration</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schedule</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dace.dtypes.ScheduleType</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#Map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Map" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Map.iterations">
+<span class="sig-name descname"><span class="pre">iterations</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.Iteration" title="gt4py.cartesian.gtc.dace.expansion_specification.Iteration"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.Iteration</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Map.iterations" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Map.schedule">
+<span class="sig-name descname"><span class="pre">schedule</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">dace.dtypes.ScheduleType</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Map.schedule" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Sections">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">Sections</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#Sections"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Sections" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.Stages">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">Stages</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#Stages"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.Stages" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></code></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification._populate_strides">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">_populate_strides</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expansion_specification</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#_populate_strides"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification._populate_strides" title="Permalink to this definition"></a></dt>
+<dd><p>Fill in <cite>stride</cite> attribute of <cite>Iteration</cite> and <cite>Loop</cite> dataclasses.</p>
+<p>For loops, stride is set to either -1 or 1, based on iteration order.
+For tiling maps, the stride is chosen such that the resulting tile size
+is that of the tile_size attribute.
+Other maps get stride 1.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_axis">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">get_expansion_order_axis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">item</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#get_expansion_order_axis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_axis" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_index">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">get_expansion_order_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expansion_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#get_expansion_order_index"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.get_expansion_order_index" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.is_expansion_order_valid">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">is_expansion_order_valid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation" title="gt4py.cartesian.gtc.dace.nodes.StencilComputation"><span class="pre">StencilComputation</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">expansion_order</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#is_expansion_order_valid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.is_expansion_order_valid" title="Permalink to this definition"></a></dt>
+<dd><p>Check if a given expansion specification valid.</p>
+<p>That is, it is semantically valid for the StencilComputation node that is to be configured and currently
+implemented.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.expansion_specification.make_expansion_order">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.</span></span><span class="sig-name descname"><span class="pre">make_expansion_order</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation" title="gt4py.cartesian.gtc.dace.nodes.StencilComputation"><span class="pre">StencilComputation</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">expansion_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem" title="gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem"><span class="pre">gt4py.cartesian.gtc.dace.expansion_specification.ExpansionItem</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/expansion_specification.html#make_expansion_order"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.expansion_specification.make_expansion_order" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.nodes">
+<span id="gt4py-cartesian-gtc-dace-nodes-module"></span><h2>gt4py.cartesian.gtc.dace.nodes module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.nodes" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledDataclassProperty">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.nodes.</span></span><span class="sig-name descname"><span class="pre">PickledDataclassProperty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">getter=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">setter=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype:</span> <span class="pre">typing.Optional[typing.Type[dace.properties.T]]</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">from_string=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_string=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">from_json=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_json=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">meta_to_json=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">choices=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unmapped=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_none=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indirected=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">category='General'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desc=''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional_condition=&lt;function</span> <span class="pre">Property.&lt;lambda&gt;&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledDataclassProperty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledDataclassProperty" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty" title="gt4py.cartesian.gtc.dace.nodes.PickledProperty"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.nodes.PickledProperty</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.properties.DataclassProperty</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledDictProperty">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.nodes.</span></span><span class="sig-name descname"><span class="pre">PickledDictProperty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_type</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledDictProperty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledDictProperty" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty" title="gt4py.cartesian.gtc.dace.nodes.PickledProperty"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.nodes.PickledProperty</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.properties.DictProperty</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledListProperty">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.nodes.</span></span><span class="sig-name descname"><span class="pre">PickledListProperty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">element_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dace.properties.T</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledListProperty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledListProperty" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty" title="gt4py.cartesian.gtc.dace.nodes.PickledProperty"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.gtc.dace.nodes.PickledProperty</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.properties.ListProperty</span></code></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledProperty">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.nodes.</span></span><span class="sig-name descname"><span class="pre">PickledProperty</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledProperty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledProperty.from_json">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdfg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledProperty.from_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty.from_json" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.PickledProperty.to_json">
+<span class="sig-name descname"><span class="pre">to_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#PickledProperty.to_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.PickledProperty.to_json" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.nodes.</span></span><span class="sig-name descname"><span class="pre">StencilComputation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#StencilComputation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.sdfg.nodes.LibraryNode</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.access_infos">
+<span class="sig-name descname"><span class="pre">access_infos</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.access_infos" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type dict</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.declarations">
+<span class="sig-name descname"><span class="pre">declarations</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.declarations" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type dict</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.default_implementation">
+<span class="sig-name descname"><span class="pre">default_implementation</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'default'</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.default_implementation" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.device">
+<span class="sig-name descname"><span class="pre">device</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.device" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type DeviceType</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.expansion_specification">
+<span class="sig-name descname"><span class="pre">expansion_specification</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.expansion_specification" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type list</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.extents">
+<span class="sig-name descname"><span class="pre">extents</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.extents" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type dict</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.field_decls">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">field_decls</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.FieldDecl" title="gt4py.cartesian.gtc.oir.FieldDecl"><span class="pre">gt4py.cartesian.gtc.oir.FieldDecl</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.field_decls" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.free_symbols">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">free_symbols</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Set</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.free_symbols" title="Permalink to this definition"></a></dt>
+<dd><p>Returns a set of symbols used in this node’s properties.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.get_extents">
+<span class="sig-name descname"><span class="pre">get_extents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">he</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#StencilComputation.get_extents"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.get_extents" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.has_splittable_regions">
+<span class="sig-name descname"><span class="pre">has_splittable_regions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/nodes.html#StencilComputation.has_splittable_regions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.has_splittable_regions" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.implementations">
+<span class="sig-name descname"><span class="pre">implementations</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dace.transformation.transformation.ExpandTransformation</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'default':</span> <span class="pre">&lt;class</span> <span class="pre">'gt4py.cartesian.gtc.dace.expansion.expansion.StencilComputationExpansion'&gt;}</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.implementations" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.oir_node">
+<span class="sig-name descname"><span class="pre">oir_node</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.oir_node" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type VerticalLoop</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.properties">
+<span class="sig-name descname"><span class="pre">properties</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.properties" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.symbol_mapping">
+<span class="sig-name descname"><span class="pre">symbol_mapping</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.symbol_mapping" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type dict</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_sizes">
+<span class="sig-name descname"><span class="pre">tile_sizes</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_sizes" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type dict</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_sizes_interpretation">
+<span class="sig-name descname"><span class="pre">tile_sizes_interpretation</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_sizes_interpretation" title="Permalink to this definition"></a></dt>
+<dd><p>Object property of type str</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_strides">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tile_strides</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.nodes.StencilComputation.tile_strides" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.oir_to_dace">
+<span id="gt4py-cartesian-gtc-dace-oir-to-dace-module"></span><h2>gt4py.cartesian.gtc.dace.oir_to_dace module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.oir_to_dace" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.oir_to_dace.</span></span><span class="sig-name descname"><span class="pre">OirSDFGBuilder</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="gt4py.eve.html#gt4py.eve.visitors.NodeVisitor" title="gt4py.eve.visitors.NodeVisitor"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.visitors.NodeVisitor</span></code></a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SDFGContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stencil</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Stencil" title="gt4py.cartesian.gtc.oir.Stencil"><span class="pre">gt4py.cartesian.gtc.oir.Stencil</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.SDFGContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.access_infos">
+<span class="sig-name descname"><span class="pre">access_infos</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.access_infos" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.block_extents">
+<span class="sig-name descname"><span class="pre">block_extents</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.definitions.Extent" title="gt4py.cartesian.gtc.definitions.Extent"><span class="pre">gt4py.cartesian.gtc.definitions.Extent</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.block_extents" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.decls">
+<span class="sig-name descname"><span class="pre">decls</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Decl" title="gt4py.cartesian.gtc.oir.Decl"><span class="pre">gt4py.cartesian.gtc.oir.Decl</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.decls" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.last_state">
+<span class="sig-name descname"><span class="pre">last_state</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dace.sdfg.state.SDFGState</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.last_state" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_input_dace_subset">
+<span class="sig-name descname"><span class="pre">make_input_dace_subset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.SDFGContext.make_input_dace_subset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_input_dace_subset" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_output_dace_subset">
+<span class="sig-name descname"><span class="pre">make_output_dace_subset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.SDFGContext.make_output_dace_subset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_output_dace_subset" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_shape">
+<span class="sig-name descname"><span class="pre">make_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">field</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.SDFGContext.make_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.make_shape" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.sdfg">
+<span class="sig-name descname"><span class="pre">sdfg</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dace.sdfg.sdfg.SDFG</span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext.sdfg" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.visit_Stencil">
+<span class="sig-name descname"><span class="pre">visit_Stencil</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.Stencil" title="gt4py.cartesian.gtc.oir.Stencil"><span class="pre">gt4py.cartesian.gtc.oir.Stencil</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.visit_Stencil"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.visit_Stencil" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.visit_VerticalLoop">
+<span class="sig-name descname"><span class="pre">visit_VerticalLoop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoop" title="gt4py.cartesian.gtc.oir.VerticalLoop"><span class="pre">gt4py.cartesian.gtc.oir.VerticalLoop</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext" title="gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext"><span class="pre">gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.SDFGContext</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/oir_to_dace.html#OirSDFGBuilder.visit_VerticalLoop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.oir_to_dace.OirSDFGBuilder.visit_VerticalLoop" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.symbol_utils">
+<span id="gt4py-cartesian-gtc-dace-symbol-utils-module"></span><h2>gt4py.cartesian.gtc.dace.symbol_utils module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.symbol_utils" title="Permalink to this headline"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.symbol_utils.data_type_to_dace_typeclass">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.symbol_utils.</span></span><span class="sig-name descname"><span class="pre">data_type_to_dace_typeclass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/symbol_utils.html#data_type_to_dace_typeclass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.symbol_utils.data_type_to_dace_typeclass" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_dace_symbol">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.symbol_utils.</span></span><span class="sig-name descname"><span class="pre">get_axis_bound_dace_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis_bound</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dcir.AxisBound</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/symbol_utils.html#get_axis_bound_dace_symbol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_dace_symbol" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_diff_str">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.symbol_utils.</span></span><span class="sig-name descname"><span class="pre">get_axis_bound_diff_str</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis_bound1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis_bound2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/symbol_utils.html#get_axis_bound_diff_str"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_diff_str" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_str">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.symbol_utils.</span></span><span class="sig-name descname"><span class="pre">get_axis_bound_str</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis_bound</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/symbol_utils.html#get_axis_bound_str"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.symbol_utils.get_axis_bound_str" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.symbol_utils.get_dace_symbol">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.symbol_utils.</span></span><span class="sig-name descname"><span class="pre">get_dace_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.SymbolRef" title="gt4py.eve.concepts.SymbolRef"><span class="pre">gt4py.eve.concepts.SymbolRef</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.common.DataType" title="gt4py.cartesian.gtc.common.DataType"><span class="pre">gt4py.cartesian.gtc.common.DataType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">DataType.INT32</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/symbol_utils.html#get_dace_symbol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.symbol_utils.get_dace_symbol" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.transformations">
+<span id="gt4py-cartesian-gtc-dace-transformations-module"></span><h2>gt4py.cartesian.gtc.dace.transformations module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.transformations" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.transformations.</span></span><span class="sig-name descname"><span class="pre">InlineThreadLocalTransients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#InlineThreadLocalTransients"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.transformation.transformation.SingleStateTransformation</span></code></p>
+<p>Inline and tile thread-local transients.</p>
+<p>Inlines transients like <cite>dace.transformations.interstate.InlineTransients</cite>, however only applies to OpenMP map
+scopes but also makes the resulting local arrays persistent and thread-local. This reproduces <cite>cpu_kfirst</cite>-style
+transient tiling.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.apply">
+<span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdfg</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#InlineThreadLocalTransients.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.apply" title="Permalink to this definition"></a></dt>
+<dd><p>Applies this transformation instance on the matched pattern graph.
+:param sdfg: The SDFG to apply the transformation to.
+:return: A transformation-defined return value, which could be used</p>
+<blockquote>
+<div><p>to pass analysis data out, or nothing.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.can_be_applied">
+<span class="sig-name descname"><span class="pre">can_be_applied</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">permissive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#InlineThreadLocalTransients.can_be_applied"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.can_be_applied" title="Permalink to this definition"></a></dt>
+<dd><p>Returns True if this transformation can be applied on the candidate matched subgraph.
+:param graph: SDFGState object in which the match was found.
+:param candidate: A mapping between node IDs returned from</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">PatternTransformation.expressions</span></code> and the nodes in
+<code class="docutils literal notranslate"><span class="pre">graph</span></code>.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expr_index</strong> – The list index from <code class="docutils literal notranslate"><span class="pre">PatternTransformation.expressions</span></code>
+that was matched.</p></li>
+<li><p><strong>sdfg</strong> – The parent SDFG of the matched state.</p></li>
+<li><p><strong>permissive</strong> – Whether transformation should run in permissive mode.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the transformation can be applied.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.expressions">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">expressions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#InlineThreadLocalTransients.expressions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.expressions" title="Permalink to this definition"></a></dt>
+<dd><p>Returns a list of SDFG state subgraphs that will be matched in the
+subgraph isomorphism phase. Used as a pre-pass before calling
+<code class="docutils literal notranslate"><span class="pre">can_be_applied</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.map_entry">
+<span class="sig-name descname"><span class="pre">map_entry</span></span><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.map_entry" title="Permalink to this definition"></a></dt>
+<dd><p>Static field wrapper of a node or an SDFG state that designates it as part
+of a subgraph pattern. These objects are used in subclasses of
+<code class="docutils literal notranslate"><span class="pre">PatternTransformation</span></code> to represent the subgraph patterns.</p>
+<p>Example use:
+<a href="#id1"><span class="problematic" id="id2">``</span></a>`
+class MyTransformation(SingleStateTransformation):</p>
+<blockquote>
+<div><p>some_map_node = PatternNode(nodes.MapEntry)
+array = PatternNode(nodes.AccessNode)</p>
+</div></blockquote>
+<p><a href="#id3"><span class="problematic" id="id4">``</span></a><a href="#id5"><span class="problematic" id="id6">`</span></a></p>
+<p>The two nodes can then be used in the transformation static methods (e.g.,
+<code class="docutils literal notranslate"><span class="pre">expressions</span></code>, <code class="docutils literal notranslate"><span class="pre">can_be_applied</span></code>) to represent the nodes, and in the instance
+methods to point to the nodes in the parent SDFG.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.transformations.</span></span><span class="sig-name descname"><span class="pre">NoEmptyEdgeTrivialMapElimination</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#NoEmptyEdgeTrivialMapElimination"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">dace.transformation.dataflow.trivial_map_elimination.TrivialMapElimination</span></code></p>
+<p>Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination.can_be_applied">
+<span class="sig-name descname"><span class="pre">can_be_applied</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">permissive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#NoEmptyEdgeTrivialMapElimination.can_be_applied"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination.can_be_applied" title="Permalink to this definition"></a></dt>
+<dd><p>Returns True if this transformation can be applied on the candidate matched subgraph.
+:param graph: SDFGState object in which the match was found.
+:param candidate: A mapping between node IDs returned from</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">PatternTransformation.expressions</span></code> and the nodes in
+<code class="docutils literal notranslate"><span class="pre">graph</span></code>.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expr_index</strong> – The list index from <code class="docutils literal notranslate"><span class="pre">PatternTransformation.expressions</span></code>
+that was matched.</p></li>
+<li><p><strong>sdfg</strong> – The parent SDFG of the matched state.</p></li>
+<li><p><strong>permissive</strong> – Whether transformation should run in permissive mode.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the transformation can be applied.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.transformations.nest_sequential_map_scopes">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.transformations.</span></span><span class="sig-name descname"><span class="pre">nest_sequential_map_scopes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sdfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dace.sdfg.sdfg.SDFG</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/transformations.html#nest_sequential_map_scopes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.transformations.nest_sequential_map_scopes" title="Permalink to this definition"></a></dt>
+<dd><p>Nest map scopes of sequential maps.</p>
+<p>Nest scope subgraphs of sequential maps in NestedSDFG’s to force eagerly offsetting pointers on each iteration, to
+avoid more complex pointer arithmetic on each Tasklet’s invocation.
+This is performed in an inner-map-first order to avoid revisiting the graph after changes.</p>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace.utils">
+<span id="gt4py-cartesian-gtc-dace-utils-module"></span><h2>gt4py.cartesian.gtc.dace.utils module<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace.utils" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">AccessInfoCollector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">collect_read</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">collect_write</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_full_domain</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="gt4py.eve.html#gt4py.eve.visitors.NodeVisitor" title="gt4py.eve.visitors.NodeVisitor"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.visitors.NodeVisitor</span></code></a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">axes:</span> <span class="pre">Dict[str,</span> <span class="pre">List[ForwardRef('dcir.Axis')]],</span> <span class="pre">access_infos:</span> <span class="pre">Dict[str,</span> <span class="pre">ForwardRef('dcir.FieldAccessInfo')]</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.Context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context.access_infos">
+<span class="sig-name descname"><span class="pre">access_infos</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context.access_infos" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context.axes">
+<span class="sig-name descname"><span class="pre">axes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis" title="gt4py.cartesian.gtc.daceir.Axis"><span class="pre">gt4py.cartesian.gtc.daceir.Axis</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context.axes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_AssignStmt">
+<span class="sig-name descname"><span class="pre">visit_AssignStmt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.AssignStmt" title="gt4py.cartesian.gtc.oir.AssignStmt"><span class="pre">gt4py.cartesian.gtc.oir.AssignStmt</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_AssignStmt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_AssignStmt" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_FieldAccess">
+<span class="sig-name descname"><span class="pre">visit_FieldAccess</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.FieldAccess" title="gt4py.cartesian.gtc.oir.FieldAccess"><span class="pre">gt4py.cartesian.gtc.oir.FieldAccess</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">he_grid</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_subset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_write</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_conditional</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context" title="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context"><span class="pre">gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_FieldAccess"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_FieldAccess" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_HorizontalExecution">
+<span class="sig-name descname"><span class="pre">visit_HorizontalExecution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.HorizontalExecution" title="gt4py.cartesian.gtc.oir.HorizontalExecution"><span class="pre">gt4py.cartesian.gtc.oir.HorizontalExecution</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_extents</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context" title="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context"><span class="pre">gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.Context</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_interval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_subset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_HorizontalExecution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_HorizontalExecution" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_HorizontalRestriction">
+<span class="sig-name descname"><span class="pre">visit_HorizontalRestriction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.HorizontalRestriction" title="gt4py.cartesian.gtc.oir.HorizontalRestriction"><span class="pre">gt4py.cartesian.gtc.oir.HorizontalRestriction</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_conditional</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_HorizontalRestriction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_HorizontalRestriction" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_MaskStmt">
+<span class="sig-name descname"><span class="pre">visit_MaskStmt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.MaskStmt" title="gt4py.cartesian.gtc.oir.MaskStmt"><span class="pre">gt4py.cartesian.gtc.oir.MaskStmt</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_conditional</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_MaskStmt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_MaskStmt" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_VerticalLoop">
+<span class="sig-name descname"><span class="pre">visit_VerticalLoop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoop" title="gt4py.cartesian.gtc.oir.VerticalLoop"><span class="pre">gt4py.cartesian.gtc.oir.VerticalLoop</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_extents</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_VerticalLoop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_VerticalLoop" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_VerticalLoopSection">
+<span class="sig-name descname"><span class="pre">visit_VerticalLoopSection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.VerticalLoopSection" title="gt4py.cartesian.gtc.oir.VerticalLoopSection"><span class="pre">gt4py.cartesian.gtc.oir.VerticalLoopSection</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_extents</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_subset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.11)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_VerticalLoopSection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_VerticalLoopSection" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_While">
+<span class="sig-name descname"><span class="pre">visit_While</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.oir.While" title="gt4py.cartesian.gtc.oir.While"><span class="pre">gt4py.cartesian.gtc.oir.While</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_conditional</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#AccessInfoCollector.visit_While"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.AccessInfoCollector.visit_While" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.array_dimensions">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">array_dimensions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">array</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dace.data.Array</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#array_dimensions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.array_dimensions" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.axes_list_from_flags">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">axes_list_from_flags</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flags</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#axes_list_from_flags"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.axes_list_from_flags" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.collect_toplevel_computation_nodes">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">collect_toplevel_computation_nodes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_or_node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.Node" title="gt4py.eve.concepts.Node"><span class="pre">gt4py.eve.concepts.Node</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.ComputationNode" title="gt4py.cartesian.gtc.daceir.ComputationNode"><span class="pre">gt4py.cartesian.gtc.daceir.ComputationNode</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#collect_toplevel_computation_nodes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.collect_toplevel_computation_nodes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.collect_toplevel_iteration_nodes">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">collect_toplevel_iteration_nodes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_or_node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.Node" title="gt4py.eve.concepts.Node"><span class="pre">gt4py.eve.concepts.Node</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.IterationNode" title="gt4py.cartesian.gtc.daceir.IterationNode"><span class="pre">gt4py.cartesian.gtc.daceir.IterationNode</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#collect_toplevel_iteration_nodes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.collect_toplevel_iteration_nodes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.compute_dcir_access_infos">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">compute_dcir_access_infos</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">oir_node</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">oir_decls</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_extents</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">collect_read</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">collect_write</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_full_domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dace.properties.DictProperty</span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#compute_dcir_access_infos"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.compute_dcir_access_infos" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.flatten_list">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">flatten_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_or_node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.Node" title="gt4py.eve.concepts.Node"><span class="pre">gt4py.eve.concepts.Node</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#flatten_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.flatten_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.get_tasklet_symbol">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">get_tasklet_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_target</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#get_tasklet_symbol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.get_tasklet_symbol" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.make_dace_subset">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">make_dace_subset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">context_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">access_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.FieldAccessInfo" title="gt4py.cartesian.gtc.daceir.FieldAccessInfo"><span class="pre">gt4py.cartesian.gtc.daceir.FieldAccessInfo</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_dims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.11)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dace.subsets.Range</span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#make_dace_subset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.make_dace_subset" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.replace_strides">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">replace_strides</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arrays</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">get_layout_map</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#replace_strides"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.replace_strides" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.union_inout_memlets">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">union_inout_memlets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nodes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.Node" title="gt4py.eve.concepts.Node"><span class="pre">gt4py.eve.concepts.Node</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#union_inout_memlets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.union_inout_memlets" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.union_node_grid_subsets">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">union_node_grid_subsets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nodes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.concepts.Node" title="gt4py.eve.concepts.Node"><span class="pre">gt4py.eve.concepts.Node</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#union_node_grid_subsets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.union_node_grid_subsets" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.gtc.dace.utils.untile_memlets">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.gtc.dace.utils.</span></span><span class="sig-name descname"><span class="pre">untile_memlets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memlets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.11)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet" title="gt4py.cartesian.gtc.daceir.Memlet"><span class="pre">gt4py.cartesian.gtc.daceir.Memlet</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.11)"><span class="pre">Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Axis" title="gt4py.cartesian.gtc.daceir.Axis"><span class="pre">gt4py.cartesian.gtc.daceir.Axis</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.cartesian.gtc.html#gt4py.cartesian.gtc.daceir.Memlet" title="gt4py.cartesian.gtc.daceir.Memlet"><span class="pre">gt4py.cartesian.gtc.daceir.Memlet</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/gtc/dace/utils.html#untile_memlets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.gtc.dace.utils.untile_memlets" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.gtc.dace">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-gt4py.cartesian.gtc.dace" title="Permalink to this headline"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gt4py.cartesian.gtc.cuir.html" class="btn btn-neutral float-left" title="gt4py.cartesian.gtc.cuir package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gt4py.cartesian.gtc.dace.expansion.html" class="btn btn-neutral float-right" title="gt4py.cartesian.gtc.dace.expansion package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

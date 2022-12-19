@@ -1,0 +1,20 @@
+gt4py package
+=============
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   gt4py.cartesian
+   gt4py.eve
+   gt4py.storage
+
+Module contents
+---------------
+
+.. automodule:: gt4py
+   :members:
+   :undoc-members:
+   :show-inheritance:

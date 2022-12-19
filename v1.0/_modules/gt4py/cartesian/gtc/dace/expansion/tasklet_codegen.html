@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.expansion.tasklet_codegen &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.expansion.tasklet_codegen</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.expansion.tasklet_codegen</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ChainMap</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.library</span>
+<span class="kn">import</span> <span class="nn">dace.subsets</span>
+
+<span class="kn">import</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="k">as</span> <span class="nn">common</span>
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">daceir</span> <span class="k">as</span> <span class="n">dcir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.symbol_utils</span> <span class="kn">import</span> <span class="n">get_axis_bound_str</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.dace.utils</span> <span class="kn">import</span> <span class="n">make_dace_subset</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">FormatTemplate</span> <span class="k">as</span> <span class="n">as_fmt</span>
+
+
+<div class="viewcode-block" id="TaskletCodegen"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen">[docs]</a><span class="k">class</span> <span class="nc">TaskletCodegen</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">codegen</span><span class="o">.</span><span class="n">TemplatedGenerator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+    <span class="n">ScalarAccess</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_visit_offset</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">dcir</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">access_info</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">FieldAccessInfo</span><span class="p">,</span>
+        <span class="n">decl</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">FieldDecl</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">int_sizes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">access_info</span><span class="o">.</span><span class="n">axes</span><span class="p">()):</span>
+            <span class="n">memlet_shape</span> <span class="o">=</span> <span class="n">access_info</span><span class="o">.</span><span class="n">shape</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">memlet_shape</span><span class="p">[</span><span class="n">i</span><span class="p">])</span><span class="o">.</span><span class="n">isnumeric</span><span class="p">()</span>
+                <span class="ow">and</span> <span class="n">axis</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">decl</span><span class="o">.</span><span class="n">access_info</span><span class="o">.</span><span class="n">variable_offset_axes</span>
+            <span class="p">):</span>
+                <span class="n">int_sizes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">memlet_shape</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">int_sizes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">sym_offsets</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">pystr_to_symbolic</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">off</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">off</span> <span class="ow">in</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;i&quot;</span><span class="p">],</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">node</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">access_info</span><span class="o">.</span><span class="n">variable_offset_axes</span><span class="p">:</span>
+            <span class="n">access_info</span> <span class="o">=</span> <span class="n">access_info</span><span class="o">.</span><span class="n">restricted_to_index</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
+        <span class="n">context_info</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">access_info</span><span class="p">)</span>
+        <span class="n">context_info</span><span class="o">.</span><span class="n">variable_offset_axes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">ranges</span> <span class="o">=</span> <span class="n">make_dace_subset</span><span class="p">(</span>
+            <span class="n">access_info</span><span class="p">,</span> <span class="n">context_info</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="p">()</span>  <span class="c1"># data_index added in visit_IndexAccess</span>
+        <span class="p">)</span>
+        <span class="n">ranges</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">sym_offsets</span><span class="p">,</span> <span class="n">negative</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">Range</span><span class="p">([</span><span class="n">r</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ranges</span><span class="o">.</span><span class="n">ranges</span><span class="p">)</span> <span class="k">if</span> <span class="n">int_sizes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_CartesianOffset"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_CartesianOffset">[docs]</a>    <span class="k">def</span> <span class="nf">visit_CartesianOffset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_visit_offset</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_VariableKOffset"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_VariableKOffset">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VariableKOffset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_visit_offset</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_IndexAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_IndexAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_IndexAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">IndexAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">is_target</span><span class="p">,</span>
+        <span class="n">sdfg_ctx</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">ChainMap</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">SymbolRef</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Decl</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">is_target</span><span class="p">:</span>
+            <span class="n">memlets</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;write_memlets&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># if this node is not a target, it will still use the symbol of the write memlet if the</span>
+            <span class="c1"># field was previously written in the same memlet.</span>
+            <span class="n">memlets</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;read_memlets&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;write_memlets&quot;</span><span class="p">]</span>
+        <span class="n">memlet</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">mem</span> <span class="k">for</span> <span class="n">mem</span> <span class="ow">in</span> <span class="n">memlets</span> <span class="k">if</span> <span class="n">mem</span><span class="o">.</span><span class="n">connector</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="n">index_strs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">index_strs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                    <span class="n">decl</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">memlet</span><span class="o">.</span><span class="n">field</span><span class="p">],</span>
+                    <span class="n">access_info</span><span class="o">=</span><span class="n">memlet</span><span class="o">.</span><span class="n">access_info</span><span class="p">,</span>
+                    <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+                    <span class="n">in_idx</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="n">index_strs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">sdfg_ctx</span><span class="o">=</span><span class="n">sdfg_ctx</span><span class="p">,</span> <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span> <span class="n">in_idx</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">data_index</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">index_strs</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_AssignStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">is_target</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">left</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">is_target</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">right</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+    <span class="n">BinaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{left}</span><span class="s2"> </span><span class="si">{op}</span><span class="s2"> </span><span class="si">{right}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">UnaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{op}{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">TernaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{true_expr}</span><span class="s2"> if </span><span class="si">{cond}</span><span class="s2"> else </span><span class="si">{false_expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_BuiltInLiteral"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_BuiltInLiteral">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BuiltInLiteral</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builtin</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">builtin</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;True&quot;</span>
+        <span class="k">elif</span> <span class="n">builtin</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">FALSE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;False&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented BuiltInLiteral encountered.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_Literal"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_Literal">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Literal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">literal</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">in_idx</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">literal</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">in_idx</span><span class="o">=</span><span class="n">in_idx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">in_idx</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2">(</span><span class="si">{value}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">literal</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">in_idx</span><span class="o">=</span><span class="n">in_idx</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span>
+            <span class="p">)</span></div>
+
+    <span class="n">Cast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2">(</span><span class="si">{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_NativeFunction"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_NativeFunction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFunction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ABS</span><span class="p">:</span> <span class="s2">&quot;abs&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span> <span class="s2">&quot;min&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">MOD</span><span class="p">:</span> <span class="s2">&quot;fmod&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">SIN</span><span class="p">:</span> <span class="s2">&quot;dace.math.sin&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">COS</span><span class="p">:</span> <span class="s2">&quot;dace.math.cos&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">TAN</span><span class="p">:</span> <span class="s2">&quot;dace.math.tan&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">:</span> <span class="s2">&quot;asin&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">:</span> <span class="s2">&quot;acos&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">:</span> <span class="s2">&quot;atan&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">SINH</span><span class="p">:</span> <span class="s2">&quot;dace.math.sinh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">COSH</span><span class="p">:</span> <span class="s2">&quot;dace.math.cosh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">TANH</span><span class="p">:</span> <span class="s2">&quot;dace.math.tanh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">:</span> <span class="s2">&quot;asinh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">:</span> <span class="s2">&quot;acosh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">:</span> <span class="s2">&quot;atanh&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">SQRT</span><span class="p">:</span> <span class="s2">&quot;dace.math.sqrt&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span> <span class="s2">&quot;dace.math.pow&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">EXP</span><span class="p">:</span> <span class="s2">&quot;dace.math.exp&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">LOG</span><span class="p">:</span> <span class="s2">&quot;dace.math.log&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span> <span class="s2">&quot;tgamma&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">CBRT</span><span class="p">:</span> <span class="s2">&quot;cbrt&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">:</span> <span class="s2">&quot;isfinite&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">:</span> <span class="s2">&quot;isinf&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">:</span> <span class="s2">&quot;isnan&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">FLOOR</span><span class="p">:</span> <span class="s2">&quot;dace.math.ifloor&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">CEIL</span><span class="p">:</span> <span class="s2">&quot;ceil&quot;</span><span class="p">,</span>
+                <span class="n">common</span><span class="o">.</span><span class="n">NativeFunction</span><span class="o">.</span><span class="n">TRUNC</span><span class="p">:</span> <span class="s2">&quot;trunc&quot;</span><span class="p">,</span>
+            <span class="p">}[</span><span class="n">func</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented NativeFunction encountered.&quot;</span><span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_NativeFuncCall"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_NativeFuncCall">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFuncCall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">call</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">NativeFuncCall</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># TODO: Unroll integer POW</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">call</span><span class="o">.</span><span class="n">args</span><span class="p">])</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_DataType"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_DataType">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DataType</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.bool_&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT8</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.int8&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT16</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.int16&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.int32&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">INT64</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.int64&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.float32&quot;</span>
+        <span class="k">elif</span> <span class="n">dtype</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;dace.float64&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented DataType encountered.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_UnaryOperator"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_UnaryOperator">[docs]</a>    <span class="k">def</span> <span class="nf">visit_UnaryOperator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">op</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot; not &quot;</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NEG</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;-&quot;</span>
+        <span class="k">elif</span> <span class="n">op</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">UnaryOperator</span><span class="o">.</span><span class="n">POS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;+&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented UnaryOperator encountered.&quot;</span><span class="p">)</span></div>
+
+    <span class="n">Arg</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">Param</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">LocalScalarDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">: </span><span class="si">{dtype}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_Tasklet"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_Tasklet">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Tasklet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Tasklet</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">decls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">stmts</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+    <span class="k">def</span> <span class="nf">_visit_conditional</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cond</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">dcir</span><span class="o">.</span><span class="n">Expr</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">]],</span>
+        <span class="n">body</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">dcir</span><span class="o">.</span><span class="n">Stmt</span><span class="p">],</span>
+        <span class="n">keyword</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">mask_str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">indent</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">cond</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span><span class="n">cond_str</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">is_target</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)):</span>
+            <span class="n">mask_str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">keyword</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">cond_str</span><span class="si">}</span><span class="s2">:&quot;</span>
+            <span class="n">indent</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="mi">4</span>
+        <span class="n">body_code</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span> <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">block</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)]</span>
+        <span class="n">body_code</span> <span class="o">=</span> <span class="p">[</span><span class="n">indent</span> <span class="o">+</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">body_code</span><span class="p">]</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">mask_str</span><span class="p">]</span> <span class="o">+</span> <span class="n">body_code</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_MaskStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_visit_conditional</span><span class="p">(</span><span class="n">cond</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">keyword</span><span class="o">=</span><span class="s2">&quot;if&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_HorizontalRestriction"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_HorizontalRestriction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalRestriction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">HorizontalRestriction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_visit_conditional</span><span class="p">(</span><span class="n">cond</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">keyword</span><span class="o">=</span><span class="s2">&quot;if&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_While"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_While">[docs]</a>    <span class="k">def</span> <span class="nf">visit_While</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">While</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_visit_conditional</span><span class="p">(</span><span class="n">cond</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">cond</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">keyword</span><span class="o">=</span><span class="s2">&quot;while&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.visit_HorizontalMask"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.visit_HorizontalMask">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalMask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">HorizontalMask</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">clauses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">interval</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">dcir</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">dims_horizontal</span><span class="p">(),</span> <span class="n">node</span><span class="o">.</span><span class="n">intervals</span><span class="p">):</span>
+            <span class="n">it_sym</span><span class="p">,</span> <span class="n">dom_sym</span> <span class="o">=</span> <span class="n">axis</span><span class="o">.</span><span class="n">iteration_symbol</span><span class="p">(),</span> <span class="n">axis</span><span class="o">.</span><span class="n">domain_symbol</span><span class="p">()</span>
+
+            <span class="n">min_val</span> <span class="o">=</span> <span class="n">get_axis_bound_str</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">dom_sym</span><span class="p">)</span>
+            <span class="n">max_val</span> <span class="o">=</span> <span class="n">get_axis_bound_str</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">dom_sym</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">min_val</span>
+                <span class="ow">and</span> <span class="n">max_val</span>
+                <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">==</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span>
+                <span class="ow">and</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span>
+            <span class="p">):</span>
+                <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">it_sym</span><span class="si">}</span><span class="s2"> == </span><span class="si">{</span><span class="n">min_val</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">min_val</span><span class="p">:</span>
+                    <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">it_sym</span><span class="si">}</span><span class="s2"> &gt;= </span><span class="si">{</span><span class="n">min_val</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">max_val</span><span class="p">:</span>
+                    <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">it_sym</span><span class="si">}</span><span class="s2"> &lt; </span><span class="si">{</span><span class="n">max_val</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">clauses</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TaskletCodegen.apply_codegen"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.dace.expansion.html#gt4py.cartesian.gtc.dace.expansion.tasklet_codegen.TaskletCodegen.apply_codegen">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply_codegen</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Tasklet</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># NOTE This is not named &#39;apply&#39; b/c the base class has a method with</span>
+        <span class="c1"># that name and a different type signature.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">dcir</span><span class="o">.</span><span class="n">Tasklet</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;apply() requires dcir.Tasklet node&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

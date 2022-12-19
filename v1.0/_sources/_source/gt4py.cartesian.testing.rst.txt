@@ -1,0 +1,37 @@
+gt4py.cartesian.testing package
+===============================
+
+Submodules
+----------
+
+gt4py.cartesian.testing.input\_strategies module
+------------------------------------------------
+
+.. automodule:: gt4py.cartesian.testing.input_strategies
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.testing.suites module
+-------------------------------------
+
+.. automodule:: gt4py.cartesian.testing.suites
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.testing.utils module
+------------------------------------
+
+.. automodule:: gt4py.cartesian.testing.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.testing
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.backend.dace_stencil_object &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.backend.dace_stencil_object</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.backend.dace_stencil_object</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">import</span> <span class="nn">dace.data</span>
+<span class="kn">import</span> <span class="nn">dace.frontend.python.common</span>
+<span class="kn">from</span> <span class="nn">dace.frontend.python.common</span> <span class="kn">import</span> <span class="n">SDFGClosure</span><span class="p">,</span> <span class="n">SDFGConvertible</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt4pyc</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.dace_backend</span> <span class="kn">import</span> <span class="n">freeze_origin_domain_sdfg</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.definitions</span> <span class="kn">import</span> <span class="n">AccessKind</span><span class="p">,</span> <span class="n">DomainInfo</span><span class="p">,</span> <span class="n">FieldInfo</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_object</span> <span class="kn">import</span> <span class="n">ArgsInfo</span><span class="p">,</span> <span class="n">FrozenStencil</span><span class="p">,</span> <span class="n">StencilObject</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.utils</span> <span class="kn">import</span> <span class="n">shash</span>
+
+
+<span class="k">def</span> <span class="nf">_extract_array_infos</span><span class="p">(</span><span class="n">field_args</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArgsInfo</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">ArgsInfo</span><span class="p">(</span>
+            <span class="n">array</span><span class="o">=</span><span class="n">arg</span><span class="p">,</span>
+            <span class="n">dimensions</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s2">&quot;__gt_dims__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">origin</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="s2">&quot;__gt_origin__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">field_args</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+    <span class="p">}</span>
+
+
+<div class="viewcode-block" id="add_optional_fields"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.add_optional_fields">[docs]</a><span class="k">def</span> <span class="nf">add_optional_fields</span><span class="p">(</span>
+    <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">field_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">parameter_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">:</span>
+    <span class="n">sdfg</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">sdfg</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">field_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">access</span> <span class="o">==</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">:</span>
+            <span class="n">outer_array</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">sdfg</span><span class="o">.</span><span class="n">add_array</span><span class="p">(</span>
+                <span class="n">name</span><span class="p">,</span>
+                <span class="n">shape</span><span class="o">=</span><span class="n">outer_array</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">outer_array</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">strides</span><span class="o">=</span><span class="n">outer_array</span><span class="o">.</span><span class="n">strides</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">parameter_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">access</span> <span class="o">==</span> <span class="n">AccessKind</span><span class="o">.</span><span class="n">NONE</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">symbols</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Scalar</span><span class="p">):</span>
+                <span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">sdfg</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="n">dace</span><span class="o">.</span><span class="n">typeclass</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">])))</span>
+    <span class="k">return</span> <span class="n">sdfg</span></div>
+
+
+<div class="viewcode-block" id="DaCeFrozenStencil"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeFrozenStencil">[docs]</a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DaCeFrozenStencil</span><span class="p">(</span><span class="n">FrozenStencil</span><span class="p">,</span> <span class="n">SDFGConvertible</span><span class="p">):</span>
+
+    <span class="n">stencil_object</span><span class="p">:</span> <span class="s2">&quot;DaCeStencilObject&quot;</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">add_optional_fields</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">parameter_info</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_signature__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stencil_object</span><span class="o">.</span><span class="n">__sdfg_signature__</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_closure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="DaCeFrozenStencil.closure_resolver"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeFrozenStencil.closure_resolver">[docs]</a>    <span class="k">def</span> <span class="nf">closure_resolver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">constant_args</span><span class="p">,</span> <span class="n">given_args</span><span class="p">,</span> <span class="n">parent_closure</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">SDFGClosure</span><span class="p">()</span></div></div>
+
+
+<div class="viewcode-block" id="DaCeStencilObject"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeStencilObject">[docs]</a><span class="k">class</span> <span class="nc">DaCeStencilObject</span><span class="p">(</span><span class="n">StencilObject</span><span class="p">,</span> <span class="n">SDFGConvertible</span><span class="p">):</span>
+
+    <span class="n">_sdfg</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">SDFG_PATH</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="k">def</span> <span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_frozen_cache&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">_frozen_cache</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_domain_origin_key</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">origin</span><span class="p">):</span>
+        <span class="n">origins_tuple</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">((</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">origin</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">domain</span><span class="p">,</span> <span class="n">origins_tuple</span>
+
+<div class="viewcode-block" id="DaCeStencilObject.freeze"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeStencilObject.freeze">[docs]</a>    <span class="k">def</span> <span class="nf">freeze</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;DaCeStencilObject&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DaCeFrozenStencil</span><span class="p">:</span>
+
+        <span class="n">key</span> <span class="o">=</span> <span class="n">DaCeStencilObject</span><span class="o">.</span><span class="n">_get_domain_origin_key</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frozen_cache</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frozen_cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+        <span class="n">frozen_hash</span> <span class="o">=</span> <span class="n">shash</span><span class="p">(</span><span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+
+        <span class="c1"># check if same sdfg already cached on disk</span>
+        <span class="n">basename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">SDFG_PATH</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">basename</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">frozen_hash</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.sdfg&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">frozen_sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+            <span class="c1"># otherwise, wrap and save sdfg from scratch</span>
+            <span class="n">inner_sdfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sdfg</span><span class="p">()</span>
+
+            <span class="n">frozen_sdfg</span> <span class="o">=</span> <span class="n">freeze_origin_domain_sdfg</span><span class="p">(</span>
+                <span class="n">inner_sdfg</span><span class="p">,</span>
+                <span class="n">arg_names</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">__sdfg_signature__</span><span class="p">()[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">field_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+                <span class="n">origin</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span>
+                <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">frozen_sdfg</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_frozen_cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">DaCeFrozenStencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">frozen_sdfg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frozen_cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="DaCeStencilObject.sdfg"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeStencilObject.sdfg">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">sdfg</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;_sdfg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">_sdfg</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">SDFG_PATH</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_sdfg</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DaCeStencilObject.closure_resolver"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeStencilObject.closure_resolver">[docs]</a>    <span class="k">def</span> <span class="nf">closure_resolver</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">constant_args</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">given_args</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">parent_closure</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;dace.frontend.python.common.SDFGClosure&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;dace.frontend.python.common.SDFGClosure&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dace</span><span class="o">.</span><span class="n">frontend</span><span class="o">.</span><span class="n">python</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">SDFGClosure</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">__sdfg__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">:</span>
+        <span class="n">arg_names</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__sdfg_signature__</span><span class="p">()</span>
+        <span class="n">norm_kwargs</span> <span class="o">=</span> <span class="n">DaCeStencilObject</span><span class="o">.</span><span class="n">normalize_args</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+            <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">arg_names</span><span class="o">=</span><span class="n">arg_names</span><span class="p">,</span>
+            <span class="n">domain_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">domain_info</span><span class="p">,</span>
+            <span class="n">field_info</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">field_info</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">frozen_stencil</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">freeze</span><span class="p">(</span><span class="n">origin</span><span class="o">=</span><span class="n">norm_kwargs</span><span class="p">[</span><span class="s2">&quot;origin&quot;</span><span class="p">],</span> <span class="n">domain</span><span class="o">=</span><span class="n">norm_kwargs</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">frozen_stencil</span><span class="o">.</span><span class="n">__sdfg__</span><span class="p">(</span><span class="o">**</span><span class="n">norm_kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_closure__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reevaluate</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">__sdfg_signature__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">special_args</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;self&quot;</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="s2">&quot;origin&quot;</span><span class="p">,</span> <span class="s2">&quot;validate_args&quot;</span><span class="p">,</span> <span class="s2">&quot;exec_info&quot;</span><span class="p">}</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="p">(</span>
+            <span class="n">inspect</span><span class="o">.</span><span class="n">getfullargspec</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="fm">__call__</span><span class="p">)</span><span class="o">.</span><span class="n">args</span>
+            <span class="o">+</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getfullargspec</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="fm">__call__</span><span class="p">)</span><span class="o">.</span><span class="n">kwonlyargs</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">special_args</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="p">[])</span>
+
+<div class="viewcode-block" id="DaCeStencilObject.normalize_args"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.backend.html#gt4py.cartesian.backend.dace_stencil_object.DaCeStencilObject.normalize_args">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">normalize_args</span><span class="p">(</span>
+        <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">arg_names</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">domain_info</span><span class="p">:</span> <span class="n">DomainInfo</span><span class="p">,</span>
+        <span class="n">field_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FieldInfo</span><span class="p">],</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">backend_cls</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">backend_cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">args_iter</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">args_as_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="k">else</span> <span class="nb">next</span><span class="p">(</span><span class="n">args_iter</span><span class="p">))</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">arg_names</span>
+        <span class="p">}</span>
+        <span class="n">arg_infos</span> <span class="o">=</span> <span class="n">_extract_array_infos</span><span class="p">(</span>
+            <span class="n">field_args</span><span class="o">=</span><span class="n">args_as_kwargs</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">backend_cls</span><span class="o">.</span><span class="n">storage_info</span><span class="p">[</span><span class="s2">&quot;device&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="n">origin</span> <span class="o">=</span> <span class="n">DaCeStencilObject</span><span class="o">.</span><span class="n">_normalize_origins</span><span class="p">(</span><span class="n">arg_infos</span><span class="p">,</span> <span class="n">field_info</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">DaCeStencilObject</span><span class="o">.</span><span class="n">_get_max_domain</span><span class="p">(</span><span class="n">arg_infos</span><span class="p">,</span> <span class="n">domain_info</span><span class="p">,</span> <span class="n">field_info</span><span class="p">,</span> <span class="n">origin</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">args_as_kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="n">args_as_kwargs</span><span class="p">[</span><span class="s2">&quot;domain&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">domain</span>
+        <span class="n">args_as_kwargs</span><span class="p">[</span><span class="s2">&quot;origin&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">origin</span>
+        <span class="k">return</span> <span class="n">args_as_kwargs</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

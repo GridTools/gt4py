@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP 1 — Standalone Compiler CLI &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="GDP 3 — A New Storage Implementation using Duck Typing" href="gdp-0003-duck-storage.html" />
+    <link rel="prev" title="GDP 2 — Specializations Near Boundaries" href="gdp-0002-regions.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="gdp-index.html">GT4Py Development</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GDP 1 — Standalone Compiler CLI</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#abstract">Abstract</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#motivation-and-scope">Motivation and Scope</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#usage-and-impact">Usage and Impact</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#backward-compatibility">Backward compatibility</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#detailed-description">Detailed description</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#related-work">Related Work</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#implementation">Implementation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#alternatives">Alternatives</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#discussion">Discussion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#references-and-footnotes">References and Footnotes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#copyright">Copyright</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#declined-gdps">Declined GDPs</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="gdp-index.html">GT4Py Development</a></li>
+      <li class="breadcrumb-item active">GDP 1 — Standalone Compiler CLI</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/GDPs/gdp-0001-standalone-cli.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gdp-1-standalone-compiler-cli">
+<h1>GDP 1 — Standalone Compiler CLI<a class="headerlink" href="#gdp-1-standalone-compiler-cli" title="Permalink to this headline"></a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>Rico Häuselmann &lt;<a class="reference external" href="mailto:ricoh&#37;&#52;&#48;cscs&#46;ch">ricoh<span>&#64;</span>cscs<span>&#46;</span>ch</a>&gt;</p>
+</dd>
+<dt class="field-even">Status</dt>
+<dd class="field-even"><p>Accepted</p>
+</dd>
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Feature</p>
+</dd>
+<dt class="field-even">Created</dt>
+<dd class="field-even"><p>17.04.2020</p>
+</dd>
+<dt class="field-odd">Discussion PR</dt>
+<dd class="field-odd"><p><a class="reference external" href="discussion_pr">https://github.com/GridTools/gt4py/pull/21</a></p>
+</dd>
+<dt class="field-even">Implementation</dt>
+<dd class="field-even"><p><a class="reference external" href="reference_impl_pr">https://github.com/GridTools/gt4py/pull/23</a></p>
+</dd>
+</dl>
+<section id="abstract">
+<h2>Abstract<a class="headerlink" href="#abstract" title="Permalink to this headline"></a></h2>
+<p>GT4Py currently provides a Python API / embedded DSL for defining,
+compiling and running GridTools stencils from Python programs.</p>
+<p>This GDP describes an additional CLI which can be integrated into the build
+process of non-Python programs to compile, link and run stencils written
+in GT4Py DSL (GTScript) from any host language that can link to C++ libraries.</p>
+<p>A <a class="reference external" href="reference_impl_pr">reference implementation</a> exists, which will on acception of this GDP be
+drawn on for adding functionality of this GDP in a series of separate pull requests.</p>
+</section>
+<section id="motivation-and-scope">
+<h2>Motivation and Scope<a class="headerlink" href="#motivation-and-scope" title="Permalink to this headline"></a></h2>
+<p>This GDP proposes adding a CLI command named <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> (naming rationale / alternatives documented
+somewhere below). The command will take a GTScript file and the name of one of the available
+backends as input and output backend specific source code. This includes any language bindings
+supported by the backend. Commandline options will allow full control over what bindings should be
+created if any, depending on what the backend supports.</p>
+<p>A GTScript file denotes a file with a to-be-defined extension (suggestion: <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code>), beginning
+with the line</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># [GT] using-dsl: gtscript</span>
+</pre></div>
+</div>
+<p>All other content must be valid Python under the assumption that the first line has been replaced
+by <code class="code docutils literal notranslate"><span class="pre">from</span> <span class="pre">gt4py.cartesian.gtscript</span> <span class="pre">import</span> <span class="pre">*</span></code>.</p>
+<p>In support of this, two more features are proposed:</p>
+<ul class="simple">
+<li><p>A mechanism to allow GTScript files as if they were Python modules.  The usage will be
+<code class="code docutils literal notranslate"><span class="pre">from</span> <span class="pre">gt4py.cartesian</span> <span class="pre">import</span> <span class="pre">gtpy_import;</span> <span class="pre">gtpy_import.install()</span></code>.</p></li>
+<li><p>A lazy variant or replacement of the <code class="docutils literal notranslate"><span class="pre">stencil</span></code> decorator, returning an object that supports
+manual stepwise compilation.</p></li>
+</ul>
+<section id="limited-scope">
+<h3>Limited Scope<a class="headerlink" href="#limited-scope" title="Permalink to this headline"></a></h3>
+<p>In order to support the usecases listed below the input Python files must be written in GTScript
+DSL without explicitly importing GT4Py. Instead of the decorators provided by the <code class="docutils literal notranslate"><span class="pre">gtscript</span></code>
+module, comments may be used, or functions may be inferred to be a <code class="docutils literal notranslate"><span class="pre">stencil</span></code> or <code class="docutils literal notranslate"><span class="pre">submodule</span></code>
+depending on whether they return something or not. In order to stay maintainable <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> will not
+add any new logic beyond reading input Python code and command line options.</p>
+<p>However, the final version will rely on more fine grained control over when and where backends
+create and store intermediate source files, which should become part of the backend API to be used
+for run-time compilation in order to avoid redundancy and guarantee maintainability.</p>
+</section>
+<section id="other-language-projects">
+<h3>Other language projects<a class="headerlink" href="#other-language-projects" title="Permalink to this headline"></a></h3>
+<p>In order to benefit from the higher abstraction level of the GT4Py eDSL it should not be required
+to run Python code at runtime. Especially for existing programs written in other languages it makes
+more sense to link to libraries created by GT4Py as part of the build process of the host program.</p>
+</section>
+<section id="avoiding-runtime-dependency">
+<h3>Avoiding runtime dependency<a class="headerlink" href="#avoiding-runtime-dependency" title="Permalink to this headline"></a></h3>
+<p>Even for Python projects it may be desirable to distribute only the extension modules created by
+GT4Py, not the code that generated them, thus requiring the final user of the generated code to
+only install GridTools, not GT4Py.</p>
+</section>
+<section id="licensing">
+<h3>Licensing<a class="headerlink" href="#licensing" title="Permalink to this headline"></a></h3>
+<p>Using only the GT4Py generated stencils in a project without depending on GT4Py at runtime allows
+to use a licence other than GPL3 in said project without the express permission of CSCS.</p>
+</section>
+<section id="flexibility">
+<h3>Flexibility<a class="headerlink" href="#flexibility" title="Permalink to this headline"></a></h3>
+<p>The import mechanism will allow the flexibility to define GTScript objects in GTScript files and
+using them in Python code without extra steps (as if they were defined directly in Python), yet
+also compiling them into other language sources / bindings from the same code base just by running
+the CLI tool on them. This allows prototyping in Python without making a final choice as to project
+language and license.</p>
+</section>
+</section>
+<section id="usage-and-impact">
+<h2>Usage and Impact<a class="headerlink" href="#usage-and-impact" title="Permalink to this headline"></a></h2>
+<section id="basic-cli-usage">
+<h3>Basic CLI usage<a class="headerlink" href="#basic-cli-usage" title="Permalink to this headline"></a></h3>
+<p>The usage is explained best using a small example.</p>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code> files could be replaced by equivalent <code class="docutils literal notranslate"><span class="pre">.py</span></code> files (importing GTScript symbols
+either from <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a> or from a <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code> file) in all following examples.  Python modules or packages
+are also valid input files to <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code>, provided they are valid Python under the assumption that the
+import extensions are installed.</p>
+<p>Assume the following file structure:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ tree .
+<span class="nb">pwd</span>
+├── constants.py
+└── stencils.gt.py
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">stencils.gt.py</span></code> contains the GTScript code to be compiled to stencils. The contents might look
+something like the following example.</p>
+<div class="literal-block-wrapper docutils container" id="id4">
+<div class="code-block-caption"><span class="caption-text">stencils.gt.py</span><a class="headerlink" href="#id4" title="Permalink to this code"></a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># [GT] using-dsl: gtscript</span>
+
+<span class="kn">from</span> <span class="nn">.constants</span> <span class="kn">import</span> <span class="n">PI</span>
+
+
+<span class="nd">@function</span>
+<span class="k">def</span> <span class="nf">square</span><span class="p">(</span><span class="n">inp_field</span><span class="p">):</span>
+   <span class="k">return</span> <span class="n">inp_field</span> <span class="o">*</span> <span class="n">inp_field</span>
+
+
+<span class="nd">@stencil</span>
+<span class="k">def</span> <span class="nf">stencil_a</span><span class="p">(</span><span class="n">inp_field</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="n">float64</span><span class="p">],</span> <span class="n">out_field</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+      <span class="n">out_field</span> <span class="o">=</span> <span class="n">square</span><span class="p">(</span><span class="n">inp_field</span><span class="p">)</span>
+
+
+<span class="nd">@stencil</span>
+<span class="k">def</span> <span class="nf">stencil_b</span><span class="p">(</span><span class="n">inp_field</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="n">float64</span><span class="p">],</span> <span class="n">out_field</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="kn">from</span> <span class="nn">__externals__</span> <span class="kn">import</span> <span class="n">COMPILE_TIME_VALUE</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+      <span class="n">out_field</span> <span class="o">=</span> <span class="n">PI</span> <span class="o">*</span> <span class="n">inp_field</span> <span class="o">+</span> <span class="n">COMPILE_TIME_VALUE</span>
+</pre></div>
+</div>
+</div>
+<p>Notice that this file uses names from <code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py.gtscript</span></code> without importing <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a>. The names will be
+injected by <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> upon recognizing the <code class="code docutils literal notranslate"><span class="pre">#</span> <span class="pre">[GT]</span> <span class="pre">using-dsl:</span> <span class="pre">gtscript</span></code> comment.  Also note that
+<code class="code docutils literal notranslate"><span class="pre">stencil_b</span></code> uses an external value which is not available in the file itself, so it will have to be
+supplied on the command line.  The file <code class="docutils literal notranslate"><span class="pre">constants.py</span></code> contains some constant values (which might
+be templated by the build system).</p>
+<p>In order to get C++ code we can now run <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> with for example the GridTools multi core backend
+(<code class="docutils literal notranslate"><span class="pre">-b</span> <span class="pre">gtmc</span></code>) and tell it to generate the stencils in the new subdirectory <code class="docutils literal notranslate"><span class="pre">stencils</span></code> (<code class="code docutils literal notranslate"><span class="pre">-o</span>
+<span class="pre">stencils</span></code>).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ gtpyc -b gtmc stencils.gt.py -o stencils -e COMPILE_TIME_VALUE
+$ tree .stencils/
+stencils
+├── stencil_a.cpp
+├── stencil_a.hpp
+├── stencil_b.cpp
+└── stencil_b.hpp
+</pre></div>
+</div>
+<p>The current backends of <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a> (with the exception of the Python-only ones) all have the ability
+to generate Python bindings.  Future backends might allow bindings for other languages. This is
+accessible through an additional CLI option, which should be validated based on the chosen backend.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ gtpyc -b gtx86 stencils.gt.py -o stencils --bindings<span class="o">=</span>python -e COMPILE_TIME_VALUE
+$ tree .stencils/
+stencils
+├── stencil_a_bindings.cpp
+├── stencil_a.cpp
+├── stencil_a.hpp
+├── stencil_a.py
+├── stencil_b_bindings.cpp
+├── stencil_b.cpp
+├── stencil_b.hpp
+└── stencil_b.py
+</pre></div>
+</div>
+<p>Finally, the backend may allow options specific to it. These can be passed using the <code class="code docutils literal notranslate"><span class="pre">--option</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">-O</span></code> flag.  For example the GridTools multi core backend takes a <code class="code docutils literal notranslate"><span class="pre">debug</span></code> flag (which does nothing
+during source file generation) but would activate debug flags if we ask gt4py to compile a readily
+importable Python extension.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ gtpyc -b gtmc stencils.gt.py -o stencils -e COMPILE_TIME_VALUE -O debug True --bindings<span class="o">=</span>python --compile-bindings
+$ tree .stencils/
+stencils
+├── stencil_a_bindings.cpp
+├── stencil_a.cpp
+├── stencil_a.hpp
+├── _stencil_a.so  <span class="c1"># compiled with debug flags</span>
+├── stencil_a.py
+├── stencil_b_bindings.cpp
+├── stencil_b.cpp
+├── stencil_b.hpp
+├── _stencil_b.so  <span class="c1"># compiled with debug flags</span>
+└── stencil_b.py
+</pre></div>
+</div>
+<p>Additional Commandline options will mostly correspond to the keyword arguments of the
+<code class="xref py py-mod docutils literal notranslate"><span class="pre">gtscript.stencil</span></code> decorator.</p>
+<p>This should be easy to incorporate into existing build systems as an additional step from <code class="docutils literal notranslate"><span class="pre">.py</span></code>
+source files to <code class="docutils literal notranslate"><span class="pre">.cpp</span></code> or <code class="docutils literal notranslate"><span class="pre">.cu</span></code> sources before building and linking or as an alternative step to
+build <code class="docutils literal notranslate"><span class="pre">.py</span></code> sources into ready to link libraries.</p>
+</section>
+<section id="advanced-cli-usage">
+<h3>Advanced CLI usage<a class="headerlink" href="#advanced-cli-usage" title="Permalink to this headline"></a></h3>
+<p>For complex or mixed language usecases it might be desirable to use a whole library of GTScript /
+Python files. The import mechanism makes it possible.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ tree .
+<span class="nb">pwd</span>
+├── stencils.gt.py
+└── lib
+    ├── __init__.py
+    ├── foo.gt.py
+    └── bar
+        ├── __init__.py
+        └── baz.gt.py
+</pre></div>
+</div>
+<p>Note that packages require an __init__.py which remains a valid Python module (no <code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py.gtscript</span></code>
+injection). However any Python module inside the package can import from any GTScript file
+(including <code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py.gtscript</span></code> members).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ gtpyc -b &lt;backend&gt; stencils.gt.py -o stencils
+</pre></div>
+</div>
+<p>Compiles all top-level stencil members of <code class="docutils literal notranslate"><span class="pre">stencils.gt.py</span></code>, whether they are defined directly in
+<code class="docutils literal notranslate"><span class="pre">stencils</span></code> or imported from <code class="docutils literal notranslate"><span class="pre">lib</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ gtpyc -b &lt;backend&gt; lib -o lib_stencils
+</pre></div>
+</div>
+<p>Compiles all top-level stencil members of <code class="docutils literal notranslate"><span class="pre">lib/__init__.py</span></code>.</p>
+</section>
+<section id="usage-from-python">
+<h3>Usage from Python<a class="headerlink" href="#usage-from-python" title="Permalink to this headline"></a></h3>
+<p>After adding the following to the top of a Python module, any GTScript files in the PYTHONPATH can
+be imported as Python modules:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">gt4py.cartesian</span> <span class="kn">import</span> <span class="n">gtpy_import</span><span class="p">;</span> <span class="n">gtpy_import</span><span class="o">.</span><span class="n">install</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="backward-compatibility">
+<h2>Backward compatibility<a class="headerlink" href="#backward-compatibility" title="Permalink to this headline"></a></h2>
+<p>This GDP is aimed to be fully backward-compatible.</p>
+</section>
+<section id="detailed-description">
+<h2>Detailed description<a class="headerlink" href="#detailed-description" title="Permalink to this headline"></a></h2>
+<p>Any description of design ideas and implementation refers to the <a class="reference external" href="reference_impl_pr">reference implementation</a>.  This section will be updated as the reference implementation progresses.</p>
+<section id="naming">
+<h3>Naming<a class="headerlink" href="#naming" title="Permalink to this headline"></a></h3>
+<p>The accepted name, used throughout this document is <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> which derives from <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a> but is easier on
+typing.  The <code class="docutils literal notranslate"><span class="pre">c</span></code> at the end stands for “compiler”. The author does not have a strong prefernce for
+this name, it is simply the first one that came to mind.</p>
+<p>The accepted conventional file extension for GTScript files is <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code>. The extension <code class="docutils literal notranslate"><span class="pre">.gtpy</span></code>
+is also allowed for cases where double extensions may not be practical.</p>
+<p>Alternatives under consideration:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gtscript</span></code> / <code class="docutils literal notranslate"><span class="pre">gtscriptc</span></code> (or short version <code class="docutils literal notranslate"><span class="pre">gts</span></code> / <code class="docutils literal notranslate"><span class="pre">gtsc</span></code>)  -&gt; most intuitive file extension:
+<code class="docutils literal notranslate"><span class="pre">.gts</span></code> * same as above but prefixed with <code class="docutils literal notranslate"><span class="pre">py</span></code> -&gt; most intuitive file extension: <code class="docutils literal notranslate"><span class="pre">.pygt</span></code> or
+<code class="docutils literal notranslate"><span class="pre">.pyg</span></code></p></li>
+</ul>
+<p>Rejected Alternatives:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gt4pyc</span></code>, the sequence “gt4” is all typed with the left index finger on a standard keyboard. The
+author strongly feels that cli command names should start with an easy to type sequence
+(afterwards tab-completion can be used).</p></li>
+</ul>
+<p>It is recommended to allow one file extension for GTScript files which can be derived from the CLI
+command name by shortening it in an intuitive way. Since the accepted double extension might cause
+trouble for some tools or in some environments an additional fallback is acceptable. It is possible
+to allow many more extensions, however the potential confusion outweighs the benefits of being more
+permissive.</p>
+</section>
+<section id="enabling-all-of-gtscript-without-importing-from-gt4py-cartesian">
+<h3>Enabling all of GTScript without importing from gt4py.cartesian<a class="headerlink" href="#enabling-all-of-gtscript-without-importing-from-gt4py-cartesian" title="Permalink to this headline"></a></h3>
+<p>The currently chosen route for this is to require a comment at the very start of the file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># [GT] using-dsl: gtscript</span>
+</pre></div>
+</div>
+<p>This will serve two purposes, first it will mark the file as being written in GTScript.  Any name
+that in Python can be accessed by <code class="code docutils literal notranslate"><span class="pre">from</span> <span class="pre">gt4py.cartesian.gtscript</span> <span class="pre">import</span> <span class="pre">*</span></code> will work when compiling with
+<code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> but will be deemed undefined by the Python interpreter.  It is not planned to provide any
+means of informing Python syntax checkers to consider these names as defined.  Secondly <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> can
+replace this line with an actual <code class="code docutils literal notranslate"><span class="pre">import</span></code> line without changing line numbers for error messages.</p>
+<p>Obviously, some symbols like the <code class="code docutils literal notranslate"><span class="pre">&#64;stencil</span></code> decorator will have to be either changed or an
+alternative has to be offered, since we do not want loading of the input GTScript file to already
+trigger a compilation and though we might want to give default arguments to the backend in the
+decorator we want to be able to override them on the CLI.</p>
+</section>
+<section id="lazy-stencil-decorator">
+<h3>Lazy stencil decorator<a class="headerlink" href="#lazy-stencil-decorator" title="Permalink to this headline"></a></h3>
+<p>The <code class="xref py py-func docutils literal notranslate"><span class="pre">gt4py.gtscript.stencil()</span></code> decorator will be extended to return an intermediate object, a
+drop-in replacement for the compiled <code class="xref py py-class docutils literal notranslate"><span class="pre">StencilObject</span></code> which triggers the compilation
+process only when used in a way that requires the stencil to be compiled first.  On the other hand
+it will hold all contextual information given to the decorator, which will allow <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> to
+trigger it’s slightly modified build process.</p>
+</section>
+<section id="gtscript-import-system">
+<h3>GTScript import system<a class="headerlink" href="#gtscript-import-system" title="Permalink to this headline"></a></h3>
+<p>GTScript files can import Python modules and vice versa, after installing the GTScript import
+system (which can be done in a single line). <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> installs the import system and (by default)
+adds the parent directory of the input file to <code class="xref py py-mod docutils literal notranslate"><span class="pre">sys.path</span></code>, the search path for Python imports. This
+means Python and GTScript modules and packages in the same folder as the input file are found by
+default, other than that imports behave as normal.</p>
+<p>The public API consists of the <code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py.gtpy_import.install</span></code> function.</p>
+</section>
+<section id="passing-externals">
+<h3>Passing externals<a class="headerlink" href="#passing-externals" title="Permalink to this headline"></a></h3>
+<p>There are two supported ways to configure values at compile / generate time.</p>
+<ul class="simple">
+<li><p>By relative import of a Python file, which may be automatically generated from a template.  The
+latter could happen as part of a build system depending on build parameters. In this case the
+stencil definition can use the values without importing them from <code class="code docutils literal notranslate"><span class="pre">__externals__</span></code>. If it does,
+however, the external value can be overriden on the command line using the following second
+option.</p></li>
+<li><p>By passing externals options on the command line. In this case the external will be passed to
+every stencil in this run of <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code> and each stencil needs to import it from <code class="code docutils literal notranslate"><span class="pre">__externals__</span></code> to
+use it.</p></li>
+</ul>
+</section>
+<section id="generating-language-bindings">
+<h3>Generating Language bindings<a class="headerlink" href="#generating-language-bindings" title="Permalink to this headline"></a></h3>
+<p>The intention of this GDP is to support generating language bindings for all languages the chosen
+backend supports. These language bindings are intended to be usable without <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a> as a
+requirement. This is important to allow usage of generated bindings in non-GPL3 projects.</p>
+</section>
+<section id="implications-for-tools-ides-linters-etc">
+<h3>Implications for Tools (IDEs, Linters, etc)<a class="headerlink" href="#implications-for-tools-ides-linters-etc" title="Permalink to this headline"></a></h3>
+<p>It has been remarked that it would be beneficial to use Python tools like linters, checkers, syntax
+highlighting etc. for GTScript files.  This should work by default using the recommended <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code>
+file extension. However it is natural that Python tools will flag some code which is perfectly
+valid GTScript code as faulty Python code. Most tools should expose configuration options to
+ignore or correctly consider such cases.  These configuration options are very different from tool
+to tool and are documented for each tool separately. This GDP does not propose packaging any such
+configuration or even extensions for tools with <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a>.</p>
+<p>Note that the following is a simple way to get most of the desired behaviour from any tools which
+have trouble with the <code class="docutils literal notranslate"><span class="pre">.gt.py</span></code> double extension (The author is not aware of any):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ tree .
+<span class="nb">pwd</span>
+├── mystencils.py
+└── mygts.gt.py
+</pre></div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id5">
+<div class="code-block-caption"><span class="caption-text">mygts.gt.py</span><a class="headerlink" href="#id5" title="Permalink to this code"></a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># [GT] using-dsl: gtscript</span>
+</pre></div>
+</div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id6">
+<div class="code-block-caption"><span class="caption-text">mystencils.py</span><a class="headerlink" href="#id6" title="Permalink to this code"></a></div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mygts</span> <span class="kn">import</span> <span class="n">lazy_stencil</span><span class="p">,</span> <span class="n">Field</span><span class="p">,</span> <span class="n">computation</span><span class="p">,</span> <span class="n">interval</span>
+
+<span class="nd">@lazy_stencil</span>
+<span class="k">def</span> <span class="nf">mystencil</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="nb">float</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+      <span class="n">a</span> <span class="o">=</span> <span class="mf">1.</span>
+</pre></div>
+</div>
+</div>
+<p>Now IDEs will recognize <code class="docutils literal notranslate"><span class="pre">mystencils.py</span></code> as a Python file and will highlight and check the syntax.
+Of course tools will be unable to import <code class="docutils literal notranslate"><span class="pre">mygts</span></code>, unless there is a way to configure them to run
+<code class="code docutils literal notranslate"><span class="pre">gt4py.gtpy_import.install()</span></code> before trying to import.</p>
+</section>
+</section>
+<section id="related-work">
+<h2>Related Work<a class="headerlink" href="#related-work" title="Permalink to this headline"></a></h2>
+<p>CLIs of well-known compilers (Provide CLI conventions):</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://clang.llvm.org/docs/ClangCommandLineReference.html">clang</a></p></li>
+<li><p><a class="reference external" href="https://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html">gcc</a></p></li>
+<li><p><a class="reference external" href="https://gcc.gnu.org/onlinedocs/gfortran/Invoking-GNU-Fortran.html#Invoking-GNU-Fortran">gfortran</a></p></li>
+</ul>
+</section>
+<section id="implementation">
+<h2>Implementation<a class="headerlink" href="#implementation" title="Permalink to this headline"></a></h2>
+<p>Implementation will start with a proof-of-concept CLI with an absolutely mninimal feature set,
+taking a single function in an input <code class="docutils literal notranslate"><span class="pre">.py</span></code> file and outputting the result of the stencil
+compilation in a separate file.</p>
+<p>If it becomes apparent at that stage that changes to the internal structure would become necessary
+these will likely be treated in separate GDPs.</p>
+<p>The PoC will utilize the <a class="reference external" href="https://click.palletsprojects.com/en/7.x/">click</a> framework for the CLI, since it encourages separation and reuse
+of CLI argument / option handling and documentation code from program logic. None of the known
+limitations of <a class="reference external" href="https://click.palletsprojects.com/en/7.x/">click</a> are foreseen to be detrimental to what this GDP wants to achieve.</p>
+<section id="reasons-for-choosing-click">
+<h3>Reasons for choosing <a class="reference external" href="https://click.palletsprojects.com/en/7.x/">click</a><a class="headerlink" href="#reasons-for-choosing-click" title="Permalink to this headline"></a></h3>
+<ul class="simple">
+<li><p>separation of concerns</p></li>
+<li><p>ease of reuse of CLI components</p></li>
+<li><p>built in command completion for bash, zsh etc</p></li>
+<li><p>built-in testing api</p></li>
+</ul>
+</section>
+</section>
+<section id="alternatives">
+<h2>Alternatives<a class="headerlink" href="#alternatives" title="Permalink to this headline"></a></h2>
+<section id="using-argparse-for-the-cli">
+<h3>Using <a class="reference external" href="https://docs.python.org/3/library/argparse.html">argparse</a> for the CLI<a class="headerlink" href="#using-argparse-for-the-cli" title="Permalink to this headline"></a></h3>
+<p>Using <a class="reference external" href="https://docs.python.org/3/library/argparse.html">argparse</a> has been rejected. although it is not impossible to separate option handling code
+from program logic, any attempt to do so consistently would lead to partially reinventing one of
+the more advanced frameworks like <a class="reference external" href="https://click.palletsprojects.com/en/7.x/">click</a>.</p>
+<p>The author of this GDP does believe the additional requirement of a small pure-Python framework
+like <a class="reference external" href="https://click.palletsprojects.com/en/7.x/">click</a> to be outweighed by the benefits.</p>
+</section>
+<section id="using-plain-py-extension-in-combination-with-the-marker-comment">
+<h3>Using plain <code class="docutils literal notranslate"><span class="pre">.py</span></code> extension in combination with the marker comment<a class="headerlink" href="#using-plain-py-extension-in-combination-with-the-marker-comment" title="Permalink to this headline"></a></h3>
+<p>The author believes that the two types of files serve distinctly separate purposes.  While both
+types can be passed into <code class="docutils literal notranslate"><span class="pre">gtpyc</span></code>, plain <code class="docutils literal notranslate"><span class="pre">.py</span></code> files should represent valid Python modules whereas
+<code class="docutils literal notranslate"><span class="pre">.gt.py</span></code> files are treated as written in GTScript, a domain specific language that extends Python.</p>
+<p>It may be a subtle difference in implementation but quite a difference in intent. The author of a
+<code class="docutils literal notranslate"><span class="pre">.py</span></code> file may use <a class="reference internal" href="../_source/gt4py.html#module-gt4py" title="gt4py"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gt4py</span></code></a> as a library, whereas the author of a GTScript file uses a different
+language which happens to have the same syntax.</p>
+</section>
+</section>
+<section id="discussion">
+<h2>Discussion<a class="headerlink" href="#discussion" title="Permalink to this headline"></a></h2>
+<p>The discussion for this GDP will be in the draft PR for it, which is to be found
+<a class="reference external" href="https://github.com/GridTools/gt4py/pull/21">here</a>.</p>
+<p>The discussion around the reference implementation is located in it’s separate
+<a class="reference external" href="https://github.com/GridTools/gt4py/pull/23">pull request</a>.</p>
+</section>
+<section id="references-and-footnotes">
+<h2>References and Footnotes<a class="headerlink" href="#references-and-footnotes" title="Permalink to this headline"></a></h2>
+<dl class="footnote brackets">
+<dt class="label" id="id2"><span class="brackets"><a class="fn-backref" href="#id3">1</a></span></dt>
+<dd><p>Each GDP must either be explicitly labeled as placed in the public domain (see
+this GDP as an example) or licensed under the <a class="reference external" href="https://www.opencontent.org/openpub/">Open Publication License</a>.</p>
+</dd>
+</dl>
+</section>
+<section id="copyright">
+<h2>Copyright<a class="headerlink" href="#copyright" title="Permalink to this headline"></a></h2>
+<p>This document has been placed in the public domain. <a class="footnote-reference brackets" href="#id2" id="id3">1</a></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gdp-0002-regions.html" class="btn btn-neutral float-left" title="GDP 2 — Specializations Near Boundaries" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gdp-0003-duck-storage.html" class="btn btn-neutral float-right" title="GDP 3 — A New Storage Implementation using Duck Typing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

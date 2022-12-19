@@ -1,0 +1,53 @@
+gt4py.cartesian.gtc.dace.expansion package
+==========================================
+
+Submodules
+----------
+
+gt4py.cartesian.gtc.dace.expansion.daceir\_builder module
+---------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion.daceir_builder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.expansion.expansion module
+---------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion.expansion
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.expansion.sdfg\_builder module
+-------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion.sdfg_builder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.expansion.tasklet\_codegen module
+----------------------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion.tasklet_codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.gtc.dace.expansion.utils module
+-----------------------------------------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.gtc.dace.expansion
+   :members:
+   :undoc-members:
+   :show-inheritance:

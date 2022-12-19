@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.testing.input_strategies &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.testing.input_strategies</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.testing.input_strategies</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">import</span> <span class="nn">enum</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">numbers</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">hypothesis.strategies</span> <span class="k">as</span> <span class="nn">hyp_st</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">hypothesis.extra</span> <span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">hyp_np</span>
+
+
+<span class="c1"># ---- Test Suites utilities ----</span>
+<div class="viewcode-block" id="SymbolKind"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.SymbolKind">[docs]</a><span class="k">class</span> <span class="nc">SymbolKind</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="n">NONE</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">GLOBAL_STRATEGY</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">GLOBAL_SET</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">SINGLETON</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">PARAMETER</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">FIELD</span> <span class="o">=</span> <span class="mi">5</span></div>
+
+
+<div class="viewcode-block" id="_SymbolStrategy"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies._SymbolStrategy">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">_SymbolStrategy</span><span class="p">:</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">SymbolKind</span>
+    <span class="n">boundary</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span>
+    <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">data_dims</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span>
+    <span class="n">value_st_factory</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">SearchStrategy</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="_SymbolValueTuple"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies._SymbolValueTuple">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">_SymbolValueTuple</span><span class="p">:</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">boundary</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span>
+    <span class="n">values</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="global_name"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.global_name">[docs]</a><span class="k">def</span> <span class="nf">global_name</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">singleton</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">symbol</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">one_of</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">in_range</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define a *global* symbol.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">singleton</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">symbol</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">_SymbolValueTuple</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">SINGLETON</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="p">(</span><span class="n">singleton</span><span class="p">,))</span>
+
+    <span class="k">if</span> <span class="n">symbol</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">singleton</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">_SymbolValueTuple</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">GLOBAL_SET</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="p">(</span><span class="n">symbol</span><span class="p">,))</span>
+
+    <span class="k">if</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="n">singleton</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">symbol</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">one_of</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">_SymbolValueTuple</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">GLOBAL_SET</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">one_of</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">singleton</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">symbol</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_range</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+        <span class="k">return</span> <span class="n">_SymbolStrategy</span><span class="p">(</span>
+            <span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">GLOBAL_STRATEGY</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">data_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">value_st_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">scalar_value_st</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+        <span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Missing value descriptor&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="field"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.field">[docs]</a><span class="k">def</span> <span class="nf">field</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">in_range</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define a *field* symbol.&quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">boundary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">extent</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_range</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+    <span class="n">boundary</span> <span class="o">=</span> <span class="n">boundary</span> <span class="ow">or</span> <span class="p">[(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">abs</span><span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">extent</span><span class="p">]</span>
+    <span class="n">extent</span> <span class="o">=</span> <span class="n">extent</span> <span class="ow">or</span> <span class="p">[(</span><span class="o">-</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">boundary</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">((</span><span class="o">-</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">e</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">b</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">extent</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">((</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">boundary</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_SymbolStrategy</span><span class="p">(</span>
+        <span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">FIELD</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
+        <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span>
+        <span class="n">data_dims</span><span class="o">=</span><span class="n">data_dims</span> <span class="ow">or</span> <span class="nb">tuple</span><span class="p">(),</span>
+        <span class="n">value_st_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">scalar_value_st</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="parameter"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.parameter">[docs]</a><span class="k">def</span> <span class="nf">parameter</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">one_of</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">in_range</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Define a *parameter* symbol.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">one_of</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_SymbolStrategy</span><span class="p">(</span>
+            <span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">PARAMETER</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">data_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">value_st_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">one_of_values_st</span><span class="p">(</span><span class="n">one_of</span><span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">in_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">one_of</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_range</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+        <span class="k">return</span> <span class="n">_SymbolStrategy</span><span class="p">(</span>
+            <span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">PARAMETER</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">data_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">value_st_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">scalar_value_st</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">in_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+        <span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;Missing value descriptor&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="none"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.none">[docs]</a><span class="k">def</span> <span class="nf">none</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Define the symbol ``None``.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_SymbolStrategy</span><span class="p">(</span>
+        <span class="n">kind</span><span class="o">=</span><span class="n">SymbolKind</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">data_dims</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">value_st_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">none</span><span class="p">(),</span>
+    <span class="p">)</span></div>
+
+
+<span class="c1"># ---- Custom Hypothesis strategies ----</span>
+<div class="viewcode-block" id="scalar_value_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.scalar_value_st">[docs]</a><span class="k">def</span> <span class="nf">scalar_value_st</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">min_value</span><span class="p">,</span> <span class="n">max_value</span><span class="p">,</span> <span class="n">allow_nan</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy for `dtype` scalar values in range [min_value, max_value].&quot;&quot;&quot;</span>
+    <span class="n">allow_infinity</span> <span class="o">=</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">min_value</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">max_value</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Real</span><span class="p">):</span>
+        <span class="n">value_st</span> <span class="o">=</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">floats</span><span class="p">(</span>
+            <span class="n">min_value</span><span class="p">,</span>
+            <span class="n">max_value</span><span class="p">,</span>
+            <span class="n">allow_infinity</span><span class="o">=</span><span class="n">allow_infinity</span><span class="p">,</span>
+            <span class="n">allow_nan</span><span class="o">=</span><span class="n">allow_nan</span><span class="p">,</span>
+            <span class="n">width</span><span class="o">=</span><span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span> <span class="o">*</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Integral</span><span class="p">):</span>
+        <span class="n">value_st</span> <span class="o">=</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">min_value</span><span class="p">,</span> <span class="n">max_value</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">value_st</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">dtype</span><span class="o">.</span><span class="n">type</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="one_of_values_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.one_of_values_st">[docs]</a><span class="k">def</span> <span class="nf">one_of_values_st</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy returning one of the values passed in the arguments.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">just</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">sampled_from</span><span class="p">(</span><span class="n">args</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ndarray_shape_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.ndarray_shape_st">[docs]</a><span class="k">def</span> <span class="nf">ndarray_shape_st</span><span class="p">(</span><span class="n">sizes</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy for shapes of `ndims` dimensions and size within `size_range`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">tuples</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">hyp_st</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">min_size</span><span class="p">,</span> <span class="n">max_size</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">min_size</span><span class="p">,</span> <span class="n">max_size</span><span class="p">)</span> <span class="ow">in</span> <span class="n">sizes</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="derived_shape_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.derived_shape_st">[docs]</a><span class="k">def</span> <span class="nf">derived_shape_st</span><span class="p">(</span><span class="n">shape_st</span><span class="p">,</span> <span class="n">extra</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]]):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy for extending shapes generated from a provided strategy with some extra padding.</span>
+
+<span class="sd">    If an element of extra contains None, the item will be dropped from the final shape, otherwise,</span>
+<span class="sd">    both shape and extra elements are summed together.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">hyp_st</span><span class="o">.</span><span class="n">builds</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">d</span> <span class="o">+</span> <span class="n">e</span> <span class="k">for</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">zip_longest</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">extra</span><span class="p">,</span> <span class="n">fillvalue</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">e</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="p">),</span>
+        <span class="n">shape_st</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ndarray_in_range_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.ndarray_in_range_st">[docs]</a><span class="k">def</span> <span class="nf">ndarray_in_range_st</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape_st</span><span class="p">,</span> <span class="n">value_range</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` strategies and the `value_range`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">hyp_np</span><span class="o">.</span><span class="n">arrays</span><span class="p">(</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">shape_st</span><span class="p">,</span>
+        <span class="n">elements</span><span class="o">=</span><span class="n">scalar_value_st</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">min_value</span><span class="o">=</span><span class="n">value_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">max_value</span><span class="o">=</span><span class="n">value_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+        <span class="n">fill</span><span class="o">=</span><span class="n">scalar_value_st</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">min_value</span><span class="o">=</span><span class="n">value_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">max_value</span><span class="o">=</span><span class="n">value_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ndarray_st"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.ndarray_st">[docs]</a><span class="k">def</span> <span class="nf">ndarray_st</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape_strategy</span><span class="p">,</span> <span class="n">value_st_factory</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Hypothesis strategy for ndarrays generated using the provided `dtype` and `shape` and `value_st_factory` strategies/factories.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">hyp_np</span><span class="o">.</span><span class="n">arrays</span><span class="p">(</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">shape_strategy</span><span class="p">,</span>
+        <span class="n">elements</span><span class="o">=</span><span class="n">value_st_factory</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span>
+        <span class="n">fill</span><span class="o">=</span><span class="n">value_st_factory</span><span class="p">(</span><span class="n">dtype</span><span class="p">),</span>
+    <span class="p">)</span></div>
+
+
+<span class="c1"># ---- Utility functions ----</span>
+<div class="viewcode-block" id="draw_from_strategies"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.draw_from_strategies">[docs]</a><span class="nd">@hyp_st</span><span class="o">.</span><span class="n">composite</span>
+<span class="k">def</span> <span class="nf">draw_from_strategies</span><span class="p">(</span><span class="n">draw</span><span class="p">,</span> <span class="n">strategies</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generate a Hypothesis strategy example by composing named strategies from a dictionary.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    draw : `function`</span>
+<span class="sd">        Hypothesis :func:`draw` implementation.</span>
+<span class="sd">    strategies : `dict`</span>
+<span class="sd">        Named strategies.</span>
+<span class="sd">        - ``name``: Hypothesis strategy (`function`).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    ----------</span>
+<span class="sd">    args: `dict`</span>
+<span class="sd">        A dictionary of Hypothesis examples.</span>
+<span class="sd">        - ``name``: Hypothesis strategy example (``value``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">strategy</span> <span class="ow">in</span> <span class="n">strategies</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">args</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">draw</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">args</span></div>
+
+
+<div class="viewcode-block" id="composite_strategy_factory"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.composite_strategy_factory">[docs]</a><span class="k">def</span> <span class="nf">composite_strategy_factory</span><span class="p">(</span><span class="n">dtypes</span><span class="p">,</span> <span class="n">strategy_factories</span><span class="p">):</span>
+    <span class="n">strategy_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">factory</span> <span class="ow">in</span> <span class="n">strategy_factories</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">strategy_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">factory</span><span class="p">(</span><span class="n">dtypes</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+
+    <span class="nd">@hyp_st</span><span class="o">.</span><span class="n">composite</span>
+    <span class="k">def</span> <span class="nf">strategy</span><span class="p">(</span><span class="n">draw</span><span class="p">):</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">strategy</span> <span class="ow">in</span> <span class="n">strategy_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">args</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">draw</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">args</span>
+
+    <span class="k">return</span> <span class="n">strategy</span></div>
+
+
+<div class="viewcode-block" id="composite_implementation_strategy_factory"><a class="viewcode-back" href="../../../../_source/gt4py.cartesian.testing.html#gt4py.cartesian.testing.input_strategies.composite_implementation_strategy_factory">[docs]</a><span class="k">def</span> <span class="nf">composite_implementation_strategy_factory</span><span class="p">(</span>
+    <span class="n">dtypes</span><span class="p">,</span> <span class="n">validation_strategy_factories</span><span class="p">,</span> <span class="n">global_boundaries</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generate strategy for run-time :class:`StencilTestSuite` parameters.&quot;&quot;&quot;</span>
+    <span class="n">strategy_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">factory</span> <span class="ow">in</span> <span class="n">validation_strategy_factories</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">strategy_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">factory</span><span class="p">(</span><span class="n">dtypes</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+
+    <span class="nd">@hyp_st</span><span class="o">.</span><span class="n">composite</span>
+    <span class="k">def</span> <span class="nf">strategy</span><span class="p">(</span><span class="n">draw</span><span class="p">):</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">strat</span> <span class="ow">in</span> <span class="n">strategy_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">inputs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">draw</span><span class="p">(</span><span class="n">strat</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">inputs</span><span class="p">,</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">strategy</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

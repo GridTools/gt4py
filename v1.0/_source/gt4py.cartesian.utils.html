@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.utils package &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="gt4py.eve package" href="gt4py.eve.html" />
+    <link rel="prev" title="gt4py.cartesian.testing package" href="gt4py.cartesian.testing.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../apiref.html">API Documentation</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="modules.html">gt4py</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="gt4py.html">gt4py package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="gt4py.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gt4py.html#module-gt4py">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../apiref.html">API Documentation</a></li>
+          <li class="breadcrumb-item"><a href="modules.html">gt4py</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.html">gt4py package</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.cartesian.html">gt4py.cartesian package</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.utils package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_source/gt4py.cartesian.utils.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gt4py-cartesian-utils-package">
+<h1>gt4py.cartesian.utils package<a class="headerlink" href="#gt4py-cartesian-utils-package" title="Permalink to this headline"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-gt4py.cartesian.utils.attrib">
+<span id="gt4py-cartesian-utils-attrib-module"></span><h2>gt4py.cartesian.utils.attrib module<a class="headerlink" href="#module-gt4py.cartesian.utils.attrib" title="Permalink to this headline"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.AttributeClassLike">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.attrib.</span></span><span class="sig-name descname"><span class="pre">AttributeClassLike</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#AttributeClassLike"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.AttributeClassLike" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.AttributeClassLike.as_dict">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">as_dict</span></span><a class="headerlink" href="#gt4py.cartesian.utils.attrib.AttributeClassLike.as_dict" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.AttributeClassLike.attributes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">attributes</span></span><a class="headerlink" href="#gt4py.cartesian.utils.attrib.AttributeClassLike.attributes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.AttributeClassLike.validate">
+<span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#AttributeClassLike.validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.AttributeClassLike.validate" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.attribclass">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.attrib.</span></span><span class="sig-name descname"><span class="pre">attribclass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_or_none</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#attribclass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.attribclass" title="Permalink to this definition"></a></dt>
+<dd><p>Class decorator to convert a regular class into an <cite>AttribClass</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.attribkwclass">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.attrib.</span></span><span class="sig-name descname"><span class="pre">attribkwclass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_or_none</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#attribkwclass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.attribkwclass" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.attribute">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.attrib.</span></span><span class="sig-name descname"><span class="pre">attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">of</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.attribute" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.attrib.attributes_of">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.attrib.</span></span><span class="sig-name descname"><span class="pre">attributes_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">an_attribclass</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/attrib.html#attributes_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.attrib.attributes_of" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.utils.base">
+<span id="gt4py-cartesian-utils-base-module"></span><h2>gt4py.cartesian.utils.base module<a class="headerlink" href="#module-gt4py.cartesian.utils.base" title="Permalink to this headline"></a></h2>
+<p>Basic utilities for Python programming.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.BaseFrozen">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">BaseFrozen</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#BaseFrozen"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.BaseFrozen" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.BaseSingleton">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">BaseSingleton</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#BaseSingleton"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.BaseSingleton" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.ClassProperty">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">ClassProperty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fget</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fdel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#ClassProperty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.ClassProperty" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Like a <a class="reference external" href="https://docs.python.org/3/library/functions.html#property" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">property</span></code></a>, but the wrapped function is a class method.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.ClassProperty.deleter">
+<span class="sig-name descname"><span class="pre">deleter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fdel</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#ClassProperty.deleter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.ClassProperty.deleter" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.ClassProperty.getter">
+<span class="sig-name descname"><span class="pre">getter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fget</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#ClassProperty.getter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.ClassProperty.getter" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.ClassProperty.setter">
+<span class="sig-name descname"><span class="pre">setter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#ClassProperty.setter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.ClassProperty.setter" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.Registry">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">Registry</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#Registry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.Registry" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a></p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.Registry.names">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">names</span></span><a class="headerlink" href="#gt4py.cartesian.utils.base.Registry.names" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.Registry.register">
+<span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item=&lt;object</span> <span class="pre">object&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#Registry.register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.Registry.register" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.UniqueIdGenerator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">UniqueIdGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#UniqueIdGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.UniqueIdGenerator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.UniqueIdGenerator.current">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">current</span></span><a class="headerlink" href="#gt4py.cartesian.utils.base.UniqueIdGenerator.current" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.UniqueIdGenerator.new">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">new</span></span><a class="headerlink" href="#gt4py.cartesian.utils.base.UniqueIdGenerator.new" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.classmethod_to_function">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">classmethod_to_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">owner=&lt;class</span> <span class="pre">'NoneType'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_cls_arg=False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#classmethod_to_function"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.classmethod_to_function" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.classproperty">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">classproperty</span></span><a class="headerlink" href="#gt4py.cartesian.utils.base.classproperty" title="Permalink to this definition"></a></dt>
+<dd><p>alias of <a class="reference internal" href="#gt4py.cartesian.utils.base.ClassProperty" title="gt4py.cartesian.utils.base.ClassProperty"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.base.ClassProperty</span></code></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.compose">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">compose</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">functions_or_iterable</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#compose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.compose" title="Permalink to this definition"></a></dt>
+<dd><p>Return a function that chains the input functions.</p>
+<p>Derived from: <a class="reference external" href="https://mathieularose.com/function-composition-in-python/">https://mathieularose.com/function-composition-in-python/</a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.flatten">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">flatten</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nested_iterables</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_none=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_types=(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'bytes'&gt;)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#flatten"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.flatten" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.flatten_iter">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">flatten_iter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nested_iterables</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_none=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_types=(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'bytes'&gt;)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#flatten_iter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.flatten_iter" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.get_member">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">get_member</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#get_member"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.get_member" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.is_collection">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">is_collection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">accept_mapping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#is_collection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.is_collection" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.is_identifier_name">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">is_identifier_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespaced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#is_identifier_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.is_identifier_name" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.is_iterable_of">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">is_iterable_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterable_class=&lt;class</span> <span class="pre">'collections.abc.Iterable'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">accept_mapping=True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#is_iterable_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.is_iterable_of" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.is_mapping_of">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">is_mapping_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_class=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mapping_class=&lt;class</span> <span class="pre">'collections.abc.Mapping'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optional=False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#is_mapping_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.is_mapping_of" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.jsonify">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">jsonify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#jsonify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.jsonify" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.make_dir">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">make_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dir_name</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">511</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_package</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#make_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.make_dir" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.make_local_dir">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">make_local_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dir_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">511</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_package</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#make_local_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.make_local_dir" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.make_module_from_file">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">make_module_from_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">qualified_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_path</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_import</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#make_module_from_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.make_module_from_file" title="Permalink to this definition"></a></dt>
+<dd><p>Import module from file.</p>
+<p class="rubric">References</p>
+<p><a class="reference external" href="https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly">https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly</a>
+<a class="reference external" href="https://stackoverflow.com/a/43602645">https://stackoverflow.com/a/43602645</a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.namespace_from_nested_dict">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">namespace_from_nested_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nested_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#namespace_from_nested_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.namespace_from_nested_dict" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.normalize_mapping">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">normalize_mapping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_types=(&lt;class</span> <span class="pre">'object'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_none=False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#normalize_mapping"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.normalize_mapping" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.patch_module">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">patch_module</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">member</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_value</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recursive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#patch_module"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.patch_module" title="Permalink to this definition"></a></dt>
+<dd><p>Monkey patch a module replacing a member with a new value.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.restore_module">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">restore_module</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patch</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verify</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#restore_module"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.restore_module" title="Permalink to this definition"></a></dt>
+<dd><p>Restore a module patched with the <cite>patch_module()</cite> function.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.shash">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">shash</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hash_algorithm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#shash"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.shash" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.shashed_id">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">shashed_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hash_algorithm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#shashed_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.shashed_id" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.base.slugify">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.base.</span></span><span class="sig-name descname"><span class="pre">slugify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replace_spaces</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">valid_symbols</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'-_.()'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invalid_marker</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/base.html#slugify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.base.slugify" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.utils.meta">
+<span id="gt4py-cartesian-utils-meta-module"></span><h2>gt4py.cartesian.utils.meta module<a class="headerlink" href="#module-gt4py.cartesian.utils.meta" title="Permalink to this headline"></a></h2>
+<p>Utilities for runtime: introspection and bytecode.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ASTEvaluator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTPass" title="gt4py.cartesian.utils.meta.ASTPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTPass</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.AST_OP_TO_OP">
+<span class="sig-name descname"><span class="pre">AST_OP_TO_OP</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{&lt;class</span> <span class="pre">'ast.UAdd'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">pos&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.USub'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">neg&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Add'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">add&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Sub'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">sub&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Mult'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">mul&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Div'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">truediv&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Mod'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">mod&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Pow'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">pow&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Invert'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">invert&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.BitOr'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">or_&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.BitXor'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">xor&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.BitAnd'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">and_&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Not'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">not_&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Eq'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">eq&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.NotEq'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">ne&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Lt'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">lt&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.LtE'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">le&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.Gt'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">gt&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'ast.GtE'&gt;:</span> <span class="pre">&lt;built-in</span> <span class="pre">function</span> <span class="pre">ge&gt;}</span></em><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.AST_OP_TO_OP" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.apply">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.apply" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.generic_visit">
+<span class="sig-name descname"><span class="pre">generic_visit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.generic_visit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.generic_visit" title="Permalink to this definition"></a></dt>
+<dd><p>Fallback if no explicit visitor function exists for a node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Attribute">
+<span class="sig-name descname"><span class="pre">visit_Attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Attribute" title="(in Python v3.11)"><span class="pre">ast.Attribute</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Attribute" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_BinOp">
+<span class="sig-name descname"><span class="pre">visit_BinOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.BinOp" title="(in Python v3.11)"><span class="pre">ast.BinOp</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_BinOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_BinOp" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_BoolOp">
+<span class="sig-name descname"><span class="pre">visit_BoolOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.BoolOp" title="(in Python v3.11)"><span class="pre">ast.BoolOp</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_BoolOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_BoolOp" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Compare">
+<span class="sig-name descname"><span class="pre">visit_Compare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Compare" title="(in Python v3.11)"><span class="pre">ast.Compare</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Compare"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Compare" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Constant">
+<span class="sig-name descname"><span class="pre">visit_Constant</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Constant"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Constant" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Name">
+<span class="sig-name descname"><span class="pre">visit_Name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Name" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_NameConstant">
+<span class="sig-name descname"><span class="pre">visit_NameConstant</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_NameConstant"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_NameConstant" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Num">
+<span class="sig-name descname"><span class="pre">visit_Num</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Num"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Num" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_Tuple">
+<span class="sig-name descname"><span class="pre">visit_Tuple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Tuple" title="(in Python v3.11)"><span class="pre">ast.Tuple</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_Tuple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_Tuple" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTEvaluator.visit_UnaryOp">
+<span class="sig-name descname"><span class="pre">visit_UnaryOp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.UnaryOp" title="(in Python v3.11)"><span class="pre">ast.UnaryOp</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTEvaluator.visit_UnaryOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTEvaluator.visit_UnaryOp" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTPass">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ASTPass</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTPass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTPass" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Clone of the ast.NodeVisitor that supports forwarding kwargs.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTPass.generic_visit">
+<span class="sig-name descname"><span class="pre">generic_visit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTPass.generic_visit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTPass.generic_visit" title="Permalink to this definition"></a></dt>
+<dd><p>Fallback if no explicit visitor function exists for a node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTPass.visit">
+<span class="sig-name descname"><span class="pre">visit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTPass.visit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTPass.visit" title="Permalink to this definition"></a></dt>
+<dd><p>Visit a node.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTTransformPass">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ASTTransformPass</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTTransformPass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTTransformPass" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTPass" title="gt4py.cartesian.utils.meta.ASTPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTPass</span></code></a></p>
+<p>Clone of the ast.NodeTransformer that supports forwarding kwargs.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ASTTransformPass.generic_visit">
+<span class="sig-name descname"><span class="pre">generic_visit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ASTTransformPass.generic_visit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ASTTransformPass.generic_visit" title="Permalink to this definition"></a></dt>
+<dd><p>Fallback if no explicit visitor function exists for a node.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.AssignTargetsCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">AssignTargetsCollector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multiple_targets</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#AssignTargetsCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.AssignTargetsCollector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTPass" title="gt4py.cartesian.utils.meta.ASTPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTPass</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.AssignTargetsCollector.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#AssignTargetsCollector.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.AssignTargetsCollector.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.AssignTargetsCollector.apply">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multiple_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#AssignTargetsCollector.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.AssignTargetsCollector.apply" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.AssignTargetsCollector.visit_Assign">
+<span class="sig-name descname"><span class="pre">visit_Assign</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Assign" title="(in Python v3.11)"><span class="pre">ast.Assign</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#AssignTargetsCollector.visit_Assign"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.AssignTargetsCollector.visit_Assign" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ImportsCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ImportsCollector</span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ImportsCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ImportsCollector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTPass" title="gt4py.cartesian.utils.meta.ASTPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTPass</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ImportsCollector.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ImportsCollector.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ImportsCollector.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ImportsCollector.apply">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ImportsCollector.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ImportsCollector.apply" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ImportsCollector.visit_Import">
+<span class="sig-name descname"><span class="pre">visit_Import</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Import" title="(in Python v3.11)"><span class="pre">ast.Import</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ImportsCollector.visit_Import"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ImportsCollector.visit_Import" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ImportsCollector.visit_ImportFrom">
+<span class="sig-name descname"><span class="pre">visit_ImportFrom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.ImportFrom" title="(in Python v3.11)"><span class="pre">ast.ImportFrom</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ImportsCollector.visit_ImportFrom"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ImportsCollector.visit_ImportFrom" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">QualifiedNameCollector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefixes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_decorators</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_annotations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTPass" title="gt4py.cartesian.utils.meta.ASTPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTPass</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector.apply">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefixes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_decorators</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_annotations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector.apply" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector.generic_visit">
+<span class="sig-name descname"><span class="pre">generic_visit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector.generic_visit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector.generic_visit" title="Permalink to this definition"></a></dt>
+<dd><p>Fallback if no explicit visitor function exists for a node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Attribute">
+<span class="sig-name descname"><span class="pre">visit_Attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Attribute" title="(in Python v3.11)"><span class="pre">ast.Attribute</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector.visit_Attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Attribute" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Name">
+<span class="sig-name descname"><span class="pre">visit_Name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Name" title="(in Python v3.11)"><span class="pre">ast.Name</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#QualifiedNameCollector.visit_Name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.QualifiedNameCollector.visit_Name" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.SymbolsNameMapper">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">SymbolsNameMapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template_fmt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_names</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#SymbolsNameMapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.SymbolsNameMapper" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.cartesian.utils.meta.ASTTransformPass" title="gt4py.cartesian.utils.meta.ASTTransformPass"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.cartesian.utils.meta.ASTTransformPass</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.SymbolsNameMapper.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#SymbolsNameMapper.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.SymbolsNameMapper.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.SymbolsNameMapper.apply">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template_fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#SymbolsNameMapper.apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.SymbolsNameMapper.apply" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.SymbolsNameMapper.visit_Name">
+<span class="sig-name descname"><span class="pre">visit_Name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/ast.html#ast.Name" title="(in Python v3.11)"><span class="pre">ast.Name</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#SymbolsNameMapper.visit_Name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.SymbolsNameMapper.visit_Name" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ast_dump">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ast_dump</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">definition</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_annotations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_decorators</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.11)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ast_dump"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ast_dump" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ast_eval">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ast_eval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.utils.meta.ast_eval" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ast_shash">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ast_shash</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_node</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_decorators</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ast_shash"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ast_shash" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.ast_unparse">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">ast_unparse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_node</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#ast_unparse"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.ast_unparse" title="Permalink to this definition"></a></dt>
+<dd><p>Call ast.unparse, but use astunparse for Python prior to 3.9.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.collect_assign_targets">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">collect_assign_targets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multiple_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.utils.meta.collect_assign_targets" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.collect_decorators">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">collect_decorators</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func_or_source_or_ast</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#collect_decorators"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.collect_decorators" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.collect_imported_symbols">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">collect_imported_symbols</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.utils.meta.collect_imported_symbols" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.collect_names">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">collect_names</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefixes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_decorators</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_annotations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.utils.meta.collect_names" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.get_ast">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">get_ast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func_or_source_or_ast</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.11)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#get_ast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.get_ast" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.get_closure">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">get_closure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_globals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">included_nonlocals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_builtins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#get_closure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.get_closure" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.get_qualified_name_from_node">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">get_qualified_name_from_node</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name_or_attribute</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">as_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#get_qualified_name_from_node"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.get_qualified_name_from_node" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.get_source">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">get_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#get_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.get_source" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.map_symbol_names">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">map_symbol_names</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ast_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template_fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.cartesian.utils.meta.map_symbol_names" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.remove_decorators">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">remove_decorators</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func_or_source_or_ast</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#remove_decorators"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.remove_decorators" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.meta.split_def_decorators">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.meta.</span></span><span class="sig-name descname"><span class="pre">split_def_decorators</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func_or_source</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/meta.html#split_def_decorators"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.meta.split_def_decorators" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.utils.text">
+<span id="gt4py-cartesian-utils-text-module"></span><h2>gt4py.cartesian.utils.text module<a class="headerlink" href="#module-gt4py.cartesian.utils.text" title="Permalink to this headline"></a></h2>
+<p>Text and templating utilities.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.Joiner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.text.</span></span><span class="sig-name descname"><span class="pre">Joiner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">joiner_str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#Joiner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.Joiner" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.Joiner.Placeholder">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Placeholder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">joiner</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#Joiner.Placeholder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.Joiner.Placeholder" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.Joiner.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#Joiner.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.Joiner.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.text.</span></span><span class="sig-name descname"><span class="pre">TextBlock</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">indent_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent_char</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'</span> <span class="pre">'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_line</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'\n'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.append">
+<span class="sig-name descname"><span class="pre">append</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_line</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.append"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.append" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.dedent">
+<span class="sig-name descname"><span class="pre">dedent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.dedent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.dedent" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.empty_line">
+<span class="sig-name descname"><span class="pre">empty_line</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.empty_line"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.empty_line" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.extend">
+<span class="sig-name descname"><span class="pre">extend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source_lines</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dedent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.extend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.extend" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.indent">
+<span class="sig-name descname"><span class="pre">indent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.indent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.indent" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.indented">
+<span class="sig-name descname"><span class="pre">indented</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#TextBlock.indented"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.indented" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.TextBlock.text">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">text</span></span><a class="headerlink" href="#gt4py.cartesian.utils.text.TextBlock.text" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.format_source">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.text.</span></span><span class="sig-name descname"><span class="pre">format_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#format_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.format_source" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.cartesian.utils.text.get_line_number">
+<span class="sig-prename descclassname"><span class="pre">gt4py.cartesian.utils.text.</span></span><span class="sig-name descname"><span class="pre">get_line_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">re_query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">re_flags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/cartesian/utils/text.html#get_line_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.cartesian.utils.text.get_line_number" title="Permalink to this definition"></a></dt>
+<dd><p>Return (0-based) line number of the match or None.</p>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.cartesian.utils">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-gt4py.cartesian.utils" title="Permalink to this headline"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gt4py.cartesian.testing.html" class="btn btn-neutral float-left" title="gt4py.cartesian.testing package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gt4py.eve.html" class="btn btn-neutral float-right" title="gt4py.eve package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

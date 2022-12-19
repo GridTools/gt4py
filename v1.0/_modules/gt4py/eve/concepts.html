@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.concepts &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.concepts</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.eve.concepts</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="sd">&quot;&quot;&quot;Definitions of basic Eve concepts.&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">ast</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">datamodels</span><span class="p">,</span> <span class="n">exceptions</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">extended_typing</span> <span class="k">as</span> <span class="n">xtyping</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">trees</span><span class="p">,</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">.datamodels</span> <span class="kn">import</span> <span class="n">validators</span> <span class="k">as</span> <span class="n">_validators</span>
+<span class="kn">from</span> <span class="nn">.extended_typing</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Any</span><span class="p">,</span>
+    <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">ClassVar</span><span class="p">,</span>
+    <span class="n">Dict</span><span class="p">,</span>
+    <span class="n">Final</span><span class="p">,</span>
+    <span class="n">Iterable</span><span class="p">,</span>
+    <span class="n">List</span><span class="p">,</span>
+    <span class="n">Optional</span><span class="p">,</span>
+    <span class="n">Set</span><span class="p">,</span>
+    <span class="n">Tuple</span><span class="p">,</span>
+    <span class="n">Type</span><span class="p">,</span>
+    <span class="n">TypeVar</span><span class="p">,</span>
+    <span class="n">Union</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.type_definitions</span> <span class="kn">import</span> <span class="n">ConstrainedStr</span><span class="p">,</span> <span class="n">IntEnum</span><span class="p">,</span> <span class="n">StrEnum</span>
+
+
+<span class="n">_SYMBOL_NAME_RE</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^[a-zA-Z_]\w*$&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SymbolName"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.SymbolName">[docs]</a><span class="k">class</span> <span class="nc">SymbolName</span><span class="p">(</span><span class="n">ConstrainedStr</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="n">_SYMBOL_NAME_RE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;String value containing a valid symbol name for typical programming conventions.&quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="SymbolRef"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.SymbolRef">[docs]</a><span class="k">class</span> <span class="nc">SymbolRef</span><span class="p">(</span><span class="n">ConstrainedStr</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="n">_SYMBOL_NAME_RE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Reference to a symbol name.&quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="SourceLocation"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.SourceLocation">[docs]</a><span class="nd">@datamodels</span><span class="o">.</span><span class="n">datamodel</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SourceLocation</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Source code location (line, column, source).&quot;&quot;&quot;</span>
+
+    <span class="n">line</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">_validators</span><span class="o">.</span><span class="n">ge</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">column</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">_validators</span><span class="o">.</span><span class="n">ge</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">end_line</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">_validators</span><span class="o">.</span><span class="n">optional</span><span class="p">(</span><span class="n">_validators</span><span class="o">.</span><span class="n">ge</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+    <span class="n">end_column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">_validators</span><span class="o">.</span><span class="n">optional</span><span class="p">(</span><span class="n">_validators</span><span class="o">.</span><span class="n">ge</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+
+<div class="viewcode-block" id="SourceLocation.from_AST"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.SourceLocation.from_AST">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_AST</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">ast_node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SourceLocation</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ast_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ast_node</span><span class="p">,</span> <span class="s2">&quot;lineno&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ast_node</span><span class="p">,</span> <span class="s2">&quot;col_offset&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Passed AST node &#39;</span><span class="si">{</span><span class="n">ast_node</span><span class="si">}</span><span class="s2">&#39; does not contain a valid source location.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">source</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;ast.</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">ast_node</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at 0x</span><span class="si">{</span><span class="nb">id</span><span class="p">(</span><span class="n">ast_node</span><span class="p">)</span><span class="si">:</span><span class="s2">x</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">ast_node</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
+            <span class="n">ast_node</span><span class="o">.</span><span class="n">col_offset</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">source</span><span class="p">,</span>
+            <span class="n">end_line</span><span class="o">=</span><span class="n">ast_node</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span>
+            <span class="n">end_column</span><span class="o">=</span><span class="n">ast_node</span><span class="o">.</span><span class="n">end_col_offset</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">ast_node</span><span class="o">.</span><span class="n">end_col_offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">line</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">column</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">end_line</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">end_column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">end_column</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">end_line</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__auto_init__</span><span class="p">(</span>  <span class="c1"># type: ignore[attr-defined]  # __auto_init__ added dynamically</span>
+            <span class="n">line</span><span class="o">=</span><span class="n">line</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="n">column</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">source</span><span class="p">,</span> <span class="n">end_line</span><span class="o">=</span><span class="n">end_line</span><span class="p">,</span> <span class="n">end_column</span><span class="o">=</span><span class="n">end_column</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">src</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">source</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">end_part</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_line</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">end_part</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; to </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">end_line</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_column</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">end_part</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">end_column</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="n">src</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">line</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">column</span><span class="si">}{</span><span class="n">end_part</span><span class="si">}</span><span class="s2">&gt;&quot;</span></div>
+
+
+<div class="viewcode-block" id="SourceLocationGroup"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.SourceLocationGroup">[docs]</a><span class="nd">@datamodels</span><span class="o">.</span><span class="n">datamodel</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SourceLocationGroup</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;A group of merged source code locations (with optional info).&quot;&quot;&quot;</span>
+
+    <span class="n">locations</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">SourceLocation</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">datamodels</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">_validators</span><span class="o">.</span><span class="n">non_empty</span><span class="p">())</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">locations</span><span class="p">:</span> <span class="n">SourceLocation</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__auto_init__</span><span class="p">(</span><span class="n">locations</span><span class="o">=</span><span class="n">locations</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # __auto_init__ added dynamically</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">locs</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">loc</span><span class="p">)</span> <span class="k">for</span> <span class="n">loc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">locations</span><span class="p">)</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;#</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="si">}</span><span class="s2">#&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="n">context</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">locs</span><span class="si">}</span><span class="s2">]&gt;&quot;</span></div>
+
+
+<span class="n">AnySourceLocation</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">SourceLocation</span><span class="p">,</span> <span class="n">SourceLocationGroup</span><span class="p">]</span>
+
+<span class="n">_T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;_T&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="AnnexManager"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.AnnexManager">[docs]</a><span class="k">class</span> <span class="nc">AnnexManager</span><span class="p">:</span>
+    <span class="n">register</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="AnnexManager.register_user"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.AnnexManager.register_user">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">register_user</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">AnnexManager</span><span class="p">],</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">type_hint</span><span class="p">:</span> <span class="n">xtyping</span><span class="o">.</span><span class="n">TypeAnnotation</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">shared</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">_T</span><span class="p">],</span> <span class="n">_T</span><span class="p">]:</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">_decorator</span><span class="p">(</span><span class="n">owner</span><span class="p">:</span> <span class="n">_T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_T</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">register</span><span class="p">:</span>
+                <span class="n">reg_shared</span><span class="p">,</span> <span class="n">reg_type</span><span class="p">,</span> <span class="n">reg_owner</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">register</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">shared</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Annex key &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; has been already registered by </span><span class="si">{</span><span class="n">reg_owner</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">reg_shared</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Annex key &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; has been privately registered by </span><span class="si">{</span><span class="n">reg_owner</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">type_hint</span> <span class="o">!=</span> <span class="n">reg_type</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">exceptions</span><span class="o">.</span><span class="n">EveRuntimeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Annex key &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; type &#39;</span><span class="si">{</span><span class="n">type_hint</span><span class="si">}</span><span class="s2">&#39; does not match registered type &#39;</span><span class="si">{</span><span class="n">reg_type</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;registered by </span><span class="si">{</span><span class="n">reg_owner</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">owners</span> <span class="o">=</span> <span class="n">reg_owner</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">owners</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="bp">cls</span><span class="o">.</span><span class="n">register</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="n">type_hint</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">owners</span><span class="p">,</span> <span class="n">owner</span><span class="p">])</span>
+
+            <span class="k">return</span> <span class="n">owner</span>
+
+        <span class="k">return</span> <span class="n">_decorator</span></div></div>
+
+
+<span class="n">register_annex_user</span> <span class="o">=</span> <span class="n">AnnexManager</span><span class="o">.</span><span class="n">register_user</span>
+
+
+<div class="viewcode-block" id="Node"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.Node">[docs]</a><span class="k">class</span> <span class="nc">Node</span><span class="p">(</span><span class="n">datamodels</span><span class="o">.</span><span class="n">DataModel</span><span class="p">,</span> <span class="n">trees</span><span class="o">.</span><span class="n">Tree</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>  <span class="c1"># type: ignore[call-arg]  # kw_only from DataModel</span>
+    <span class="sd">&quot;&quot;&quot;Base class representing a node in a syntax tree.</span>
+
+<span class="sd">    Implemented as a :class:`eve.datamodels.DataModel` with some extra features.</span>
+
+<span class="sd">    Field values should be either:</span>
+
+<span class="sd">        * builtin types: `bool`, `bytes`, `int`, `float`, `str`</span>
+<span class="sd">        * enum.Enum types</span>
+<span class="sd">        * other :class:`Node` subclasses</span>
+<span class="sd">        * other :class:`eve.datamodels.DataModel` subclasses</span>
+<span class="sd">        * supported collections (:class:`List`, :class:`Dict`, :class:`Set`)</span>
+<span class="sd">            of any of the previous items</span>
+
+<span class="sd">    The `annex` attribute is used to dynamically add data to a node, even to</span>
+<span class="sd">    frozen classes. Data in the `annex` do not affect the hash or equality</span>
+<span class="sd">    comparisons of the node, since it is not really a field. Thus, visitors</span>
+<span class="sd">    and pipeline passes can freely attach computed attributes into the instance</span>
+<span class="sd">    `annex`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">annex</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">utils</span><span class="o">.</span><span class="n">Namespace</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;__node_annex__&quot;</span><span class="p">):</span>
+            <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;__node_annex__&quot;</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">Namespace</span><span class="p">())</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__node_annex__</span>  <span class="c1"># type: ignore[attr-defined]  # __node_annex__ added dynamically</span>
+
+<div class="viewcode-block" id="Node.iter_children_values"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.Node.iter_children_values">[docs]</a>    <span class="k">def</span> <span class="nf">iter_children_values</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Node.iter_children_items"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.Node.iter_children_items">[docs]</a>    <span class="k">def</span> <span class="nf">iter_children_items</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">trees</span><span class="o">.</span><span class="n">TreeKey</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__datamodel_fields__</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="n">name</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+    <span class="n">pre_walk_items</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">pre_walk_items</span>
+    <span class="n">pre_walk_values</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">pre_walk_values</span>
+
+    <span class="n">post_walk_items</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">post_walk_items</span>
+    <span class="n">post_walk_values</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">post_walk_values</span>
+
+    <span class="n">bfs_walk_items</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">bfs_walk_items</span>
+    <span class="n">bfs_walk_values</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">bfs_walk_values</span>
+
+    <span class="n">walk_items</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">walk_items</span>
+    <span class="n">walk_values</span> <span class="o">=</span> <span class="n">trees</span><span class="o">.</span><span class="n">walk_values</span>
+
+<div class="viewcode-block" id="Node.copy"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.Node.copy">[docs]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="n">_T</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">_T</span><span class="p">:</span>
+        <span class="n">new_node</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">update</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">new_node</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_node</span></div></div>
+
+    <span class="c1"># TODO(egparedes): add useful hashes to base node</span>
+    <span class="c1"># # @property</span>
+    <span class="c1"># def content_id(self) -&gt; int:</span>
+    <span class="c1">#     ...</span>
+    <span class="c1">#</span>
+    <span class="c1"># @property</span>
+    <span class="c1"># def annex_content_id(self) -&gt; int:</span>
+    <span class="c1">#     ...</span>
+    <span class="c1">#</span>
+    <span class="c1"># @property</span>
+    <span class="c1"># def node_content_id(self) -&gt; int:</span>
+    <span class="c1">#     ...</span>
+    <span class="c1">#</span>
+    <span class="c1"># @property</span>
+    <span class="c1"># def instance_content_id(self) -&gt; int:</span>
+    <span class="c1">#     ...</span>
+    <span class="c1">#</span>
+    <span class="c1"># @property</span>
+    <span class="c1"># def instance_id(self) -&gt; int:</span>
+    <span class="c1">#     ...</span>
+
+
+<span class="n">NodeT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;NodeT&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">&quot;Node&quot;</span><span class="p">)</span>
+<span class="n">ValueNode</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">IntEnum</span><span class="p">,</span> <span class="n">StrEnum</span><span class="p">]</span>
+<span class="n">LeafNode</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">NodeT</span><span class="p">,</span> <span class="n">ValueNode</span><span class="p">]</span>
+<span class="n">CollectionNode</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">LeafNode</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">LeafNode</span><span class="p">],</span> <span class="n">Set</span><span class="p">[</span><span class="n">LeafNode</span><span class="p">]]</span>
+<span class="n">RootNode</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">NodeT</span><span class="p">,</span> <span class="n">CollectionNode</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="FrozenNode"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.FrozenNode">[docs]</a><span class="k">class</span> <span class="nc">FrozenNode</span><span class="p">(</span><span class="n">Node</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>  <span class="c1"># type: ignore[call-arg]  # frozen from DataModel</span>
+    <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="GenericNode"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.GenericNode">[docs]</a><span class="k">class</span> <span class="nc">GenericNode</span><span class="p">(</span><span class="n">datamodels</span><span class="o">.</span><span class="n">GenericDataModel</span><span class="p">,</span> <span class="n">Node</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>  <span class="c1"># type: ignore[call-arg]  # kw_only from DataModel</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="VType"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.VType">[docs]</a><span class="k">class</span> <span class="nc">VType</span><span class="p">(</span><span class="n">datamodels</span><span class="o">.</span><span class="n">FrozenModel</span><span class="p">):</span>
+
+    <span class="c1"># Unique name</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+
+<div class="viewcode-block" id="eq_nonlocated"><a class="viewcode-back" href="../../../_source/gt4py.eve.html#gt4py.eve.concepts.eq_nonlocated">[docs]</a><span class="k">def</span> <span class="nf">eq_nonlocated</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Node</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">Node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Compare two nodes, ignoring their `SourceLocation` or `SourceLocationGroup`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">ddiff</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">exclude_types</span><span class="o">=</span><span class="p">[</span><span class="n">SourceLocation</span><span class="p">,</span> <span class="n">SourceLocationGroup</span><span class="p">]))</span> <span class="o">==</span> <span class="mi">0</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

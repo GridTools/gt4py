@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.passes.oir_optimizations.caches &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.passes.oir_optimizations.caches</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.passes.oir_optimizations.caches</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span><span class="p">,</span> <span class="n">oir</span>
+
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">AccessCollector</span><span class="p">,</span> <span class="n">symbol_name_creator</span>
+
+
+<span class="sd">&quot;&quot;&quot;Utilities for cache detection and modifications on the OIR level.</span>
+
+<span class="sd">Caches in GridTools terminology (with roots in STELLA) are local replacements</span>
+<span class="sd">of temporary fields, which are usually stored as full fields in global memory,</span>
+<span class="sd">by smaller buffers with more reuse (and faster memory on GPUs) or by registers.</span>
+
+<span class="sd">IJ-caches are used in purely horizontal k-parallel stencils and replace the</span>
+<span class="sd">fully 3D temporary field by 2D buffers (in block-local shared memory on GPUs</span>
+<span class="sd">and thread-local memory on CPUs).</span>
+
+<span class="sd">K-caches are used in vertical sweeps, most notably tridiagonal solvers. They</span>
+<span class="sd">cache values from vertical accesses in a ring buffer, that is shifted on each</span>
+<span class="sd">loop iteration. K-cache values can optionally be filled with values from global</span>
+<span class="sd">memory or flushed to global memory, then acting like normal temporary fields,</span>
+<span class="sd">but only requiring one read operation per loop iteration, independent of the</span>
+<span class="sd">number of vertical accesses. In cases, where a field is always written before</span>
+<span class="sd">read, the fill is not required. Similar, if a field is not read later, the</span>
+<span class="sd">flushes can be omitted. When fills and flushes are omitted, all field accesses</span>
+<span class="sd">are replaced by just a few registers.</span>
+
+<span class="sd">Note that filling and flushing k-caches can always be replaced by a local</span>
+<span class="sd">(non-filling or flushing) k-cache plus additional filling and flushing</span>
+<span class="sd">statements.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="IJCacheDetection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.IJCacheDetection">[docs]</a><span class="k">class</span> <span class="nc">IJCacheDetection</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+<div class="viewcode-block" id="IJCacheDetection.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.IJCacheDetection.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">local_tmps</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">local_tmps</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">node</span>
+
+        <span class="k">def</span> <span class="nf">already_cached</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">field</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">has_vertical_offset</span><span class="p">(</span><span class="n">offsets</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">)</span>
+
+        <span class="n">accesses</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span>
+        <span class="n">cacheable</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">field</span>
+            <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">accesses</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">local_tmps</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="n">already_cached</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="n">has_vertical_offset</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">caches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">caches</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span>
+            <span class="n">oir</span><span class="o">.</span><span class="n">IJCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">field</span><span class="p">)</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">cacheable</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">(</span>
+            <span class="n">sections</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">,</span>
+            <span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+            <span class="n">caches</span><span class="o">=</span><span class="n">caches</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="IJCacheDetection.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.IJCacheDetection.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="n">vertical_loops</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">)</span>
+        <span class="n">counts</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">Counter</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">collections</span><span class="o">.</span><span class="n">Counter</span><span class="p">(</span>
+                    <span class="n">vertical_loop</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+                    <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span>
+                    <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                    <span class="o">.</span><span class="n">if_in</span><span class="p">({</span><span class="n">tmp</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tmp</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">})</span>
+                    <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">vertical_loop</span> <span class="ow">in</span> <span class="n">vertical_loops</span>
+            <span class="p">),</span>
+            <span class="n">collections</span><span class="o">.</span><span class="n">Counter</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">local_tmps</span> <span class="o">=</span> <span class="p">{</span><span class="n">tmp</span> <span class="k">for</span> <span class="n">tmp</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">1</span><span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">local_tmps</span><span class="o">=</span><span class="n">local_tmps</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="KCacheDetection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.KCacheDetection">[docs]</a><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">KCacheDetection</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+    <span class="n">max_cacheable_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
+
+<div class="viewcode-block" id="KCacheDetection.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.KCacheDetection.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">:</span>
+        <span class="c1"># k-caches are restricted to loops with a single horizontal region as all regions without</span>
+        <span class="c1"># horizontal offsets should be merged before anyway and this restriction allows for easier</span>
+        <span class="c1"># conversion of fill and flush caches to local caches later</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">sections</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="n">all_accesses</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">fields_with_variable_reads</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">field</span>
+            <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">all_accesses</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">off</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">off</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="k">def</span> <span class="nf">accessed_more_than_once</span><span class="p">(</span><span class="n">offsets</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+
+        <span class="k">def</span> <span class="nf">already_cached</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">{</span><span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span><span class="p">}</span>
+
+        <span class="c1"># TODO(fthaler): k-caches with non-zero ij offsets?</span>
+        <span class="k">def</span> <span class="nf">has_horizontal_offset</span><span class="p">(</span><span class="n">offsets</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">offset</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">offsets_within_limits</span><span class="p">(</span><span class="n">offsets</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_cacheable_offset</span> <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">has_variable_offset_reads</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">fields_with_variable_reads</span>
+
+        <span class="n">accesses</span> <span class="o">=</span> <span class="n">all_accesses</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span>
+        <span class="n">cacheable</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">field</span>
+            <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">accesses</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">already_cached</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="n">has_variable_offset_reads</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">accessed_more_than_once</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="n">has_horizontal_offset</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">offsets_within_limits</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">caches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">caches</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span>
+            <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">field</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">cacheable</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">(</span>
+            <span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+            <span class="n">sections</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">,</span>
+            <span class="n">caches</span><span class="o">=</span><span class="n">caches</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="PruneKCacheFills"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFills">[docs]</a><span class="k">class</span> <span class="nc">PruneKCacheFills</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prunes unneeded k-cache fills.</span>
+
+<span class="sd">    A fill is classified as required if at least one of the two following conditions holds in any of the loop sections:</span>
+<span class="sd">    * There is a read with offset in the direction of looping.</span>
+<span class="sd">    * The first centered access is a read access.</span>
+<span class="sd">    If none of the conditions holds for any loop section, the fill is considered as unneeded.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PruneKCacheFills.visit_KCache"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFills.visit_KCache">[docs]</a>    <span class="k">def</span> <span class="nf">visit_KCache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pruneable</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">pruneable</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">flush</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PruneKCacheFills.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFills.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">:</span>
+        <span class="n">filling_fields</span> <span class="o">=</span> <span class="p">{</span><span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">)</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">fill</span><span class="p">}</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">filling_fields</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">!=</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span>
+
+        <span class="k">def</span> <span class="nf">pruneable_fields</span><span class="p">(</span><span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="n">accesses</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">section</span><span class="p">)</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span>
+            <span class="n">offsets</span> <span class="o">=</span> <span class="n">accesses</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span>
+            <span class="n">center_accesses</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">accesses</span><span class="o">.</span><span class="n">ordered_accesses</span><span class="p">()</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">offset</span> <span class="o">==</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+
+            <span class="k">def</span> <span class="nf">requires_fill</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+                <span class="n">k_offsets</span> <span class="o">=</span> <span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">[</span><span class="n">field</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span> <span class="ow">and</span> <span class="nb">max</span><span class="p">(</span><span class="n">k_offsets</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+                <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span> <span class="ow">and</span> <span class="nb">min</span><span class="p">(</span><span class="n">k_offsets</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">is_read</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">center_accesses</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">field</span> <span class="o">==</span> <span class="n">field</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+
+            <span class="k">return</span> <span class="p">{</span><span class="n">field</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">filling_fields</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">requires_fill</span><span class="p">(</span><span class="n">field</span><span class="p">)}</span>
+
+        <span class="n">pruneable</span> <span class="o">=</span> <span class="nb">set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">pruneable_fields</span><span class="p">(</span><span class="n">section</span><span class="p">)</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">))</span>
+
+        <span class="c1"># Consider accesses outside of loop interval</span>
+        <span class="c1"># Note: those accesses would not require a fill in the whole loop interval in in theory</span>
+        <span class="c1"># but restriction to the GridTools k-cache types makes this necessary</span>
+        <span class="c1"># E.g. consider the following loop with k = 1, 2:</span>
+        <span class="c1"># k | no fill required | initial fill required |</span>
+        <span class="c1"># - | ---------------- | --------------------- |</span>
+        <span class="c1"># 1 | a[k] = init      | a[k] = a[k - 1]       |</span>
+        <span class="c1"># 2 | a[k] = a[k - 1]  | a[k] = a[k - 1]       |</span>
+        <span class="c1"># In the first case, no fill is required. In the second case, a[0] has to be filled on</span>
+        <span class="c1"># level k = 1. On level k = 2, no fill would be necessary, but GridTools C++ does not</span>
+        <span class="c1"># support a k-cache type that only fills on the initial level, so fills are inserted on all</span>
+        <span class="c1"># levels here.</span>
+
+        <span class="n">first_section_offsets</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="n">last_section_offsets</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span><span class="o">.</span><span class="n">offsets</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">pruneable</span><span class="p">):</span>
+            <span class="n">first_k_offsets</span> <span class="o">=</span> <span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">first_section_offsets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="p">{(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)}))</span>
+            <span class="n">last_k_offsets</span> <span class="o">=</span> <span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">last_section_offsets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="p">{(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)}))</span>
+            <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span>
+                <span class="n">first_k_offsets</span><span class="p">,</span> <span class="n">last_k_offsets</span> <span class="o">=</span> <span class="n">last_k_offsets</span><span class="p">,</span> <span class="n">first_k_offsets</span>
+            <span class="k">if</span> <span class="nb">min</span><span class="p">(</span><span class="n">first_k_offsets</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="nb">max</span><span class="p">(</span><span class="n">last_k_offsets</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">pruneable</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">pruneable</span><span class="o">=</span><span class="n">pruneable</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="PruneKCacheFlushes"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFlushes">[docs]</a><span class="k">class</span> <span class="nc">PruneKCacheFlushes</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prunes unneeded k-cache flushes.</span>
+
+<span class="sd">    A flush is classified as unneeded under the following conditions:</span>
+<span class="sd">    * All accesses to the field are read-only in the current vertical loop.</span>
+<span class="sd">    * There are no read accesses to the field in a following loop.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PruneKCacheFlushes.visit_KCache"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFlushes.visit_KCache">[docs]</a>    <span class="k">def</span> <span class="nf">visit_KCache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pruneable</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">pruneable</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">fill</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PruneKCacheFlushes.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.PruneKCacheFlushes.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="n">accesses</span> <span class="o">=</span> <span class="p">[</span><span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">vertical_loop</span><span class="p">)</span> <span class="k">for</span> <span class="n">vertical_loop</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">]</span>
+        <span class="n">vertical_loops</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">vertical_loop</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">):</span>
+            <span class="n">flushing_fields</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">vertical_loop</span><span class="o">.</span><span class="n">caches</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">)</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">flush</span>
+            <span class="p">}</span>
+            <span class="n">read_only_fields</span> <span class="o">=</span> <span class="n">flushing_fields</span> <span class="o">&amp;</span> <span class="p">(</span>
+                <span class="n">accesses</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">read_fields</span><span class="p">()</span> <span class="o">-</span> <span class="n">accesses</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="n">future_reads</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="n">future_reads</span> <span class="o">=</span> <span class="n">future_reads</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">read_fields</span><span class="p">()</span> <span class="k">for</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">accesses</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]))</span>
+            <span class="n">tmps_without_reuse</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">flushing_fields</span> <span class="o">&amp;</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">}</span>
+            <span class="p">)</span> <span class="o">-</span> <span class="n">future_reads</span>
+            <span class="n">pruneable</span> <span class="o">=</span> <span class="n">read_only_fields</span> <span class="o">|</span> <span class="n">tmps_without_reuse</span>
+            <span class="n">vertical_loops</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">vertical_loop</span><span class="p">,</span> <span class="n">pruneable</span><span class="o">=</span><span class="n">pruneable</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">),</span>
+            <span class="n">vertical_loops</span><span class="o">=</span><span class="n">vertical_loops</span><span class="p">,</span>
+            <span class="n">declarations</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches">[docs]</a><span class="k">class</span> <span class="nc">FillFlushToLocalKCaches</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts fill and flush k-caches to local k-caches.</span>
+
+<span class="sd">    For each cached field, the following actions are performed:</span>
+<span class="sd">    1. A new locally-k-cached temporary is introduced.</span>
+<span class="sd">    2. All accesses to the original field are replaced by accesses to this temporary.</span>
+<span class="sd">    3. Loop sections are split where necessary to allow single-level loads whereever possible.</span>
+<span class="sd">    3. Fill statements from the original field to the temporary are introduced.</span>
+<span class="sd">    4. Flush statements from the temporary to the original field are introduced.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches.visit_FieldAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">name_map</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">name_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">],</span>
+                <span class="n">data_index</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">data_index</span><span class="p">,</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">offset</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span>
+                <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">node</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches.visit_VerticalLoopSection"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches.visit_VerticalLoopSection">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoopSection</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Multiple horizontal_executions are not supported&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches.visit_HorizontalExecution"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches.visit_HorizontalExecution">[docs]</a>    <span class="k">def</span> <span class="nf">visit_HorizontalExecution</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">name_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">fills</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Stmt</span><span class="p">],</span>
+        <span class="n">flushes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Stmt</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">HorizontalExecution</span><span class="p">(</span>
+            <span class="n">body</span><span class="o">=</span><span class="n">fills</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">name_map</span><span class="o">=</span><span class="n">name_map</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">+</span> <span class="n">flushes</span><span class="p">,</span>
+            <span class="n">declarations</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._fill_limits"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._fill_limits">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_fill_limits</span><span class="p">(</span>
+        <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span> <span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Direction-normalized min and max read accesses for each accessed field.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            loop_order: forward or backward order.</span>
+<span class="sd">            section: loop section to split.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">def</span> <span class="nf">directional_k_offset</span><span class="p">(</span><span class="n">offset</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+            <span class="sd">&quot;&quot;&quot;Positive k-offset for forward loops, negative for backward.&quot;&quot;&quot;</span>
+            <span class="k">return</span> <span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">if</span> <span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span> <span class="k">else</span> <span class="o">-</span><span class="n">offset</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+        <span class="n">read_offsets</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">section</span><span class="p">)</span><span class="o">.</span><span class="n">cartesian_accesses</span><span class="p">()</span><span class="o">.</span><span class="n">read_offsets</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">field</span><span class="p">:</span> <span class="p">(</span>
+                <span class="nb">min</span><span class="p">(</span><span class="n">directional_k_offset</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">),</span>
+                <span class="nb">max</span><span class="p">(</span><span class="n">directional_k_offset</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">offsets</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">offsets</span> <span class="ow">in</span> <span class="n">read_offsets</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._requires_splitting"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._requires_splitting">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_requires_splitting</span><span class="p">(</span><span class="n">interval</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Check if an interval is larger than one level and thus may require splitting.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span> <span class="o">!=</span> <span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="nb">abs</span><span class="p">(</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">-</span> <span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._split_entry_level"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._split_entry_level">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_split_entry_level</span><span class="p">(</span>
+        <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span>
+        <span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Split the entry level of a loop section.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            loop_order: forward or backward order.</span>
+<span class="sd">            section: loop section to split.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Two loop sections.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">loop_order</span> <span class="ow">in</span> <span class="p">(</span><span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span><span class="p">:</span>
+            <span class="n">bound</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">(</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="p">)</span>
+            <span class="n">entry_interval</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">bound</span><span class="p">)</span>
+            <span class="n">rest_interval</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">bound</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">bound</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">AxisBound</span><span class="p">(</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">level</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">offset</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="p">)</span>
+            <span class="n">entry_interval</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">bound</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+            <span class="n">rest_interval</span> <span class="o">=</span> <span class="n">oir</span><span class="o">.</span><span class="n">Interval</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">bound</span><span class="p">)</span>
+        <span class="n">decls</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span><span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">Decl</span><span class="p">))</span>
+        <span class="n">decls_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">decl</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">decl</span> <span class="ow">in</span> <span class="n">decls</span><span class="p">}</span>
+
+        <span class="k">class</span> <span class="nc">FixSymbolNameClashes</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">visit_ScalarAccess</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">decls_map</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">node</span>
+                <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">decls_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+            <span class="k">def</span> <span class="nf">visit_LocalScalar</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">LocalScalar</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">decls_map</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span>
+                <span class="n">interval</span><span class="o">=</span><span class="n">entry_interval</span><span class="p">,</span>
+                <span class="n">horizontal_executions</span><span class="o">=</span><span class="n">FixSymbolNameClashes</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">),</span>
+                <span class="n">loc</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">(</span>
+                <span class="n">interval</span><span class="o">=</span><span class="n">rest_interval</span><span class="p">,</span>
+                <span class="n">horizontal_executions</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">horizontal_executions</span><span class="p">,</span>
+                <span class="n">loc</span><span class="o">=</span><span class="n">section</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._split_section_with_multiple_fills"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._split_section_with_multiple_fills">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_split_section_with_multiple_fills</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span>
+        <span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span>
+        <span class="n">filling_fields</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">first_unfilled</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Split loop sections that require multiple fills.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            loop_order: forward or backward order.</span>
+<span class="sd">            section: loop section to split.</span>
+<span class="sd">            filling_fields: fields that are using fill caches.</span>
+<span class="sd">            first_unfilled: direction-normalized offset of the first unfilled cache entry for each field.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            A list of sections and an updated `first_unfilled` map.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">fill_limits</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_fill_limits</span><span class="p">(</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">)</span>
+        <span class="n">max_required_fills</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">filling_fields</span><span class="p">:</span>
+            <span class="n">lmin</span><span class="p">,</span> <span class="n">lmax</span> <span class="o">=</span> <span class="n">fill_limits</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+            <span class="n">required_fills</span> <span class="o">=</span> <span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">-</span> <span class="nb">max</span><span class="p">(</span><span class="n">lmin</span><span class="p">,</span> <span class="n">first_unfilled</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">lmin</span><span class="p">))</span>
+            <span class="n">max_required_fills</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">required_fills</span><span class="p">,</span> <span class="n">max_required_fills</span><span class="p">)</span>
+            <span class="n">first_unfilled</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">lmax</span>
+        <span class="k">if</span> <span class="n">max_required_fills</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_requires_splitting</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">interval</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_split_entry_level</span><span class="p">(</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">new_symbol_name</span><span class="p">),</span> <span class="n">first_unfilled</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">section</span><span class="p">,),</span> <span class="n">first_unfilled</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._fill_stmts"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._fill_stmts">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_fill_stmts</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span>
+        <span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span>
+        <span class="n">filling_fields</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">first_unfilled</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Generate fill statements for the given loop section.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            loop_order: forward or backward order.</span>
+<span class="sd">            section: loop section to split.</span>
+<span class="sd">            filling_fields: mapping from field names to cache names.</span>
+<span class="sd">            first_unfilled: direction-normalized offset of the first unfilled cache entry for each field.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            A list of fill statements and an updated `first_unfilled` map.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">fill_limits</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_fill_limits</span><span class="p">(</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">)</span>
+        <span class="n">fill_stmts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">cache</span> <span class="ow">in</span> <span class="n">filling_fields</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">lmin</span><span class="p">,</span> <span class="n">lmax</span> <span class="o">=</span> <span class="n">fill_limits</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+            <span class="n">lmin</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">lmin</span><span class="p">,</span> <span class="n">first_unfilled</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">lmin</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">offset</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">lmin</span><span class="p">,</span> <span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">k_offset</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">(</span>
+                    <span class="n">i</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="n">j</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="n">k</span><span class="o">=</span><span class="n">offset</span> <span class="k">if</span> <span class="n">loop_order</span> <span class="o">==</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span> <span class="k">else</span> <span class="o">-</span><span class="n">offset</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">fill_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">(</span>
+                        <span class="n">left</span><span class="o">=</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                            <span class="n">name</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">k_offset</span>
+                        <span class="p">),</span>
+                        <span class="n">right</span><span class="o">=</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                            <span class="n">name</span><span class="o">=</span><span class="n">field</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">k_offset</span>
+                        <span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="n">first_unfilled</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">lmax</span>
+        <span class="k">return</span> <span class="n">fill_stmts</span><span class="p">,</span> <span class="n">first_unfilled</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches._flush_stmts"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches._flush_stmts">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_flush_stmts</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">loop_order</span><span class="p">:</span> <span class="n">common</span><span class="o">.</span><span class="n">LoopOrder</span><span class="p">,</span>
+        <span class="n">section</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">,</span>
+        <span class="n">flushing_fields</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Generate flush statements for the given loop section.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            loop_order: forward or backward order.</span>
+<span class="sd">            section: loop section to split.</span>
+<span class="sd">            flushing_fields: mapping from field names to cache names.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            A list of flush statements.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">write_fields</span> <span class="o">=</span> <span class="n">AccessCollector</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">section</span><span class="p">)</span><span class="o">.</span><span class="n">write_fields</span><span class="p">()</span>
+        <span class="n">flush_stmts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">cache</span> <span class="ow">in</span> <span class="n">flushing_fields</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">write_fields</span><span class="p">:</span>
+                <span class="n">flush_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">(</span>
+                        <span class="n">left</span><span class="o">=</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                            <span class="n">name</span><span class="o">=</span><span class="n">field</span><span class="p">,</span>
+                            <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                            <span class="n">offset</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span>
+                        <span class="p">),</span>
+                        <span class="n">right</span><span class="o">=</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">(</span>
+                            <span class="n">name</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span>
+                            <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">field</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                            <span class="n">offset</span><span class="o">=</span><span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="o">.</span><span class="n">zero</span><span class="p">(),</span>
+                        <span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="n">flush_stmts</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches.visit_VerticalLoop"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches.visit_VerticalLoop">[docs]</a>    <span class="k">def</span> <span class="nf">visit_VerticalLoop</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">new_tmps</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">],</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">new_symbol_name</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">:</span>
+        <span class="n">filling_fields</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">)</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">fill</span>
+        <span class="p">}</span>
+        <span class="n">flushing_fields</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">filling_fields</span><span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">filling_fields</span> <span class="k">else</span> <span class="n">new_symbol_name</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">)</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">flush</span>
+        <span class="p">}</span>
+
+        <span class="n">filling_or_flushing_fields</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="nb">set</span><span class="p">(</span><span class="n">filling_fields</span><span class="o">.</span><span class="n">items</span><span class="p">())</span> <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">flushing_fields</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">filling_or_flushing_fields</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">node</span>
+
+        <span class="c1"># new temporaries used for caches, declarations are later added to stencil</span>
+        <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">tmp_name</span> <span class="ow">in</span> <span class="n">filling_or_flushing_fields</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">new_tmps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">tmp_name</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">symtable</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">filling_fields</span><span class="p">:</span>
+            <span class="c1"># split sections where more than one fill operations are required at the entry level</span>
+            <span class="n">first_unfilled</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="n">split_sections</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoopSection</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">sections</span><span class="p">:</span>
+                <span class="n">split_section</span><span class="p">,</span> <span class="n">previous_fills</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_section_with_multiple_fills</span><span class="p">(</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">filling_fields</span><span class="p">,</span> <span class="n">first_unfilled</span><span class="p">,</span> <span class="n">new_symbol_name</span>
+                <span class="p">)</span>
+                <span class="n">split_sections</span> <span class="o">+=</span> <span class="n">split_section</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">split_sections</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">sections</span>
+
+        <span class="c1"># generate cache fill and flush statements</span>
+        <span class="n">first_unfilled</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">sections</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">split_sections</span><span class="p">:</span>
+            <span class="n">fills</span><span class="p">,</span> <span class="n">first_unfilled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_stmts</span><span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">filling_fields</span><span class="p">,</span> <span class="n">first_unfilled</span><span class="p">,</span> <span class="n">symtable</span>
+            <span class="p">)</span>
+            <span class="n">flushes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flush_stmts</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">flushing_fields</span><span class="p">,</span> <span class="n">symtable</span><span class="p">)</span>
+            <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                    <span class="n">section</span><span class="p">,</span>
+                    <span class="n">fills</span><span class="o">=</span><span class="n">fills</span><span class="p">,</span>
+                    <span class="n">flushes</span><span class="o">=</span><span class="n">flushes</span><span class="p">,</span>
+                    <span class="n">name_map</span><span class="o">=</span><span class="n">filling_or_flushing_fields</span><span class="p">,</span>
+                    <span class="n">symtable</span><span class="o">=</span><span class="n">symtable</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="c1"># replace cache declarations</span>
+        <span class="n">caches</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">caches</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">filling_or_flushing_fields</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span>
+            <span class="n">oir</span><span class="o">.</span><span class="n">KCache</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="n">fill</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filling_or_flushing_fields</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">VerticalLoop</span><span class="p">(</span>
+            <span class="n">loop_order</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loop_order</span><span class="p">,</span>
+            <span class="n">sections</span><span class="o">=</span><span class="n">sections</span><span class="p">,</span>
+            <span class="n">caches</span><span class="o">=</span><span class="n">caches</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="FillFlushToLocalKCaches.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.caches.FillFlushToLocalKCaches.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="n">new_tmps</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
+            <span class="n">vertical_loops</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span>
+                <span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">,</span>
+                <span class="n">new_tmps</span><span class="o">=</span><span class="n">new_tmps</span><span class="p">,</span>
+                <span class="n">new_symbol_name</span><span class="o">=</span><span class="n">symbol_name_creator</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;symtable&quot;</span><span class="p">])),</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">declarations</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">declarations</span> <span class="o">+</span> <span class="n">new_tmps</span><span class="p">,</span>
+            <span class="n">loc</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">loc</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

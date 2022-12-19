@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.eve.datamodels package &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="gt4py.storage package" href="gt4py.storage.html" />
+    <link rel="prev" title="gt4py.eve package" href="gt4py.eve.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../apiref.html">API Documentation</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="modules.html">gt4py</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="gt4py.html">gt4py package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="gt4py.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gt4py.html#module-gt4py">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../apiref.html">API Documentation</a></li>
+          <li class="breadcrumb-item"><a href="modules.html">gt4py</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.html">gt4py package</a></li>
+          <li class="breadcrumb-item"><a href="gt4py.eve.html">gt4py.eve package</a></li>
+      <li class="breadcrumb-item active">gt4py.eve.datamodels package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_source/gt4py.eve.datamodels.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gt4py-eve-datamodels-package">
+<h1>gt4py.eve.datamodels package<a class="headerlink" href="#gt4py-eve-datamodels-package" title="Permalink to this headline"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline"></a></h2>
+</section>
+<section id="module-gt4py.eve.datamodels.core">
+<span id="gt4py-eve-datamodels-core-module"></span><h2>gt4py.eve.datamodels.core module<a class="headerlink" href="#module-gt4py.eve.datamodels.core" title="Permalink to this headline"></a></h2>
+<p>Data Model class creation and other utils.</p>
+<p>Check <code class="xref py py-mod docutils literal notranslate"><span class="pre">eve.datamodels</span></code> for additional information.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.Coerced">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">Coerced</span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.Coerced" title="Permalink to this definition"></a></dt>
+<dd><p>Type hint marker to define fields that should be coerced at initialization.</p>
+<p>alias of <code class="xref py py-obj docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core._T</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core._T</span></code>]</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.DEFAULT_OPTIONS">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">DEFAULT_OPTIONS</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Final</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.utils.FrozenNamespace" title="gt4py.eve.utils.FrozenNamespace"><span class="pre">utils.FrozenNamespace</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">FrozenNamespace(repr=True,</span> <span class="pre">eq=True,</span> <span class="pre">order=False,</span> <span class="pre">unsafe_hash=False,</span> <span class="pre">frozen=False,</span> <span class="pre">match_args=True,</span> <span class="pre">kw_only=False,</span> <span class="pre">slots=False,</span> <span class="pre">coerce=False,</span> <span class="pre">generic=False)</span></em><a class="headerlink" href="#gt4py.eve.datamodels.core.DEFAULT_OPTIONS" title="Permalink to this definition"></a></dt>
+<dd><p>Convenient public namespace to expose default values to users.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.DataModel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">DataModel</span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#DataModel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.DataModel" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base class to automatically convert any subclass into a Data Model.</p>
+<p>Inheriting from this class is equivalent to apply the <a class="reference internal" href="#gt4py.eve.datamodels.core.datamodel" title="gt4py.eve.datamodels.core.datamodel"><code class="xref py py-func docutils literal notranslate"><span class="pre">datamodel()</span></code></a>
+decorator to a class, except that the <code class="docutils literal notranslate"><span class="pre">slots</span></code> option is always <code class="docutils literal notranslate"><span class="pre">False</span></code>
+(since it generates a new class) and all descendants will be also converted
+automatically in Data Models with the same options of the parent class
+(which does not happen when explicitly applying the decorator).</p>
+<p>See <a class="reference internal" href="#gt4py.eve.datamodels.core.datamodel" title="gt4py.eve.datamodels.core.datamodel"><code class="xref py py-func docutils literal notranslate"><span class="pre">datamodel()</span></code></a> for the description of the parameters.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.DataModelTP">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">DataModelTP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#DataModelTP"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.DataModelTP" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core._AttrsClassTP</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.extended_typing.DevToolsPrettyPrintable</span></code>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Protocol" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Protocol</span></code></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">DefaultFieldTypeValidatorFactory</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory" title="Permalink to this definition"></a></dt>
+<dd><p>Default type validator factory used by datamodels classes. <cite>None</cite> by default if running in optimized mode.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ForwardRefValidator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">ForwardRefValidator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">factory:</span> <span class="pre">gt4py.eve.type_validation.TypeValidatorFactory</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">validator:</span> <span class="pre">typing.Union[gt4py.eve.type_validation.FixedTypeValidator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gt4py.eve.type_definitions.NothingType]</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'gt4py.eve.type_definitions.NOTHING'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#ForwardRefValidator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.ForwardRefValidator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Implementation of <code class="docutils literal notranslate"><span class="pre">attrs</span></code> field validator for <code class="docutils literal notranslate"><span class="pre">ForwardRef</span></code> typings.</p>
+<p>The first time is called it will update the class’ field type annotations
+and then create the actual type validator for the field.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ForwardRefValidator.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">attribute</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.Attribute" title="(in attrs v22.1)"><span class="pre">attr._make.Attribute</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">typing_extensions.Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#ForwardRefValidator.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.ForwardRefValidator.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ForwardRefValidator.factory">
+<span class="sig-name descname"><span class="pre">factory</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.type_validation.TypeValidatorFactory" title="gt4py.eve.type_validation.TypeValidatorFactory"><span class="pre">gt4py.eve.type_validation.TypeValidatorFactory</span></a></em><a class="headerlink" href="#gt4py.eve.datamodels.core.ForwardRefValidator.factory" title="Permalink to this definition"></a></dt>
+<dd><p>Type factory used to create the actual field validator.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ForwardRefValidator.validator">
+<span class="sig-name descname"><span class="pre">validator</span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.ForwardRefValidator.validator" title="Permalink to this definition"></a></dt>
+<dd><p>Actual type validator created after resolving the forward references.</p>
+<p>alias of <a class="reference internal" href="gt4py.eve.html#gt4py.eve.type_definitions.NOTHING" title="gt4py.eve.type_definitions.NOTHING"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.type_definitions.NOTHING</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.FrozenModel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">FrozenModel</span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#FrozenModel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.FrozenModel" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.FrozenModel.update_forward_refs">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">update_forward_refs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">localns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">_DataModelT</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.FrozenModel.update_forward_refs" title="Permalink to this definition"></a></dt>
+<dd><p>Update Data Model class meta-information replacing forwarded type annotations with actual types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>localns</strong> – locals <code class="docutils literal notranslate"><span class="pre">dict</span></code> used in the evaluation of the annotations
+(globals are automatically taken from <code class="docutils literal notranslate"><span class="pre">model.__module__</span></code>).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The provided class (so it can be used as a decorator too).</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.GenericDataModel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">GenericDataModel</span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#GenericDataModel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.GenericDataModel" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.GenericDataModel.update_forward_refs">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">update_forward_refs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">localns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">_DataModelT</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.GenericDataModel.update_forward_refs" title="Permalink to this definition"></a></dt>
+<dd><p>Update Data Model class meta-information replacing forwarded type annotations with actual types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>localns</strong> – locals <code class="docutils literal notranslate"><span class="pre">dict</span></code> used in the evaluation of the annotations
+(globals are automatically taken from <code class="docutils literal notranslate"><span class="pre">model.__module__</span></code>).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The provided class (so it can be used as a decorator too).</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.GenericDataModelTP">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">GenericDataModelTP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#GenericDataModelTP"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.GenericDataModelTP" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#gt4py.eve.datamodels.core.DataModelTP" title="gt4py.eve.datamodels.core.DataModelTP"><code class="xref py py-class docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core.DataModelTP</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Protocol" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Protocol</span></code></a></p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.Unchecked">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">Unchecked</span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.Unchecked" title="Permalink to this definition"></a></dt>
+<dd><p>Type hint marker to define fields that should NOT be type-checked at initialization.</p>
+<p>alias of <code class="xref py py-obj docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core._T</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">gt4py.eve.datamodels.core._T</span></code>]</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ValidatorAdapter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">ValidatorAdapter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">validator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="gt4py.eve.html#gt4py.eve.type_validation.FixedTypeValidator" title="gt4py.eve.type_validation.FixedTypeValidator"><span class="pre">gt4py.eve.type_validation.FixedTypeValidator</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#ValidatorAdapter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.ValidatorAdapter" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Adapter to use :class:<a href="#id1"><span class="problematic" id="id2">`</span></a>eve.type_validation.FixedTypeValidator`s as field validators.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ValidatorAdapter.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_instance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">_attribute</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.Attribute" title="(in attrs v22.1)"><span class="pre">attr._make.Attribute</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">typing_extensions.Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#ValidatorAdapter.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.ValidatorAdapter.__call__" title="Permalink to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ValidatorAdapter.description">
+<span class="sig-name descname"><span class="pre">description</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></em><a class="headerlink" href="#gt4py.eve.datamodels.core.ValidatorAdapter.description" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.ValidatorAdapter.validator">
+<span class="sig-name descname"><span class="pre">validator</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="gt4py.eve.html#gt4py.eve.type_validation.FixedTypeValidator" title="gt4py.eve.type_validation.FixedTypeValidator"><span class="pre">gt4py.eve.type_validation.FixedTypeValidator</span></a></em><a class="headerlink" href="#gt4py.eve.datamodels.core.ValidatorAdapter.validator" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core._make_datamodel">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">_make_datamodel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">eq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">unsafe_hash</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">frozen</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.frontend.html#gt4py.cartesian.frontend.nodes.Literal" title="gt4py.cartesian.frontend.nodes.Literal"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'strict'</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kw_only</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">slots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">coerce</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">generic</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="gt4py.cartesian.frontend.html#gt4py.cartesian.frontend.nodes.Literal" title="gt4py.cartesian.frontend.nodes.Literal"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'True_no_checks'</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_validation_factory</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">FieldTypeValidatorFactory</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_stacklevel_offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#_make_datamodel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core._make_datamodel" title="Permalink to this definition"></a></dt>
+<dd><p>Actual implementation of the Data Model creation.</p>
+<p>See <a class="reference internal" href="#gt4py.eve.datamodels.core.datamodel" title="gt4py.eve.datamodels.core.datamodel"><code class="xref py py-func docutils literal notranslate"><span class="pre">datamodel()</span></code></a> for the description of the parameters.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.asdict">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">asdict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_serializer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.11)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.Attribute" title="(in attrs v22.1)"><span class="pre">attr._make.Attribute</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#asdict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.asdict" title="Permalink to this definition"></a></dt>
+<dd><p>Return the contents of a Data Model instance as a new mapping from field names to values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>instance</strong> – Data Model instance.</p>
+</dd>
+<dt class="field-even">Keyword Arguments</dt>
+<dd class="field-even"><p><strong>value_serializer</strong> – A hook that is called for every attribute or dict key/value and must
+return the (updated) value.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">C</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">x</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">... </span>    <span class="n">y</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">asdict</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">==</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.astuple">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">astuple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.11)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#astuple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.astuple" title="Permalink to this definition"></a></dt>
+<dd><p>Return the contents of a Data Model instance as a new tuple of field values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>instance</strong> – Data Model instance.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">C</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">x</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">... </span>    <span class="n">y</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">astuple</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.coerced_field">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">coerced_field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">*,</span> <span class="pre">default:</span> <span class="pre">Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'gt4py.eve.type_definitions.NOTHING'&gt;,</span> <span class="pre">default_factory:</span> <span class="pre">Optional[Callable[[],</span> <span class="pre">Any]]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">init:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">repr:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">hash:</span> <span class="pre">Optional[bool]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">compare:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">metadata:</span> <span class="pre">Optional[Mapping[Any,</span> <span class="pre">Any]]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">kw_only:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">converter:</span> <span class="pre">Callable[[Any],</span> <span class="pre">Any]</span> <span class="pre">|</span> <span class="pre">Literal['coerce']</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">'coerce',</span> <span class="pre">validator:</span> <span class="pre">AttrsValidator</span> <span class="pre">|</span> <span class="pre">FieldValidator</span> <span class="pre">|</span> <span class="pre">Sequence[AttrsValidator</span> <span class="pre">|</span> <span class="pre">FieldValidator]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.coerced_field" title="Permalink to this definition"></a></dt>
+<dd><p>Field definition function using <code class="docutils literal notranslate"><span class="pre">converter=&quot;coerce&quot;</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.concretize">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">concretize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">datamodel_cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">GenericDataModelT</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">type_args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">support_pickling</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite_definition</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">DataModelT</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#concretize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.concretize" title="Permalink to this definition"></a></dt>
+<dd><p>Generate a new concrete subclass of a generic Data Model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>datamodel_cls</strong> – Generic Data Model to be subclassed.</p></li>
+<li><p><strong>type_args</strong> – Type definitions replacing the <cite>TypeVars</cite> in
+<code class="docutils literal notranslate"><span class="pre">datamodel_cls.__parameters__</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Keyword Arguments</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>class_name</strong> – Name of the new concrete class. The default value is the
+same of the generic Data Model replacing the <cite>TypeVars</cite> by the provided
+<cite>type_args</cite> in the name.</p></li>
+<li><p><strong>module</strong> – Value of the <code class="docutils literal notranslate"><span class="pre">__module__</span></code> attribute of the new class.
+The default value is the name of the module containing the generic Data Model.</p></li>
+<li><p><strong>support_pickling</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, support for pickling will be added
+by actually inserting the new class into the target <cite>module</cite>.</p></li>
+<li><p><strong>overwrite_definition</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, a previous definition of the class in
+the target module will be overwritten.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.datamodel">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">datamodel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls:</span> <span class="pre">Optional[Type[_T]]</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repr:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eq:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unsafe_hash:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frozen:</span> <span class="pre">bool</span> <span class="pre">|</span> <span class="pre">Literal['strict']</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_args:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kw_only:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slots:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coerce:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generic:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_validation_factory:</span> <span class="pre">Optional[FieldTypeValidatorFactory]</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">field_type_validator_factory.&lt;locals&gt;._field_type_validator_factory&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#datamodel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.datamodel" title="Permalink to this definition"></a></dt>
+<dd><p>Add generated special methods to classes according to the specified attributes (class decorator).</p>
+<p>It converts the class to an <a class="reference external" href="https://www.attrs.org/">attrs</a> with some extra features.
+Adding strict type validation functions for the fields is done by means of
+the <code class="docutils literal notranslate"><span class="pre">type_validation_factory</span></code> argument, falling back to the default factory</p>
+<blockquote>
+<div><p>(<a class="reference internal" href="#gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory" title="gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory"><code class="xref py py-class docutils literal notranslate"><span class="pre">DefaultFieldTypeValidatorFactory</span></code></a>). The generated field type</p>
+</div></blockquote>
+<p>validators are generated by using PEP 526 <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> to determine field
+types and creating validation functions for them.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>cls</strong> – Original class definition.</p>
+</dd>
+<dt class="field-even">Keyword Arguments</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>repr</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), a <code class="docutils literal notranslate"><span class="pre">__repr__()</span></code> method will be generated if it does
+not overwrite a custom implementation defined in this class (not inherited).</p></li>
+<li><p><strong>eq</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), <code class="docutils literal notranslate"><span class="pre">__eq__()</span></code> and <code class="docutils literal notranslate"><span class="pre">__ne__()</span></code> methods will be generated
+if they do not overwrite custom implementations defined in this class (not inherited).
+The generated method compares the class as if it were a tuple of its fields, but both
+instances in the comparison must be of identical type.</p></li>
+<li><p><strong>order</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), add <code class="docutils literal notranslate"><span class="pre">__lt__()</span></code>, <code class="docutils literal notranslate"><span class="pre">__le__()</span></code>, <code class="docutils literal notranslate"><span class="pre">__gt__()</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">__ge__()</span></code> methods that behave like <cite>eq</cite> above and allow instances
+to be ordered. If <code class="docutils literal notranslate"><span class="pre">None</span></code> mirror value of <cite>eq</cite>.</p></li>
+<li><p><strong>unsafe_hash</strong> – If <code class="docutils literal notranslate"><span class="pre">False</span></code>, a <code class="docutils literal notranslate"><span class="pre">__hash__()</span></code> method is generated in a safe way
+according to how <code class="docutils literal notranslate"><span class="pre">eq</span></code> and <code class="docutils literal notranslate"><span class="pre">frozen</span></code> are set, or set to <code class="docutils literal notranslate"><span class="pre">None</span></code> (disabled)
+otherwise. If <code class="docutils literal notranslate"><span class="pre">True</span></code>, a <code class="docutils literal notranslate"><span class="pre">__hash__()</span></code> method is generated anyway
+(use with care). See <a class="reference external" href="https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass" title="(in Python v3.11)"><code class="xref py py-func docutils literal notranslate"><span class="pre">dataclasses.dataclass()</span></code></a> for the complete explanation
+(or other sources like: <a class="reference external" href="https://hynek.me/articles/hashes-and-equality/">https://hynek.me/articles/hashes-and-equality/</a>).</p></li>
+<li><p><strong>frozen</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), assigning to fields will generate an exception.
+This emulates read-only frozen instances. The <code class="docutils literal notranslate"><span class="pre">__setattr__()</span></code> and
+<code class="docutils literal notranslate"><span class="pre">__delattr__()</span></code> methods should not be defined in the class.</p></li>
+<li><p><strong>match_args</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) and <code class="docutils literal notranslate"><span class="pre">__match_args__</span></code> is not already defined in the class,
+set <code class="docutils literal notranslate"><span class="pre">__match_args__</span></code> on the class to support PEP 634 (Structural Pattern Matching).
+It is a tuple of all positional-only <code class="docutils literal notranslate"><span class="pre">__init__</span></code> parameter names on
+Python 3.10 and later. Ignored on older Python versions.</p></li>
+<li><p><strong>kw_only</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), make all fields keyword-only in the generated
+<code class="docutils literal notranslate"><span class="pre">__init__</span></code> (if <code class="docutils literal notranslate"><span class="pre">init</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, this parameter is ignored).</p></li>
+<li><p><strong>slots</strong> – slots: If <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), <code class="docutils literal notranslate"><span class="pre">__slots__</span></code> attribute will be generated
+and a new slotted class will be returned instead of the original one.</p></li>
+<li><p><strong>coerce</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), an automatic type converter will be generated
+for all fields.</p></li>
+<li><p><strong>generic</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>) the class should be a <code class="docutils literal notranslate"><span class="pre">Generic[]</span></code> class,
+and the generated Data Model will support creation of new Data Model subclasses
+when using concrete types as arguments of <code class="docutils literal notranslate"><span class="pre">DataModelClass[some_concret_type]</span></code>.</p></li>
+<li><p><strong>type_validation_factory</strong> – Type validation factory used to build the field type validators.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, type validators will not be generators.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.evolve">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">evolve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inst</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">changes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/_funcs.html#evolve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.evolve" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new instance, based on inst with changes applied.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.field">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">field</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">*,</span> <span class="pre">default:</span> <span class="pre">Any</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'gt4py.eve.type_definitions.NOTHING'&gt;,</span> <span class="pre">default_factory:</span> <span class="pre">Optional[Callable[[],</span> <span class="pre">Any]]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">init:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">repr:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">hash:</span> <span class="pre">Optional[bool]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">compare:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">metadata:</span> <span class="pre">Optional[Mapping[Any,</span> <span class="pre">Any]]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">kw_only:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">converter:</span> <span class="pre">Callable[[Any],</span> <span class="pre">Any]</span> <span class="pre">|</span> <span class="pre">Literal['coerce']</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">validator:</span> <span class="pre">AttrsValidator</span> <span class="pre">|</span> <span class="pre">FieldValidator</span> <span class="pre">|</span> <span class="pre">Sequence[AttrsValidator</span> <span class="pre">|</span> <span class="pre">FieldValidator]</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#field"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.field" title="Permalink to this definition"></a></dt>
+<dd><p>Define a new attribute on a class with advanced options.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Keyword Arguments</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>default</strong> – If provided, this will be the default value for this field.
+This is needed because the <code class="docutils literal notranslate"><span class="pre">field()</span></code> call itself replaces the
+normal position of the default value.</p></li>
+<li><p><strong>default_factory</strong> – If provided, it must be a zero-argument callable that will
+be called when a default value is needed for this field. Among other
+purposes, this can be used to specify fields with mutable default values.
+It is an error to specify both <cite>default</cite> and <cite>default_factory</cite>.</p></li>
+<li><p><strong>init</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), this field is included as a parameter to the
+generated <code class="docutils literal notranslate"><span class="pre">__init__()</span></code> method.</p></li>
+<li><p><strong>repr</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), this field is included in the string returned
+by the generated <code class="docutils literal notranslate"><span class="pre">__repr__()</span></code> method.</p></li>
+<li><p><strong>hash</strong> – This can be a <code class="docutils literal notranslate"><span class="pre">bool</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> (default). If <code class="docutils literal notranslate"><span class="pre">True</span></code>, this field is
+included in the generated <code class="docutils literal notranslate"><span class="pre">__hash__()</span></code> method. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, use the value
+of <cite>compare</cite>, which would normally be the expected behavior: a field
+should be considered in the <cite>hash</cite> if it is used for comparisons.
+Setting this value to anything other than <code class="docutils literal notranslate"><span class="pre">None</span></code> is <cite>discouraged</cite>.</p></li>
+<li><p><strong>compare</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), this field is included in the generated equality and
+comparison methods (__eq__(), __gt__(), et al.).</p></li>
+<li><p><strong>metadata</strong> – An arbitrary mapping, not used at all by Data Models, and provided
+only as a third-party extension mechanism. Multiple third-parties can each
+have their own key, to use as a namespace in the metadata.</p></li>
+<li><p><strong>kw_only</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), make this field keyword-only in the
+generated <code class="docutils literal notranslate"><span class="pre">__init__</span></code> (if <code class="docutils literal notranslate"><span class="pre">init</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, this parameter is ignored).</p></li>
+<li><p><strong>converter</strong> – Callable that is automatically called to convert attribute’s value.
+It is given the passed-in value, and the returned value will be used as the
+new value of the attribute before being passed to the validator, if any.
+If <code class="docutils literal notranslate"><span class="pre">&quot;coerce&quot;</span></code> is passed, a naive coercer converter will be generated.
+The automatic converter basically calls the constructor of the type indicated
+in the type hint, so it is assumed that new instances of this type can be created
+like <code class="docutils literal notranslate"><span class="pre">type_name(value)</span></code>. For collection types, there is not attempt to convert
+its items, only the collection type.</p></li>
+<li><p><strong>validator</strong> – FieldValidator or list of FieldValidators to be used with this field.
+(Note that validators can also be set using decorator notation).</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">C</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">mylist</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span> <span class="o">=</span> <span class="n">C</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c</span><span class="o">.</span><span class="n">mylist</span>
+<span class="go">[1, 2, 3]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.field_type_validator_factory">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">field_type_validator_factory</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#field_type_validator_factory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.field_type_validator_factory" title="Permalink to this definition"></a></dt>
+<dd><p>Create a factory of field type validators from a factory of regular type validators.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.fields">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">fields</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="gt4py.eve.html#gt4py.eve.utils.FrozenNamespace" title="gt4py.eve.utils.FrozenNamespace"><span class="pre">gt4py.eve.utils.FrozenNamespace</span></a></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.fields" title="Permalink to this definition"></a></dt>
+<dd><p>Return the field meta-information of a Data Model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>model</strong> – A Data Model class or instance.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">Model</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">... </span>    <span class="n">amount</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">... </span>    <span class="n">numbers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">fields</span><span class="p">(</span><span class="n">Model</span><span class="p">)</span>  
+<span class="go">FrozenNamespace(...name=Attribute(name=&#39;name&#39;, default=NOTHING, ...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.frozen_model">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">frozen_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls:</span> <span class="pre">Optional[Type[_T]]</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repr:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eq:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unsafe_hash:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frozen:</span> <span class="pre">bool</span> <span class="pre">|</span> <span class="pre">Literal['strict']</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_args:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kw_only:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slots:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coerce:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generic:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_validation_factory:</span> <span class="pre">Optional[FieldTypeValidatorFactory]</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">field_type_validator_factory.&lt;locals&gt;._field_type_validator_factory&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.frozen_model" title="Permalink to this definition"></a></dt>
+<dd><p>Add generated special methods to classes according to the specified attributes (class decorator).</p>
+<p>It converts the class to an <a class="reference external" href="https://www.attrs.org/">attrs</a> with some extra features.
+Adding strict type validation functions for the fields is done by means of
+the <code class="docutils literal notranslate"><span class="pre">type_validation_factory</span></code> argument, falling back to the default factory</p>
+<blockquote>
+<div><p>(<a class="reference internal" href="#gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory" title="gt4py.eve.datamodels.core.DefaultFieldTypeValidatorFactory"><code class="xref py py-class docutils literal notranslate"><span class="pre">DefaultFieldTypeValidatorFactory</span></code></a>). The generated field type</p>
+</div></blockquote>
+<p>validators are generated by using PEP 526 <code class="docutils literal notranslate"><span class="pre">__annotations__</span></code> to determine field
+types and creating validation functions for them.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>cls</strong> – Original class definition.</p>
+</dd>
+<dt class="field-even">Keyword Arguments</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>repr</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), a <code class="docutils literal notranslate"><span class="pre">__repr__()</span></code> method will be generated if it does
+not overwrite a custom implementation defined in this class (not inherited).</p></li>
+<li><p><strong>eq</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default), <code class="docutils literal notranslate"><span class="pre">__eq__()</span></code> and <code class="docutils literal notranslate"><span class="pre">__ne__()</span></code> methods will be generated
+if they do not overwrite custom implementations defined in this class (not inherited).
+The generated method compares the class as if it were a tuple of its fields, but both
+instances in the comparison must be of identical type.</p></li>
+<li><p><strong>order</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), add <code class="docutils literal notranslate"><span class="pre">__lt__()</span></code>, <code class="docutils literal notranslate"><span class="pre">__le__()</span></code>, <code class="docutils literal notranslate"><span class="pre">__gt__()</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">__ge__()</span></code> methods that behave like <cite>eq</cite> above and allow instances
+to be ordered. If <code class="docutils literal notranslate"><span class="pre">None</span></code> mirror value of <cite>eq</cite>.</p></li>
+<li><p><strong>unsafe_hash</strong> – <p>If <code class="docutils literal notranslate"><span class="pre">False</span></code>, a <code class="docutils literal notranslate"><span class="pre">__hash__()</span></code> method is generated in a safe way
+according to how <code class="docutils literal notranslate"><span class="pre">eq</span></code> and <code class="docutils literal notranslate"><span class="pre">frozen</span></code> are set, or set to <code class="docutils literal notranslate"><span class="pre">None</span></code> (disabled)
+otherwise. If <code class="docutils literal notranslate"><span class="pre">True</span></code>, a <code class="docutils literal notranslate"><span class="pre">__hash__()</span></code> method is generated anyway
+(use with care). See <a class="reference external" href="https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass" title="(in Python v3.11)"><code class="xref py py-func docutils literal notranslate"><span class="pre">dataclasses.dataclass()</span></code></a> for the complete explanation
+(or other sources like: <a class="reference external" href="https://hynek.me/articles/hashes-and-equality/">https://hynek.me/articles/hashes-and-equality/</a>).</p>
+</p></li>
+<li><p><strong>frozen</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), assigning to fields will generate an exception.
+This emulates read-only frozen instances. The <code class="docutils literal notranslate"><span class="pre">__setattr__()</span></code> and
+<code class="docutils literal notranslate"><span class="pre">__delattr__()</span></code> methods should not be defined in the class.</p></li>
+<li><p><strong>match_args</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) and <code class="docutils literal notranslate"><span class="pre">__match_args__</span></code> is not already defined in the class,
+set <code class="docutils literal notranslate"><span class="pre">__match_args__</span></code> on the class to support PEP 634 (Structural Pattern Matching).
+It is a tuple of all positional-only <code class="docutils literal notranslate"><span class="pre">__init__</span></code> parameter names on
+Python 3.10 and later. Ignored on older Python versions.</p></li>
+<li><p><strong>kw_only</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), make all fields keyword-only in the generated
+<code class="docutils literal notranslate"><span class="pre">__init__</span></code> (if <code class="docutils literal notranslate"><span class="pre">init</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, this parameter is ignored).</p></li>
+<li><p><strong>slots</strong> – slots: If <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), <code class="docutils literal notranslate"><span class="pre">__slots__</span></code> attribute will be generated
+and a new slotted class will be returned instead of the original one.</p></li>
+<li><p><strong>coerce</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>), an automatic type converter will be generated
+for all fields.</p></li>
+<li><p><strong>generic</strong> – If <code class="docutils literal notranslate"><span class="pre">True</span></code> (default is <code class="docutils literal notranslate"><span class="pre">False</span></code>) the class should be a <code class="docutils literal notranslate"><span class="pre">Generic[]</span></code> class,
+and the generated Data Model will support creation of new Data Model subclasses
+when using concrete types as arguments of <code class="docutils literal notranslate"><span class="pre">DataModelClass[some_concret_type]</span></code>.</p></li>
+<li><p><strong>type_validation_factory</strong> – Type validation factory used to build the field type validators.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, type validators will not be generators.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.frozenmodel">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">frozenmodel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls:</span> <span class="pre">Optional[Type[_T]]</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repr:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eq:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unsafe_hash:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frozen:</span> <span class="pre">bool</span> <span class="pre">|</span> <span class="pre">Literal['strict']</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_args:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kw_only:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slots:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coerce:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generic:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_validation_factory:</span> <span class="pre">Optional[FieldTypeValidatorFactory]</span> <span class="pre">=</span> <span class="pre">&lt;function</span> <span class="pre">field_type_validator_factory.&lt;locals&gt;._field_type_validator_factory&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Type</span><span class="p"><span class="pre">[</span></span><span class="pre">_T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#gt4py.eve.datamodels.core.frozenmodel" title="Permalink to this definition"></a></dt>
+<dd><p>Data Model definition function using <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.get_fields">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">get_fields</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.11)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#gt4py.eve.datamodels.core.DataModel" title="gt4py.eve.datamodels.core.DataModel"><span class="pre">gt4py.eve.datamodels.core.DataModel</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="gt4py.eve.html#gt4py.eve.utils.FrozenNamespace" title="gt4py.eve.utils.FrozenNamespace"><span class="pre">gt4py.eve.utils.FrozenNamespace</span></a></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#get_fields"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.get_fields" title="Permalink to this definition"></a></dt>
+<dd><p>Return the field meta-information of a Data Model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>model</strong> – A Data Model class or instance.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">Model</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">... </span>    <span class="n">amount</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="gp">... </span>    <span class="n">numbers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">fields</span><span class="p">(</span><span class="n">Model</span><span class="p">)</span>  
+<span class="go">FrozenNamespace(...name=Attribute(name=&#39;name&#39;, default=NOTHING, ...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.is_datamodel">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">is_datamodel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">typing_extensions.Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#is_datamodel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.is_datamodel" title="Permalink to this definition"></a></dt>
+<dd><p>Return True if <cite>obj</cite> is a Data Model class or an instance of a Data Model.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.is_generic_datamodel_class">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">is_generic_datamodel_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#is_generic_datamodel_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.is_generic_datamodel_class" title="Permalink to this definition"></a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> if <cite>obj</cite> is a generic Data Model class with type parameters.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.root_validator">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">root_validator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">gt4py.eve.datamodels.core._RV</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">gt4py.eve.datamodels.core._RV</span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#root_validator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.root_validator" title="Permalink to this definition"></a></dt>
+<dd><p>Define a custom root validator (decorator function).</p>
+<p>The decorated functions should have the following signature:
+<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">_root_validator_function(cls,</span> <span class="pre">instance):</span></code>
+where <code class="docutils literal notranslate"><span class="pre">cls</span></code> will be the class of the model and <code class="docutils literal notranslate"><span class="pre">instance</span></code> the
+actual instance being validated.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.simple_type_validator_factory">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">simple_type_validator_factory</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#gt4py.eve.datamodels.core.simple_type_validator_factory" title="Permalink to this definition"></a></dt>
+<dd><p>Field type validator for datamodels, supporting forward references.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.update_forward_refs">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">update_forward_refs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">_DataModelT</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">localns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.11)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">typing_extensions.Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><span class="pre">type</span></a><span class="p"><span class="pre">[</span></span><span class="pre">_DataModelT</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#update_forward_refs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.update_forward_refs" title="Permalink to this definition"></a></dt>
+<dd><p>Update Data Model class meta-information replacing forwarded type annotations with actual types.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>localns</strong> – locals <code class="docutils literal notranslate"><span class="pre">dict</span></code> used in the evaluation of the annotations
+(globals are automatically taken from <code class="docutils literal notranslate"><span class="pre">model.__module__</span></code>).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The provided class (so it can be used as a decorator too).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.validate">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inst</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/_make.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.validate" title="Permalink to this definition"></a></dt>
+<dd><p>Validate all attributes on inst that have a validator.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.core.validator">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.core.</span></span><span class="sig-name descname"><span class="pre">validator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.11)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.11)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">gt4py.eve.datamodels.core._DM</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.Attribute" title="(in attrs v22.1)"><span class="pre">attr._make.Attribute</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">gt4py.eve.datamodels.core._T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable" title="(in Python v3.11)"><span class="pre">collections.abc.Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">gt4py.eve.datamodels.core._DM</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.Attribute" title="(in attrs v22.1)"><span class="pre">attr._make.Attribute</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">gt4py.eve.datamodels.core._T</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/core.html#validator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.core.validator" title="Permalink to this definition"></a></dt>
+<dd><p>Define a custom field validator for a specific field (decorator function).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> – Name of the field to be validated by the decorated function.</p>
+</dd>
+</dl>
+<p>The decorated functions should have the following signature:
+<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">_validator_function(self,</span> <span class="pre">attribute,</span> <span class="pre">value):</span></code>
+where <code class="docutils literal notranslate"><span class="pre">self</span></code> will be the model instance being validated, <code class="docutils literal notranslate"><span class="pre">attribute</span></code>
+the definition information of the attribute (the value of
+<code class="docutils literal notranslate"><span class="pre">__datamodel_fields__.field_name</span></code>) and <code class="docutils literal notranslate"><span class="pre">value</span></code> the actual value
+received for this field.</p>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.eve.datamodels.validators">
+<span id="gt4py-eve-datamodels-validators-module"></span><h2>gt4py.eve.datamodels.validators module<a class="headerlink" href="#module-gt4py.eve.datamodels.validators" title="Permalink to this headline"></a></h2>
+<p>Data Model field validators.</p>
+<p>Check <code class="xref py py-mod docutils literal notranslate"><span class="pre">eve.datamodels</span></code> and <cite>attrs validation reference &lt;https://www.attrs.org/en/stable/api.html#validators &gt;</cite>
+for additional information.</p>
+<p>Note that validators are implemented as callable classes just to be able to
+customize their <code class="docutils literal notranslate"><span class="pre">__repr__</span></code> method.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.and_">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">and_</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">validators</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/_make.html#and_"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.and_" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that composes multiple validators into one.</p>
+<p>When called on a value, it runs all wrapped validators.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>validators</strong> (<em>callables</em>) – Arbitrary number of validators.</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 17.1.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.deep_iterable">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">deep_iterable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">member_validator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterable_validator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#deep_iterable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.deep_iterable" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that performs deep validation of an iterable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>member_validator</strong> – Validator(s) to apply to iterable members</p></li>
+<li><p><strong>iterable_validator</strong> – Validator to apply to iterable itself
+(optional)</p></li>
+</ul>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 19.1.0.</span></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.11)"><strong>TypeError</strong></a> – if any sub-validators fail</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.deep_mapping">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">deep_mapping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key_validator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_validator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mapping_validator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#deep_mapping"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.deep_mapping" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that performs deep validation of a dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key_validator</strong> – Validator to apply to dictionary keys</p></li>
+<li><p><strong>value_validator</strong> – Validator to apply to dictionary values</p></li>
+<li><p><strong>mapping_validator</strong> – Validator to apply to top-level mapping
+attribute (optional)</p></li>
+</ul>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 19.1.0.</span></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.11)"><strong>TypeError</strong></a> – if any sub-validators fail</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.ge">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">ge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#ge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.ge" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a number smaller than <em>val</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>val</strong> – Inclusive lower bound for values</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 21.3.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.gt">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">gt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#gt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.gt" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a number smaller or equal to <em>val</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>val</strong> – Exclusive lower bound for values</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 21.3.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.in_">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">in_</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">options</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#in_"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.in_" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises a <cite>ValueError</cite> if the initializer is called
+with a value that does not belong in the options provided.  The check is
+performed using <code class="docutils literal notranslate"><span class="pre">value</span> <span class="pre">in</span> <span class="pre">options</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>options</strong> (list, tuple, <cite>enum.Enum</cite>, …) – Allowed options.</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.11)"><strong>ValueError</strong></a> – With a human readable error message, the attribute (of
+type <cite>attrs.Attribute</cite>), the expected options, and the value it
+got.</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 17.1.0.</span></p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 22.1.0: </span>The ValueError was incomplete until now and only contained the human
+readable error message. Now it contains all the information that has
+been promised since 17.1.0.</p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.instance_of">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">instance_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#instance_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.instance_of" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises a <cite>TypeError</cite> if the initializer is called
+with a wrong type for this particular attribute (checks are performed using
+<cite>isinstance</cite> therefore it’s also valid to pass a tuple of types).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.11)"><em>type</em></a><em> or </em><em>tuple of types</em>) – The type to check for.</p>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.11)"><strong>TypeError</strong></a> – With a human readable error message, the attribute
+(of type <cite>attrs.Attribute</cite>), the expected type, and the value it
+got.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.is_callable">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">is_callable</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#is_callable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.is_callable" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises a <cite>attr.exceptions.NotCallableError</cite> if the
+initializer is called with a value for this particular attribute
+that is not callable.</p>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 19.1.0.</span></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://www.attrs.org/en/stable/api.html#attrs.exceptions.NotCallableError" title="(in attrs v22.1)"><strong>attr.exceptions.NotCallableError</strong></a> – With a human readable error
+message containing the attribute (<cite>attrs.Attribute</cite>) name,
+and the value it got.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.le">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">le</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#le"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.le" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a number greater than <em>val</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>val</strong> – Inclusive upper bound for values</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 21.3.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.lt">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">lt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#lt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.lt" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a number larger or equal to <em>val</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>val</strong> – Exclusive upper bound for values</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 21.3.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.matches_re">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">matches_re</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#matches_re"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.matches_re" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a string that doesn’t match <em>regex</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>regex</strong> – a regex string or precompiled pattern to match against</p></li>
+<li><p><strong>flags</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a>) – flags that will be passed to the underlying re function
+(default 0)</p></li>
+<li><p><strong>func</strong> (<em>callable</em>) – which underlying <cite>re</cite> function to call. Valid options
+are <cite>re.fullmatch</cite>, <cite>re.search</cite>, and <cite>re.match</cite>; the default <code class="docutils literal notranslate"><span class="pre">None</span></code>
+means <cite>re.fullmatch</cite>. For performance reasons, the pattern is always
+precompiled using <cite>re.compile</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 19.2.0.</span></p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 21.3.0: </span><em>regex</em> can be a pre-compiled pattern.</p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.max_len">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">max_len</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">length</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#max_len"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.max_len" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that raises <cite>ValueError</cite> if the initializer is called
+with a string or iterable that is longer than <em>length</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>length</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a>) – Maximum length of the string or iterable</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 21.3.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.non_empty">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">non_empty</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">FieldValidator</span></span></span><a class="reference internal" href="../_modules/gt4py/eve/datamodels/validators.html#non_empty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.non_empty" title="Permalink to this definition"></a></dt>
+<dd><p>Create a validator for non-empty iterables.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="gt4py.eve.datamodels.validators.optional">
+<span class="sig-prename descclassname"><span class="pre">gt4py.eve.datamodels.validators.</span></span><span class="sig-name descname"><span class="pre">optional</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">validator</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/attr/validators.html#optional"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#gt4py.eve.datamodels.validators.optional" title="Permalink to this definition"></a></dt>
+<dd><p>A validator that makes an attribute optional.  An optional attribute is one
+which can be set to <code class="docutils literal notranslate"><span class="pre">None</span></code> in addition to satisfying the requirements of
+the sub-validator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>validator</strong> (callable or <cite>list</cite> of callables.) – A validator (or a list of validators) that is used for
+non-<code class="docutils literal notranslate"><span class="pre">None</span></code> values.</p>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 15.1.0.</span></p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 17.1.0: </span><em>validator</em> can be a list of validators.</p>
+</div>
+</dd></dl>
+
+</section>
+<section id="module-gt4py.eve.datamodels">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-gt4py.eve.datamodels" title="Permalink to this headline"></a></h2>
+<p>Data Model classes and related utils and validators.</p>
+<p>Data Models can be considered as enhanced  <a class="reference external" href="https://www.attrs.org">attrs</a>
+/ <a class="reference external" href="https://docs.python.org/3/library/dataclasses.html">dataclasses</a> providing
+additional features like automatic run-time type validation. Values assigned to fields
+at initialization can be validated with automatic type checkings using the
+field type definition. Custom field validation methods can also be added with
+the <code class="xref py py-func docutils literal notranslate"><span class="pre">validator()</span></code> decorator, and global instance validation methods with
+<code class="xref py py-func docutils literal notranslate"><span class="pre">root_validator()</span></code>.</p>
+<p>The datamodels API tries to follow <code class="docutils literal notranslate"><span class="pre">dataclasses</span></code> API conventions when possible,
+but it is not an exact copy. Implementation-wise, Data Model classes are just
+customized <code class="docutils literal notranslate"><span class="pre">attrs</span></code> classes, and therefore external tools compatible with <code class="docutils literal notranslate"><span class="pre">attrs</span></code>
+classes should also work with Data Models classes.</p>
+<p>A valid <code class="docutils literal notranslate"><span class="pre">__init__</span></code> method for the Data Model class is always generated. If the class
+already defines a custom <code class="docutils literal notranslate"><span class="pre">__init__</span></code> method, the generated method will be named
+<code class="docutils literal notranslate"><span class="pre">__auto_init__</span></code> and should be called from the custom <code class="docutils literal notranslate"><span class="pre">__init__</span></code> to profit from
+datamodels features. Additionally, if custom <code class="docutils literal notranslate"><span class="pre">__pre_init__(self)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code> or
+<code class="docutils literal notranslate"><span class="pre">__post_init__(self)</span> <span class="pre">-&gt;</span> <span class="pre">None</span></code> methods exist in the class, they will be automatically
+called from the generated <code class="docutils literal notranslate"><span class="pre">__init__</span></code> before and after the instance creation.</p>
+<p>The order of execution of the different components at initialization is the following:</p>
+<blockquote>
+<div><ol class="arabic">
+<li><p><code class="docutils literal notranslate"><span class="pre">__init__()</span></code>.</p>
+<blockquote>
+<div><ol class="loweralpha simple">
+<li><p>If a custom <code class="docutils literal notranslate"><span class="pre">__init__</span></code> already exists in the class, it will not be overwritten.
+It is your responsability to call <code class="docutils literal notranslate"><span class="pre">__auto_init__</span></code> from there to obtain
+the described behavior.</p></li>
+<li><p>If there is not custom <code class="docutils literal notranslate"><span class="pre">__init__</span></code>, the one generated by datamodels
+will be called first.</p></li>
+</ol>
+</div></blockquote>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">__pre_init__()</span></code>, if it exists.</p></li>
+<li><p>For each field, in the order it was defined:</p>
+<blockquote>
+<div><ol class="loweralpha simple">
+<li><p>default factory (if any).</p></li>
+<li><p>converter (if any).</p></li>
+</ol>
+</div></blockquote>
+</li>
+<li><p>all field validators.</p></li>
+<li><p>root validators following the reversed class MRO order.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">__post_init__()</span></code>, if it exists.</p></li>
+</ol>
+</div></blockquote>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">SampleModel</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">... </span>    <span class="n">amount</span><span class="p">:</span> <span class="nb">int</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">_name_validator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+<span class="gp">... </span>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<span class="gp">... </span>                <span class="sa">f</span><span class="s2">&quot;Provided value &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; for &#39;</span><span class="si">{</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; field is too short.&quot;</span>
+<span class="gp">... </span>            <span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">SampleModel</span><span class="p">(</span><span class="s2">&quot;Some Name&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="go">SampleModel(name=&#39;Some Name&#39;, amount=10)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">SampleModel</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+    <span class="o">...</span>
+<span class="gr">ValueError</span>: <span class="n">Provided value &#39;A&#39; for &#39;name&#39; field is too short.</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">AnotherSampleModel</span><span class="p">(</span><span class="n">DataModel</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="gp">... </span>    <span class="n">friends</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="nd">@root_validator</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">_root_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">if</span> <span class="n">instance</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">instance</span><span class="o">.</span><span class="n">friends</span><span class="p">:</span>
+<span class="gp">... </span>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&#39;name&#39; value cannot appear in &#39;friends&#39; list.&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">AnotherSampleModel</span><span class="p">(</span><span class="s2">&quot;Eve&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;Liam&quot;</span><span class="p">,</span> <span class="s2">&quot;John&quot;</span><span class="p">])</span>
+<span class="go">AnotherSampleModel(name=&#39;Eve&#39;, friends=[&#39;Liam&#39;, &#39;John&#39;])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">AnotherSampleModel</span><span class="p">(</span><span class="s2">&quot;Eve&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;Eve&quot;</span><span class="p">,</span> <span class="s2">&quot;John&quot;</span><span class="p">])</span>
+<span class="gt">Traceback (most recent call last):</span>
+    <span class="o">...</span>
+<span class="gr">ValueError</span>: <span class="n">&#39;name&#39; value cannot appear in &#39;friends&#39; list.</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@datamodel</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">CustomModel</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">value</span><span class="p">:</span> <span class="nb">float</span>
+<span class="gp">... </span>    <span class="n">num_instances</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">__auto_init__</span><span class="p">(</span><span class="n">a</span><span class="o">/</span><span class="n">b</span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__pre_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="n">num_instances</span> <span class="o">+=</span> <span class="mi">1</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Instance </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_instances</span><span class="si">}</span><span class="s2"> == </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">CustomModel</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="go">Instance 1 == 1.5</span>
+<span class="go">CustomModel(value=1.5)</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gt4py.eve.html" class="btn btn-neutral float-left" title="gt4py.eve package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gt4py.storage.html" class="btn btn-neutral float-right" title="gt4py.storage package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

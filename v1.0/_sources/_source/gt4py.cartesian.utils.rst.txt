@@ -1,0 +1,45 @@
+gt4py.cartesian.utils package
+=============================
+
+Submodules
+----------
+
+gt4py.cartesian.utils.attrib module
+-----------------------------------
+
+.. automodule:: gt4py.cartesian.utils.attrib
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.utils.base module
+---------------------------------
+
+.. automodule:: gt4py.cartesian.utils.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.utils.meta module
+---------------------------------
+
+.. automodule:: gt4py.cartesian.utils.meta
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gt4py.cartesian.utils.text module
+---------------------------------
+
+.. automodule:: gt4py.cartesian.utils.text
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: gt4py.cartesian.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:

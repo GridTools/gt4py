@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GT4Py: GridTools for Python &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quick Start Guide" href="quickstart.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="#" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">GT4Py: GridTools for Python</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gt4py-gridtools-for-python">
+<h1>GT4Py: GridTools for Python<a class="headerlink" href="#gt4py-gridtools-for-python" title="Permalink to this headline"></a></h1>
+<p>GT4Py is a DSL compiler framework for weather and climate modeling, allowing users
+to write codes in a simplified stencil language using standard Python syntax and
+executing them with great performance on different machine architectures, such as
+CPUs and GPUs.</p>
+<p><strong>How does it work?</strong> GT4Py takes your stencils written in GTScript and generates
+optimized C++ code, which is compiled just-in-time to deliver the best
+possible performance. GT4Py’s GTScript language is readable and concise.
+As an extension of Python it has a familiar look and feel to anyone who knows
+Python and interoperates nicely with scientific Python software stack (e.g. NumPy, SciPy).</p>
+<p><strong>Great! So what does it look like in practice?</strong> Look at the following example of
+a laplacian operation coded in GTScript, and note how similar the GTScript representation is to the mathematical notation:</p>
+<img alt="_images/stencil.png" src="_images/stencil.png" />
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 59%" />
+<col style="width: 41%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">&quot;gt:cpu_kfirst&quot;</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">laplacian</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">B</span><span class="p">:</span> <span class="n">Field</span><span class="p">[</span><span class="nb">float</span><span class="p">]):</span>
+    <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="o">-</span> <span class="mf">4.</span> <span class="o">*</span> <span class="n">A</span> <span class="o">+</span> <span class="p">(</span> <span class="n">A</span><span class="p">[</span><span class="n">I</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">A</span><span class="p">[</span><span class="n">I</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span>
+                         <span class="n">A</span><span class="p">[</span><span class="n">J</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">A</span><span class="p">[</span><span class="n">J</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
+</pre></div>
+</div>
+</td>
+<td><p><span class="math notranslate nohighlight">\(\begin{align}
+B_{i, j, k} = &amp; - 4 A_{i, j, k} \\
+&amp; + (A_{i+1, j, k} + A_{i-1, j, k} \\
+&amp; + A_{i, i+1, k} + A_{i, j-1, k})
+\end{align}\)</span></p></td>
+</tr>
+</tbody>
+</table>
+<p>The default performance backends use the <a class="reference external" href="https://github.com/GridTools/gridtools">GridTools</a> C++ library to target typical modern multi-core CPU and GPU architectures.
+GridTools is a C++ framework developed by <a class="reference external" href="https://cscs.ch">CSCS</a> for writing performance-portable stencil operations.
+In contrast to GT4Py it operates on a much lower level.</p>
+<p>GT4Py can also generate easy-to-read numpy code that illustrates how the stencil parallelization works.
+This also is easier for debugging, since the user can put breakpoints in this function.</p>
+<p>It is also possible to generate backends for other performance portability libraries, or even hook into other frameworks at a deeper level.
+As an example of this, GT4Py comes with built-in integration to the <a class="reference external" href="https://github.com/spcl/dace">DaCe</a> data-centric parallel programming library.</p>
+<p>GT4Py Features:</p>
+<ul class="simple">
+<li><p>High-Level:
+GT4Py takes care of common concerns, such as storage layout, reducing boiler plate code and allowing the intent of the code to shine through.</p></li>
+<li><p>Performant &amp; Portable:
+GT4Py generates and compiles highly optimized code wherever GridTools is available.</p></li>
+<li><p>Familiar:
+GTScript is a <a class="reference external" href="https://en.wikipedia.org/wiki/Domain-specific_language#Usage_patterns">DSL</a> in Python and easy learn for anyone with Python experience.</p></li>
+<li><p>Versatile:
+GT4Py is not limited to GridTools as a backend for compiling optimized code but rather can be extended.
+GTScript code can also be used to generate optimized stencils that can be called from programs not written in Python (C++, Fortran, …).</p></li>
+</ul>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#allocation">Allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#array-interfaces">Array Interfaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#computations-and-intervals">Computations and Intervals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#offset-syntax">Offset syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#compile-time-conditionals">Compile-time conditionals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#system-setup">System Setup</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="arrays.html#interfaces">Interfaces</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="commandline.html#usage">Usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="_source/modules.html">gt4py</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="GDPs/gdp-index.html">GT4Py Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GDPs/gdp-index.html#declined-gdps">Declined GDPs</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-right" title="Quick Start Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

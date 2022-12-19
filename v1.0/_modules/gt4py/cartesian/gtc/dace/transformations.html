@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.dace.transformations &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.dace.transformations</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.dace.transformations</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">dace</span>
+<span class="kn">from</span> <span class="nn">dace.transformation.dataflow</span> <span class="kn">import</span> <span class="n">TrivialMapElimination</span>
+<span class="kn">from</span> <span class="nn">dace.transformation.helpers</span> <span class="kn">import</span> <span class="n">nest_state_subgraph</span>
+<span class="kn">from</span> <span class="nn">dace.transformation.interstate</span> <span class="kn">import</span> <span class="n">InlineTransients</span>
+
+
+<div class="viewcode-block" id="NoEmptyEdgeTrivialMapElimination"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination">[docs]</a><span class="k">class</span> <span class="nc">NoEmptyEdgeTrivialMapElimination</span><span class="p">(</span><span class="n">TrivialMapElimination</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NoEmptyEdgeTrivialMapElimination.can_be_applied"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.NoEmptyEdgeTrivialMapElimination.can_be_applied">[docs]</a>    <span class="k">def</span> <span class="nf">can_be_applied</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">expr_index</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">permissive</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">can_be_applied</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">expr_index</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">permissive</span><span class="o">=</span><span class="n">permissive</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">map_entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">map_entry</span>
+        <span class="n">map_exit</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">exit_node</span><span class="p">(</span><span class="n">map_entry</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">map_entry</span><span class="o">.</span><span class="n">map</span><span class="o">.</span><span class="n">schedule</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span><span class="p">,</span>
+            <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">,</span>
+        <span class="p">}:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">edge</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">is_empty</span><span class="p">()</span> <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="p">(</span><span class="n">graph</span><span class="o">.</span><span class="n">in_edges</span><span class="p">(</span><span class="n">map_entry</span><span class="p">)</span> <span class="o">+</span> <span class="n">graph</span><span class="o">.</span><span class="n">out_edges</span><span class="p">(</span><span class="n">map_exit</span><span class="p">))</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div></div>
+
+
+<div class="viewcode-block" id="InlineThreadLocalTransients"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients">[docs]</a><span class="k">class</span> <span class="nc">InlineThreadLocalTransients</span><span class="p">(</span><span class="n">dace</span><span class="o">.</span><span class="n">transformation</span><span class="o">.</span><span class="n">SingleStateTransformation</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Inline and tile thread-local transients.</span>
+
+<span class="sd">    Inlines transients like `dace.transformations.interstate.InlineTransients`, however only applies to OpenMP map</span>
+<span class="sd">    scopes but also makes the resulting local arrays persistent and thread-local. This reproduces `cpu_kfirst`-style</span>
+<span class="sd">    transient tiling.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">map_entry</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">transformation</span><span class="o">.</span><span class="n">transformation</span><span class="o">.</span><span class="n">PatternNode</span><span class="p">(</span><span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">MapEntry</span><span class="p">)</span>
+
+<div class="viewcode-block" id="InlineThreadLocalTransients.expressions"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.expressions">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">expressions</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">node_path_graph</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">map_entry</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="InlineThreadLocalTransients.can_be_applied"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.can_be_applied">[docs]</a>    <span class="k">def</span> <span class="nf">can_be_applied</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">expr_index</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">,</span> <span class="n">permissive</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">map_entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">map_entry</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">map_entry</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">CPU_Multicore</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">scope_subgraph</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">scope_subgraph</span><span class="p">(</span><span class="n">map_entry</span><span class="p">,</span> <span class="n">include_entry</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_exit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">scope_subgraph</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">scope_subgraph</span><span class="o">.</span><span class="n">nodes</span><span class="p">()[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">candidates</span> <span class="o">=</span> <span class="n">InlineTransients</span><span class="o">.</span><span class="n">_candidates</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">scope_subgraph</span><span class="o">.</span><span class="n">nodes</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="InlineThreadLocalTransients.apply"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.InlineThreadLocalTransients.apply">[docs]</a>    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">sdfg</span><span class="p">):</span>
+        <span class="n">map_entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">map_entry</span>
+
+        <span class="n">scope_subgraph</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">scope_subgraph</span><span class="p">(</span><span class="n">map_entry</span><span class="p">,</span> <span class="n">include_entry</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_exit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">nsdfg_node</span> <span class="o">=</span> <span class="n">scope_subgraph</span><span class="o">.</span><span class="n">nodes</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">candidates</span> <span class="o">=</span> <span class="n">InlineTransients</span><span class="o">.</span><span class="n">_candidates</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">nsdfg_node</span><span class="p">)</span>
+        <span class="n">InlineTransients</span><span class="o">.</span><span class="n">apply_to</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">nsdfg</span><span class="o">=</span><span class="n">nsdfg_node</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">array</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">nsdfg_node</span><span class="o">.</span><span class="n">sdfg</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">[</span><span class="n">dace</span><span class="o">.</span><span class="n">symbolic</span><span class="o">.</span><span class="n">overapproximate</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">]</span>
+            <span class="n">strides</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">total_size</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+                <span class="n">strides</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="o">*</span> <span class="n">strides</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">*</span><span class="n">strides</span><span class="p">]</span>
+                <span class="n">total_size</span> <span class="o">*=</span> <span class="n">s</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">strides</span> <span class="o">=</span> <span class="n">strides</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">total_size</span> <span class="o">=</span> <span class="n">total_size</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">storage</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">StorageType</span><span class="o">.</span><span class="n">CPU_ThreadLocal</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">lifetime</span> <span class="o">=</span> <span class="n">dace</span><span class="o">.</span><span class="n">AllocationLifetime</span><span class="o">.</span><span class="n">Persistent</span></div></div>
+
+
+<div class="viewcode-block" id="nest_sequential_map_scopes"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.dace.html#gt4py.cartesian.gtc.dace.transformations.nest_sequential_map_scopes">[docs]</a><span class="k">def</span> <span class="nf">nest_sequential_map_scopes</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Nest map scopes of sequential maps.</span>
+
+<span class="sd">    Nest scope subgraphs of sequential maps in NestedSDFG&#39;s to force eagerly offsetting pointers on each iteration, to</span>
+<span class="sd">    avoid more complex pointer arithmetic on each Tasklet&#39;s invocation.</span>
+<span class="sd">    This is performed in an inner-map-first order to avoid revisiting the graph after changes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">_process_map</span><span class="p">(</span><span class="n">sdfg</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFG</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span><span class="p">,</span> <span class="n">map_entry</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">MapEntry</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">state</span><span class="o">.</span><span class="n">scope_children</span><span class="p">()[</span><span class="n">map_entry</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">NestedSDFG</span><span class="p">):</span>
+                <span class="n">nest_sequential_map_scopes</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">sdfg</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">MapEntry</span><span class="p">):</span>
+                <span class="n">_process_map</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">map_entry</span><span class="o">.</span><span class="n">schedule</span> <span class="o">==</span> <span class="n">dace</span><span class="o">.</span><span class="n">ScheduleType</span><span class="o">.</span><span class="n">Sequential</span><span class="p">:</span>
+            <span class="n">subgraph</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">scope_subgraph</span><span class="p">(</span><span class="n">map_entry</span><span class="p">,</span> <span class="n">include_entry</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_exit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">nest_state_subgraph</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">subgraph</span><span class="p">)</span>
+
+    <span class="n">state</span><span class="p">:</span> <span class="n">dace</span><span class="o">.</span><span class="n">SDFGState</span>
+    <span class="k">for</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">sdfg</span><span class="o">.</span><span class="n">nodes</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">map_entry</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">(</span>
+            <span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dace</span><span class="o">.</span><span class="n">nodes</span><span class="o">.</span><span class="n">MapEntry</span><span class="p">),</span> <span class="n">state</span><span class="o">.</span><span class="n">scope_children</span><span class="p">()[</span><span class="kc">None</span><span class="p">]</span>
+        <span class="p">):</span>
+            <span class="n">_process_map</span><span class="p">(</span><span class="n">sdfg</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">map_entry</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

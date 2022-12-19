@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTScript Language Reference &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">GTScript Language Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/gt4py/gtscript.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gtscript-language-reference">
+<h1>GTScript Language Reference<a class="headerlink" href="#gtscript-language-reference" title="Permalink to this headline"></a></h1>
+<p>This document describes the GTScript language and will be most useful to those implementing stencils in GTScript.</p>
+<section id="stencils">
+<h2>Stencils<a class="headerlink" href="#stencils" title="Permalink to this headline"></a></h2>
+<p>Stencils are the entry points for GTScript. All of GTScript is valid inside functions decorated with <code class="code docutils literal notranslate"><span class="pre">gt4py.gtscript.stencil</span></code>. Take the following example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">field_plus_one</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="n">target</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+       <span class="n">target</span> <span class="o">=</span> <span class="n">source</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>When we decorate a function with <code class="code docutils literal notranslate"><span class="pre">gt4py.gtscript.stencil</span></code>, we are marking it to be interpreted as written in GTScript. This causes GT4Py to parse it into something on which it can apply stencil-specific optimizations. It can then hand the optimized version off to a backend, which can apply further optimizations (for example hardware-specific ones) and finally turn their further optimized version into something Python can execute.</p>
+<p>More about how to use <code class="code docutils literal notranslate"><span class="pre">gt4py.gtscript.stencil</span></code> can be found in the <span class="xref std std-doc">Quick Start Guide</span></p>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Permalink to this headline"></a></h2>
+<p>Stencils can not call other stencils (this is a limitation in GT4Py’s design), however commom computations can be shared as GT4Py functions.</p>
+<p>Functions can also contain some GTScript code, but they are only meaningful when called from a Stencil. Think of them like common GTScript snippets that can be reused in Stencils. The difference is that functions are not allowed to contain the following elements of GTScript:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">from</span> <span class="pre">__externals__</span> <span class="pre">import</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">computation</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">interval</span></code></p></li>
+<li><p>in-place modification of input variables</p></li>
+</ul>
+</div></blockquote>
+<p>As opposed to Stencils, they must return their results. Don’t worry however, this does not imply that data gets copied around unnecessarily when we run the final result. GT4Py will see to that.</p>
+<p>For added clarity, let’s rephrase the above example using a function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">field_plus_one</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="n">target</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+       <span class="n">target</span> <span class="o">=</span> <span class="n">plus_one</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">function</span>
+<span class="k">def</span> <span class="nf">plus_one</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">return</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>By comparing to the version without a function above, we realize that functions are called within computation contexts and should be written accordingly.</p>
+</section>
+<section id="computation-contexts">
+<h2>Computation Contexts<a class="headerlink" href="#computation-contexts" title="Permalink to this headline"></a></h2>
+<p>A computation context describes a pass over 3-dimensional data stored in fields, which GT4Py can optimize for you. Depending on the type of context, inside we may:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>read and write</strong> the current element of a field: <code class="code docutils literal notranslate"><span class="pre">some_field[0,</span> <span class="pre">0,</span> <span class="pre">0]</span></code> or <code class="code docutils literal notranslate"><span class="pre">some_field</span></code> (shorthand)</p></li>
+<li><p><strong>read</strong> another element on the same vertical plane (horizontal offset): <code class="code docutils literal notranslate"><span class="pre">some_field[-1,</span> <span class="pre">5,</span> <span class="pre">0]</span></code></p></li>
+<li><p><strong>read</strong> another element on a lower plane (negative vertical offset) <strong>special meaning in forward contexts</strong> <code class="code docutils literal notranslate"><span class="pre">some_field[1,</span> <span class="pre">2,</span> <span class="pre">-1]</span></code></p></li>
+<li><p><strong>read</strong> another element on a higher plane (positive vertical offset) <strong>special meaning in backward contexts</strong> <code class="code docutils literal notranslate"><span class="pre">some_field[1,</span> <span class="pre">2,</span> <span class="pre">1]</span></code></p></li>
+</ul>
+</div></blockquote>
+<p>Vertical offsets have special meanings in forward or backward contexts, where the elements in the direction we come from are considered already processed. In forward contexts, this is the case for negative vertical offsets, in backward contexts for positive ones.</p>
+<p>We create a context using the <cite>computation</cite> context manager. Since it is a GTScript builtin, we do not have to import it (in fact, it does not exist). It will be read and translated by GT4Py when the function is processed as GTScript.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">some_stencil</span><span class="p">(</span><span class="n">some_field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+<span class="hll">   <span class="k">with</span> <span class="n">compuation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">):</span>
+</span>       <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+           <span class="o">...</span>
+</pre></div>
+</div>
+<p>GT4Py is responsible for running it all for each element in the right order, parallelizing when possible. The machine code equivalent to a computation context would be a triple-nested for loop over each dimension.</p>
+<p>GT4Py is of course also aware that computations that access offset values can not be run in certain margin areas of the data (where the offset values would not exist). For horizontal offsets, GTScript will automatically take care of the margins and leave them untouched. If we want to enforce horizontal boundary conditions, we require a separate stencil, to which we pass the boundarie’s horizontal domain. For vertical offsets we can use computation <a class="reference internal" href="#interval-contexts"><span class="std std-ref">intervals</span></a> to run different computations on the boundaries. This means we can “force” computations to run in the vertical margins where the offset elements do not exist. GTScript will fail to compile in those cases.</p>
+<section id="parallel-contexts">
+<h3>Parallel Contexts<a class="headerlink" href="#parallel-contexts" title="Permalink to this headline"></a></h3>
+<p>The name “parallel” comes from the idea that every vertical plane can be processed in parallel trivially. This is also why no vertical offsets are allowed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">laplacian</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+       <span class="n">field</span> <span class="o">=</span> <span class="n">field</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mf">8.0</span> <span class="o">*</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>In this example every offset element, including <code class="code docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> and <code class="code docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">1]</span></code> refer to the values of these elements before the stencil is run.</p>
+</section>
+<section id="forward-contexts">
+<h3>Forward Contexts<a class="headerlink" href="#forward-contexts" title="Permalink to this headline"></a></h3>
+<p>The name “forward” describes the mental model of processing each plane in order from lowest vertical index to hightest.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">cumsum</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+       <span class="n">field</span> <span class="o">+=</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>In this example, <code class="code docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> refers to the value of the element directly below <strong>after processing</strong>. Each element of <code class="code docutils literal notranslate"><span class="pre">field</span></code> will afterwards contain a sum of all the elements previously in it’s vertical column up to and including itself.</p>
+</section>
+<section id="backward-contexts">
+<h3>Backward Contexts<a class="headerlink" href="#backward-contexts" title="Permalink to this headline"></a></h3>
+<p>The name “backward” describes the mental model of processing each plane in reverse order, from highest to lowest vertical index.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">reversed_cumsum</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">BACKWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+       <span class="n">field</span> <span class="o">+=</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>In this example, <code class="code docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> refers to the value of the element directly above <strong>after processing</strong>. Each element of <code class="code docutils literal notranslate"><span class="pre">field</span></code> will afterwards contain a sum of all the previous elements above it in it’s vertical column down to and including itself.</p>
+</section>
+</section>
+<section id="interval-contexts">
+<span id="id1"></span><h2>Interval Contexts<a class="headerlink" href="#interval-contexts" title="Permalink to this headline"></a></h2>
+<p>Because it is very common to do different computations on different horizontal planes, depending on their vertical position, GTScript has vertical intervals built in:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">gtscript</span>
+
+<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span>
+<span class="k">def</span> <span class="nf">use_vertical_intervals</span><span class="p">(</span><span class="n">field</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="n">updated_vertical_boundary</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]):</span>
+   <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">):</span>
+<span class="hll">       <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+</span>           <span class="n">field</span> <span class="o">=</span> <span class="n">updated_vertical_boundary</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="hll">       <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+</span>           <span class="n">field</span> <span class="o">=</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">field</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="hll">       <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+</span>           <span class="n">field</span> <span class="o">=</span> <span class="n">updated_vertical_boundary</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>The above stencil would update the bottom and top vertical level and at the same time compute vertical finite difference in between (using the old boundary values, since it is inside a parallel compute context)</p>
+<p>Interval contexts may only occur inside compute contexts. They do not alter the vertical offset semantics of the given compute context they are in. The intervals inside a given compute context may not overlap.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

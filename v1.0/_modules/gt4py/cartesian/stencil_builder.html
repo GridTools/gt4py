@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.stencil_builder &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/underscore.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.stencil_builder</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.stencil_builder</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">pathlib</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">cartesian</span> <span class="k">as</span> <span class="n">gt4pyc</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.definitions</span> <span class="kn">import</span> <span class="n">BuildOptions</span><span class="p">,</span> <span class="n">StencilID</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">gtir</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.passes.gtir_pipeline</span> <span class="kn">import</span> <span class="n">GtirPipeline</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.type_hints</span> <span class="kn">import</span> <span class="n">AnnotatedStencilFunc</span><span class="p">,</span> <span class="n">StencilFunc</span>
+
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">Backend</span> <span class="k">as</span> <span class="n">BackendType</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">CLIBackendMixin</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.frontend.base</span> <span class="kn">import</span> <span class="n">Frontend</span> <span class="k">as</span> <span class="n">FrontendType</span>
+    <span class="kn">from</span> <span class="nn">gt4py.cartesian.stencil_object</span> <span class="kn">import</span> <span class="n">StencilObject</span>
+
+
+<div class="viewcode-block" id="StencilBuilder"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder">[docs]</a><span class="k">class</span> <span class="nc">StencilBuilder</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Orchestrates code generation and compilation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    definition_func:</span>
+<span class="sd">        Stencil definition function, before or after annotation.</span>
+
+<span class="sd">    backend:</span>
+<span class="sd">        Backend class to be instantiated for this build</span>
+
+<span class="sd">    options:</span>
+<span class="sd">        Build options, defaults to name and module of the :code:`definition_func`</span>
+
+<span class="sd">    frontend:</span>
+<span class="sd">        Frontend class to be used</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Backends can use the :py:meth:`with_backend_data` method the :py:meth:`backend_data` property</span>
+<span class="sd">    to set and retrieve backend specific information for use in later steps.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">definition_func</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">StencilFunc</span><span class="p">,</span> <span class="n">AnnotatedStencilFunc</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">backend</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;BackendType&quot;</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BuildOptions</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">frontend</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">[</span><span class="s2">&quot;FrontendType&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_definition</span> <span class="o">=</span> <span class="n">definition_func</span>
+        <span class="c1"># type ignore explanation: Attribclass generated init not recognized by mypy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span> <span class="ow">or</span> <span class="n">BuildOptions</span><span class="p">(</span>  <span class="c1"># type: ignore</span>
+            <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">default_options_dict</span><span class="p">(</span><span class="n">definition_func</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span> <span class="ow">or</span> <span class="s2">&quot;numpy&quot;</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">backend</span>
+        <span class="k">if</span> <span class="n">backend</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown backend: </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">frontend</span> <span class="o">=</span> <span class="n">frontend</span> <span class="ow">or</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">frontend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="s2">&quot;gtscript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">frontend</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown frontend: </span><span class="si">{</span><span class="n">frontend</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">:</span> <span class="s2">&quot;BackendType&quot;</span> <span class="o">=</span> <span class="n">backend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">frontend</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;FrontendType&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">frontend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">with_caching</span><span class="p">(</span><span class="s2">&quot;jit&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_externals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="StencilBuilder.build"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.build">[docs]</a>    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;StencilObject&quot;</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Generate, compile and/or load everything necessary to provide a usable stencil class.&quot;&quot;&quot;</span>
+        <span class="c1"># load or generate</span>
+        <span class="n">stencil_class</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">rebuild</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">stencil_class</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">raise_if_not_cached</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;The stencil </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_definition</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is not up to date in the cache&quot;</span>
+                <span class="p">)</span>
+            <span class="n">stencil_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">stencil_class</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.generate_computation"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.generate_computation">[docs]</a>    <span class="k">def</span> <span class="nf">generate_computation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Generate the stencil source code, fail if backend does not support CLI.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cli_backend</span><span class="o">.</span><span class="n">generate_computation</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.generate_bindings"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.generate_bindings">[docs]</a>    <span class="k">def</span> <span class="nf">generate_bindings</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">targe_language</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;Generate ``target_language`` bindings source, fail if backend does not support CLI.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cli_backend</span><span class="o">.</span><span class="n">generate_bindings</span><span class="p">(</span><span class="n">targe_language</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.with_caching"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_caching">[docs]</a>    <span class="k">def</span> <span class="nf">with_caching</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">caching_strategy_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fluidly set the caching strategy from the name.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        caching_strategy_name:</span>
+<span class="sd">            Name of the caching strategy to be passed to the factory.</span>
+
+<span class="sd">        args:</span>
+<span class="sd">            Passed through to the caching strategy factory</span>
+
+<span class="sd">        kwargs:</span>
+<span class="sd">            Passed through to the caching strategy factory</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Resets all cached build data.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">cache_settings</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">caching</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">strategy_factory</span><span class="p">(</span><span class="n">caching_strategy_name</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.with_options"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_options">[docs]</a>    <span class="k">def</span> <span class="nf">with_options</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fluidly set the build options.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        name:</span>
+<span class="sd">            Name of the stencil</span>
+
+<span class="sd">        module:</span>
+<span class="sd">            qualified module name of the stencil&#39;s module</span>
+
+<span class="sd">        kwargs:</span>
+<span class="sd">            passed through to the options instance</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># mypy attribkwclass bug</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">BuildOptions</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">module</span><span class="o">=</span><span class="n">module</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.with_changed_options"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_changed_options">[docs]</a>    <span class="k">def</span> <span class="nf">with_changed_options</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="n">old_options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+        <span class="c1"># BuildOptions constructor expects ``impl_opts`` keyword</span>
+        <span class="c1"># but BuildOptions.as_dict outputs ``_impl_opts`` key</span>
+        <span class="n">old_options</span><span class="p">[</span><span class="s2">&quot;impl_opts&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">old_options</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;_impl_opts&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">with_options</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="o">**</span><span class="n">old_options</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.with_backend"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_backend">[docs]</a>    <span class="k">def</span> <span class="nf">with_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">backend_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fluidly set the backend type from backend name.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        backend_name:</span>
+<span class="sd">            Name of the backend type.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        Resets all cached build data.</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">from_name</span><span class="p">(</span><span class="n">backend_name</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">backend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.default_options_dict"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.default_options_dict">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">default_options_dict</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span> <span class="n">definition_func</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">StencilFunc</span><span class="p">,</span> <span class="n">AnnotatedStencilFunc</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">definition_func</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="s2">&quot;module&quot;</span><span class="p">:</span> <span class="n">definition_func</span><span class="o">.</span><span class="vm">__module__</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.name_to_options_args"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.name_to_options_args">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">name_to_options_args</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;Check for qualified name, extract also module option in that case.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;module&quot;</span><span class="p">:</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">components</span><span class="p">[</span><span class="mi">1</span><span class="p">]}</span>
+        <span class="k">return</span> <span class="n">data</span></div>
+
+<div class="viewcode-block" id="StencilBuilder.nest_impl_options"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.nest_impl_options">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">nest_impl_options</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">options_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">impl_opts</span> <span class="o">=</span> <span class="n">options_dict</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;impl_opts&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="c1"># The following is not a dict comprehension because:</span>
+        <span class="c1"># The backend-specific options (starting with ``_``) are nested under</span>
+        <span class="c1"># options_dict[&quot;impl_opts&quot;] *and at the same time removed* from</span>
+        <span class="c1"># options_dict itself.</span>
+        <span class="k">for</span> <span class="n">impl_key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">options_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)):</span>
+            <span class="n">impl_opts</span><span class="p">[</span><span class="n">impl_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">options_dict</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">impl_key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">options_dict</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">definition</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AnnotatedStencilFunc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prepared_def&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+            <span class="s2">&quot;prepared_def&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">frontend</span><span class="o">.</span><span class="n">prepare_stencil_definition</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_definition</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">externals</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">externals</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;externals&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+            <span class="s2">&quot;externals&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_externals</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="StencilBuilder.with_externals"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_externals">[docs]</a>    <span class="k">def</span> <span class="nf">with_externals</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">externals</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fluidly set externals for this build.</span>
+
+<span class="sd">        Resets all cached build data.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_externals</span> <span class="o">=</span> <span class="n">externals</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">with_caching</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">backend_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend_data&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+<div class="viewcode-block" id="StencilBuilder.with_backend_data"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_backend_data">[docs]</a>    <span class="k">def</span> <span class="nf">with_backend_data</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="p">[</span><span class="s2">&quot;backend_data&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">backend_data</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">stencil_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StencilID</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">stencil_id</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">root_pkg_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+            <span class="s2">&quot;root_pkg_name&quot;</span><span class="p">,</span> <span class="n">gt4pyc</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">code_settings</span><span class="p">[</span><span class="s2">&quot;root_package_name&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="StencilBuilder.with_root_pkg_name"><a class="viewcode-back" href="../../../_source/gt4py.cartesian.html#gt4py.cartesian.stencil_builder.StencilBuilder.with_root_pkg_name">[docs]</a>    <span class="k">def</span> <span class="nf">with_root_pkg_name</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StencilBuilder&quot;</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="p">[</span><span class="s2">&quot;root_pkg_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">pkg_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">pkg_qualname</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_pkg_name</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">qualified_name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">pkg_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">backend_root_path</span><span class="o">.</span><span class="n">joinpath</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">qualified_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">gtir_pipeline</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GtirPipeline</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;gtir_pipeline&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+            <span class="s2">&quot;gtir_pipeline&quot;</span><span class="p">,</span>
+            <span class="n">GtirPipeline</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">frontend</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">definition</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">externals</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">stencil_id</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">gtir</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gtir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gtir_pipeline</span><span class="o">.</span><span class="n">full</span><span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">module_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">module_prefix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">module_postfix</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">module_qualname</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg_qualname</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">module_name</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">module_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">:</span>
+        <span class="n">file_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_name</span> <span class="o">+</span> <span class="s2">&quot;.py&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pkg_path</span> <span class="o">/</span> <span class="n">file_name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">stencil_source</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Read the stencil source from the written module file.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        :py:class:`FileNotFoundError`</span>
+<span class="sd">            if the file has not been written yet</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">class_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">caching</span><span class="o">.</span><span class="n">class_name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_build_data_empty</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_data</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cli_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;CLIBackendMixin&quot;</span><span class="p">:</span>
+        <span class="kn">from</span> <span class="nn">gt4py.cartesian.backend.base</span> <span class="kn">import</span> <span class="n">CLIBackendMixin</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span> <span class="n">CLIBackendMixin</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;backend of StencilBuilder instance is not CLI enabled.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backend</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

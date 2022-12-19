@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDP X — Template and Instructions &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="GDP 2 — Specializations Near Boundaries" href="gdp-0002-regions.html" />
+    <link rel="prev" title="GDP 0 — Purpose and Process" href="gdp-0000-gdp-process.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="gdp-index.html">GT4Py Development</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="gdp-index.html#process-gdps-gdps-about-gdps-or-processes">Process GDPs (GDPs about GDPs or Processes)</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="gdp-0000-gdp-process.html">GDP 0 — Purpose and Process</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GDP X — Template and Instructions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#abstract">Abstract</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#motivation-and-scope">Motivation and Scope</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#usage-and-impact">Usage and Impact</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#backward-compatibility">Backward compatibility</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#detailed-description">Detailed description</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#related-work">Related Work</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#implementation">Implementation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#alternatives">Alternatives</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#discussion">Discussion</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#references-and-footnotes">References and Footnotes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#copyright">Copyright</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#open-gdps-under-consideration">Open GDPs (under consideration)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#provisional-gdps-provisionally-accepted-interface-may-change">Provisional GDPs (provisionally accepted; interface may change)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#accepted-gdps-implementation-in-progress">Accepted GDPs (implementation in progress)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#finished-gdps">Finished GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#replaced-gdps">Replaced GDPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gdp-index.html#declined-gdps">Declined GDPs</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="gdp-index.html">GT4Py Development</a></li>
+      <li class="breadcrumb-item active">GDP X — Template and Instructions</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/GDPs/gdp-template.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gdp-x-template-and-instructions">
+<h1>GDP X — Template and Instructions<a class="headerlink" href="#gdp-x-template-and-instructions" title="Permalink to this headline"></a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author</dt>
+<dd class="field-odd"><p>&lt;list of authors’ real names and optionally, email addresses&gt;</p>
+</dd>
+<dt class="field-even">Status</dt>
+<dd class="field-even"><p>&lt;Draft | Active | Accepted | Declined | Provisional | Final | Replaced&gt;</p>
+</dd>
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>&lt;Feature | Informational | Process&gt;</p>
+</dd>
+<dt class="field-even">Created</dt>
+<dd class="field-even"><p>&lt;date created on, in dd-mm-yyyy format&gt;</p>
+</dd>
+<dt class="field-odd">Discussion PR</dt>
+<dd class="field-odd"><p>&lt;PR url&gt;</p>
+</dd>
+</dl>
+<section id="abstract">
+<h2>Abstract<a class="headerlink" href="#abstract" title="Permalink to this headline"></a></h2>
+<p>The abstract should be a short description of what the GDP will achieve.</p>
+<p>Note that the — in the title is an elongated dash, not -.</p>
+</section>
+<section id="motivation-and-scope">
+<h2>Motivation and Scope<a class="headerlink" href="#motivation-and-scope" title="Permalink to this headline"></a></h2>
+<p>This section describes the need for the proposed change. It should describe
+the existing problem, who it affects, what it is trying to solve, and why.
+This section should explicitly address the scope of and key requirements for
+the proposed change.</p>
+</section>
+<section id="usage-and-impact">
+<h2>Usage and Impact<a class="headerlink" href="#usage-and-impact" title="Permalink to this headline"></a></h2>
+<p>This section describes how users of GT4Py will use features described in this
+GDP. It should be comprised mainly of code examples that wouldn’t be possible
+without acceptance and implementation of this GDP, as well as the impact the
+proposed changes would have on the ecosystem. This section should be written
+from the perspective of the users of GT4Py, and the benefits it will provide
+them; and as such, it should include implementation details only if
+necessary to explain the functionality.</p>
+</section>
+<section id="backward-compatibility">
+<h2>Backward compatibility<a class="headerlink" href="#backward-compatibility" title="Permalink to this headline"></a></h2>
+<p>This section describes the ways in which the GDP breaks backward compatibility.</p>
+</section>
+<section id="detailed-description">
+<h2>Detailed description<a class="headerlink" href="#detailed-description" title="Permalink to this headline"></a></h2>
+<p>This section should provide a detailed description of the proposed change.
+It should include examples of how the new functionality would be used,
+intended use-cases and pseudo-code illustrating its use.</p>
+</section>
+<section id="related-work">
+<h2>Related Work<a class="headerlink" href="#related-work" title="Permalink to this headline"></a></h2>
+<p>This section should list relevant and/or similar technologies, possibly in other
+libraries. It does not need to be comprehensive, just list the major examples of
+prior and relevant art.</p>
+</section>
+<section id="implementation">
+<h2>Implementation<a class="headerlink" href="#implementation" title="Permalink to this headline"></a></h2>
+<p>This section lists the major steps required to implement the GDP.  Where
+possible, it should be noted where one step is dependent on another, and which
+steps may be optionally omitted.  Where it makes sense, each step should
+include a link to related pull requests as the implementation progresses.</p>
+<p>Any pull requests or development branches containing work on this GDP should
+be linked to from here.  (A GDP does not need to be implemented in a single
+pull request if it makes sense to implement it in discrete phases).</p>
+</section>
+<section id="alternatives">
+<h2>Alternatives<a class="headerlink" href="#alternatives" title="Permalink to this headline"></a></h2>
+<p>If there were any alternative solutions to solving the same problem, they should
+be discussed here, along with a justification for the chosen approach.</p>
+</section>
+<section id="discussion">
+<h2>Discussion<a class="headerlink" href="#discussion" title="Permalink to this headline"></a></h2>
+<p>This section may just be a bullet list including links to any discussions
+regarding the GDP:</p>
+<ul class="simple">
+<li><p>This includes links to relevant GitHub issues and publicly available discussions.</p></li>
+</ul>
+</section>
+<section id="references-and-footnotes">
+<h2>References and Footnotes<a class="headerlink" href="#references-and-footnotes" title="Permalink to this headline"></a></h2>
+<dl class="footnote brackets">
+<dt class="label" id="id1"><span class="brackets"><a class="fn-backref" href="#id2">1</a></span></dt>
+<dd><p>Each GDP must either be explicitly labeled as placed in the public domain (see
+this GDP as an example) or licensed under the <a class="reference external" href="https://www.opencontent.org/openpub/">Open Publication License</a>.</p>
+</dd>
+</dl>
+</section>
+<section id="copyright">
+<h2>Copyright<a class="headerlink" href="#copyright" title="Permalink to this headline"></a></h2>
+<p>This document has been placed in the public domain. <a class="footnote-reference brackets" href="#id1" id="id2">1</a></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="gdp-0000-gdp-process.html" class="btn btn-neutral float-left" title="GDP 0 — Purpose and Process" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gdp-0002-regions.html" class="btn btn-neutral float-right" title="GDP 2 — Specializations Near Boundaries" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

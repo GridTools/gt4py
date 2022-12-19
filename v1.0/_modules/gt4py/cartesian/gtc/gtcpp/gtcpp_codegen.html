@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.gtcpp.gtcpp_codegen &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.gtcpp.gtcpp_codegen</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.gtcpp.gtcpp_codegen</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">common</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.common</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BuiltInLiteral</span><span class="p">,</span>
+    <span class="n">DataType</span><span class="p">,</span>
+    <span class="n">LoopOrder</span><span class="p">,</span>
+    <span class="n">NativeFunction</span><span class="p">,</span>
+    <span class="n">UnaryOperator</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc.gtcpp</span> <span class="kn">import</span> <span class="n">gtcpp</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve</span> <span class="kn">import</span> <span class="n">codegen</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">FormatTemplate</span> <span class="k">as</span> <span class="n">as_fmt</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.codegen</span> <span class="kn">import</span> <span class="n">MakoTemplate</span> <span class="k">as</span> <span class="n">as_mako</span>
+<span class="kn">from</span> <span class="nn">gt4py.eve.concepts</span> <span class="kn">import</span> <span class="n">LeafNode</span>
+
+
+<span class="k">def</span> <span class="nf">_offset_limit</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">eve</span><span class="o">.</span><span class="n">Node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">root</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+        <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">gtcpp</span><span class="o">.</span><span class="n">GTLevel</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;offset&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">state</span><span class="p">,</span> <span class="n">cur</span><span class="p">:</span> <span class="nb">max</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">cur</span><span class="p">)),</span> <span class="n">init</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+
+
+<div class="viewcode-block" id="GTCppCodegen"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen">[docs]</a><span class="k">class</span> <span class="nc">GTCppCodegen</span><span class="p">(</span><span class="n">codegen</span><span class="o">.</span><span class="n">TemplatedGenerator</span><span class="p">,</span> <span class="n">eve</span><span class="o">.</span><span class="n">VisitorWithSymbolTableTrait</span><span class="p">):</span>
+
+    <span class="n">GTExtent</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;extent&lt;</span><span class="si">{i[0]}</span><span class="s2">,</span><span class="si">{i[1]}</span><span class="s2">,</span><span class="si">{j[0]}</span><span class="s2">,</span><span class="si">{j[1]}</span><span class="s2">,</span><span class="si">{k[0]}</span><span class="s2">,</span><span class="si">{k[1]}</span><span class="s2">&gt;&quot;</span><span class="p">)</span>
+
+    <span class="n">GTAccessor</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;using </span><span class="si">{name}</span><span class="s2"> = </span><span class="si">{intent}</span><span class="s2">_accessor&lt;</span><span class="si">{id}</span><span class="s2">, </span><span class="si">{extent}</span><span class="s2">, </span><span class="si">{ndim}</span><span class="s2">&gt;;&quot;</span><span class="p">)</span>
+
+    <span class="n">GTParamList</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;${ &#39;\\n&#39;.join(accessors) }</span>
+
+<span class="sd">        using param_list = make_param_list&lt;${ &#39;,&#39;.join(a.name for a in _this_node.accessors)}&gt;;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">GTFunctor</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;struct ${ name } {</span>
+<span class="sd">        ${param_list}</span>
+
+<span class="sd">        ${ &#39;\\n&#39;.join(applies) }</span>
+<span class="sd">    };</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">GTLevel</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;gridtools::stencil::core::level&lt;</span><span class="si">{splitter}</span><span class="s2">, </span><span class="si">{offset}</span><span class="s2">, </span><span class="si">{offset_limit}</span><span class="s2">&gt;&quot;</span><span class="p">)</span>
+
+    <span class="n">GTInterval</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;gridtools::stencil::core::interval&lt;</span><span class="si">{from_level}</span><span class="s2">, </span><span class="si">{to_level}</span><span class="s2">&gt;&quot;</span><span class="p">)</span>
+
+    <span class="n">LocalVarDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{dtype}</span><span class="s2"> </span><span class="si">{name}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+    <span class="n">GTApplyMethod</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    template&lt;typename Evaluation&gt;</span>
+<span class="sd">    GT_FUNCTION static void apply(Evaluation eval, ${interval}) {</span>
+<span class="sd">        ${ &#39; &#39;.join(local_variables) }</span>
+<span class="sd">        ${ &#39;\\n&#39;.join(body) }</span>
+<span class="sd">    }</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">AssignStmt</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{left}</span><span class="s2"> = </span><span class="si">{right}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_AccessorRef"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_AccessorRef">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AccessorRef</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">accessor_ref</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">AccessorRef</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">symtable</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTAccessor</span><span class="p">],</span>
+        <span class="n">temp_decls</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">temp_decls</span> <span class="o">=</span> <span class="n">temp_decls</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">common</span><span class="o">.</span><span class="n">CartesianOffset</span><span class="p">):</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">offset</span>
+            <span class="k">if</span> <span class="n">offset</span><span class="o">.</span><span class="n">i</span> <span class="o">==</span> <span class="n">offset</span><span class="o">.</span><span class="n">j</span> <span class="o">==</span> <span class="n">offset</span><span class="o">.</span><span class="n">k</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">data_index</span><span class="p">:</span>
+                <span class="c1"># Skip offsets in the accessor if possible, improves generated code readability and reduces code size for point-wise computations significantly</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;eval(</span><span class="si">{</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">())&quot;</span>
+            <span class="n">i_offset</span><span class="p">,</span> <span class="n">j_offset</span><span class="p">,</span> <span class="n">k_offset</span> <span class="o">=</span> <span class="n">offset</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">offset</span><span class="o">.</span><span class="n">j</span><span class="p">,</span> <span class="n">offset</span><span class="o">.</span><span class="n">k</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">offset</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">VariableKOffset</span><span class="p">):</span>
+            <span class="n">i_offset</span><span class="p">,</span> <span class="n">j_offset</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="n">k_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">offset</span><span class="o">.</span><span class="n">k</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Unsupported offset type&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">temp_decls</span> <span class="ow">and</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">data_index</span><span class="p">:</span>
+            <span class="c1"># Cannot use symtable. See https://github.com/GridTools/gt4py/issues/808</span>
+            <span class="n">temp</span> <span class="o">=</span> <span class="n">temp_decls</span><span class="p">[</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">data_index</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">in_data_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span><span class="si">}</span><span class="s2">*</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">temp</span><span class="o">.</span><span class="n">data_dims</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:],</span> <span class="n">initial</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">data_index</span><span class="p">)</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;eval(</span><span class="si">{</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">i_offset</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">j_offset</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">k_offset</span><span class="si">}</span><span class="s2">))[</span><span class="si">{</span><span class="n">data_index</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data_index</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">in_data_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">accessor_ref</span><span class="o">.</span><span class="n">data_index</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;eval(</span><span class="si">{</span><span class="n">accessor_ref</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">i_offset</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">j_offset</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">k_offset</span><span class="si">}{</span><span class="n">data_index</span><span class="si">}</span><span class="s2">))&quot;</span></div>
+
+    <span class="n">LocalAccess</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">Positional</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;auto </span><span class="si">{name}</span><span class="s2"> = positional&lt;dim::</span><span class="si">{axis_name}</span><span class="s2">&gt;();&quot;</span><span class="p">)</span>
+
+    <span class="n">AxisLength</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span>
+        <span class="s2">&quot;auto </span><span class="si">{name}</span><span class="s2"> = global_parameter(static_cast&lt;gridtools::int_t&gt;(domain[</span><span class="si">{axis}</span><span class="s2">]));&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">BinaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{left}</span><span class="s2"> </span><span class="si">{op}</span><span class="s2"> </span><span class="si">{right}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">UnaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{op}{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">TernaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{cond}</span><span class="s2"> ? </span><span class="si">{true_expr}</span><span class="s2"> : </span><span class="si">{false_expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">Cast</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;static_cast&lt;</span><span class="si">{dtype}</span><span class="s2">&gt;(</span><span class="si">{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_BuiltInLiteral"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_BuiltInLiteral">[docs]</a>    <span class="k">def</span> <span class="nf">visit_BuiltInLiteral</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">builtin</span><span class="p">:</span> <span class="n">BuiltInLiteral</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">builtin</span> <span class="o">==</span> <span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">TRUE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;true&quot;</span>
+        <span class="k">elif</span> <span class="n">builtin</span> <span class="o">==</span> <span class="n">BuiltInLiteral</span><span class="o">.</span><span class="n">FALSE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;false&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Not implemented BuiltInLiteral encountered.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_Literal"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_Literal">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Literal</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Literal</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">in_data_index</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">in_data_index</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;static_cast&lt;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&gt;(</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_NativeFunction"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_NativeFunction">[docs]</a>    <span class="k">def</span> <span class="nf">visit_NativeFunction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">NativeFunction</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ABS</span><span class="p">:</span> <span class="s2">&quot;std::abs&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MIN</span><span class="p">:</span> <span class="s2">&quot;std::min&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MAX</span><span class="p">:</span> <span class="s2">&quot;std::max&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">MOD</span><span class="p">:</span> <span class="s2">&quot;std::fmod&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SIN</span><span class="p">:</span> <span class="s2">&quot;std::sin&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COS</span><span class="p">:</span> <span class="s2">&quot;std::cos&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TAN</span><span class="p">:</span> <span class="s2">&quot;std::tan&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSIN</span><span class="p">:</span> <span class="s2">&quot;std::asin&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOS</span><span class="p">:</span> <span class="s2">&quot;std::acos&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTAN</span><span class="p">:</span> <span class="s2">&quot;std::atan&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SINH</span><span class="p">:</span> <span class="s2">&quot;std::sinh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">COSH</span><span class="p">:</span> <span class="s2">&quot;std::cosh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TANH</span><span class="p">:</span> <span class="s2">&quot;std::tanh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCSINH</span><span class="p">:</span> <span class="s2">&quot;std::asinh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCCOSH</span><span class="p">:</span> <span class="s2">&quot;std::acosh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ARCTANH</span><span class="p">:</span> <span class="s2">&quot;std::atanh&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">SQRT</span><span class="p">:</span> <span class="s2">&quot;std::sqrt&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">POW</span><span class="p">:</span> <span class="s2">&quot;std::pow&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">EXP</span><span class="p">:</span> <span class="s2">&quot;std::exp&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">LOG</span><span class="p">:</span> <span class="s2">&quot;std::log&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">GAMMA</span><span class="p">:</span> <span class="s2">&quot;std::tgamma&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CBRT</span><span class="p">:</span> <span class="s2">&quot;std::cbrt&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISFINITE</span><span class="p">:</span> <span class="s2">&quot;std::isfinite&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISINF</span><span class="p">:</span> <span class="s2">&quot;std::isinf&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">ISNAN</span><span class="p">:</span> <span class="s2">&quot;std::isnan&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">FLOOR</span><span class="p">:</span> <span class="s2">&quot;std::floor&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">CEIL</span><span class="p">:</span> <span class="s2">&quot;std::ceil&quot;</span><span class="p">,</span>
+                <span class="n">NativeFunction</span><span class="o">.</span><span class="n">TRUNC</span><span class="p">:</span> <span class="s2">&quot;std::trunc&quot;</span><span class="p">,</span>
+            <span class="p">}[</span><span class="n">func</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Not implemented NativeFunction &#39;</span><span class="si">{</span><span class="n">func</span><span class="si">}</span><span class="s2">&#39; encountered.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+    <span class="n">NativeFuncCall</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;$</span><span class="si">{func}</span><span class="s2">(${&#39;,&#39;.join(args)})&quot;</span><span class="p">)</span>
+
+    <span class="n">DATA_TYPE_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">BOOL</span><span class="p">:</span> <span class="s2">&quot;bool&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT8</span><span class="p">:</span> <span class="s2">&quot;std::int8_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT16</span><span class="p">:</span> <span class="s2">&quot;std::int16_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT32</span><span class="p">:</span> <span class="s2">&quot;std::int32_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">INT64</span><span class="p">:</span> <span class="s2">&quot;std::int64_t&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT32</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+        <span class="n">DataType</span><span class="o">.</span><span class="n">FLOAT64</span><span class="p">:</span> <span class="s2">&quot;double&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_DataType"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_DataType">[docs]</a>    <span class="k">def</span> <span class="nf">visit_DataType</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DataType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">DATA_TYPE_TO_CODE</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Not implemented DataType &#39;</span><span class="si">{</span><span class="n">dtype</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; encountered.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">error</span></div>
+
+    <span class="n">UNARY_OPERATOR_TO_CODE</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NOT</span><span class="p">:</span> <span class="s2">&quot;!&quot;</span><span class="p">,</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">NEG</span><span class="p">:</span> <span class="s2">&quot;-&quot;</span><span class="p">,</span>
+        <span class="n">UnaryOperator</span><span class="o">.</span><span class="n">POS</span><span class="p">:</span> <span class="s2">&quot;+&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">UnaryOp</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;(</span><span class="si">{_this_generator.UNARY_OPERATOR_TO_CODE[_this_node.op]}{expr}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+    <span class="n">Arg</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">ApiParamDecl</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">GTStage</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;.stage($</span><span class="si">{functor}</span><span class="s2">(), ${&#39;,&#39;.join(args)})&quot;</span><span class="p">)</span>
+
+    <span class="n">GTMultiStage</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;execute_${ loop_order }()${&#39;&#39;.join(caches)}${&#39;&#39;.join(stages)}&quot;</span><span class="p">)</span>
+
+    <span class="n">IJCache</span> <span class="o">=</span> <span class="n">as_fmt</span><span class="p">(</span><span class="s2">&quot;.ij_cached(</span><span class="si">{name}</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="n">KCache</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="s2">&quot;.k_cached(${&#39;cache_io_policy::fill(), &#39; if _this_node.fill else &#39;&#39;}${&#39;cache_io_policy::flush(), &#39; if _this_node.flush else &#39;&#39;}$</span><span class="si">{name}</span><span class="s2">)&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_LoopOrder"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_LoopOrder">[docs]</a>    <span class="k">def</span> <span class="nf">visit_LoopOrder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">looporder</span><span class="p">:</span> <span class="n">LoopOrder</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="n">LoopOrder</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">:</span> <span class="s2">&quot;parallel&quot;</span><span class="p">,</span>
+            <span class="n">LoopOrder</span><span class="o">.</span><span class="n">FORWARD</span><span class="p">:</span> <span class="s2">&quot;forward&quot;</span><span class="p">,</span>
+            <span class="n">LoopOrder</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">:</span> <span class="s2">&quot;backward&quot;</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">looporder</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_Temporary"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_Temporary">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Temporary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Temporary</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">:</span>
+            <span class="n">total_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">data_dims</span><span class="p">,</span> <span class="n">initial</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(array&lt;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">total_size</span><span class="si">}</span><span class="s2">&gt;)&quot;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;GT_DECLARE_TMP(</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">);&quot;</span></div>
+
+    <span class="n">IfStmt</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;if(${cond}) ${true_branch}</span>
+<span class="sd">        %if _this_node.false_branch:</span>
+<span class="sd">            else ${false_branch}</span>
+<span class="sd">        %endif</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">While</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;while($</span><span class="si">{cond}</span><span class="s2">) {${&#39;&#39;.join(body)}}&quot;</span><span class="p">)</span>
+
+    <span class="n">BlockStmt</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span><span class="s2">&quot;{${&#39;&#39;.join(body)}}&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_GTComputationCall"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_GTComputationCall">[docs]</a>    <span class="k">def</span> <span class="nf">visit_GTComputationCall</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">GTComputationCall</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">computation_name</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">computation_name</span><span class="o">=</span><span class="n">computation_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">GTComputationCall</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        %if len(multi_stages) &gt; 0 and len(arguments) &gt; 0:</span>
+<span class="sd">        {</span>
+<span class="sd">            auto grid = make_grid(domain[0], domain[1], axis&lt;1,</span>
+<span class="sd">                axis_config::offset_limit&lt;${offset_limit}&gt;&gt;{domain[2]});</span>
+
+<span class="sd">            auto ${ computation_name } = [](${ &#39;,&#39;.join(&#39;auto &#39; + a for a in arguments) }) {</span>
+
+<span class="sd">                ${ &#39;\\n&#39;.join(temporaries) }</span>
+<span class="sd">                return multi_pass(${ &#39;,&#39;.join(multi_stages) });</span>
+<span class="sd">            };</span>
+
+<span class="sd">            ${&#39;\\n&#39;.join(extra_decls)}</span>
+<span class="sd">            run(${computation_name}, ${gt_backend_t}&lt;&gt;{}, grid, ${&#39;,&#39;.join(f&quot;std::forward&lt;decltype({arg})&gt;({arg})&quot; for arg in arguments)});</span>
+<span class="sd">        }</span>
+<span class="sd">        %endif</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.visit_Program"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.visit_Program">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Program</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Program</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">temp_decls</span> <span class="o">=</span> <span class="p">{</span><span class="n">temp</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">temp</span> <span class="k">for</span> <span class="n">temp</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">gt_computation</span><span class="o">.</span><span class="n">temporaries</span><span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">temp_decls</span><span class="o">=</span><span class="n">temp_decls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    <span class="n">Program</span> <span class="o">=</span> <span class="n">as_mako</span><span class="p">(</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        #include &lt;gridtools/stencil/${gt_backend_t}.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/cartesian.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/common/array.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/positional.hpp&gt;</span>
+<span class="sd">        #include &lt;gridtools/stencil/global_parameter.hpp&gt;</span>
+
+<span class="sd">        namespace ${ name }_impl_{</span>
+<span class="sd">            using Domain = std::array&lt;gridtools::uint_t, 3&gt;;</span>
+<span class="sd">            using namespace gridtools::stencil;</span>
+<span class="sd">            using namespace gridtools::stencil::cartesian;</span>
+<span class="sd">            using gridtools::array;</span>
+
+<span class="sd">            ${&#39;\\n&#39;.join(functors)}</span>
+
+<span class="sd">            auto ${name}(Domain domain){</span>
+<span class="sd">                return [domain](${ &#39;,&#39;.join( &#39;auto&amp;&amp; &#39; + p for p in parameters)}){</span>
+<span class="sd">                    ${gt_computation}</span>
+<span class="sd">                };</span>
+<span class="sd">            }</span>
+<span class="sd">        }</span>
+
+<span class="sd">        auto ${name}(${name}_impl_::Domain domain){</span>
+<span class="sd">            return ${name}_impl_::${name}(domain);</span>
+<span class="sd">        }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="GTCppCodegen.apply"><a class="viewcode-back" href="../../../../../_source/gt4py.cartesian.gtc.gtcpp.html#gt4py.cartesian.gtc.gtcpp.gtcpp_codegen.GTCppCodegen.apply">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">apply</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">LeafNode</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">gtcpp</span><span class="o">.</span><span class="n">Program</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;apply() requires gtcpp.Progam root node&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;gt_backend_t&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;apply() missing 1 required keyword-only argument: &#39;gt_backend_t&#39;&quot;</span><span class="p">)</span>
+        <span class="n">generated_code</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">offset_limit</span><span class="o">=</span><span class="n">_offset_limit</span><span class="p">(</span><span class="n">root</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;format_source&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">generated_code</span> <span class="o">=</span> <span class="n">codegen</span><span class="o">.</span><span class="n">format_source</span><span class="p">(</span><span class="s2">&quot;cpp&quot;</span><span class="p">,</span> <span class="n">generated_code</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;LLVM&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">generated_code</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

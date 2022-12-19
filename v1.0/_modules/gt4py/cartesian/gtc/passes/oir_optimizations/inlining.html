@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gt4py.cartesian.gtc.passes.oir_optimizations.inlining &mdash; GT4Py 0.1.1 documentation</title>
+      <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../../../" id="documentation_options" src="../../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../../_static/jquery.js"></script>
+        <script src="../../../../../../_static/underscore.js"></script>
+        <script src="../../../../../../_static/doctools.js"></script>
+    <script src="../../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../../../../../../index.html" class="icon icon-home"> GT4Py
+          </a>
+              <div class="version">
+                0.1.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../index.html">GT4Py: GridTools for Python</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../../GDPs/gdp-index.html">GT4Py Development</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../../index.html">GT4Py</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../../index.html" class="icon icon-home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">gt4py.cartesian.gtc.passes.oir_optimizations.inlining</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for gt4py.cartesian.gtc.passes.oir_optimizations.inlining</h1><div class="highlight"><pre>
+<span></span><span class="c1"># GT4Py - GridTools Framework</span>
+<span class="c1">#</span>
+<span class="c1"># Copyright (c) 2014-2022, ETH Zurich</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This file is part of the GT4Py project and the GridTools framework.</span>
+<span class="c1"># GT4Py is free software: you can redistribute it and/or modify it under</span>
+<span class="c1"># the terms of the GNU General Public License as published by the</span>
+<span class="c1"># Free Software Foundation, either version 3 of the License, or any later</span>
+<span class="c1"># version. See the LICENSE.txt file at the top-level directory of this</span>
+<span class="c1"># distribution for a copy of the license or check &lt;https://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">#</span>
+<span class="c1"># SPDX-License-Identifier: GPL-3.0-or-later</span>
+
+<span class="kn">import</span> <span class="nn">copy</span> <span class="k">as</span> <span class="nn">cp</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">from</span> <span class="nn">gt4py</span> <span class="kn">import</span> <span class="n">eve</span>
+<span class="kn">from</span> <span class="nn">gt4py.cartesian.gtc</span> <span class="kn">import</span> <span class="n">oir</span>
+
+
+<div class="viewcode-block" id="MaskCollector"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskCollector">[docs]</a><span class="k">class</span> <span class="nc">MaskCollector</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeVisitor</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Collects the boolean expressions defining mask statements that are boolean fields.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MaskCollector.visit_AssignStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskCollector.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">masks_to_inline</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">masks_to_inline</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">masks_to_inline</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="n">masks_to_inline</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span></div>
+
+<div class="viewcode-block" id="MaskCollector.visit_MaskStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskCollector.visit_MaskStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_MaskStmt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">masks_to_inline</span><span class="p">:</span>
+            <span class="c1"># Find all reads in condition</span>
+            <span class="n">condition_reads</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">masks_to_inline</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+                <span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">ScalarAccess</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">getattr</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">to_set</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="c1"># Find all writes in body</span>
+            <span class="n">body_writes</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">child</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">child</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">)</span>
+            <span class="p">}</span>
+            <span class="c1"># Do not inline the mask if there is an intersection</span>
+            <span class="k">if</span> <span class="n">condition_reads</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">body_writes</span><span class="p">):</span>
+                <span class="n">masks_to_inline</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MaskCollector.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskCollector.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">]:</span>
+        <span class="n">masks_to_inline</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">mask_stmt</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">mask_stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">walk_values</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">if_isinstance</span><span class="p">(</span><span class="n">oir</span><span class="o">.</span><span class="n">MaskStmt</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">stmt</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">))</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">vertical_loops</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="o">=</span><span class="n">masks_to_inline</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">masks_to_inline</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span> <span class="n">masks_to_inline</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="MaskInlining"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining">[docs]</a><span class="k">class</span> <span class="nc">MaskInlining</span><span class="p">(</span><span class="n">eve</span><span class="o">.</span><span class="n">NodeTranslator</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Inlines mask statements that are boolean mask fields with the expression that generates the field.</span>
+
+<span class="sd">    Preconditions: Mask statements exist as boolean temporary field accesses.</span>
+<span class="sd">    Postcondition: Mask statements exist as boolean expressions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MaskInlining.visit_FieldAccess"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining.visit_FieldAccess">[docs]</a>    <span class="k">def</span> <span class="nf">visit_FieldAccess</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">FieldAccess</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">masks_to_inline</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">masks_to_inline</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cp</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">masks_to_inline</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="o">=</span><span class="n">masks_to_inline</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MaskInlining.visit_AssignStmt"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining.visit_AssignStmt">[docs]</a>    <span class="k">def</span> <span class="nf">visit_AssignStmt</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">masks_to_inline</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">oir</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">oir</span><span class="o">.</span><span class="n">AssignStmt</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">eve</span><span class="o">.</span><span class="n">NOTHING</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">masks_to_inline</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">eve</span><span class="o">.</span><span class="n">NOTHING</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="o">=</span><span class="n">masks_to_inline</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MaskInlining.visit_Temporary"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining.visit_Temporary">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Temporary</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Temporary</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">node</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">masks_to_inline</span> <span class="k">else</span> <span class="n">eve</span><span class="o">.</span><span class="n">NOTHING</span></div>
+
+<div class="viewcode-block" id="MaskInlining.visit_CacheDesc"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining.visit_CacheDesc">[docs]</a>    <span class="k">def</span> <span class="nf">visit_CacheDesc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">CacheDesc</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">node</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">masks_to_inline</span> <span class="k">else</span> <span class="n">eve</span><span class="o">.</span><span class="n">NOTHING</span></div>
+
+<div class="viewcode-block" id="MaskInlining.visit_Stencil"><a class="viewcode-back" href="../../../../../../_source/gt4py.cartesian.gtc.passes.oir_optimizations.html#gt4py.cartesian.gtc.passes.oir_optimizations.inlining.MaskInlining.visit_Stencil">[docs]</a>    <span class="k">def</span> <span class="nf">visit_Stencil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">oir</span><span class="o">.</span><span class="n">Stencil</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generic_visit</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">masks_to_inline</span><span class="o">=</span><span class="n">MaskCollector</span><span class="p">()</span><span class="o">.</span><span class="n">visit</span><span class="p">(</span><span class="n">node</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2014-2022, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
