@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Generator, Optional
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
@@ -248,11 +248,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim_i: int,
         dim: Dimension,
         node_domain: past.Dict,
-    ) -> tuple[past.Expr, past.Expr]:
+    ) -> Generator[Any, None, None]:
         keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
         if keys_dims_types == dim:
             assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)  # type: ignore
+            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
         else:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
