@@ -41,9 +41,9 @@ The effect of the program is as if statements are executed as follows:
 1. computations are executed sequentially in the order they appear in the code,
 2. vertical intervals are executed sequentially in the order defined by the iteration policy of the computation
 3. every vertical interval is executed as a sequential for-loop over the ``K``-range following the order defined by the iteration policy,
-4. within a computation, it is illegal to write to an external (non-temporary) field (or aliases pointing to the same memory location) if it is also read with horizontal offset; this rule does not apply to temporaries,
-5. in an assignment, a field cannot be assigned to, if it's used in the r.h.s. expression with a horizontal offset; note that this rule only applies to temporaries as this pattern is already excluded for external fields by rule 4,
-6. for ``if-else`` statements, the condition is evaluated first, then the ``if`` and ``else`` bodies are evaluated with the same rules as above.
+4. within a stencil, it is illegal to assign to an external field (or aliases pointing to the same memory location) if it is also read with horizontal offset in any expression that is (transitively) used to compute the r.h.s. of the assignment,
+5. for ``if-else`` statements, the condition is evaluated first, then the ``if`` and ``else`` bodies are evaluated with the same rules as above,
+6. execution of a program is illegal if any field access in any branch is outside of array bounds.
 
 Examples
 ^^^^^^^^
@@ -73,6 +73,17 @@ Shifted self-assignment
     with computation(FORWARD):
         with interval(...):
             a = a[1,1,0]
+
+Shifted self-assignment with temporary
+
+.. code:: python
+
+   with computation(PARALLEL):
+       with interval(...):
+           tmp = a
+   with computation(PARALLEL):
+       with interval(...):
+           a = tmp[1,1,0]
 
 These cases are forbidden as, in general, there is no efficient mapping to a blocked execution.
 

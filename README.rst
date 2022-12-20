@@ -49,7 +49,7 @@ The following backends are supported:
 
 For testing GT4Py with the ``numpy`` backend, all dependencies are included in the ``setup.cfg`` and are automatically installed. The performance backends also require
 
-1. `Boost <https://www.boost.org/>`__ library, a dependency of GridTools C++, which needs to be installed by the user.
+1. the `Boost <https://www.boost.org/>`__ library, a dependency of GridTools C++, which needs to be installed by the user.
 
 Options
 ~~~~~~~
