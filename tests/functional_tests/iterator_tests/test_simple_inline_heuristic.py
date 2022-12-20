@@ -1,7 +1,7 @@
 import pytest
 
 from functional.iterator import ir
-from functional.iterator.transforms.simple_inline_heuristic import is_eligable_for_inlining
+from functional.iterator.transforms.simple_inline_heuristic import is_eligible_for_inlining
 
 
 @pytest.fixture
@@ -37,14 +37,14 @@ def test_trivial(is_scan_context):
         ),
         args=[ir.SymRef(id="it")],
     )
-    assert expected == is_eligable_for_inlining(testee, is_scan_context)
+    assert expected == is_eligible_for_inlining(testee, is_scan_context)
 
 
 def test_scan(scan):
     testee = ir.FunCall(
         fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[scan]), args=[ir.SymRef(id="it")]
     )
-    assert not is_eligable_for_inlining(testee, False)
+    assert not is_eligible_for_inlining(testee, False)
 
 
 def test_scan_with_lifted_arg(scan):
@@ -60,4 +60,4 @@ def test_scan_with_lifted_arg(scan):
             )
         ],
     )
-    assert not is_eligable_for_inlining(testee, False)
+    assert not is_eligible_for_inlining(testee, False)

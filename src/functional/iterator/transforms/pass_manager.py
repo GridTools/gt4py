@@ -24,7 +24,7 @@ def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
     if lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligable_for_inlining).visit(ir)
+        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
     assert lift_mode == LiftMode.FORCE_TEMPORARIES
     return ir
 

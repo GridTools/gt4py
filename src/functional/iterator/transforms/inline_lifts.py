@@ -83,7 +83,7 @@ def _transform_and_extract_lift_args(
                 occupied_names=symtable.keys(),
                 occupied_symbols=extracted_args.keys(),
             )
-            # assert new_symbol not in extracted_args
+            assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 

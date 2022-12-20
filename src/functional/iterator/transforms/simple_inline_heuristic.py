@@ -2,7 +2,7 @@ from functional.iterator import ir
 from functional.iterator.transforms.inline_lifts import _is_lift
 
 
-def is_eligable_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bool:
+def is_eligible_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bool:
     """
     Predicate for the InlineLifts transformation.
 

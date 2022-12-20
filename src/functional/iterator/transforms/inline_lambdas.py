@@ -38,14 +38,14 @@ def inline_lambda(
             ):
                 eligible_params[i] = True
 
-    if len(eligible_params) != 0 and not any(eligible_params):
+    if node.fun.params and not any(eligible_params):
         return node
 
     refs = set().union(
         *(
             arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
-            for i, arg in enumerate(node.args)
-            if eligible_params[i]
+            for arg, eligible in zip(node.args, eligible_params)
+            if eligible
         )
     )
     syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
@@ -70,8 +70,8 @@ def inline_lambda(
 
     symbol_map = {
         param.id: arg
-        for i, (param, arg) in enumerate(zip(node.fun.params, node.args))
-        if eligible_params[i]
+        for param, arg, eligible in zip(node.fun.params, node.args, eligible_params)
+        if eligible
     }
     new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
 
@@ -82,12 +82,12 @@ def inline_lambda(
             fun=ir.Lambda(
                 params=[
                     param
-                    for param, eligable in zip(node.fun.params, eligible_params)
-                    if not eligable
+                    for param, eligible in zip(node.fun.params, eligible_params)
+                    if not eligible
                 ],
                 expr=new_expr,
             ),
-            args=[arg for arg, eligable in zip(node.args, eligible_params) if not eligable],
+            args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
         )
 
 

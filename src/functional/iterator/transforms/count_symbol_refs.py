@@ -16,13 +16,13 @@ class CountSymbolRefs(eve.NodeVisitor):
         obj = cls(ref_counts=ref_counts)
         obj.visit(node, active_refs=active_refs)
 
-        return ref_counts
+        return obj.ref_counts
 
     def visit_SymRef(self, node: itir.Node, *, active_refs: set[str]):
         if node.id in active_refs:
             self.ref_counts[node.id] += 1
 
     def visit_Lambda(self, node: itir.Lambda, *, active_refs: set[str]):
-        active_refs = active_refs - set(param.id for param in node.params)
+        active_refs = active_refs - {param.id for param in node.params}
 
         self.generic_visit(node, active_refs=active_refs)
