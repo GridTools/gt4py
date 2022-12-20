@@ -1,3 +1,22 @@
 [build-system]
 requires = ["setuptools>=60.6", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target_version = ["py38", "py39", "py310"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.gt_cache
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

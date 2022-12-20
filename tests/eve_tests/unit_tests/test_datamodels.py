@@ -17,8 +17,7 @@ from __future__ import annotations
 import enum
 import types
 import typing
-from typing import Set  # noqa: F401  # imported but unused (used in exec() context)
-from typing import (
+from typing import (  # noqa: F401  # imported but unused (used in exec() context)
     Any,
     Callable,
     ClassVar,
@@ -31,6 +30,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Type,
     TypeVar,
