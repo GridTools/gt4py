@@ -461,6 +461,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if node.op == ct.BinaryOperator.POW:
             return left_type
 
+        if node.op == ct.BinaryOperator.MOD and not type_info.is_integral(right_type):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                arg,
+                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+            )
+
         try:
             return type_info.promote(left_type, right_type)
         except GTTypeError as ex:
@@ -657,6 +663,28 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> foast.Call:
         return self._visit_reduction(node, **kwargs)
+
+    def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
+        casted_obj_type = node.args[0].type
+        dtype_obj = node.args[1]
+        assert isinstance(dtype_obj, foast.Name)
+        dtype_obj_type = dtype_obj.type
+        assert isinstance(dtype_obj_type, ct.FunctionType)
+        assert dtype_obj.id in fbuiltins.TYPE_BUILTIN_NAMES
+        assert isinstance(casted_obj_type, ct.FieldType)
+        assert type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
+
+        return_type = ct.FieldType(
+            dims=casted_obj_type.dims,
+            dtype=self.visit(dtype_obj_type).returns,
+        )
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=return_type,
+            location=node.location,
+        )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> foast.Call:
         mask_type = cast(ct.FieldType, node.args[0].type)

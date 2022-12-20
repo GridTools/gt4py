@@ -28,7 +28,7 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import common_types, field_operator_ast as foast
-from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.ffront.symbol_makers import TypingError
@@ -264,6 +264,18 @@ def test_conditional_wrong_arg_type():
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_astype():
+    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
+        return astype(a, float64)
+
+    parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
+
+    assert parsed.body[-1].value.type == common_types.FieldType(
+        dims=Ellipsis,
+        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 # --- External symbols ---
