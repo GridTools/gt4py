@@ -51,7 +51,7 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
                 return ts.ScalarKind.FLOAT32
             case np.float64:
                 return ts.ScalarKind.FLOAT64
-            case np.str:
+            case np.str_:
                 return ts.ScalarKind.STRING
             case _:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
