@@ -1,13 +1,13 @@
 [build-system]
-requires = ["hatchling>=1.6.0"]
+requires = ["hatchling>=1.6.0", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [project]
 name = "gt4py"
 description = "Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)."
-dynamic = ["version"]
+dynamic = ["readme", "version"]
 authors = [{ name = "ETH Zurich", email = "gridtools@cscs.ch" }]
-readme = "README.rst"
+#readme = "README.rst"
 requires-python = ">=3.8"
 keywords = [
   "gridtools",
@@ -56,7 +56,7 @@ dependencies = [
   # -- eve / gtc --
   "boltons>=20.0",
   "cytoolz>=0.11",
-  "devtools>=0.5",
+  "devtools>=0.6",
   "deepdiff>=5.8",
   "frozendict>=2.3",
   "mako>=1.1",
@@ -109,24 +109,10 @@ exclude = '''
 )/
 '''
 
-[tool.coverage.html]
-directory = "tests/_reports/coverage_html"
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/x-rst"
+fragments = [{ path = "README.rst" }]
 
-[tool.coverage.paths]
-source = ["src/", ".tox/py*/lib/python3.*/site-packages/"]
-
-[tool.coverage.report]
-exclude_lines = [
-  "raise AssertionError",
-  "raise NotImplementedError",
-  "if 0:",
-  "if __name__ == .__main__.:",
-]
-ignore_errors = true
-
-[tool.coverage.run]
-branch = true
-source_pkgs = ["gt4py"]
 
 [tool.hatch.version]
 path = "src/gt4py/__about__.py"
@@ -183,6 +169,5 @@ module = "gt4py.cartesian.gtc.*"
 allow_untyped_defs = true
 
 [tool.pytest.ini_options]
-addopts = "--cov-config=setup.cfg --cov-report html"
 norecursedirs = ["dist", "build", "_local*", ".*"]
 testpaths = "tests"

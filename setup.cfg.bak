@@ -64,7 +64,7 @@ install_requires =
     # ---- eve / gtc ----
     boltons>=20.0
     cytoolz>=0.11
-    devtools>=0.5
+    devtools>=0.6
     deepdiff>=5.8
     frozendict>=2.3
     mako>=1.1
@@ -118,33 +118,32 @@ console_scripts =
 
 
 #---- Other tools ----
+# #-- coverage --
+# [coverage:run]
+# branch = True
+# source_pkgs =
+#     gt4py
 
-#-- coverage --
-[coverage:run]
-branch = True
-source_pkgs =
-    gt4py
+# [coverage:paths]
+# source =
+#     src/
+#     .tox/py*/lib/python3.*/site-packages/
 
-[coverage:paths]
-source =
-    src/
-    .tox/py*/lib/python3.*/site-packages/
+# [coverage:report]
+# # Regexes for lines to exclude from consideration
+# exclude_lines =
+#     # Don't complain if tests don't hit defensive assertion code:
+#     raise AssertionError
+#     raise NotImplementedError
 
-[coverage:report]
-# Regexes for lines to exclude from consideration
-exclude_lines =
-    # Don't complain if tests don't hit defensive assertion code:
-    raise AssertionError
-    raise NotImplementedError
+#     # Don't complain if non-runnable code isn't run:
+#     if 0:
+#     if __name__ == .__main__.:
 
-    # Don't complain if non-runnable code isn't run:
-    if 0:
-    if __name__ == .__main__.:
+# ignore_errors = True
 
-ignore_errors = True
-
-[coverage:html]
-directory = tests/_reports/coverage_html
+# [coverage:html]
+# directory = tests/_reports/coverage_html
 
 #-- flake8 --
 [flake8]
