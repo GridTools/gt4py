@@ -22,8 +22,6 @@ from functional.program_processors.codegens.gtfn import gtfn_ir
 from functional.program_processors.codegens.gtfn import gtfn_im_ir
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
-from functional.program_processors.codegens.gtfn.to_imp_proto import to_imp
-
 
 class GTFNCodegen(codegen.TemplatedGenerator):
     _grid_type_str = {
