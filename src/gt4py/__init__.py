@@ -12,10 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Python API to develop performance portable applications for weather and climate."""
+"""Python library for generating high-performance implementations of stencil kernels for weather and climate modeling."""
 
-from . import __about__, cartesian, eve, storage
-from .__about__ import __version__, __version_info__
+from . import cartesian, eve, storage
+from .__about__ import __author__, __copyright__, __license__, __version__, __version_info__
 
 
-__all__ = ["__about__", "__version__", "__version_info__", "cartesian", "eve", "storage"]
+__all__ = [
+    "__author__",
+    "__copyright__",
+    "__license__",
+    "__version__",
+    "__version_info__",
+    "cartesian",
+    "eve",
+    "storage",
+]
