@@ -20,7 +20,7 @@ We strongly recommended to create a virtual environment for any new project:
     pip install --upgrade pip wheel setuptools
 
 
-Then clone the GT4Py repository and install the local copy or install it directly from pypi.org.
+Then clone the GT4Py repository and install the local copy or install it directly from PyPI: `pip install gt4py`
 For use with NVIDIA GPUs, add the `[cudaXXX]` optional dependency, where `XXX` takes the values
 `101`, `102`, ... depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, ...).
 
