@@ -12,16 +12,26 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Python API to develop performance portable applications for weather and climate."""
+"""Package metadata: version, authors, license and copyright."""
 
-import typing
+from typing import Final
 
 from packaging import version as pkg_version
 
 
-__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: typing.Final = "GPLv3+"
+__all__ = [
+    "__author__",
+    "__copyright__",
+    "__license__",
+    "__version__",
+    "__version_info__",
+]
 
 
-__version__: typing.Final = "1.0.0"
-__version_info__: typing.Final = pkg_version.parse(__version__)
+__author__: Final = "ETH Zurich and individual contributors"
+__copyright__: Final = "Copyright (c) 2014-2022 ETH Zurich"
+__license__: Final = "GPL-3.0-or-later"
+
+
+__version__: Final = "1.0.0"
+__version_info__: Final = pkg_version.parse(__version__)

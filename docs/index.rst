@@ -14,7 +14,7 @@ As an extension of Python it has a familiar look and feel to anyone who knows
 Python and interoperates nicely with scientific Python software stack (e.g. NumPy, SciPy).
 
 **Great! So what does it look like in practice?** Look at the following example of
-a laplacian operation coded in GTScript, and note how similar the GTScript representation is to the mathematical notation:
+a Laplacian operation coded in GTScript, and note how similar the GTScript representation is to the mathematical notation:
 
 .. image:: stencil.png
 
