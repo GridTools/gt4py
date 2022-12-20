@@ -20,7 +20,7 @@ We strongly recommended to create a virtual environment for any new project:
     pip install --upgrade pip wheel setuptools
 
 
-Then clone the GT4Py repository and install the local copy or install it directly from GitHub with `pip`.
+Then clone the GT4Py repository and install the local copy or install it directly from pypi.org.
 For use with NVIDIA GPUs, add the `[cudaXXX]` optional dependency, where `XXX` takes the values
 `101`, `102`, ... depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, ...).
 
@@ -34,8 +34,8 @@ Or
 
 .. code:: bash
 
-    pip install git+https://github.com/gridtools/gt4py.git
-    # pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda115]
+    pip install gt4py
+    # pip install gt4py[cuda115]
 
 
 ------------
@@ -330,77 +330,6 @@ Offset syntax
 
 Offsets can be specified either as a list of offsets on all spatial axes, e.g. ``field[0, 0, 1]``, or as offsets on the
 axes present by specifying the axis ``field[K+1]``.
-
--------------------------
-Compile-time conditionals
--------------------------
-
-Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
-call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
-example, when we are testing an extension to a existing model, we might want to perform some additional computations
-when running the extended versions and compare the results against the regular one. For this purpose we can force a
-*compile-time* evaluation of a conditional ``if`` statement whose test condition depends only on **constant symbol**
-definitions. The condition will be evaluated at the generation step and only the statements in the
-selected branch will be actually compiled.
-
-For example, the previous definition could be modified in the following way:
-
-.. code:: python
-
-    USE_ALPHA = True
-
-    @gtscript.stencil(backend=backend)
-    def stencil_example(
-        field_a: gtscript.Field[np.float64],
-        field_b: gtscript.Field[np.float64],
-        field_c: gtscript.Field[np.float64],
-        result: gtscript.Field[np.float64],
-        *,
-        alpha: np.float64,
-        weight: np.float64 = 2.0,
-    ):
-        if __INLINED(USE_ALPHA):
-            with computation(PARALLEL), interval(...):
-                result = field_a[0, 0, 0] - (1. - alpha) * (
-                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
-                )
-        else:
-            with computation(FORWARD), interval(...):
-                result = field_a[0, 0, 0] - (field_b[0, 0, -1] - weight * field_c[0, 0, 0])
-
-
-The ``__INLINED()`` call is used to force the compile-time evaluation of ``USE_ALPHA``, which is an external symbol
-that must be defined explicitly before the ``gtscript.stencil()`` decorator processes the definition function.
-For `C` programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
-``#IF`` definitions.
-
-Alternatively, the actual values of *constant* symbols can be defined in the ``gtscript.stencil()`` call as a
-dictionary passed to the ``externals`` keyword. This allows a more flexible way to parameterize kernel definitions.
-In this case, the symbol must be imported from ``__externals__`` in the body of the function definition.
-
-.. code:: python
-
-    @gtscript.stencil(backend=backend, externals={"USE_ALPHA": True})
-    def stencil_example(
-        field_a: gtscript.Field[np.float64],
-        field_b: gtscript.Field[np.float64],
-        field_c: gtscript.Field[np.float64],
-        result: gtscript.Field[np.float64],
-        *,
-        alpha: np.float64,
-        weight: np.float64 = 2.0,
-    ):
-        from __externals__ import USE_ALPHA
-
-        if __INLINED(USE_ALPHA):
-            with computation(PARALLEL), interval(...):
-                result = field_a[0, 0, 0] - (1. - alpha) * (
-                    field_b[0, 0, 0] - weight * field_c[0, 0, 0]
-                )
-        else:
-            with computation(FORWARD), interval(...):
-                result = field_a[0, 0, 0] - (field_b[0, 0, -1] - weight * field_c[0, 0, 0])
-
 
 ------------
 System Setup
