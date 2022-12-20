@@ -23,5 +23,5 @@ __copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
 __license__: typing.Final = "GPLv3+"
 
 
-__version__: typing.Final = "0.1.1"
+__version__: typing.Final = "1.0.0"
 __version_info__: typing.Final = pkg_version.parse(__version__)
