@@ -1,0 +1,39 @@
+[flake8]
+# Some sane defaults for the code style checker flake8
+max-line-length = 100
+max-complexity = 15
+doctests=true
+ignore =
+    B008    # Do not perform function calls in argument defaults
+    D1      # Public code object needs docstring
+    DAR     # Disable dargling errors by default
+    E203    # Whitespace before ':' (black formatter breaks this sometimes)
+    E501    # Line too long (using Bugbear's B950 warning)
+    W503    # Line break occurred before a binary operator
+
+exclude =
+    .eggs
+    .gt_cache
+    .ipynb_checkpoints
+    .tox
+    _local/
+    _local_*
+    build
+    dist
+    docs
+    tests/_disabled
+    setup.py
+
+per-file-ignores =
+    src/eve/extended_typing.py:F401,F405
+
+rst-roles=
+    py:mod, mod,
+    py:func, func,
+    py:data, data,
+    py:const, const,
+    py:class, class,
+    py:meth, meth,
+    py:attr, attr,
+    py:exc, exc,
+    py:obj, obj,
