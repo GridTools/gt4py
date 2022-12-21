@@ -28,14 +28,14 @@ For use with NVIDIA GPUs, add the `[cudaXXX]` optional dependency, where `XXX` t
 
     git clone https://github.com/GridTools/gt4py.git
     pip install ./gt4py
-    # pip install ./gt4py[cuda115]
+    # pip install ./gt4py[cuda11x]
 
 Or
 
 .. code:: bash
 
     pip install gt4py
-    # pip install gt4py[cuda115]
+    # pip install gt4py[cuda11x]
 
 
 ------------
