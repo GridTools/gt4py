@@ -22,7 +22,7 @@ It is recommended to install the package in a virtual environment. For example:
     python -m venv venv
     source venv/bin/activate
     # For the CUDA backends add the '[cudaXXX]' optional dependency
-    pip install gt4py[cuda117]
+    pip install gt4py[cuda11x]
 
 
 📖 Description
