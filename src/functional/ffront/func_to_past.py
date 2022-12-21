@@ -17,8 +17,12 @@ import ast
 from dataclasses import dataclass
 from typing import Any, cast
 
-from functional.ffront import dialect_ast_enums
-from functional.ffront import program_ast as past, type_specifications as ts, type_translation
+from functional.ffront import (
+    dialect_ast_enums,
+    program_ast as past,
+    type_specifications as ts,
+    type_translation,
+)
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction

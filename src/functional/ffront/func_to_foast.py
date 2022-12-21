@@ -19,9 +19,9 @@ import builtins
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
-from functional.ffront import dialect_ast_enums
 from functional import common
 from functional.ffront import (
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
     type_info,

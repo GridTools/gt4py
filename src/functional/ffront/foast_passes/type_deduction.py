@@ -13,11 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
-from functional.ffront import dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
-from functional.ffront import fbuiltins, type_info, type_specifications as ts
+from functional.ffront import dialect_ast_enums, fbuiltins, type_info, type_specifications as ts
 from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.type_translation import from_value
 
@@ -462,7 +461,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if node.op == dialect_ast_enums.BinaryOperator.POW:
             return left_type
 
-        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
+        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
+            right_type
+        ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 arg,
                 msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",

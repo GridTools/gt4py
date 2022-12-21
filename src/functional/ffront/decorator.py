@@ -31,11 +31,11 @@ from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, Ty
 import numpy as np
 from devtools import debug
 
-from functional.ffront import dialect_ast_enums
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
 from functional.ffront import (
+    dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
     type_info,

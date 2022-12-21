@@ -13,10 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
-from functional.ffront import dialect_ast_enums
 from eve import NodeTranslator, traits
 from functional.common import GTTypeError
-from functional.ffront import program_ast as past, type_info, type_specifications as ts
+from functional.ffront import (
+    dialect_ast_enums,
+    program_ast as past,
+    type_info,
+    type_specifications as ts,
+)
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -153,7 +157,9 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == dialect_ast_enums.BinaryOperator.POW:
             return left_type
 
-        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
+        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
+            right_type
+        ):
             raise ProgramTypeError.from_past_node(
                 arg,
                 msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",

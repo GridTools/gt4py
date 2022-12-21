@@ -19,10 +19,10 @@ from typing import Any, Callable, Optional, cast
 
 import numpy as np
 
-from functional.ffront import dialect_ast_enums
 from eve import NodeTranslator
 from functional.common import Dimension, DimensionKind
 from functional.ffront import (
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
     itir_makers as im,

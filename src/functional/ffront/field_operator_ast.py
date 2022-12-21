@@ -13,11 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Any, Generic, TypeVar, Union
 
-from functional.ffront import dialect_ast_enums
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import type_specifications as ts
+from functional.ffront import dialect_ast_enums, type_specifications as ts
 from functional.utils import RecursionGuard
 
 
@@ -50,7 +49,9 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     type: Union[SymbolT, ts.DeferredType]  # noqa A003
-    namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(dialect_ast_enums.Namespace.LOCAL)
+    namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
+        dialect_ast_enums.Namespace.LOCAL
+    )
 
 
 DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)

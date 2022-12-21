@@ -4,10 +4,9 @@ import enum
 import textwrap
 from typing import Final, TypeAlias, Union
 
-from functional.ffront import dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
-from functional.ffront import type_specifications as ts
+from functional.ffront import dialect_ast_enums, type_specifications as ts
 
 
 PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
