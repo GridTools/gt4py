@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, cast
 
-import functional.ffront.dialect_ast_enums as ast_enums
+from functional.ffront import dialect_ast_enums
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
@@ -443,9 +443,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         **kwargs,
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
-            ast_enums.BinaryOperator.BIT_AND,
-            ast_enums.BinaryOperator.BIT_OR,
-            ast_enums.BinaryOperator.BIT_XOR,
+            dialect_ast_enums.BinaryOperator.BIT_AND,
+            dialect_ast_enums.BinaryOperator.BIT_OR,
+            dialect_ast_enums.BinaryOperator.BIT_XOR,
         }
         is_compatible = type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
 
@@ -459,10 +459,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         left_type = cast(ts.FieldType | ts.ScalarType, left.type)
         right_type = cast(ts.FieldType | ts.ScalarType, right.type)
 
-        if node.op == ast_enums.BinaryOperator.POW:
+        if node.op == dialect_ast_enums.BinaryOperator.POW:
             return left_type
 
-        if node.op == ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
+        if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(right_type):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 arg,
                 msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
@@ -493,8 +493,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             type_info.is_logical
             if node.op
             in [
-                ast_enums.UnaryOperator.NOT,
-                ast_enums.UnaryOperator.INVERT,
+                dialect_ast_enums.UnaryOperator.NOT,
+                dialect_ast_enums.UnaryOperator.INVERT,
             ]
             else type_info.is_arithmetic
         )
