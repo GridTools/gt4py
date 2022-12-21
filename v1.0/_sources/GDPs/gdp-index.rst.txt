@@ -2,6 +2,9 @@
 GT4Py Development
 =================
 
+The GDP process is currently suspended. The following documents are for
+reference only.
+
 This page provides an overview of the development decisions and priorities
 for GT4Py. Specifically, it contains a collections of GT4Py Development
 Proposals (GDPs) with proposed features for the framework in various

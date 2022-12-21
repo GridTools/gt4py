@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GT4Py: GridTools for Python &mdash; GT4Py 0.1.1 documentation</title>
+  <title>GT4Py: GridTools for Python &mdash; GT4Py 1.0.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/cscs.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -28,9 +29,10 @@
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
             <a href="#" class="icon icon-home"> GT4Py
+            <img src="_static/logo.svg" class="logo" alt="Logo"/>
           </a>
               <div class="version">
-                0.1.1
+                1.0.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -46,7 +48,9 @@
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gtscript.html">GTScript Language Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lang_design.html">GTScript Language Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
 <li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
@@ -90,7 +94,7 @@ possible performance. GT4Py’s GTScript language is readable and concise.
 As an extension of Python it has a familiar look and feel to anyone who knows
 Python and interoperates nicely with scientific Python software stack (e.g. NumPy, SciPy).</p>
 <p><strong>Great! So what does it look like in practice?</strong> Look at the following example of
-a laplacian operation coded in GTScript, and note how similar the GTScript representation is to the mathematical notation:</p>
+a Laplacian operation coded in GTScript, and note how similar the GTScript representation is to the mathematical notation:</p>
 <img alt="_images/stencil.png" src="_images/stencil.png" />
 <table class="docutils align-default">
 <colgroup>
@@ -146,12 +150,26 @@ GTScript code can also be used to generate optimized stencils that can be called
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#computations-and-intervals">Computations and Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#functions">Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#offset-syntax">Offset syntax</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#compile-time-conditionals">Compile-time conditionals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#system-setup">System Setup</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="gtscript.html">GTScript Language Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="gtscript.html#stencils">Stencils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gtscript.html#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gtscript.html#computation-contexts">Computation Contexts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gtscript.html#interval-contexts">Interval Contexts</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="arrays.html#interfaces">Interfaces</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lang_design.html">GTScript Language Design</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lang_design.html#parallel-model">Parallel Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lang_design.html#variable-declarations">Variable Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lang_design.html#compute-domain">Compute Domain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lang_design.html#conditionals">Conditionals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lang_design.html#loops">Loops</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a><ul>

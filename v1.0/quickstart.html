@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quick Start Guide &mdash; GT4Py 0.1.1 documentation</title>
+  <title>Quick Start Guide &mdash; GT4Py 1.0.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/cscs.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -18,7 +19,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Allocation and Array Interfaces" href="arrays.html" />
+    <link rel="next" title="GTScript Language Reference" href="gtscript.html" />
     <link rel="prev" title="GT4Py: GridTools for Python" href="index.html" /> 
 </head>
 
@@ -28,9 +29,10 @@
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
             <a href="index.html" class="icon icon-home"> GT4Py
+            <img src="_static/logo.svg" class="logo" alt="Logo"/>
           </a>
               <div class="version">
-                0.1.1
+                1.0.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -56,14 +58,15 @@
 <li class="toctree-l2"><a class="reference internal" href="#computations-and-intervals">Computations and Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#offset-syntax">Offset syntax</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#compile-time-conditionals">Compile-time conditionals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#system-setup">System Setup</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#macos">MacOS</a></li>
 </ul>
 </li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="gtscript.html">GTScript Language Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lang_design.html">GTScript Language Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
 <li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
@@ -108,17 +111,17 @@ Additional commands are provided to install and remove the GridTools C++ sources
 pip install --upgrade pip wheel setuptools
 </pre></div>
 </div>
-<p>Then clone the GT4Py repository and install the local copy or install it directly from GitHub with <cite>pip</cite>.
+<p>Then clone the GT4Py repository and install the local copy or install it directly from PyPI: <cite>pip install gt4py</cite>
 For use with NVIDIA GPUs, add the <cite>[cudaXXX]</cite> optional dependency, where <cite>XXX</cite> takes the values
 <cite>101</cite>, <cite>102</cite>, … depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, …).</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git clone https://github.com/GridTools/gt4py.git
 pip install ./gt4py
-<span class="c1"># pip install ./gt4py[cuda115]</span>
+<span class="c1"># pip install ./gt4py[cuda11x]</span>
 </pre></div>
 </div>
 <p>Or</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install git+https://github.com/gridtools/gt4py.git
-<span class="c1"># pip install git+https://github.com/gridtools/gt4py.git#egg=gt4py[cuda115]</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip install gt4py
+<span class="c1"># pip install gt4py[cuda11x]</span>
 </pre></div>
 </div>
 </section>
@@ -378,68 +381,6 @@ to function calls since they are inlined in the generated code.</p>
 <p>Offsets can be specified either as a list of offsets on all spatial axes, e.g. <code class="docutils literal notranslate"><span class="pre">field[0,</span> <span class="pre">0,</span> <span class="pre">1]</span></code>, or as offsets on the
 axes present by specifying the axis <code class="docutils literal notranslate"><span class="pre">field[K+1]</span></code>.</p>
 </section>
-<section id="compile-time-conditionals">
-<h2>Compile-time conditionals<a class="headerlink" href="#compile-time-conditionals" title="Permalink to this headline"></a></h2>
-<p>Run-time parameters are a powerful way to customize the computation with scalar values that may be different for every
-call. However, sometimes a structural modification of the kernel definition is required depending on the context. For
-example, when we are testing an extension to a existing model, we might want to perform some additional computations
-when running the extended versions and compare the results against the regular one. For this purpose we can force a
-<em>compile-time</em> evaluation of a conditional <code class="docutils literal notranslate"><span class="pre">if</span></code> statement whose test condition depends only on <strong>constant symbol</strong>
-definitions. The condition will be evaluated at the generation step and only the statements in the
-selected branch will be actually compiled.</p>
-<p>For example, the previous definition could be modified in the following way:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">USE_ALPHA</span> <span class="o">=</span> <span class="kc">True</span>
-
-<span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">)</span>
-<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
-    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="o">*</span><span class="p">,</span>
-    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
-    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
-<span class="p">):</span>
-    <span class="k">if</span> <span class="n">__INLINED</span><span class="p">(</span><span class="n">USE_ALPHA</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
-                <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
-            <span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
-</pre></div>
-</div>
-<p>The <code class="docutils literal notranslate"><span class="pre">__INLINED()</span></code> call is used to force the compile-time evaluation of <code class="docutils literal notranslate"><span class="pre">USE_ALPHA</span></code>, which is an external symbol
-that must be defined explicitly before the <code class="docutils literal notranslate"><span class="pre">gtscript.stencil()</span></code> decorator processes the definition function.
-For <cite>C</cite> programmers, compile-time evaluation of conditional statements could be considered a bit like preprocessor
-<code class="docutils literal notranslate"><span class="pre">#IF</span></code> definitions.</p>
-<p>Alternatively, the actual values of <em>constant</em> symbols can be defined in the <code class="docutils literal notranslate"><span class="pre">gtscript.stencil()</span></code> call as a
-dictionary passed to the <code class="docutils literal notranslate"><span class="pre">externals</span></code> keyword. This allows a more flexible way to parameterize kernel definitions.
-In this case, the symbol must be imported from <code class="docutils literal notranslate"><span class="pre">__externals__</span></code> in the body of the function definition.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@gtscript</span><span class="o">.</span><span class="n">stencil</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span> <span class="n">externals</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;USE_ALPHA&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
-<span class="k">def</span> <span class="nf">stencil_example</span><span class="p">(</span>
-    <span class="n">field_a</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">field_b</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">field_c</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="n">result</span><span class="p">:</span> <span class="n">gtscript</span><span class="o">.</span><span class="n">Field</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span>
-    <span class="o">*</span><span class="p">,</span>
-    <span class="n">alpha</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
-    <span class="n">weight</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span> <span class="o">=</span> <span class="mf">2.0</span><span class="p">,</span>
-<span class="p">):</span>
-    <span class="kn">from</span> <span class="nn">__externals__</span> <span class="kn">import</span> <span class="n">USE_ALPHA</span>
-
-    <span class="k">if</span> <span class="n">__INLINED</span><span class="p">(</span><span class="n">USE_ALPHA</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
-                <span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
-            <span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">),</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">field_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">field_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">field_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
-</pre></div>
-</div>
-</section>
 <section id="system-setup">
 <h2>System Setup<a class="headerlink" href="#system-setup" title="Permalink to this headline"></a></h2>
 <p>Compilation settings for GT4Py backends generating C++ or CUDA code can be modified by updating
@@ -474,7 +415,7 @@ support for OpenMP in the C preprocessor and can link with OpenMP support if the
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="GT4Py: GridTools for Python" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="arrays.html" class="btn btn-neutral float-right" title="Allocation and Array Interfaces" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="gtscript.html" class="btn btn-neutral float-right" title="GTScript Language Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

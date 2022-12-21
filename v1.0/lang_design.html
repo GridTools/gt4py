@@ -4,20 +4,23 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GTScript Language Design &mdash; GT4Py 0.1.1 documentation</title>
-      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <title>GTScript Language Design &mdash; GT4Py 1.0.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/cscs.css" type="text/css" />
   <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
+    <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
-        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-    <script src="../_static/js/theme.js"></script>
-    <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" /> 
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Commandline" href="commandline.html" />
+    <link rel="prev" title="Allocation and Array Interfaces" href="arrays.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -25,13 +28,14 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="../index.html" class="icon icon-home"> GT4Py
+            <a href="index.html" class="icon icon-home"> GT4Py
+            <img src="_static/logo.svg" class="logo" alt="Logo"/>
           </a>
               <div class="version">
-                0.1.1
+                1.0.0
               </div>
 <div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
@@ -39,17 +43,54 @@
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
-<li class="toctree-l1"><a class="reference internal" href="../index.html">GT4Py: GridTools for Python</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html">GT4Py: GridTools for Python</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../arrays.html">Allocation and Array Interfaces</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../commandline.html">Commandline</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../apiref.html">API Documentation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../indices.html">Indices</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../GDPs/gdp-index.html">GT4Py Development</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gtscript.html">GTScript Language Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Allocation and Array Interfaces</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">GTScript Language Design</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#parallel-model">Parallel Model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#examples">Examples</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#rule-4">Rule 4</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#no-specific-loop-order-in-k">no specific loop order in k</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#forward-iteration-in-k">forward iteration in k</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#backward-computation-in-k-with-interval-specialization">backward computation in k with interval specialization</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#variable-declarations">Variable Declarations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#compute-domain">Compute Domain</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#conditionals">Conditionals</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#conditionals-on-scalar-expressions">Conditionals on scalar expressions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#example-for-scalar-conditions">Example for scalar conditions</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#conditionals-on-field-expressions">Conditionals on field expressions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#example-for-conditionals-on-field-expressions">Example for conditionals on field expressions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#loops">Loops</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#while">While</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="commandline.html">Commandline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apiref.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="indices.html">Indices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="GDPs/gdp-index.html">GT4Py Development</a></li>
 </ul>
 
         </div>
@@ -58,17 +99,17 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">GT4Py</a>
+          <a href="index.html">GT4Py</a>
       </nav>
 
       <div class="wy-nav-content">
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="../index.html" class="icon icon-home"></a></li>
+      <li><a href="index.html" class="icon icon-home"></a></li>
       <li class="breadcrumb-item active">GTScript Language Design</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="../_sources/gt4py/lang_design.rst.txt" rel="nofollow"> View page source</a>
+            <a href="_sources/lang_design.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
@@ -109,9 +150,9 @@
 <li><p>computations are executed sequentially in the order they appear in the code,</p></li>
 <li><p>vertical intervals are executed sequentially in the order defined by the iteration policy of the computation</p></li>
 <li><p>every vertical interval is executed as a sequential for-loop over the <code class="docutils literal notranslate"><span class="pre">K</span></code>-range following the order defined by the iteration policy,</p></li>
-<li><p>within a computation, it is illegal to write to an external (non-temporary) field (or aliases pointing to the same memory location) if it is also read with horizontal offset; this rule does not apply to temporaries,</p></li>
-<li><p>in an assignment, a field cannot be assigned to, if it’s used in the r.h.s. expression with a horizontal offset; note that this rule only applies to temporaries as this pattern is already excluded for external fields by rule 4,</p></li>
-<li><p>for <code class="docutils literal notranslate"><span class="pre">if-else</span></code> statements, the condition is evaluated first, then the <code class="docutils literal notranslate"><span class="pre">if</span></code> and <code class="docutils literal notranslate"><span class="pre">else</span></code> bodies are evaluated with the same rules as above.</p></li>
+<li><p>within a stencil, it is illegal to assign to an external field (or aliases pointing to the same memory location) if it is also read with horizontal offset in any expression that is (transitively) used to compute the r.h.s. of the assignment,</p></li>
+<li><p>for <code class="docutils literal notranslate"><span class="pre">if-else</span></code> statements, the condition is evaluated first, then the <code class="docutils literal notranslate"><span class="pre">if</span></code> and <code class="docutils literal notranslate"><span class="pre">else</span></code> bodies are evaluated with the same rules as above,</p></li>
+<li><p>execution of a program is illegal if any field access in any branch is outside of array bounds.</p></li>
 </ol>
 <section id="examples">
 <h3>Examples<a class="headerlink" href="#examples" title="Permalink to this headline"></a></h3>
@@ -131,6 +172,15 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">FORWARD</span><span class="p">):</span>
     <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
         <span class="n">a</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Shifted self-assignment with temporary</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="n">a</span>
+<span class="k">with</span> <span class="n">computation</span><span class="p">(</span><span class="n">PARALLEL</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">interval</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">tmp</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>These cases are forbidden as, in general, there is no efficient mapping to a blocked execution.</p>
@@ -385,7 +435,10 @@ The following cases are illegal:</p>
 
            </div>
           </div>
-          <footer>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="arrays.html" class="btn btn-neutral float-left" title="Allocation and Array Interfaces" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="commandline.html" class="btn btn-neutral float-right" title="Commandline" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
 
   <hr/>
 

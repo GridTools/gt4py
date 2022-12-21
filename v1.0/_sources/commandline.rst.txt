@@ -90,11 +90,10 @@ each stencil are put in a subfolder named after the stencil:
 The line
 
 .. code-block:: python
-   :caption: my_stencils.gt.py
 
    # [GT] using-dsl: gtscript
 
-is equivalent to writing
+in ``my_stencils.gt.py`` is equivalent to writing
 
 .. code-block:: python
 
