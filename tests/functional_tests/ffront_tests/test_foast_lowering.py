@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import functional.ffront.type_specifications
 from functional.common import DimensionKind, Field
 from functional.ffront import itir_makers as im, type_specifications as ts, type_translation
 from functional.ffront.fbuiltins import (
@@ -223,7 +222,7 @@ def test_call():
     #  using such heavy constructs for testing the lowering.
     field_type = type_translation.from_type_hint(Field[..., float64])
     identity = SimpleNamespace(
-        __gt_type__=lambda: functional.ffront.type_specifications.FieldOperatorType(
+        __gt_type__=lambda: ts.FieldOperatorType(
             definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
         )
     )
