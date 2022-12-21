@@ -16,7 +16,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as hyp_st
 from hypothesis.extra.numpy import arrays as st_arrays
 
@@ -186,6 +186,7 @@ class TestExecInfo:
             else:
                 assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
+    @settings(max_examples=1)
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_backcompatibility(self, data, backend):
@@ -229,6 +230,7 @@ class TestExecInfo:
         assert type(self.advection).__name__ not in exec_info
         assert type(self.diffusion).__name__ not in exec_info
 
+    @settings(max_examples=1)
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_aggregate(self, data, backend):
