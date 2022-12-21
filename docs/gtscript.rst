@@ -89,7 +89,7 @@ We create a context using the `computation` context manager. Since it is a GTScr
    
    @gtscript.stencil
    def some_stencil(some_field: gtscript.Field[np.float64]):
-      with compuation(PARALLEL):
+      with computation(PARALLEL):
           with interval(...):
               ...
   
