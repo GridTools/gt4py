@@ -189,7 +189,7 @@ class TestExecInfo:
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
     def test_backcompatibility(self, data, backend):
-        if backend == "gt:gpu":
+        if backend == "gt:gpu" or backend == "cuda":
             pytest.skip("Random compilation failures.")
 
         # set backend as instance attribute
