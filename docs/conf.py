@@ -242,5 +242,4 @@ texinfo_documents = [
 
 
 def setup(sphinx):
-    sys.path.insert(0, os.path.abspath("./"))
     sphinx.add_css_file("css/cscs.css")
