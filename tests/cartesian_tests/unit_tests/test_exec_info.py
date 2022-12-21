@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import inspect
 from typing import Any, Dict
 
 import numpy as np
@@ -69,9 +70,18 @@ class TestExecInfo:
                 flux_x[0, 0, 0] - flux_x[-1, 0, 0] + flux_y[0, 0, 0] - flux_y[0, -1, 0]
             )
 
-    def compile_stencils(self, backend):
-        self.advection = gtscript.stencil(backend=backend, definition=self.advection_def)
-        self.diffusion = gtscript.stencil(backend=backend, definition=self.diffusion_def)
+    def compile_stencils(self, backend, worker_id):
+        modulename = inspect.currentframe().f_back.f_globals["__name__"]
+        self.advection = gtscript.stencil(
+            backend=backend,
+            definition=self.advection_def,
+            name=f"{modulename}.TestExecInfo.advection.{worker_id}",
+        )
+        self.diffusion = gtscript.stencil(
+            backend=backend,
+            definition=self.diffusion_def,
+            name=f"{modulename}.TestExecInfo.diffusion.{worker_id}",
+        )
 
     def init_fields(self, data, backend):
         self.nx = data.draw(hyp_st.integers(min_value=7, max_value=32), label="nx")
@@ -188,12 +198,12 @@ class TestExecInfo:
 
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
-    def test_backcompatibility(self, data, backend):
+    def test_backcompatibility(self, data, backend, worker_id):
         # set backend as instance attribute
         self.backend = backend
 
         # compile stencils
-        self.compile_stencils(backend)
+        self.compile_stencils(backend, worker_id)
 
         # initialize storages and parameters
         self.init_fields(data, backend)
@@ -231,12 +241,12 @@ class TestExecInfo:
 
     @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
-    def test_aggregate(self, data, backend):
+    def test_aggregate(self, data, backend, worker_id):
         # set backend as instance attribute
         self.backend = backend
 
         # compile stencils
-        self.compile_stencils(backend)
+        self.compile_stencils(backend, worker_id)
 
         # initialize storages and parameters
         self.init_fields(data, backend)
