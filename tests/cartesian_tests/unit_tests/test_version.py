@@ -26,5 +26,4 @@ def test_version_info():
 
     assert isinstance(gt4py.__version_info__, Version)
     assert gt4py.__version_info__.release == tuple(int(p) for p in gt4py.__version__.split("."))
-    assert (0, 1) <= gt4py.__version_info__.release < (0, 2)
     assert gt4py.__about__.__version_info__ == gt4py.__version_info__
