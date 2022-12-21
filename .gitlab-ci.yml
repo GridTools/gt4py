@@ -83,7 +83,6 @@ test py38:
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
     NUM_PROCESSES: 1
-    CI: True
     <<: *py38
 
 test py39:
