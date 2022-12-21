@@ -18,12 +18,11 @@ import pytest
 import eve
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import program_ast as past
+from functional.ffront import program_ast as past, type_specifications as ts
 from functional.ffront.decorator import field_operator
 from functional.ffront.fbuiltins import float64
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
-from functional.type_system import type_specifications as ts
 
 from .past_common_fixtures import (
     IDim,

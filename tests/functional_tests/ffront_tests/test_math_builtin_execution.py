@@ -5,13 +5,12 @@ import numpy as np
 import pytest
 
 import functional.ffront.dialect_ast_enums as ast_enums
-from functional.ffront import fbuiltins, field_operator_ast as foast
+from functional.ffront import fbuiltins, field_operator_ast as foast, type_translation
 from functional.ffront.decorator import FieldOperator
 from functional.ffront.fbuiltins import Dimension, Field, float64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners import roundtrip
-from functional.type_system import type_specifications as ts, type_translation
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 

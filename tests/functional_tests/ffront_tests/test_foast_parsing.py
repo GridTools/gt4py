@@ -27,7 +27,7 @@ import pytest
 
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import field_operator_ast as foast
+from functional.ffront import field_operator_ast as foast, type_specifications as ts
 from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
@@ -50,7 +50,6 @@ from functional.iterator.builtins import (
     tuple_get,
     xor_,
 )
-from functional.type_system import type_specifications as ts
 from functional.type_system.type_translation import TypingError
 
 
