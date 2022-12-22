@@ -265,7 +265,8 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
         case ts.ScalarType():
             return []
         case ts.FieldType(dims):
-            return dims
+            # TODO: This code does not handle ellipses for dimensions. Fix it.
+            return dims  # type: ignore
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
@@ -482,6 +483,8 @@ def return_type_field(
     source_dim = with_args[0].source
     target_dims = with_args[0].target
     new_dims = []
+    # TODO: This code does not handle ellipses for dimensions. Fix it.
+    assert field_type.dims is not ...
     for d in field_type.dims:
         if d != source_dim:
             new_dims.append(d)
@@ -549,6 +552,8 @@ def function_signature_incompatibilities_field(
 
     source_dim = args[0].source
     target_dims = args[0].target
+    # TODO: This code does not handle ellipses for dimensions. Fix it.
+    assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
         yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
 

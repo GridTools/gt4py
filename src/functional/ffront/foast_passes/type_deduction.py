@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
-from functional.common import DimensionKind, GTSyntaxError, GTTypeError
+from functional.common import Dimension, DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import dialect_ast_enums, fbuiltins, type_info, type_specifications as ts
 from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.type_translation import from_value
@@ -101,8 +101,11 @@ def promote_to_mask_type(
     >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
+    # TODO: This code does not handle ellipses for dimensions. Fix it.
+    assert not isinstance(input_type, ts.FieldType) or input_type.dims is not ...
+    assert mask_type.dims is not ...
     if isinstance(input_type, ts.ScalarType) or not all(
-        item in input_type.dims for item in mask_type.dims
+        item in cast(list[Dimension], input_type.dims) for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
         return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
@@ -172,6 +175,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
         assert isinstance(new_body[-1], foast.Return)
         return_type = new_body[-1].value.type
+        if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Function must return `DataType`, `DeferredType`, or `VoidType`, got `{return_type}`.",
+            )
         new_type = ts.FunctionType(
             args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
         )
@@ -640,6 +648,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_reduction(self, node: foast.Call, **kwargs) -> foast.Call:
         field_type = cast(ts.FieldType, node.args[0].type)
         reduction_dim = cast(ts.DimensionType, node.kwargs["axis"].type).dim
+        # TODO: This code does not handle ellipses for dimensions. Fix it.
+        assert field_type.dims is not ...
         if reduction_dim not in field_type.dims:
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise FieldOperatorTypeDeductionError.from_foast_node(
