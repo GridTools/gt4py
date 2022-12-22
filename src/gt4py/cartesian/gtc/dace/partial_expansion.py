@@ -890,7 +890,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                             new_subset.ranges,
                             edge.data.subset.ranges,
                         )
-                    )
+                    ) + list((0, d - 1, 1) for d in data_dims)
 
         nsdfg_node.symbol_mapping.update({ax.tile_symbol(): ax.tile_dace_symbol() for ax in axes})
         for ax in axes:
