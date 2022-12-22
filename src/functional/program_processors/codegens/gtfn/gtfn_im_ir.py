@@ -14,10 +14,10 @@
 
 from __future__ import annotations
 
-from typing import Union, List, Tuple
+from typing import List, Tuple, Union
 
-from eve import Coerced, SymbolName, Node
 import functional.program_processors.codegens.gtfn.gtfn_ir as gtfn_ir
+from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait
 
 

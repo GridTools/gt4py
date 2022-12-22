@@ -1,20 +1,21 @@
 import dataclasses
-from functional.program_processors.codegens.gtfn import gtfn_ir
+from typing import Any, Iterable, List, Union
+
 import eve
-from eve import NodeVisitor, NodeTranslator
+from eve import NodeTranslator, NodeVisitor
 from eve.utils import UIDGenerator
 from functional.iterator import ir
+from functional.program_processors.codegens.gtfn import gtfn_ir
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
-    Stmt,
-    InitStmt,
     AssignStmt,
-    ReturnStmt,
     Conditional,
     ForLoop,
     ImperativeFunctionDefinition,
+    InitStmt,
+    ReturnStmt,
+    Stmt,
 )
 
-from typing import List, Union, Any, Iterable
 
 # limitations
 # - reduction must have one partial shift in their argument list

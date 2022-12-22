@@ -47,7 +47,11 @@ def test_simple_indirection(program_processor):
 
     if program_processor == type_check.check:
         pytest.xfail("bug in type inference")
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative or program_processor == gtfn_format_sourcecode:
+    if (
+        program_processor == run_gtfn
+        or program_processor == run_gtfn_imperative
+        or program_processor == gtfn_format_sourcecode
+    ):
         pytest.xfail("fails in lowering to gtfn_ir")
 
     shape = [8]

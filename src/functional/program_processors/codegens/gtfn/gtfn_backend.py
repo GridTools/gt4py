@@ -19,8 +19,8 @@ import functional.iterator.ir as itir
 from eve import codegen
 from functional.iterator.transforms.pass_manager import apply_common_transforms
 from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
-from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
+from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 
 
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:

@@ -109,7 +109,9 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 def tridiag_test(tridiag_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
     if (
-        program_processor == run_gtfn or program_processor == run_gtfn_imperative or program_processor == gtfn_format_sourcecode
+        program_processor == run_gtfn
+        or program_processor == run_gtfn_imperative
+        or program_processor == gtfn_format_sourcecode
     ) and lift_mode == LiftMode.FORCE_INLINE:
         pytest.xfail("gtfn does only support lifted scans when using temporaries")
     a, b, c, d, x = tridiag_reference
