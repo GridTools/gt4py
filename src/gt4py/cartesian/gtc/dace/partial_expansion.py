@@ -342,36 +342,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                         return False
         return True
 
-    def _get_symbolic_origin_and_domain(
-        self,
-        sdfg: dace.SDFG,
-        state: dace.SDFGState,
-        node: Union[dace.nodes.NestedSDFG, StencilComputation],
-        access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo],
-    ) -> SymbolicSplitType:
-        """Determine which part of the memlet subsets corresponds to halo and domain, respectively.
-
-        This is done by matching the `node`'s in/out memlet subsets with the dcir.GridSubset in `access_infos`.
-
-        Returns a dict mapping the field names to a 2-tuple with
-        * the origin of the field in the node as absolute index in the parent sdfg's array
-        * the shape of the domain as tuple of symbolic values
-        """
-        # union input and output subsets
-        outer_subsets = {}
-        for edge in state.in_edges(node):
-            outer_subsets[edge.data.data] = edge.data.subset
-        for edge in state.out_edges(node):
-            outer_subsets[edge.data.data] = dace.subsets.union(
-                edge.data.subset, outer_subsets.get(edge.data.data, edge.data.subset)
-            )
-        # ensure single-use of input and output subset instances
-        for edge in state.in_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
-        for edge in state.out_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
-
-        origins: Dict[eve.SymbolRef, SymblicAxisDict] = dict()
+    def _solve_domain_subsets(self, sdfg, node, access_infos, outer_subsets):
 
         # Collect equations and symbols from arguments and shapes
         equations = []
@@ -417,11 +388,43 @@ class PartialExpansion(transformation.SubgraphTransformation):
             raise PartialExpansion._InconsistentSymbolicSplit("inconsistent symbolic split.")
         result = results[0]
         result = {str(k)[len("__SOLVE_") :]: v for k, v in result.items()}
-        solved_domain: SymblicAxisDict = {
+        return {
             axis: result[axis.domain_symbol()]
             for axis in self.strides.keys()
             if axis.domain_symbol() in result
         }
+
+    def _get_symbolic_origin_and_domain(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        node: Union[dace.nodes.NestedSDFG, StencilComputation],
+        access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo],
+    ) -> SymbolicSplitType:
+        """Determine which part of the memlet subsets corresponds to halo and domain, respectively.
+
+        This is done by matching the `node`'s in/out memlet subsets with the dcir.GridSubset in `access_infos`.
+
+        Returns a dict mapping the field names to a 2-tuple with
+        * the origin of the field in the node as absolute index in the parent sdfg's array
+        * the shape of the domain as tuple of symbolic values
+        """
+        # union input and output subsets
+        outer_subsets = {}
+        for edge in state.in_edges(node):
+            outer_subsets[edge.data.data] = edge.data.subset
+        for edge in state.out_edges(node):
+            outer_subsets[edge.data.data] = dace.subsets.union(
+                edge.data.subset, outer_subsets.get(edge.data.data, edge.data.subset)
+            )
+        # ensure single-use of input and output subset instances
+        for edge in state.in_edges(node):
+            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+        for edge in state.out_edges(node):
+            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+
+        origins: Dict[eve.SymbolRef, SymblicAxisDict] = dict()
+        solved_domain = self._solve_domain_subsets(sdfg, node, access_infos, outer_subsets)
         symbol_mapping_domain: SymblicAxisDict = {
             ax: node.symbol_mapping[ax.domain_symbol()]
             for ax in self.strides.keys()
@@ -873,50 +876,51 @@ def _test_match(sdfg, states: Set[dace.SDFGState]):
     return expansion.can_be_applied(sdfg, subgraph)
 
 
-def partially_expand(sdfg: dace.SDFG):
-    cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
-
-    def _recurse(sd, cft: cf.ControlFlow):
-        subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
-        candidate: Set[dace.SDFGState] = set()
-        # reversed so that extent analysis tends to include stencil sinks
-        for child in reversed(cft.children):
-            if isinstance(child, cf.SingleState):
-                if _test_match(sd, {child.state} | candidate):
-                    candidate.add(child.state)
-                else:
-                    if candidate:
-                        subgraphs.append((sd, candidate))
-                    if _test_match(sd, {child.state}):
-                        candidate = {child.state}
-                    else:
-                        candidate = set()
-                        subsubgraphs = []
-                        for nsdfg_node in child.state.nodes():
-                            if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
-                                nsdfg_cft = cf.structured_control_flow_tree(
-                                    nsdfg_node.sdfg, lambda _: ""
-                                )
-                                subsubgraphs += _recurse(nsdfg_node.sdfg, nsdfg_cft)
-                        subgraphs.extend(subsubgraphs)
+def _generate_matches(sd, cft: cf.ControlFlow):
+    subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
+    candidate: Set[dace.SDFGState] = set()
+    # reversed so that extent analysis tends to include stencil sinks
+    for child in reversed(cft.children):
+        if isinstance(child, cf.SingleState):
+            if _test_match(sd, {child.state} | candidate):
+                candidate.add(child.state)
             else:
                 if candidate:
                     subgraphs.append((sd, candidate))
-                candidate = set()
-                subsubgraphs = []
-                if isinstance(child, cf.IfScope):
-                    subsubgraphs += _recurse(sd, child.body)
-                    if child.orelse is not None:
-                        subsubgraphs += _recurse(sd, child.orelse)
-                elif isinstance(child, cf.ForScope):
-                    subsubgraphs += _recurse(sd, child.body)
-                if subsubgraphs:
+                if _test_match(sd, {child.state}):
+                    candidate = {child.state}
+                else:
+                    candidate = set()
+                    subsubgraphs = []
+                    for nsdfg_node in child.state.nodes():
+                        if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
+                            nsdfg_cft = cf.structured_control_flow_tree(
+                                nsdfg_node.sdfg, lambda _: ""
+                            )
+                            subsubgraphs += _generate_matches(nsdfg_node.sdfg, nsdfg_cft)
                     subgraphs.extend(subsubgraphs)
-        if candidate:
-            subgraphs.append((sd, candidate))
-        return subgraphs
+        else:
+            if candidate:
+                subgraphs.append((sd, candidate))
+            candidate = set()
+            subsubgraphs = []
+            if isinstance(child, cf.IfScope):
+                subsubgraphs += _generate_matches(sd, child.body)
+                if child.orelse is not None:
+                    subsubgraphs += _generate_matches(sd, child.orelse)
+            elif isinstance(child, cf.ForScope):
+                subsubgraphs += _generate_matches(sd, child.body)
+            if subsubgraphs:
+                subgraphs.extend(subsubgraphs)
+    if candidate:
+        subgraphs.append((sd, candidate))
+    return subgraphs
 
-    matches = _recurse(sdfg, cft)
+
+def partially_expand(sdfg: dace.SDFG):
+    cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
+
+    matches = _generate_matches(sdfg, cft)
 
     for sd, nodes in matches:
         parent_sdfg = next(iter(nodes)).parent
