@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
-from functional.common import Dimension, DimensionKind, GTSyntaxError, GTTypeError
+from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import dialect_ast_enums, fbuiltins, type_info, type_specifications as ts
 from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.type_translation import from_value
@@ -101,11 +101,8 @@ def promote_to_mask_type(
     >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
-    assert not isinstance(input_type, ts.FieldType) or input_type.dims is not ...
-    assert mask_type.dims is not ...
     if isinstance(input_type, ts.ScalarType) or not all(
-        item in cast(list[Dimension], input_type.dims) for item in mask_type.dims
+        item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
         return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
@@ -141,10 +138,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>> from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
-    >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
+    >>> IDim = Dimension("IDim")
+    >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
     >>> source_definition = SourceDefinition.from_function(example)

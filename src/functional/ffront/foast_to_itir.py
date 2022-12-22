@@ -20,7 +20,7 @@ from typing import Any, Callable, Optional, cast
 import numpy as np
 
 from eve import NodeTranslator
-from functional.common import Dimension, DimensionKind
+from functional.common import DimensionKind
 from functional.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -34,10 +34,7 @@ from functional.iterator import ir as itir
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    assert isinstance(symbol_type, ts.FieldType)
-    if symbol_type.dims == ...:
-        return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 class ITIRTypeKind(enum.Enum):
@@ -111,8 +108,9 @@ def to_value(node: foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     ---------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
-    >>> def foo(a: Field[..., "float64"]):
+    >>> from functional.common import Field, Dimension
+    >>> IDim = Dimension("IDim")
+    >>> def foo(a: Field[[IDim], "float64"]):
     ...    b = 5
     ...    return a, b
 
@@ -141,9 +139,10 @@ class FieldOperatorLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>>
-    >>> def fieldop(inp: Field[..., "float64"]):
+    >>> IDim = Dimension("IDim")
+    >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...    return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
