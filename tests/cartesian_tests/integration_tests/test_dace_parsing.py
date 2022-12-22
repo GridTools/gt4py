@@ -475,48 +475,48 @@ def test_lazy_sdfg():
 
 
 @gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_1(inp1: gtscript.Field[np.float64], outp1: gtscript.Field[np.float64]):
+def stencil_inextents_1(inp1: gtscript.Field[np.float64], outp1: gtscript.Field[np.float64]):  # type: ignore[valid-type]
     with computation(PARALLEL), interval(...):
-        outp1 = (
-            inp1[0, -1, 0] + inp1[0, 1, 0]
-        )  # noqa F841: local variable 'outp' is assigned to but never used
+        outp1 = (  # noqa F841: local variable 'outp' is assigned to but never used
+            inp1[0, -1, 0] + inp1[0, 1, 0]  # type: ignore[index]
+        )
 
 
 @gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_2(inp2: gtscript.Field[np.float64], outp2: gtscript.Field[np.float64]):
+def stencil_inextents_2(inp2: gtscript.Field[np.float64], outp2: gtscript.Field[np.float64]):  # type: ignore[valid-type]
     with computation(PARALLEL), interval(...):
-        outp2 = (
-            inp2[0, -1, 0] + inp2[0, 1, 0]
-        )  # noqa F841: local variable 'outp' is assigned to but never used
+        outp2 = (  # noqa F841: local variable 'outp' is assigned to but never used
+            inp2[0, -1, 0] + inp2[0, 1, 0]  # type: ignore[index]
+        )
 
 
 @gtscript.lazy_stencil(backend="dace:cpu")
 def stencil_inextents_3(
-    field_a: gtscript.Field[np.float64],
-    field_b: gtscript.Field[np.float64],
-    tmp: gtscript.Field[np.float64],
+    field_a: gtscript.Field[np.float64],  # type: ignore[valid-type]
+    field_b: gtscript.Field[np.float64],  # type: ignore[valid-type]
+    tmp: gtscript.Field[np.float64],  # type: ignore[valid-type]
 ):
     with computation(PARALLEL), interval(...):
-        field_b = (
-            field_a[0, -1, 0] + field_a[0, 1, 0]
-        )  # noqa F841: local variable 'field_b' is assigned to but never used
+        field_b = (  # noqa F841: local variable 'field_b' is assigned to but never used
+            field_a[0, -1, 0] + field_a[0, 1, 0]  # type: ignore[index]
+        )
         tmp = 7.0  # noqa F841: local variable 'tmp' is assigned to but never used
 
 
 @gtscript.lazy_stencil(backend="dace:cpu")
 def stencil_inextents_4(
-    field_b: gtscript.Field[np.float64],
-    field_c: gtscript.Field[np.float64],
-    tmp: gtscript.Field[np.float64],
+    field_b: gtscript.Field[np.float64],  # type: ignore[valid-type]
+    field_c: gtscript.Field[np.float64],  # type: ignore[valid-type]
+    tmp: gtscript.Field[np.float64],  # type: ignore[valid-type]
 ):
     with computation(PARALLEL), interval(...):
-        field_c = (
-            tmp * field_b[0, -1, 0] + field_b[0, 1, 0]
-        )  # noqa F841: local variable 'field_c' is assigned to but never used
+        field_c = (  # noqa F841: local variable 'field_c' is assigned to but never used
+            tmp * field_b[0, -1, 0] + field_b[0, 1, 0]  # type: ignore[index]
+        )
 
 
 @gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_noextents(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):
+def stencil_noextents(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):  # type: ignore[valid-type]
     with computation(PARALLEL), interval(...):
         outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
@@ -600,7 +600,7 @@ class TestMultipleStencilsPartialExpansionIJ:
         tmp = np.ones((3, 3, 3))
 
         @dace.program
-        def orchestration(tmp: dace.float64[3, 3, 3]):
+        def orchestration(tmp: dace.float64[3, 3, 3]):  # type: ignore[name-defined]
             stencil_inextents_1(inp1=inp, outp1=tmp)
             stencil_inextents_1(inp1=tmp, outp1=outp)
 

@@ -168,7 +168,7 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
         if array.transient:
             array.lifetime = dace.AllocationLifetime.Persistent
 
-    # sdfg.simplify(validate=False)
+    sdfg.simplify(validate=False)
 
     _set_expansion_orders(sdfg)
     _set_tile_sizes(sdfg)
@@ -178,7 +178,6 @@ def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map)
 
 def _post_expand_trafos(sdfg: dace.SDFG):
     # DaCe "standard" clean-up transformations
-    sdfg.validate()
     sdfg.simplify(validate=False)
 
     sdfg.apply_transformations_repeated(NoEmptyEdgeTrivialMapElimination, validate=False)

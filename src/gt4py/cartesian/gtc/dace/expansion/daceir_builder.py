@@ -27,7 +27,14 @@ from gt4py import eve
 from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc import daceir as dcir
 from gt4py.cartesian.gtc import oir
-from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Sections, Skip, Stages
+from gt4py.cartesian.gtc.dace.expansion_specification import (
+    ExpansionItem,
+    Loop,
+    Map,
+    Sections,
+    Skip,
+    Stages,
+)
 from gt4py.cartesian.gtc.dace.utils import (
     compute_dcir_access_infos,
     flatten_list,
@@ -231,7 +238,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 parent=self,
             )
 
-        def push_expansion_item(self, item: Union[Map, Loop]) -> "DaCeIRBuilder.IterationContext":
+        def push_expansion_item(self, item: ExpansionItem) -> "DaCeIRBuilder.IterationContext":
             if not isinstance(item, (Map, Loop, Skip)):
                 raise ValueError
 
@@ -257,7 +264,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
             return DaCeIRBuilder.IterationContext(grid_subset=grid_subset, parent=parent)
 
         def push_expansion_items(
-            self, items: Iterable[Union[Map, Loop]]
+            self, items: Iterable[ExpansionItem]
         ) -> "DaCeIRBuilder.IterationContext":
             res = self
             for item in items:

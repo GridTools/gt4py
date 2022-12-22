@@ -37,9 +37,9 @@ class OirSDFGBuilder(eve.NodeVisitor):
     class SDFGContext:
         sdfg: dace.SDFG
         last_state: dace.SDFGState
-        decls: Dict[str, oir.Decl]
+        decls: Dict[eve.SymbolName, oir.Decl]
         block_extents: Dict[int, Extent]
-        access_infos: Dict[str, dcir.FieldAccessInfo]
+        access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo]
 
         def __init__(self, stencil: oir.Stencil):
             self.sdfg = dace.SDFG(stencil.name)

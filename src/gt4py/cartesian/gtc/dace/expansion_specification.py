@@ -80,7 +80,7 @@ class Sections(ExpansionItem):
 
 @dataclass
 class Skip(ExpansionItem):
-    item: ExpansionItem
+    item: Union[Map, Loop]
 
 
 def _get_axis_from_pattern(item, fmt):
