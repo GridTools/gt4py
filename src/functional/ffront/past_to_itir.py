@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any, Generator, Optional
+from typing import Any, Generator, Optional, cast
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
@@ -26,7 +26,7 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
 
 
 def _flatten_tuple_expr(
-    node: past.Name | past.Subscript | past.TupleExpr | past.Expr,
+    node: past.Expr,
 ) -> list[past.Name | past.Subscript]:
     if isinstance(node, (past.Name, past.Subscript)):
         return [node]
@@ -35,7 +35,7 @@ def _flatten_tuple_expr(
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise AssertionError(
+    raise GTTypeError(
         "Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed."
     )
 
@@ -169,9 +169,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError("Expected `None` or `past.Constant`.")
         return lowered_bound
 
-    def _construct_itir_out_arg(
-        self, node: past.TupleExpr | past.Name | past.Subscript | past.Expr
-    ) -> itir.Expr:
+    def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
         if isinstance(node, past.Name):
             return itir.SymRef(id=node.id)
         elif isinstance(node, past.Subscript):
@@ -182,21 +180,21 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
             )
         else:
-            raise AssertionError(
+            raise GTTypeError(
                 "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
-                " or a `past.TupleExpr` of  `past.Name`, `past.Subscript` or`past.TupleExpr` (recursively)."
+                " or a `past.TupleExpr` thereof."
             )
 
     def _construct_itir_domain_arg(
         self,
         out_field: past.Name,
-        node_domain: Optional[past.Expr] | past.Dict,
+        node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
         domain_args = []
 
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
-        out_field_types0 = self.visit(out_field_types[0])
+        out_field_types0 = cast(ct.FieldType, out_field_types[0])
         if any(
             not isinstance(out_field_type, ct.FieldType)
             or out_field_type.dims != out_field_types0.dims
@@ -250,7 +248,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim: Dimension,
         node_domain: past.Dict,
     ) -> Generator[Any, None, None]:
-        keys_dims_types = self.visit(node_domain.keys_[dim_i].type).dim
+        keys_dims_types = cast(ct.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types == dim:
             assert len(node_domain.values_[dim_i].elts) == 2
             return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
@@ -263,7 +261,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
         out_field_name: past.Name = node.value
-        out_field_slice_: list[past.Slice] | list[past.Expr]
+        out_field_slice_: list[past.Expr]
         if isinstance(node.slice_, past.TupleExpr) and all(
             isinstance(el, past.Slice) for el in node.slice_.elts
         ):
@@ -282,7 +280,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, out_arg: past.Expr, domain_arg: Optional[past.Expr] | past.Dict, **kwargs
+        self, out_arg: past.Expr, domain_arg: Optional[past.Expr], **kwargs
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
