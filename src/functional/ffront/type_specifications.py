@@ -15,36 +15,20 @@
 from dataclasses import dataclass
 
 from functional import common as func_common
-from functional.type_system.type_specifications import (
-    CallableType,
-    DataType,
-    DeferredType,
-    DimensionType,
-    FieldType,
-    FunctionType,
-    OffsetType,
-    ScalarKind,
-    ScalarType,
-    TupleType,
-    TypeSpec,
-    VoidType,
+from functional.type_system.type_specifications import (  # noqa: F401
+    CallableType as CallableType,
+    DataType as DataType,
+    DeferredType as DeferredType,
+    DimensionType as DimensionType,
+    FieldType as FieldType,
+    FunctionType as FunctionType,
+    OffsetType as OffsetType,
+    ScalarKind as ScalarKind,
+    ScalarType as ScalarType,
+    TupleType as TupleType,
+    TypeSpec as TypeSpec,
+    VoidType as VoidType,
 )
-
-
-__all__ = [
-    "CallableType",
-    "DataType",
-    "DeferredType",
-    "DimensionType",
-    "FieldType",
-    "FunctionType",
-    "OffsetType",
-    "ScalarKind",
-    "ScalarType",
-    "TupleType",
-    "TypeSpec",
-    "VoidType",
-]
 
 
 @dataclass(frozen=True)
