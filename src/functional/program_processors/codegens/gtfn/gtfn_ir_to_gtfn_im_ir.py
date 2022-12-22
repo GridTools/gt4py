@@ -4,8 +4,7 @@ from typing import Any, Iterable, List, Union
 import eve
 from eve import NodeTranslator, NodeVisitor
 from eve.utils import UIDGenerator
-from functional.iterator import ir
-from functional.program_processors.codegens.gtfn import gtfn_ir
+from functional.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
     Conditional,
@@ -52,10 +51,10 @@ class ToImpIR(NodeVisitor):
         )
 
     @staticmethod
-    def _find_connectivity(reduce_args: Iterable[gtfn_ir.Expr], offset_provider):
+    def _find_connectivity(reduce_args: Iterable[gtfn_ir_common.Expr], offset_provider):
         connectivities = []
         for arg in reduce_args:
-            if isinstance(arg, gtfn_ir.FunCall) and arg.fun == gtfn_ir.SymRef(id="shift"):
+            if isinstance(arg, gtfn_ir.FunCall) and arg.fun == gtfn_ir_common.SymRef(id="shift"):
                 assert isinstance(arg.args[-1], gtfn_ir.OffsetLiteral), f"{arg.args}"
                 connectivities.append(offset_provider[arg.args[-1].value])
 
@@ -69,17 +68,20 @@ class ToImpIR(NodeVisitor):
 
     @staticmethod
     def _is_reduce(node: gtfn_ir.FunCall):
-        return isinstance(node.fun, gtfn_ir.FunCall) and node.fun.fun == gtfn_ir.SymRef(id="reduce")
-
-    @staticmethod
-    def _make_shift(offsets: list[gtfn_ir.Expr], iterator: gtfn_ir.Expr):
-        return gtfn_ir.FunCall(
-            fun=gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="shift"), args=offsets), args=[iterator]
+        return isinstance(node.fun, gtfn_ir.FunCall) and node.fun.fun == gtfn_ir_common.SymRef(
+            id="reduce"
         )
 
     @staticmethod
-    def _make_deref(iterator: gtfn_ir.Expr):
-        return gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="deref"), args=[iterator])
+    def _make_shift(offsets: list[gtfn_ir_common.Expr], iterator: gtfn_ir_common.Expr):
+        return gtfn_ir.FunCall(
+            fun=gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="shift"), args=offsets),
+            args=[iterator],
+        )
+
+    @staticmethod
+    def _make_deref(iterator: gtfn_ir_common.Expr):
+        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[iterator])
 
     def handle_Reduction(self, node, **kwargs):
         emit_for_loop = False
@@ -94,26 +96,26 @@ class ToImpIR(NodeVisitor):
         # dense fields: shift(dense_f, X2Y) -> deref(shift(dense_f, X2Y, nbh_iterator)
         # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))
         new_args = []
-        nbh_iter = gtfn_ir.SymRef(id="nbh_iter")
+        nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
             if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":
                 new_args.append(
                     gtfn_ir.FunCall(
-                        fun=gtfn_ir.SymRef(id="deref"),
+                        fun=gtfn_ir_common.SymRef(id="deref"),
                         args=[
                             gtfn_ir.FunCall(
-                                fun=gtfn_ir.SymRef(id="shift"), args=arg.args + [nbh_iter]
+                                fun=gtfn_ir_common.SymRef(id="shift"), args=arg.args + [nbh_iter]
                             )
                         ],
                     )
                 )
-            if isinstance(arg, gtfn_ir.SymRef):
+            if isinstance(arg, gtfn_ir_common.SymRef):
                 new_args.append(
                     gtfn_ir.FunCall(
-                        fun=gtfn_ir.SymRef(id="tuple_get"),
+                        fun=gtfn_ir_common.SymRef(id="tuple_get"),
                         args=[
                             nbh_iter,
-                            gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="deref"), args=[arg]),
+                            gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[arg]),
                         ],
                     )
                 )
@@ -130,13 +132,13 @@ class ToImpIR(NodeVisitor):
         new_fun = ReplaceArgs().visit(fun.expr)
 
         red_idx = self.uids.sequential_id(prefix="red")
-        red_lit = gtfn_ir.Sym(id=f"{red_idx}")
+        red_lit = gtfn_ir_common.Sym(id=f"{red_idx}")
         self.imp_list_ir.append(InitStmt(lhs=red_lit, rhs=self.visit(init, **kwargs)))
 
         class PlugInCurrentIdx(NodeTranslator):
             def visit_SymRef(self, node):
                 if node.id == acc.id:
-                    return gtfn_ir.SymRef(id=red_idx)
+                    return gtfn_ir_common.SymRef(id=red_idx)
                 if node.id == "nbh_iter":
                     return self.cur_idx
                 return self.generic_visit(node)
@@ -145,20 +147,21 @@ class ToImpIR(NodeVisitor):
                 self.cur_idx = cur_idx
 
         if emit_for_loop:
-            new_expr = PlugInCurrentIdx(gtfn_ir.SymRef(id="red_iter")).visit(new_fun)
+            new_expr = PlugInCurrentIdx(gtfn_ir_common.SymRef(id="red_iter")).visit(new_fun)
             rhs = self.visit(new_expr, **kwargs)
             self.imp_list_ir.append(
                 ForLoop(
-                    num_iter=max_neighbors, stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=red_idx), rhs=rhs)
+                    num_iter=max_neighbors,
+                    stmt=AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs),
                 )
             )
         else:
             for i in range(max_neighbors):
                 new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_fun)
                 rhs = self.visit(new_expr, **kwargs)
-                self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir.SymRef(id=red_idx), rhs=rhs))
+                self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
-        return gtfn_ir.SymRef(id=red_idx)
+        return gtfn_ir_common.SymRef(id=red_idx)
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if isinstance(node.fun, gtfn_ir.Lambda) and any(
@@ -170,54 +173,58 @@ class ToImpIR(NodeVisitor):
         ):
             # do not try to lower lambdas that take lambdas as arugment to something more readable
             red_idx = self.uids.sequential_id(prefix="red")
-            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{red_idx}"), rhs=node))
-            return gtfn_ir.SymRef(id=f"{red_idx}")
+            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{red_idx}"), rhs=node))
+            return gtfn_ir_common.SymRef(id=f"{red_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
             lam_idx = self.uids.sequential_id(prefix="lam")
             params = [self.visit(param, **kwargs) for param in node.fun.params]
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
-                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{param.id}"), rhs=arg))
+                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{param.id}"), rhs=arg))
             expr = self.visit(node.fun.expr, **kwargs)
-            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{lam_idx}"), rhs=expr))
-            return gtfn_ir.SymRef(id=f"{lam_idx}")
+            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
+            return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if self._is_reduce(node):
             return self.handle_Reduction(node, **kwargs)
         if (
-            isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id == "make_tuple"
+            isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple"
         ):  # TODO: bad hardcoded string
             tupl_idx = self.uids.sequential_id(prefix="tupl")
             for i, arg in enumerate(node.args):
                 expr = self.visit(arg, **kwargs)
-                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{tupl_idx}_{i}"), rhs=expr))
-            tup_args = [gtfn_ir.SymRef(id=f"{tupl_idx}_{i}") for i in range(len(node.args))]
-            tuple_fun = gtfn_ir.FunCall(fun=gtfn_ir.SymRef(id="make_tuple"), args=tup_args)
-            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir.Sym(id=f"{tupl_idx}"), rhs=tuple_fun))
-            return gtfn_ir.SymRef(id=f"{tupl_idx}")
+                self.imp_list_ir.append(
+                    InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_idx}_{i}"), rhs=expr)
+                )
+            tup_args = [gtfn_ir_common.SymRef(id=f"{tupl_idx}_{i}") for i in range(len(node.args))]
+            tuple_fun = gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="make_tuple"), args=tup_args)
+            self.imp_list_ir.append(
+                InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_idx}"), rhs=tuple_fun)
+            )
+            return gtfn_ir_common.SymRef(id=f"{tupl_idx}")
         return gtfn_ir.FunCall(
             fun=self.visit(node.fun, **kwargs),
             args=[self.visit(arg, **kwargs) for arg in node.args],
         )
 
-    def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr, **kwargs) -> str:
+    def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr, **kwargs):
         cond = self.visit(node.cond, **kwargs)
         if_ = self.visit(node.true_expr, **kwargs)
         else_ = self.visit(node.false_expr, **kwargs)
         cond_idx = self.uids.sequential_id(prefix="cond")
         self.imp_list_ir.append(
             Conditional(
-                type=f"{cond_idx}_t",
+                cond_type=f"{cond_idx}_t",
                 init_stmt=InitStmt(
-                    type=f"{cond_idx}_t",
-                    lhs=gtfn_ir.Sym(id=cond_idx),
+                    init_type=f"{cond_idx}_t",
+                    lhs=gtfn_ir_common.Sym(id=cond_idx),
                     rhs=gtfn_ir.Literal(value="0.", type="float64"),
                 ),
                 cond=cond,
-                if_stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=if_),
-                else_stmt=AssignStmt(lhs=gtfn_ir.SymRef(id=cond_idx), rhs=else_),
+                if_stmt=AssignStmt(lhs=gtfn_ir_common.SymRef(id=cond_idx), rhs=if_),
+                else_stmt=AssignStmt(lhs=gtfn_ir_common.SymRef(id=cond_idx), rhs=else_),
             )
         )
-        return gtfn_ir.SymRef(id=cond_idx)
+        return gtfn_ir_common.SymRef(id=cond_idx)
 
 
 @dataclasses.dataclass(frozen=True)

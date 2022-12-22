@@ -13,12 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Collection, List, Union
+from typing import Any, Collection, Union
 
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional import common
-from functional.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir
+from functional.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
@@ -61,7 +61,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
+    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
         return node.id
@@ -112,9 +112,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
+        if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id in self._builtins_mapping:
             return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
+        if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
             qualified_fun_name = f"{node.fun.id}"
             return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
@@ -212,7 +212,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     }
 
     ${'\\n'.join(offset_definitions)}
-    ${'\\n'.join(function_definitions)}    
+    ${'\\n'.join(function_definitions)}
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
@@ -236,11 +236,11 @@ class GTFNIMCodegen(GTFNCodegen):
 
     Stmt = as_fmt("{lhs} {op} {rhs};")
 
-    InitStmt = as_fmt("{type} {lhs} {op} {rhs};")
+    InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
 
     Conditional = as_mako(
         """
-          using ${type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
+          using ${cond_type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
           ${init_stmt}
           if (${cond}) {
             ${if_stmt}
@@ -252,7 +252,7 @@ class GTFNIMCodegen(GTFNCodegen):
 
     ForLoop = as_mako(
         """
-      for_sequence(std::make_index_sequence<${num_iter}>{}, [&](auto i) {        
+      for_sequence(std::make_index_sequence<${num_iter}>{}, [&](auto i) {
          auto red_iter = integral_constant<int, i>{};
          ${stmt}
       });

@@ -6,7 +6,7 @@ class EtaReduction(NodeTranslator):
     """Eta reduction: simplifies `λ(args...) → f(args...)` to `f`."""
 
     def visit_Lambda(self, node: ir.Lambda, **kwargs) -> ir.Node:
-        """do not apply eta "inside" reductions"""
+        """Do not apply eta "inside" reductions."""
         if "in_reduce" in kwargs and kwargs["in_reduce"]:
             return self.generic_visit(node)
 
