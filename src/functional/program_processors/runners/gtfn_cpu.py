@@ -83,4 +83,4 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
 
 run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn", use_imperative_backend=False)
-run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn", use_imperative_backend=True)
+run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn_imperative", use_imperative_backend=True)

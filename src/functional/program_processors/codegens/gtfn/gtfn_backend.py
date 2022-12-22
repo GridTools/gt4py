@@ -26,11 +26,12 @@ from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GT
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
+    do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
-        unroll_reduce=not kwargs["imperative"],
+        unroll_reduce=do_unroll,
         # unroll_reduce=True,
         common_subexpression_elimination=True,
     )

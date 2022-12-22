@@ -4,7 +4,7 @@ import pytest
 from functional.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 
@@ -63,7 +63,7 @@ def naive_lap(inp):
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: this test does not validate")
 
     shape = [5, 7, 9]

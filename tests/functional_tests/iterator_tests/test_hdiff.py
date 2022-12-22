@@ -5,7 +5,7 @@ from functional.common import Dimension
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 from .hdiff_reference import hdiff_reference
@@ -60,7 +60,7 @@ def hdiff(inp, coeff, out, x, y):
 
 def test_hdiff(hdiff_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("origin not yet supported in gtfn")
 
     inp, coeff, out = hdiff_reference

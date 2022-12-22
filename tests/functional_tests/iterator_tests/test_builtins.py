@@ -27,7 +27,7 @@ from functional.iterator.builtins import (
 from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from functional.program_processors.formatters import type_check
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
@@ -189,7 +189,7 @@ def _can_deref_lifted(inp):
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
 
     Node = CartesianAxis("Node")

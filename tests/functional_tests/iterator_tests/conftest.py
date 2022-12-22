@@ -57,7 +57,7 @@ def program_processor(request):
 
 @pytest.fixture
 def program_processor_no_gtfn_exec(program_processor):
-    if program_processor[0] == gtfn_cpu.run_gtfn:
+    if program_processor[0] == gtfn_cpu.run_gtfn or program_processor[0] == gtfn_cpu.run_gtfn_imperative:
         pytest.xfail("gtfn backend not yet supported.")
     return program_processor
 
