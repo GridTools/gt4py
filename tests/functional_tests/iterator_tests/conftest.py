@@ -46,6 +46,7 @@ def get_processor_id(processor):
         (type_check.check, False),
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
+        (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn.format_sourcecode, False),
     ],
     ids=lambda p: get_processor_id(p[0]),

@@ -41,6 +41,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
+    use_imperative_backend: bool = False
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -60,11 +61,11 @@ class GTFNExecutor(ppi.ProgramExecutor):
             return decorated_program
 
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-            gtfn_module.GTFNTranslationStep(self.language_settings)
+            gtfn_module.GTFNTranslationStep(self.language_settings, self.use_imperative_backend)
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
-                    cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
+                    cache_strategy=cache.Strategy.PERSISTENT, builder_factory=self.builder_factory
                 )
             )
             .chain(convert_args)
@@ -81,4 +82,5 @@ class GTFNExecutor(ppi.ProgramExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")
+run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn", use_imperative_backend=False)
+run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn", use_imperative_backend=True)

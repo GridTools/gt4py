@@ -16,6 +16,15 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
 
 from typing import List, Union, Any, Iterable
 
+# limitations
+# - reduction must have one partial shift in their argument list
+# - no nested lambdas, this means
+#   - no ir.Lambda in the .expr of a ir.Lambda
+#   - no ir.Lambda in the argument list of an ir.FunCall <- too restrictive?
+#   => possible alternative: lambdas need to be called immediately?
+#   => TODO write checks for this
+#   => TODO is this even restrictive enough?
+
 
 @dataclasses.dataclass(frozen=True)
 class ToImpIR(NodeVisitor):
