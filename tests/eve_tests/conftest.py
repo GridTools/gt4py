@@ -1,6 +1,6 @@
-# Eve Toolchain - GT4Py Project - GridTools Framework
+# GT4Py - GridTools Framework
 #
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 
 """Global configuration of test generation and execution with pytest."""
 

@@ -1,9 +1,9 @@
-# GT4Py - GridTools4Py - GridTools for Python
+# GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
-# This file is part the GT4Py project and the GridTools framework.
+# This file is part of the GT4Py project and the GridTools framework.
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
@@ -12,14 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import collections.abc
 import math
 import numbers
-from typing import Any, Dict, Optional, Protocol, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
 
-import gt4py.utils as gt_util
 
+if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    ArrayLike = Any
+    DTypeLike = Any
 
 try:
     import cupy as cp
@@ -51,24 +56,30 @@ def idx_from_order(order):
     return list(np.argsort(order))
 
 
-def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
+def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
+    ndata_dims = sum(d.isdigit() for d in dimensions)
+    mask = [(d in dimensions) for d in "IJK"] + [True for _ in range(ndata_dims)]
+    return tuple(mask)
+
+
+def normalize_storage_spec(
+    aligned_index: Optional[Sequence[int]],
+    shape: Sequence[int],
+    dtype: DTypeLike,
+    dimensions: Optional[Sequence[str]],
+) -> Tuple[Sequence[int], Sequence[int], DTypeLike, Tuple[str, ...]]:
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
     -------
-
     tuple(aligned_index, shape, dtype, mask)
         The output tuple fields verify the following semantics:
-
             - aligned_index: tuple of ints with default origin values for the non-masked dimensions
             - shape: tuple of ints with shape values for the non-masked dimensions
             - dtype: scalar numpy.dtype (non-structured and without subarrays)
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
-
-    from gt4py.gtscript import Axis  # prevent circular import
-
     if dimensions is None:
         dimensions = (
             list("IJK"[: len(shape)])
@@ -76,14 +87,19 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
             else list("IJK") + [str(d) for d in range(len(shape) - 3)]
         )
 
-    if not all(
-        isinstance(d, (str, Axis)) and (str(d).isdigit() or str(d) in "IJK") for d in dimensions
-    ):
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
+
+    dimensions = tuple(getattr(d, "__gt_axis_name__", d) for d in dimensions)
+    if not all(isinstance(d, str) and (d.isdigit() or d in "IJK") for d in dimensions):
         raise ValueError(f"Invalid dimensions definition: '{dimensions}'")
     else:
         dimensions = tuple(str(d) for d in dimensions)
     if shape is not None:
-        if not gt_util.is_iterable_of(shape, numbers.Integral):
+        if not (
+            isinstance(shape, collections.abc.Sequence)
+            and all(isinstance(s, numbers.Integral) for s in shape)
+        ):
             raise TypeError("shape must be an iterable of ints.")
         if len(shape) != len(dimensions):
             raise ValueError(
@@ -100,7 +116,10 @@ def normalize_storage_spec(aligned_index, shape, dtype, dimensions):
         raise TypeError("shape must be an iterable of ints.")
 
     if aligned_index is not None:
-        if not gt_util.is_iterable_of(aligned_index, numbers.Integral):
+        if not (
+            isinstance(aligned_index, collections.abc.Sequence)
+            and all(isinstance(i, numbers.Integral) for i in aligned_index)
+        ):
             raise TypeError("aligned_index must be an iterable of ints.")
         if len(aligned_index) != len(shape):
             raise ValueError(
@@ -178,7 +197,13 @@ def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_
     return raw_buffer, field
 
 
-def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_gpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple["cp.ndarray", "cp.ndarray"]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -188,6 +213,9 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
@@ -217,7 +245,13 @@ def allocate_gpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
     return device_raw_buffer, device_field
 
 
-def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
+def allocate_cpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple[np.ndarray, np.ndarray]:
     dtype = np.dtype(dtype)
     assert (
         alignment_bytes % dtype.itemsize
@@ -227,6 +261,9 @@ def allocate_cpu(aligned_index, shape, layout_map, dtype, alignment_bytes):
 
     order_idx = idx_from_order([i for i in layout_map if i is not None])
     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
+
+    if aligned_index is None:
+        aligned_index = [0] * len(shape)
 
     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
     if len(order_idx) > 0:
@@ -269,15 +306,15 @@ def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
 
 
-def get_dims(object: GtDimsInterface) -> Optional[Tuple[str, ...]]:
-    dims = getattr(object, "__gt_dims__", None)
+def get_dims(obj: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+    dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(object: GtOriginInterface) -> Optional[Tuple[int, ...]]:
-    origin = getattr(object, "__gt_origin__", None)
+def get_origin(obj: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+    origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin
     return tuple(int(o) for o in origin)

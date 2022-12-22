@@ -1,9 +1,9 @@
-# GT4Py - GridTools4Py - GridTools for Python
+# GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
-# This file is part the GT4Py project and the GridTools framework.
+# This file is part of the GT4Py project and the GridTools framework.
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
@@ -12,16 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Python API to develop performance portable applications for weather and climate."""
+"""Python library for generating high-performance implementations of stencil kernels for weather and climate modeling."""
 
-import typing
-
-
-__copyright__: typing.Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: typing.Final = "GPLv3+"
-
-from .version import __version__, __version_info__  # isort:skip
+from . import cartesian, eve, storage
+from .__about__ import __author__, __copyright__, __license__, __version__, __version_info__
 
 
-from . import config, gtscript, storage
-from .stencil_object import StencilObject
+__all__ = [
+    "__author__",
+    "__copyright__",
+    "__license__",
+    "__version__",
+    "__version_info__",
+    "cartesian",
+    "eve",
+    "storage",
+]

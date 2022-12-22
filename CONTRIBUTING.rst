@@ -39,9 +39,9 @@ the requests.
 The full guidelines are explained in CODING_GUIDELINES_.
 
 
-.. _README: https://github.com/GridTools/gt4py/blob/master/README.rst
-.. _AUTHORS: https://github.com/GridTools/gt4py/blob/master/AUTHORS.rst
-.. _CODING_GUIDELINES: https://github.com/GridTools/gt4py/blob/master/CODING_GUIDELINES.rst
+.. _README: https://github.com/GridTools/gt4py/blob/main/README.rst
+.. _AUTHORS: https://github.com/GridTools/gt4py/blob/main/AUTHORS.rst
+.. _CODING_GUIDELINES: https://github.com/GridTools/gt4py/blob/main/CODING_GUIDELINES.rst
 
 Review Process
 --------------
@@ -72,4 +72,4 @@ Further points to be considered are:
   compared to the size of the PR.
 
 
-.. _pre-commit-config: https://github.com/GridTools/gt4py/blob/master/.pre-commit-config.yaml
+.. _pre-commit-config: https://github.com/GridTools/gt4py/blob/main/.pre-commit-config.yaml

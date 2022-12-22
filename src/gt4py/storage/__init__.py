@@ -1,9 +1,9 @@
-# GT4Py - GridTools4Py - GridTools for Python
+# GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
-# This file is part the GT4Py project and the GridTools framework.
+# This file is part of the GT4Py project and the GridTools framework.
 # GT4Py is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or any later
@@ -12,13 +12,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# flake8: noqa: F401
+
 """GridTools storages classes."""
 
-
-from .storage import empty, from_array, full, ones, zeros
+from . import interface, layout
+from .interface import empty, from_array, full, ones, zeros  # noqa: F401
+from .layout import from_name, register
 
 
 try:
-    from .storage import dace_descriptor
+    from .interface import dace_descriptor  # noqa: F401
 except ImportError:
     pass
