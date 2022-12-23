@@ -19,19 +19,19 @@ import functional.iterator.ir as itir
 from eve import codegen
 from functional.iterator.transforms.pass_manager import apply_common_transforms
 from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
-from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
+from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 
 
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
+    do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
-        # unroll_reduce=not kwargs["imperative"],
-        unroll_reduce=True,
+        unroll_reduce=do_unroll,
         common_subexpression_elimination=True,
     )
     gtfn_ir = GTFN_lowering.apply(

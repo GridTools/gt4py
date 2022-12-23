@@ -366,7 +366,8 @@ class FieldOperatorLowering(NodeTranslator):
         )(*(param[1] for param in params))
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        init_expr = itir.Literal(value="0", type=str(node.type.dtype))
+        ftype: ct.FieldType = node.type  # type: ignore
+        init_expr = itir.Literal(value="0", type=str(ftype.dtype))
         return self._make_reduction_expr(
             node, lambda expr: im.plus_("acc", expr), init_expr, **kwargs
         )

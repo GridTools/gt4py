@@ -16,24 +16,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional, Union
 
-import eve
-from eve import Coerced, SymbolName, SymbolRef
+from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from functional import common
 from functional.iterator import ir as itir
-
-
-@eve.utils.noninstantiable
-class Node(eve.Node):
-    pass
-
-
-class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
-
-
-class Expr(Node):
-    ...
+from functional.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
 
 
 class UnaryExpr(Expr):
@@ -60,10 +48,6 @@ class Literal(Expr):
 
 class OffsetLiteral(Expr):
     value: Union[int, str]
-
-
-class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -170,15 +154,11 @@ class TagDefinition(Node):
     alias: Optional[Union[str, SymRef]] = None
 
 
-# TODO: additional file with common types? (Sym, Symref, Expr)
-import functional.program_processors.codegens.gtfn.gtfn_im_ir as gtfn_im_ir
-
-
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
     function_definitions: list[
-        Union[FunctionDefinition, ScanPassDefinition, gtfn_im_ir.ImperativeFunctionDefinition]
+        Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
     ]
     # function_definitions: list[Any]  # TODO
     executions: list[Union[StencilExecution, ScanExecution]]

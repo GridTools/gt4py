@@ -14,11 +14,11 @@
 
 from __future__ import annotations
 
-from typing import Union, List, Tuple
+from typing import List, Union
 
-from eve import Coerced, SymbolName, Node
-import functional.program_processors.codegens.gtfn.gtfn_ir as gtfn_ir
+from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
 
 
 class Stmt(Node):
@@ -27,20 +27,20 @@ class Stmt(Node):
 
 class AssignStmt(Stmt):
     op: str = "="
-    lhs: Union[gtfn_ir.Sym, gtfn_ir.SymRef]
-    rhs: Union[gtfn_ir.SymRef, gtfn_ir.Expr]
+    lhs: Union[Sym, SymRef]
+    rhs: Union[SymRef, Expr]
 
 
 class InitStmt(AssignStmt):
-    type: str = "auto"
+    init_type: str = "auto"
 
 
 class Conditional(Stmt):
-    type: str
+    cond_type: str
     init_stmt: Stmt
-    cond: Union[gtfn_ir.SymRef, gtfn_ir.Expr]
-    if_stmt: Stmt
-    else_stmt: Stmt
+    cond: Union[SymRef, Expr]
+    if_stmt: AssignStmt
+    else_stmt: AssignStmt
 
 
 class ForLoop(Stmt):
@@ -49,10 +49,10 @@ class ForLoop(Stmt):
 
 
 class ReturnStmt(Stmt):
-    ret: Union[gtfn_ir.Expr, gtfn_ir.SymRef]
+    ret: Union[Expr, SymRef]
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    params: List[gtfn_ir.Sym]
+    params: List[Sym]
     fun: List[Stmt]

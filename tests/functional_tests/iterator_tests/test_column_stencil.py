@@ -8,7 +8,7 @@ from functional.iterator.runtime import closure, fendef, fundef, offset
 from functional.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 
@@ -60,7 +60,10 @@ def shift_stencil(inp):
             lambda shape: np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
             ),
-            (lambda backend: backend == run_gtfn, "origin not supported in gtfn"),
+            (
+                lambda backend: backend == run_gtfn or backend == run_gtfn_imperative,
+                "origin not supported in gtfn",
+            ),
         ),
     ],
     ids=lambda p: f"{p[0].__name__}",
@@ -229,7 +232,11 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
 )
 def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn or program_processor == gtfn_format_sourcecode:
+    if (
+        program_processor == run_gtfn
+        or program_processor == run_gtfn_imperative
+        or program_processor == gtfn_format_sourcecode
+    ):
         pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
     inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
