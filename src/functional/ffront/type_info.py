@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 from functools import reduce
 from typing import Iterable, Iterator, cast
 
