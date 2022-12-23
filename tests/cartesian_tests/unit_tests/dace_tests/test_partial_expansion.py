@@ -16,7 +16,6 @@ import numpy as np
 import pytest
 
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.backend.dace_backend import SDFGManager
 from gt4py.cartesian.gtc import daceir as dcir
 from gt4py.cartesian.gtc.dace.partial_expansion import partially_expand
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
@@ -25,6 +24,10 @@ from ...stencil_definitions import EXTERNALS_REGISTRY, REGISTRY
 
 
 dace = pytest.importorskip("dace")
+
+from gt4py.cartesian.backend.dace_backend import (  # noqa: E402 (needs to be guarded by above importorskip)
+    SDFGManager,
+)
 
 
 def get_sdfg(name, backend):
