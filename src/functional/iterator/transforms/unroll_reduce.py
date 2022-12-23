@@ -17,7 +17,7 @@ class UnrollReduce(NodeTranslator):
         return cls().visit(node, **kwargs)
 
     @staticmethod
-    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
+    def _find_connectivities(reduce_args: Iterable[ir.Expr], offset_provider):
         connectivities = []
         for arg in reduce_args:
             if (
@@ -27,6 +27,19 @@ class UnrollReduce(NodeTranslator):
             ):
                 assert isinstance(arg.fun.args[-1], ir.OffsetLiteral), f"{arg.fun.args}"
                 connectivities.append(offset_provider[arg.fun.args[-1].value])
+            # if the argument is a lift call by itself look at its arguments recursively
+            elif (
+                isinstance(arg, ir.FunCall)
+                and isinstance(arg.fun, ir.FunCall)
+                and arg.fun.fun == ir.SymRef(id="lift")
+            ):
+                connectivities.extend(UnrollReduce._find_connectivities(arg.args, offset_provider))
+
+        return connectivities
+
+    @staticmethod
+    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
+        connectivities = UnrollReduce._find_connectivities(reduce_args, offset_provider)
 
         if not connectivities:
             raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")

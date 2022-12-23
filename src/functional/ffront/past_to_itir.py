@@ -17,7 +17,8 @@ from typing import Any, Generator, Optional, cast
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import common_types as ct, program_ast as past, type_info
+
+from functional.ffront import common_types as ct, program_ast as past, type_info, type_specifications as ts
 from functional.iterator import ir as itir
 
 
@@ -155,8 +156,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
             assert (
-                isinstance(slice_bound.type, ct.ScalarType)
-                and slice_bound.type.kind == ct.ScalarKind.INT
+                isinstance(slice_bound.type, ts.ScalarType)
+                and slice_bound.type.kind == ts.ScalarKind.INT
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -196,8 +197,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_field_types0 = cast(ct.FieldType, out_field_types[0])
         if any(
-            not isinstance(out_field_type, ct.FieldType)
-            or out_field_type.dims != out_field_types0.dims
+            not isinstance(out_field_type, ts.FieldType)
+            or out_field_type.dims != out_field_types[0].dims
             for out_field_type in out_field_types
         ):
             raise AssertionError(
@@ -327,9 +328,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
-        if isinstance(node.type, ct.ScalarType) and node.type.shape is None:
+        if isinstance(node.type, ts.ScalarType) and node.type.shape is None:
             match node.type.kind:
-                case ct.ScalarKind.STRING:
+                case ts.ScalarKind.STRING:
                     raise NotImplementedError(
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
