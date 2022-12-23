@@ -17,8 +17,7 @@ from typing import Any, Generator, Optional, cast
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-
-from functional.ffront import common_types as ct, program_ast as past, type_info, type_specifications as ts
+from functional.ffront import program_ast as past, type_info, type_specifications as ts
 from functional.iterator import ir as itir
 
 
@@ -195,10 +194,10 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         domain_args = []
 
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
-        out_field_types0 = cast(ct.FieldType, out_field_types[0])
+        out_field_types0_dims = cast(ts.FieldType, out_field_types[0]).dims
         if any(
             not isinstance(out_field_type, ts.FieldType)
-            or out_field_type.dims != out_field_types[0].dims
+            or out_field_type.dims != out_field_types0_dims
             for out_field_type in out_field_types
         ):
             raise AssertionError(
@@ -206,9 +205,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f" fields defined on the same dimensions. This error should be "
                 f" caught in type deduction already."
             )
-        dims = out_field_types0.dims
 
-        for dim_i, dim in enumerate(dims):
+        for dim_i, dim in enumerate(out_field_types0_dims):  # type: ignore[arg-type] # mypy does not deduce type correctly
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
@@ -249,7 +247,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim: Dimension,
         node_domain: past.Dict,
     ) -> Generator[Any, None, None]:
-        keys_dims_types = cast(ct.DimensionType, node_domain.keys_[dim_i].type).dim
+        keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types == dim:
             assert len(node_domain.values_[dim_i].elts) == 2
             return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
@@ -273,9 +271,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             raise AssertionError(
                 "Unexpected `out` argument. Must be tuple of slices or slice expression."
             )
-        if isinstance(node.type, ct.FieldType) and len(out_field_slice_) != len(node.type.dims):
+        node_dims_ls = cast(ts.FieldType, node.type).dims
+        assert isinstance(node_dims_ls, list)
+        if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
             raise GTTypeError(
-                f"Too many indices for field {out_field_name}: field is {len(node.type.dims)}"
+                f"Too many indices for field {out_field_name}: field is {len(node_dims_ls)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
             )
         return out_field_slice_
