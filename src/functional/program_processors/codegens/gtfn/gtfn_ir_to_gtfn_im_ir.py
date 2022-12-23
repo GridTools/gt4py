@@ -15,6 +15,7 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     Stmt,
 )
 
+
 def _find_connectivity(reduce_args: Iterable[gtfn_ir_common.Expr], offset_provider):
     connectivities = []
     for arg in reduce_args:
@@ -30,42 +31,42 @@ def _find_connectivity(reduce_args: Iterable[gtfn_ir_common.Expr], offset_provid
         raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
     return connectivities[0]
 
+
 def _is_reduce(node: gtfn_ir.FunCall):
     return isinstance(node.fun, gtfn_ir.FunCall) and node.fun.fun == gtfn_ir_common.SymRef(
         id="reduce"
     )
 
 
-# the current algorithm to turn gtfn_ir into a imperative representation is rather naive, 
+# the current algorithm to turn gtfn_ir into a imperative representation is rather naive,
 # it visits the gtfn_ir tree eagerly depth first, and it is only doing one pass. This entails
 # that some constructs can not be treated. This visitor checks for such constructs, and makes
-# the contract on the gtfn_ir for ToImpIR to suceed explicit 
-@dataclasses.dataclass(frozen=True)
-class IsImpCompatiple(NodeVisitor):
-    compatiple = True
+# the contract on the gtfn_ir for ToImpIR to suceed explicit
+@dataclasses.dataclass
+class IsImpCompatible(NodeVisitor):
+    compatible: True
     incompatible_node: None
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        # reductions need at least one argument with a partial shift        
+        # reductions need at least one argument with a partial shift
         if _is_reduce(node):
             offset_provider = kwargs["offset_provider"]
-            assert offset_provider is not None            
+            assert offset_provider is not None
             try:
                 _find_connectivity(node.args, offset_provider)
             except:
-                self.compatiple = False
+                self.compatible = False
                 self.incompatible_node = node
 
         # function calls need to be lambdas, built ins or reduce
         #   this essentailly avoids situations like
         #   (λ(cs) → cs(w))(λ(x) → x)
         #   where w is some field
-        if isinstance(gtfn_ir_common.SymRef, node.fun):
-            self.compatiple = node.fun.id in gtfn_ir.BUILTINS       
-            if not self.compatiple:
+        if isinstance(node.fun, gtfn_ir_common.SymRef):
+            self.compatible = node.fun.id in gtfn_ir.BUILTINS
+            if not self.compatible:
                 self.incompatible_node = node
 
-    
 
 @dataclasses.dataclass(frozen=True)
 class ToImpIR(NodeVisitor):
@@ -251,8 +252,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(
         self, node: gtfn_ir.FunctionDefinition, **kwargs: Any
     ) -> ImperativeFunctionDefinition:
-        check_compat = IsImpCompatiple(node.expr, **kwargs)
-        if not check_compat.compatiple:
+        check_compat = IsImpCompatible(compatible=True, incompatible_node=None)
+        check_compat.visit(node.expr, **kwargs)
+        if not check_compat.compatible:
             raise RuntimeError(f"gtfn_im can not handle {check_compat.incompatible_node}")
 
         to_imp_ir = ToImpIR(imp_list_ir=[])
