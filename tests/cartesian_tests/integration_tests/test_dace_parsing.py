@@ -23,7 +23,6 @@ import pytest
 from gt4py import cartesian as gt4pyc
 from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.gtc.dace.partial_expansion import partially_expand
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.storage import utils as storage_utils
@@ -37,7 +36,7 @@ from gt4py.cartesian.backend.dace_lazy_stencil import (  # noqa: E402 (needs to 
 )
 
 
-pytestmark = pytest.mark.usefixtures("dace_env")
+pytestmark = [pytest.mark.usefixtures("dace_env"), pytest.mark.requires_dace]
 
 
 @pytest.fixture(scope="module")
@@ -472,148 +471,3 @@ def test_lazy_sdfg():
     call_lazy_s.compile(locoutp=outp, locinp=inp)
 
     assert "implementation" not in lazy_s.__dict__
-
-
-@gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_1(inp1: gtscript.Field[np.float64], outp1: gtscript.Field[np.float64]):  # type: ignore[valid-type]
-    with computation(PARALLEL), interval(...):
-        outp1 = (  # noqa F841: local variable 'outp' is assigned to but never used
-            inp1[0, -1, 0] + inp1[0, 1, 0]  # type: ignore[index]
-        )
-
-
-@gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_2(inp2: gtscript.Field[np.float64], outp2: gtscript.Field[np.float64]):  # type: ignore[valid-type]
-    with computation(PARALLEL), interval(...):
-        outp2 = (  # noqa F841: local variable 'outp' is assigned to but never used
-            inp2[0, -1, 0] + inp2[0, 1, 0]  # type: ignore[index]
-        )
-
-
-@gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_3(
-    field_a: gtscript.Field[np.float64],  # type: ignore[valid-type]
-    field_b: gtscript.Field[np.float64],  # type: ignore[valid-type]
-    tmp: gtscript.Field[np.float64],  # type: ignore[valid-type]
-):
-    with computation(PARALLEL), interval(...):
-        field_b = (  # noqa F841: local variable 'field_b' is assigned to but never used
-            field_a[0, -1, 0] + field_a[0, 1, 0]  # type: ignore[index]
-        )
-        tmp = 7.0  # noqa F841: local variable 'tmp' is assigned to but never used
-
-
-@gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_inextents_4(
-    field_b: gtscript.Field[np.float64],  # type: ignore[valid-type]
-    field_c: gtscript.Field[np.float64],  # type: ignore[valid-type]
-    tmp: gtscript.Field[np.float64],  # type: ignore[valid-type]
-):
-    with computation(PARALLEL), interval(...):
-        field_c = (  # noqa F841: local variable 'field_c' is assigned to but never used
-            tmp * field_b[0, -1, 0] + field_b[0, 1, 0]  # type: ignore[index]
-        )
-
-
-@gtscript.lazy_stencil(backend="dace:cpu")
-def stencil_noextents(inp: gtscript.Field[np.float64], outp: gtscript.Field[np.float64]):  # type: ignore[valid-type]
-    with computation(PARALLEL), interval(...):
-        outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
-
-
-class TestMultipleStencilsPartialExpansionIJ:
-    def test_no_dependency(self):
-        inp1 = np.ones((5, 5, 5))
-        inp2 = np.ones((5, 5, 5))
-        outp1 = np.ones((3, 3, 3))
-        outp2 = np.ones((3, 3, 3))
-
-        @dace.program
-        def orchestration():
-            stencil_inextents_1(inp1=inp1, outp1=outp1)
-            stencil_inextents_2(inp2=inp2, outp2=outp2)
-
-        sdfg = orchestration.to_sdfg()
-        partially_expand(sdfg)
-        assert (
-            len(
-                list(
-                    filter(
-                        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-                    )
-                )
-            )
-            == 1
-        )
-
-    def test_dependency_no_extent_name_mix(self):
-        inp = np.ones((3, 3, 3))
-        outp = np.ones((3, 3, 3))
-        tmp = np.ones((3, 3, 3))
-
-        @dace.program
-        def orchestration():
-            stencil_noextents(inp=inp, outp=tmp)
-            stencil_noextents(inp=tmp, outp=outp)
-
-        sdfg = orchestration.to_sdfg()
-        partially_expand(sdfg)
-        assert (
-            len(
-                list(
-                    filter(
-                        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-                    )
-                )
-            )
-            == 1
-        )
-
-    def test_dependency_extent_name_mix_apply(self):
-        inp = np.ones((3, 3, 3))
-        tmp = np.ones((3, 3, 3))
-        out1 = np.ones((3, 3, 3))
-        out2 = np.ones((3, 3, 3))
-
-        @dace.program
-        def orchestration():
-            stencil_inextents_3(field_a=inp, field_b=out1, tmp=tmp)
-            stencil_inextents_4(field_b=inp, field_c=out2, tmp=tmp)
-
-        sdfg = orchestration.to_sdfg()
-        partially_expand(sdfg)
-
-        assert (
-            len(
-                list(
-                    filter(
-                        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-                    )
-                )
-            )
-            == 1
-        )
-
-    def test_dependency_extent_name_mix_noapply(self):
-        inp = np.ones((3, 3, 3))
-        outp = np.ones((3, 3, 3))
-        tmp = np.ones((3, 3, 3))
-
-        @dace.program
-        def orchestration(tmp: dace.float64[3, 3, 3]):  # type: ignore[name-defined]
-            stencil_inextents_1(inp1=inp, outp1=tmp)
-            stencil_inextents_1(inp1=tmp, outp1=outp)
-
-        sdfg = orchestration.to_sdfg(tmp=tmp)
-        sdfg.arrays["tmp"].transient = True
-        partially_expand(sdfg)
-        assert (
-            len(
-                list(
-                    filter(
-                        lambda n: isinstance(n[0], dace.nodes.MapEntry), sdfg.all_nodes_recursive()
-                    )
-                )
-            )
-            == 0
-        )

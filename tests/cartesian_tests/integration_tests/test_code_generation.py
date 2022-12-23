@@ -33,8 +33,8 @@ from gt4py.cartesian.gtscript import (
 from gt4py.storage import utils as storage_utils
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
-from .stencil_definitions import EXTERNALS_REGISTRY as externals_registry
-from .stencil_definitions import REGISTRY as stencil_definitions
+from ..stencil_definitions import EXTERNALS_REGISTRY as externals_registry
+from ..stencil_definitions import REGISTRY as stencil_definitions
 
 
 @pytest.mark.parametrize("name", stencil_definitions)

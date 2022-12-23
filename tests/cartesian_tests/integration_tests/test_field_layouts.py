@@ -20,7 +20,7 @@ from gt4py import storage as gt_storage
 from gt4py.cartesian import gtscript
 
 from ..definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS
-from .stencil_definitions import copy_stencil
+from ..stencil_definitions import copy_stencil
 
 
 try:

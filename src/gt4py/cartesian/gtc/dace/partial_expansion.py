@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Sequence, Set, Tuple, Union
 
 import dace
 import dace.codegen.control_flow as cf
@@ -30,7 +30,7 @@ from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc import daceir as dcir
 from gt4py.cartesian.gtc import oir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
-from gt4py.cartesian.gtc.dace.expansion_specification import Loop, Map, Skip
+from gt4py.cartesian.gtc.dace.expansion_specification import Map, Skip
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset, union_inout_memlets
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
@@ -39,28 +39,6 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizonta
 AccessInfoCollection = Dict[eve.SymbolRef, dcir.FieldAccessInfo]
 SymblicAxisDict = Dict[dcir.Axis, dace.symbolic.SymbolicType]
 SymbolicSplitType = Tuple[SymblicAxisDict, Dict[eve.SymbolRef, SymblicAxisDict]]
-
-
-def _set_skips(state: dace.SDFGState, node: StencilComputation):
-    expansion_specification = list(node.expansion_specification)
-    item = expansion_specification[0]
-    assert isinstance(item, (Loop, Map))
-    expansion_specification[0] = Skip(item=item)
-    node.expansion_specification = expansion_specification
-
-    parent_arrays: Dict[str, dace.data.Data] = {}
-    for edge in (e for e in state.in_edges(node) if e.dst_conn is not None):
-        parent_arrays[edge.dst_conn[len("__in_") :]] = state.parent.arrays[edge.data.data]
-    for edge in (e for e in state.out_edges(node) if e.src_conn is not None):
-        parent_arrays[edge.src_conn[len("__out_") :]] = state.parent.arrays[edge.data.data]
-
-    daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
-        node.oir_node,
-        global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=parent_arrays),
-    )
-
-    _, _, memlets = union_inout_memlets(daceir.states)
-    node.access_infos = {mem.field: mem.access_info for mem in memlets}
 
 
 #
@@ -204,6 +182,17 @@ class PartialExpansion(transformation.SubgraphTransformation):
             return False
         return True
 
+    def _test_compatible_regions(self, stencil_computations):
+        for node, _ in stencil_computations:
+            for region in node.oir_node.walk_values().if_isinstance(oir.HorizontalRestriction):
+                if dcir.Axis.I in self.strides:
+                    if region.mask.i.start is not None or region.mask.i.end is not None:
+                        return False
+                if dcir.Axis.J in self.strides:
+                    if region.mask.j.start is not None or region.mask.j.end is not None:
+                        return False
+        return True
+
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
 
         stencil_computations = list(
@@ -227,7 +216,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
             if not PartialExpansion._nsdfg_checks(nsdfg.sdfg):
                 return False
 
-        # E.g. Maps can't exist in subgraph
+        # E.g. Maps in subgraphs are not supported
         if not all(
             isinstance(
                 n,
@@ -237,6 +226,8 @@ class PartialExpansion(transformation.SubgraphTransformation):
         ):
             return False
 
+        # We can't infer the semantic correspondance of subsets on edges between access nodes, there fore we can't tile
+        # those and they have to be excluded
         if any(
             isinstance(edge.src, dace.nodes.AccessNode)
             and isinstance(edge.dst, dace.nodes.AccessNode)
@@ -245,16 +236,23 @@ class PartialExpansion(transformation.SubgraphTransformation):
         ):
             return False
 
+        # check that current expansion specifications are compatible with partially expanding the outermost map
         for node, _ in stencil_computations:
             if not isinstance(node.expansion_specification[0], Map) or not all(
                 it.kind == "tiling" for it in node.expansion_specification[0].iterations
             ):
                 return False
+            outermost_map_axes = {it.axis for it in node.expansion_specification[0].iterations}
+            if any(d not in outermost_map_axes for d in self.strides.keys()):
+                return False
+
+        if not self._test_compatible_regions(stencil_computations):
+            return False
 
         if not self._test_symbolic_split(sdfg, subgraph):
             return False
 
-        if not PartialExpansion._test_extents_compatible(stencil_computations):
+        if not self._test_extents_compatible(stencil_computations):
             return False
 
         return True
@@ -289,17 +287,9 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 dtype=node.dtype,
             )
 
-    @staticmethod
     def _test_extents_compatible(
-        nodes: List[Tuple[StencilComputation, dace.SDFGState]],
+        self, nodes: List[Tuple[StencilComputation, dace.SDFGState]]
     ) -> bool:
-        for node, _ in nodes:
-            if (
-                len(node.oir_node.walk_values().if_isinstance(oir.HorizontalRestriction).to_list())
-                > 0
-            ):
-                return False
-
         vertical_loops = []
         temporary_decls = {}
         params: Dict[eve.SymbolRef, Union[oir.FieldDecl, oir.ScalarDecl]] = {}
@@ -332,14 +322,19 @@ class PartialExpansion(transformation.SubgraphTransformation):
             vertical_loops=vertical_loops,
             declarations=list(temporary_decls.values()),
         )
+
         oir_extents = compute_horizontal_block_extents(oir_stencil)
 
         for i, (node, _) in enumerate(nodes):
             for j, section in enumerate(node.oir_node.sections):
                 for k, he in enumerate(section.horizontal_executions):
                     he_id = id(vertical_loops[i].sections[j].horizontal_executions[k])
-                    if not oir_extents[he_id] == node.get_extents(he):
-                        return False
+                    for ax_idx, axis in enumerate(dcir.Axis.dims_horizontal()):
+                        if (
+                            axis in self.strides
+                            and not oir_extents[he_id][ax_idx] == node.get_extents(he)[ax_idx]
+                        ):
+                            return False
         return True
 
     def _solve_domain_subsets(self, sdfg, node, access_infos, outer_subsets):
@@ -382,9 +377,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
         # Solve for all at once
         results = sympy.solve(equations, *symbols, dict=True)
         if not results:
-            sdfg.view()
-            print(equations)
-            print(node.label)
             raise PartialExpansion._InconsistentSymbolicSplit("inconsistent symbolic split.")
         result = results[0]
         result = {str(k)[len("__SOLVE_") :]: v for k, v in result.items()}
@@ -747,6 +739,36 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
         return nsdfg_access_infos
 
+    def _set_skips(self, state: dace.SDFGState, node: StencilComputation):
+        expansion_specification = list(node.expansion_specification)
+        item = expansion_specification[0]
+        assert isinstance(item, Map)
+        if all(it.axis in self.strides for it in item.iterations):
+            expansion_specification[0] = Skip(item=item)
+        else:
+            skip_iterations = [it for it in item.iterations if it.axis in self.strides]
+            noskip_iterations = [it for it in item.iterations if it.axis not in self.strides]
+            expansion_specification = [
+                Skip(item=Map(iterations=skip_iterations, schedule=item.schedule)),
+                Map(iterations=noskip_iterations, schedule=dace.ScheduleType.Default),
+                *expansion_specification[1:],
+            ]
+        node.expansion_specification = expansion_specification
+
+        parent_arrays: Dict[str, dace.data.Data] = {}
+        for edge in (e for e in state.in_edges(node) if e.dst_conn is not None):
+            parent_arrays[edge.dst_conn[len("__in_") :]] = state.parent.arrays[edge.data.data]
+        for edge in (e for e in state.out_edges(node) if e.src_conn is not None):
+            parent_arrays[edge.src_conn[len("__out_") :]] = state.parent.arrays[edge.data.data]
+
+        daceir: dcir.NestedSDFG = DaCeIRBuilder().visit(
+            node.oir_node,
+            global_ctx=DaCeIRBuilder.GlobalContext(library_node=node, arrays=parent_arrays),
+        )
+
+        _, _, memlets = union_inout_memlets(daceir.states)
+        node.access_infos = {mem.field: mem.access_info for mem in memlets}
+
     def apply(self, sdfg: dace.SDFG):
         subgraph = self.subgraph_view(sdfg)
         nsdfg_state, nsdfg_node = _nest_sdfg_subgraph(sdfg, subgraph)
@@ -756,11 +778,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 PartialExpansion.subgraph_all_nodes_recursive_topological(nsdfg_node.sdfg),
             )
         )
-
-        first_expansion_specification = stencil_computations[0][0].expansion_specification
-
-        original_item = first_expansion_specification[0]
-        assert isinstance(original_item, Map)
+        axes = set(self.strides.keys())
 
         _, parent_symbolic_splits = self._get_symbolic_splits(
             sdfg, dace.sdfg.graph.SubgraphView(sdfg, [nsdfg_state])
@@ -768,20 +786,20 @@ class PartialExpansion(transformation.SubgraphTransformation):
         domain_dict = parent_symbolic_splits[sdfg.sdfg_id][0]
 
         for node, state in stencil_computations:
-            _set_skips(state, node)
-
-        axes = {it.axis for it in original_item.iterations}
+            self._set_skips(state, node)
+        first_item = stencil_computations[0][0].expansion_specification[0]
+        assert isinstance(first_item, Skip) and isinstance(first_item.item, Map)
+        tiling_schedule = first_item.item.schedule
 
         nsdfg_access_infos = self._update_nested_and_gather_access_info(
             nsdfg_node, parent_symbolic_splits, axes
         )
 
-        tiling_schedule = original_item.schedule
         tiling_ranges = {
-            it.axis.tile_symbol(): str(
-                dace.subsets.Range([(0, domain_dict[it.axis] - 1, it.stride)])
+            axis.tile_symbol(): str(
+                dace.subsets.Range([(0, domain_dict[axis] - 1, self.strides[axis])])
             )
-            for it in original_item.iterations
+            for axis in axes
         }
         map_entry, map_exit = nsdfg_state.add_map(
             stencil_computations[0][0].label + "_tiling_map",
@@ -804,7 +822,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     access_info,
                     memlet.subset,
                     data_dims=data_dims,
-                    tile_sizes={it.axis: it.stride for it in original_item.iterations},
+                    tile_sizes=self.strides,
                 )
             else:
                 new_subset = edge.data.subset
@@ -834,7 +852,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     access_info,
                     memlet.subset,
                     data_dims=data_dims,
-                    tile_sizes={it.axis: it.stride for it in original_item.iterations},
+                    tile_sizes=self.strides,
                 )
             else:
                 new_subset = edge.data.subset
@@ -863,31 +881,31 @@ def get_all_child_states(cft: cf.ControlFlow):
         return set.union(*[get_all_child_states(e) for e in cft.children])
 
 
-def _setup_match(sdfg, nodes):
+def _setup_match(sdfg, nodes, dims):
     subgraph = dace.sdfg.graph.SubgraphView(sdfg, nodes)
     partial_expansion = PartialExpansion()
     partial_expansion.setup_match(subgraph)
-    partial_expansion.strides = {dcir.Axis.I: 8, dcir.Axis.J: 8}
+    partial_expansion.strides = {dcir.Axis(d): 8 for d in dims}
     return partial_expansion, subgraph
 
 
-def _test_match(sdfg, states: Set[dace.SDFGState]):
-    expansion, subgraph = _setup_match(sdfg, states)
+def _test_match(sdfg, states: Set[dace.SDFGState], dims: Sequence[str]):
+    expansion, subgraph = _setup_match(sdfg, states, dims)
     return expansion.can_be_applied(sdfg, subgraph)
 
 
-def _generate_matches(sd, cft: cf.ControlFlow):
+def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
     subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
     candidate: Set[dace.SDFGState] = set()
     # reversed so that extent analysis tends to include stencil sinks
     for child in reversed(cft.children):
         if isinstance(child, cf.SingleState):
-            if _test_match(sd, {child.state} | candidate):
+            if _test_match(sd, {child.state} | candidate, dims):
                 candidate.add(child.state)
             else:
                 if candidate:
                     subgraphs.append((sd, candidate))
-                if _test_match(sd, {child.state}):
+                if _test_match(sd, {child.state}, dims):
                     candidate = {child.state}
                 else:
                     candidate = set()
@@ -897,7 +915,7 @@ def _generate_matches(sd, cft: cf.ControlFlow):
                             nsdfg_cft = cf.structured_control_flow_tree(
                                 nsdfg_node.sdfg, lambda _: ""
                             )
-                            subsubgraphs += _generate_matches(nsdfg_node.sdfg, nsdfg_cft)
+                            subsubgraphs += _generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims)
                     subgraphs.extend(subsubgraphs)
         else:
             if candidate:
@@ -905,11 +923,11 @@ def _generate_matches(sd, cft: cf.ControlFlow):
             candidate = set()
             subsubgraphs = []
             if isinstance(child, cf.IfScope):
-                subsubgraphs += _generate_matches(sd, child.body)
+                subsubgraphs += _generate_matches(sd, child.body, dims)
                 if child.orelse is not None:
-                    subsubgraphs += _generate_matches(sd, child.orelse)
+                    subsubgraphs += _generate_matches(sd, child.orelse, dims)
             elif isinstance(child, cf.ForScope):
-                subsubgraphs += _generate_matches(sd, child.body)
+                subsubgraphs += _generate_matches(sd, child.body, dims)
             if subsubgraphs:
                 subgraphs.extend(subsubgraphs)
     if candidate:
@@ -917,14 +935,17 @@ def _generate_matches(sd, cft: cf.ControlFlow):
     return subgraphs
 
 
-def partially_expand(sdfg: dace.SDFG):
+def partially_expand(sdfg: dace.SDFG, dims: Sequence[str]):
+    if len(dims) == 0:
+        return
+
     cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
 
-    matches = _generate_matches(sdfg, cft)
+    matches = _generate_matches(sdfg, cft, dims=dims)
 
     for sd, nodes in matches:
         parent_sdfg = next(iter(nodes)).parent
-        expansion, subgraph = _setup_match(sd, nodes)
+        expansion, subgraph = _setup_match(sd, nodes, dims)
         expansion.apply(parent_sdfg)
 
     return sdfg

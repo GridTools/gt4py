@@ -29,7 +29,7 @@ from gt4py.cartesian.gtscript import (
 )
 
 from ..definitions import ALL_BACKENDS
-from .stencil_definitions import optional_field, two_optional_fields
+from ..stencil_definitions import optional_field, two_optional_fields
 
 
 # ---- Identity stencil ----
