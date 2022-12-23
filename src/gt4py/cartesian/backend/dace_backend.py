@@ -197,6 +197,14 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     for sd in sdfg.all_sdfgs_recursive():
         sd.openmp_sections = False
 
+    # rename threadlocals with globally unique name as workaround for bug in dace v0.14.1
+    repldicts: Dict[int, Dict[str, str]] = {}
+    for sd, name, array in sdfg.arrays_recursive():
+        if array.transient and array.storage == dace.StorageType.CPU_ThreadLocal:
+            repldicts.setdefault(sd.sdfg_id, {})
+            repldicts[sd.sdfg_id][name] = f"LOCAL_{sd.sdfg_id}_{name}"
+            array.lifetime = dace.AllocationLifetime.Persistent
+
 
 def _sdfg_add_arrays_and_edges(
     field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins
@@ -473,19 +481,16 @@ class DaCeComputationCodegen:
 
     def generate_tmp_allocs(self, sdfg):
 
-        allocator_fmt = (
-            "__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        )
+        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
         threadlocal_fmt = (
-            "__{sdfg_id}_{name} = pool__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
+            "{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
         )
         res = []
         for array_sdfg, name, array in sdfg.arrays_recursive():
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent:
                 if array.storage != dace.StorageType.CPU_ThreadLocal:
-                    fmt = "dace_handle." + allocator_fmt
                     res.append(
-                        fmt.format(
+                        global_fmt.format(
                             name=name,
                             sdfg_id=array_sdfg.sdfg_id,
                             dtype=array.dtype.ctype,
@@ -493,13 +498,7 @@ class DaCeComputationCodegen:
                         )
                     )
                 else:
-                    fmts = [
-                        "{dtype}* pool" + allocator_fmt,
-                        "#pragma omp parallel",
-                        "{{",
-                        threadlocal_fmt,
-                        "}}",
-                    ]
+                    fmts = [global_fmt, "#pragma omp parallel", "{{", threadlocal_fmt, "}}"]
                     res.extend(
                         [
                             fmt.format(
