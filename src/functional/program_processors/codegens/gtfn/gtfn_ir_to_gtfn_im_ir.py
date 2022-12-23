@@ -48,6 +48,9 @@ class IsImpCompatible(NodeVisitor):
     incompatible_node: None
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+        if not self.compatible:
+            return
+
         # reductions need at least one argument with a partial shift
         if _is_reduce(node):
             offset_provider = kwargs["offset_provider"]
@@ -63,9 +66,11 @@ class IsImpCompatible(NodeVisitor):
         #   (λ(cs) → cs(w))(λ(x) → x)
         #   where w is some field
         if isinstance(node.fun, gtfn_ir_common.SymRef):
-            self.compatible = node.fun.id in gtfn_ir.BUILTINS
+            self.compatible = self.compatible and node.fun.id in gtfn_ir.BUILTINS
             if not self.compatible:
                 self.incompatible_node = node
+
+        self.generic_visit(node, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True)
