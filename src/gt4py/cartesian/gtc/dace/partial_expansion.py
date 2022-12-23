@@ -85,7 +85,8 @@ def _make_dace_subset_symbolic_context(
     clamped_access_info = access_info
     for axis in access_info.axes():
         if axis in access_info.variable_offset_axes:
-            context_origin[axis] = max(context_origin[axis], 0)
+            if axis in tile_sizes:
+                context_origin[axis] = max(context_origin[axis], 0)
             clamped_access_info = clamped_access_info.clamp_full_axis(axis)
     res_ranges = []
 
