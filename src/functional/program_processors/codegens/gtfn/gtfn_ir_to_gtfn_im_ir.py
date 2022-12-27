@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import eve
 from eve import NodeTranslator, NodeVisitor
@@ -76,6 +76,8 @@ class IsImpCompatible(NodeVisitor):
 @dataclasses.dataclass(frozen=True)
 class ToImpIR(NodeVisitor):
     imp_list_ir: List[Union[Stmt, Conditional]]
+    sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef]
+    localized_symbols: List[str]
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
@@ -87,6 +89,11 @@ class ToImpIR(NodeVisitor):
         return value
 
     def visit_Node(self, node, **kwargs):
+        return node
+
+    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs):
+        if node.id in self.localized_symbols:
+            return gtfn_ir_common.SymRef(id=f"{node.id}_local")
         return node
 
     def visit_UnaryExpr(self, node: gtfn_ir.UnaryExpr, **kwargs):
@@ -205,7 +212,16 @@ class ToImpIR(NodeVisitor):
             params = [self.visit(param, **kwargs) for param in node.fun.params]
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
-                self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{param.id}"), rhs=arg))
+                if param.id in self.sym_table:
+                    self.localized_symbols.append(param.id)
+                self.imp_list_ir.append(
+                    InitStmt(
+                        lhs=gtfn_ir_common.Sym(id=f"{param.id}_local")
+                        if param.id in self.sym_table
+                        else gtfn_ir_common.Sym(id=f"{param.id}"),
+                        rhs=arg,
+                    )
+                )
             expr = self.visit(node.fun.expr, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
@@ -262,7 +278,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if not check_compat.compatible:
             raise RuntimeError(f"gtfn_im can not handle {check_compat.incompatible_node}")
 
-        to_imp_ir = ToImpIR(imp_list_ir=[])
+        to_imp_ir = ToImpIR(imp_list_ir=[], sym_table=node.annex.symtable, localized_symbols=[])
         ret = to_imp_ir.visit(node.expr, **kwargs)
         return ImperativeFunctionDefinition(
             id=node.id,
