@@ -19,8 +19,7 @@ import pytest
 from functional.common import Dimension
 from functional.iterator import embedded, ir as itir
 from functional.otf import languages, stages
-from functional.program_processors.codegens.gtfn import gtfn_ir_to_gtfn_im_ir
-from functional.program_processors.codegens.gtfn import gtfn_ir
+from functional.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_to_gtfn_im_ir
 
 
 @pytest.fixture

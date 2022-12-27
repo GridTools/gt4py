@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Iterable, List, Union
+from typing import Any, Iterable, List, Optional, Union
 
 import eve
 from eve import NodeTranslator, NodeVisitor
@@ -44,8 +44,8 @@ def _is_reduce(node: gtfn_ir.FunCall):
 # the contract on the gtfn_ir for ToImpIR to suceed explicit
 @dataclasses.dataclass
 class IsImpCompatible(NodeVisitor):
-    compatible: True
-    incompatible_node: None
+    incompatible_node: Optional[gtfn_ir_common.Expr] = None
+    compatible: bool = True
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
         if not self.compatible:
@@ -57,7 +57,7 @@ class IsImpCompatible(NodeVisitor):
             assert offset_provider is not None
             try:
                 _find_connectivity(node.args, offset_provider)
-            except:
+            except RuntimeError:
                 self.compatible = False
                 self.incompatible_node = node
 

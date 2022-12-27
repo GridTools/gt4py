@@ -15,6 +15,7 @@
 import eve
 from eve import Coerced, SymbolName, SymbolRef
 
+
 @eve.utils.noninstantiable
 class Node(eve.Node):
     pass
@@ -29,4 +30,4 @@ class Expr(Node):
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003    
+    id: Coerced[SymbolRef]  # noqa: A003
