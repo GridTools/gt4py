@@ -56,24 +56,26 @@ class CollectSubexpressions(NodeVisitor):
 
     def visit_FunCall(
         self,
-        node: ir.Lambda,
+        node: ir.FunCall,
         *,
         subexprs: dict[ir.Node, tuple[list[int], Optional[ir.Node]]],
         refs: ChainMap[str, bool],
         parent: Optional[ir.Node],
         collector_stack: list[bool],
     ) -> None:
-        self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node)
-        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
-        if (
-            node.fun == ir.SymRef(id="shift")
-            or isinstance(
+        allow_collection = node.fun != ir.SymRef(id="shift") and not (
+            isinstance(
                 node.fun, ir.FunCall
             )  # TODO: want to remove the guard after the `or` (gtfn_im backend)
             and node.fun.fun == ir.SymRef(id="shift")
-        ):
-            return
-        if not any(refs.maps[0].values()):
+        )
+        child_collector_stack = [*collector_stack, allow_collection]
+
+        self.generic_visit(
+            node, subexprs=subexprs, refs=refs, parent=node, collector_stack=child_collector_stack
+        )
+
+        if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
         else:
             if len(collector_stack) > 0:
