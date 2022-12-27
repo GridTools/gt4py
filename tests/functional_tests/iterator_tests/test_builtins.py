@@ -4,15 +4,22 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from functional.iterator import builtins as it_builtins
 from functional.iterator.builtins import (
     and_,
+    bool,
     can_deref,
     cartesian_domain,
+    cast_,
     deref,
     divides,
     eq,
+    float32,
+    float64,
     greater,
     if_,
+    int32,
+    int64,
     less,
     lift,
     minus,
@@ -137,8 +144,6 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 @pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
-    from functional.iterator import builtins as it_builtins
-
     program_processor, validate = program_processor
 
     if program_processor == type_check.check:
@@ -251,3 +256,46 @@ def test_can_deref(program_processor, stencil):
 
 #     if validate:
 #         assert np.allclose(np.asarray(out), 1.0)
+
+
+# There is no straight-forward way to test cast, because when we define the
+# output buffer with the cast-to type an implicit conversion will happen even
+# if no explicit cast was done.
+# Therefore, we have to set up the test in a way that the explicit cast is required,
+# e.g. by a combination of explicit an implicit cast.
+# Test setup:
+# - Input buffer is setup with the dtype from `input_value`
+# - Output buffer is setup with the type of the `expected_value`
+# `expected_value` should be chosen with a different type than the explict cast-to type `dtype`.
+@pytest.mark.parametrize(
+    "input_value, dtype, expected_value",
+    [
+        (float64("0.1"), float32, float64(float32("0.1"))),
+        (int64(42), bool, int64(1)),
+        (int64(2147483648), int32, int64(-2147483648)),
+        (int64(2147483648), int64, int64(2147483648)),  # int64 does not accidentally down-cast
+    ],
+)
+@pytest.mark.parametrize("as_column", [False, True])
+def test_cast(program_processor, as_column, input_value, dtype, expected_value):
+    program_processor, validate = program_processor
+    column_axis = IDim if as_column else None
+
+    inp = asfield(*asarray(input_value))[0]
+    out = asfield((np.zeros_like(*asarray(expected_value))))[0]
+
+    @fundef
+    def sten_cast(value):
+        return cast_(deref(value), dtype)
+
+    run_processor(
+        sten_cast[{IDim: range(1)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={},
+        column_axis=column_axis,
+    )
+
+    if validate:
+        assert out[0] == expected_value

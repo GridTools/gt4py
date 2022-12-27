@@ -224,6 +224,8 @@ def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
+    if lift_mode != LiftMode.FORCE_INLINE:
+        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
