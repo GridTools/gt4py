@@ -107,15 +107,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
-            return (
-                f"hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
-            )
+            return f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
         else:
-            return f"tuple({','.join(values)})"
+            return f"::gridtools::tuple({','.join(values)})"
 
-    CartesianDomain = as_fmt("cartesian_domain({tagged_sizes}, {tagged_offsets})")
+    CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
+        "gtfn::unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
@@ -154,9 +152,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     ScanPassDefinition = as_mako(
         """
-        struct ${id} : ${'fwd' if _this_node.forward else 'bwd'} {
+        struct ${id} : ${'gtfn::fwd' if _this_node.forward else 'gtfn::bwd'} {
             static constexpr GT_FUNCTION auto body() {
-                return scan_pass([](${','.join('auto const& ' + p for p in params)}) {
+                return gtfn::scan_pass([](${','.join('auto const& ' + p for p in params)}) {
                     return ${expr};
                 }, ::gridtools::host_device::identity());
             }
@@ -206,25 +204,20 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
+        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
     )
 
     FencilDefinition = as_mako(
         """
-    #include <cmath>
-    #include <cstdint>
+    #include <cmath>   
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
-    namespace{
-    using namespace gridtools;
-    using namespace fn;
-    using namespace literals;
 
-    template <typename T, T... S, typename F>
-    constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f) {
-      ((f(integral_constant<T, S>{})), ...);
-    }
+    namespace gtfn = ::gridtools::fn;
+
+    namespace{
+    using namespace ::gridtools::literals;    
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
