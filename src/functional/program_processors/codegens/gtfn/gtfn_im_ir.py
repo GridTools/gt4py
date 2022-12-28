@@ -43,11 +43,6 @@ class Conditional(Stmt):
     else_stmt: AssignStmt
 
 
-class ForLoop(Stmt):
-    num_iter: int
-    stmt: Stmt
-
-
 class ReturnStmt(Stmt):
     ret: Union[Expr, SymRef]
 

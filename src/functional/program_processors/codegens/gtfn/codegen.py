@@ -209,7 +209,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     FencilDefinition = as_mako(
         """
-    #include <cmath>   
+    #include <cmath>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
@@ -217,7 +217,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     namespace gtfn = ::gridtools::fn;
 
     namespace{
-    using namespace ::gridtools::literals;    
+    using namespace ::gridtools::literals;
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
@@ -256,15 +256,6 @@ class GTFNIMCodegen(GTFNCodegen):
             ${else_stmt}
           }
     """
-    )
-
-    ForLoop = as_mako(
-        """
-      for_sequence(std::make_index_sequence<${num_iter}>{}, [&](auto i) {
-         auto red_iter = integral_constant<int, i>{};
-         ${stmt}
-      });
-      """
     )
 
     ImperativeFunctionDefinition = as_mako(

@@ -8,7 +8,6 @@ from functional.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
     Conditional,
-    ForLoop,
     ImperativeFunctionDefinition,
     InitStmt,
     ReturnStmt,
@@ -116,8 +115,6 @@ class ToImpIR(NodeVisitor):
         return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[iterator])
 
     def handle_Reduction(self, node, **kwargs):
-        emit_for_loop = False
-
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = _find_connectivity(node.args, offset_provider)
@@ -178,20 +175,10 @@ class ToImpIR(NodeVisitor):
             def __init__(self, cur_idx):
                 self.cur_idx = cur_idx
 
-        if emit_for_loop:
-            new_expr = PlugInCurrentIdx(gtfn_ir_common.SymRef(id="red_iter")).visit(new_fun)
+        for i in range(max_neighbors):
+            new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_fun)
             rhs = self.visit(new_expr, **kwargs)
-            self.imp_list_ir.append(
-                ForLoop(
-                    num_iter=max_neighbors,
-                    stmt=AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs),
-                )
-            )
-        else:
-            for i in range(max_neighbors):
-                new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_fun)
-                rhs = self.visit(new_expr, **kwargs)
-                self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
+            self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
         return gtfn_ir_common.SymRef(id=red_idx)
 
