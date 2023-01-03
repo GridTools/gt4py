@@ -3,12 +3,15 @@ GT4Py: GridTools for Python
 
 Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL).
 
-|tox| |format|
+|tox| |format| |slack|_
 
 .. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?event=schedule
    :alt:
 .. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=main
    :alt:
+.. |slack| image:: https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a
+   :alt:
+.. _slack: https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g
 
 ⚡️ Quick Start
 ---------------
