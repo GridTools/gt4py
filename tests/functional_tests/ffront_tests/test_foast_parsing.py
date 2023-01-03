@@ -279,7 +279,7 @@ def test_ternary_with_field_condition():
     def ternary_with_field_condition(cond: Field[[], bool]):
         return 1 if cond else 2
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Expected `bool`"):
+    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
         _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
 
 
