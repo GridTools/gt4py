@@ -60,6 +60,11 @@ def if_(*args):
 
 
 @builtin_dispatch
+def cast_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def not_(*args):
     raise BackendNotSelectedError()
 
@@ -71,6 +76,11 @@ def and_(*args):
 
 @builtin_dispatch
 def or_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def xor_(*args):
     raise BackendNotSelectedError()
 
 
@@ -91,6 +101,11 @@ def multiplies(*args):
 
 @builtin_dispatch
 def divides(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def floordiv(*args):
     raise BackendNotSelectedError()
 
 
@@ -270,7 +285,47 @@ def fmod(*args):
 
 
 @builtin_dispatch
+def mod(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def power(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int(*args):  # noqa: A001
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def int64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float(*args):  # noqa: A001
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float32(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def float64(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def bool(*args):  # noqa: A001
     raise BackendNotSelectedError()
 
 
@@ -299,11 +354,13 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
+TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
     | UNARY_MATH_FP_PREDICATE_BUILTINS
     | BINARY_MATH_NUMBER_BUILTINS
+    | TYPEBUILTINS
 )
 BUILTINS = {
     "deref",
@@ -315,9 +372,12 @@ BUILTINS = {
     "minus",
     "multiplies",
     "divides",
+    "floordiv",
+    "mod",
     "make_tuple",
     "tuple_get",
     "if_",
+    "cast_",
     "greater",
     "less",
     "less_equal",
@@ -327,6 +387,7 @@ BUILTINS = {
     "not_",
     "and_",
     "or_",
+    "xor_",
     "scan",
     "cartesian_domain",
     "unstructured_domain",

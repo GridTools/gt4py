@@ -16,7 +16,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from functional.common import DimensionKind, Field
-from functional.ffront import common_types as ct, itir_makers as im
+from functional.ffront import itir_makers as im, type_specifications as ts, type_translation
 from functional.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -28,7 +28,6 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
-from functional.ffront.symbol_makers import make_symbol_type_from_typing
 
 
 IDim = Dimension("IDim")
@@ -44,7 +43,7 @@ def debug_itir(tree):
     from devtools import debug
 
     from eve.codegen import format_python_source
-    from functional.fencil_processors import EmbeddedDSL
+    from functional.program_processors import EmbeddedDSL
 
     debug(format_python_source(EmbeddedDSL.apply(tree)))
 
@@ -221,10 +220,10 @@ def test_call():
     # create something that appears to the lowering like a field operator.
     #  we could also create an actual field operator, but we want to avoid
     #  using such heavy constructs for testing the lowering.
-    field_type = make_symbol_type_from_typing(Field[..., float64])
+    field_type = type_translation.from_type_hint(Field[..., float64])
     identity = SimpleNamespace(
-        __gt_type__=lambda: ct.FieldOperatorType(
-            definition=ct.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+        __gt_type__=lambda: ts.FieldOperatorType(
+            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
         )
     )
 

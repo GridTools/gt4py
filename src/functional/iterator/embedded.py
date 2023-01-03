@@ -16,6 +16,8 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    SupportsFloat,
+    SupportsInt,
     TypeAlias,
     TypeGuard,
     Union,
@@ -26,6 +28,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from eve import extended_typing as xtyping
 from functional import common
 from functional.iterator import builtins, runtime, utils
 
@@ -35,9 +38,9 @@ EMBEDDED = "embedded"
 
 # Atoms
 Tag: TypeAlias = str
-IntIndex: TypeAlias = int
+IntIndex: TypeAlias = int | np.integer
 
-FieldIndex: TypeAlias = int | slice
+FieldIndex: TypeAlias = slice | IntIndex
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 
@@ -49,6 +52,7 @@ FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 Axis: TypeAlias = FieldAxis | TupleAxis
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 class SparseTag(Tag):
@@ -107,10 +111,10 @@ OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 # Positions
 SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
-PositionEntry: TypeAlias = IntIndex | SparsePositionEntry
-IncompletePositionEntry: TypeAlias = IntIndex | IncompleteSparsePositionEntry
-ConcretePosition: TypeAlias = dict[Tag | SparseTag, PositionEntry]
-IncompletePosition: TypeAlias = dict[Tag | SparseTag, IncompletePositionEntry]
+PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
+IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
+ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
+IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
 Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
@@ -118,7 +122,7 @@ MaybePosition: TypeAlias = Optional[Position]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, int)
+    return isinstance(p, (int, np.integer))
 
 
 @runtime_checkable
@@ -250,6 +254,13 @@ def if_(cond, t, f):
     return t if cond else f
 
 
+@builtins.cast_.register(EMBEDDED)
+def cast_(obj, new_dtype):
+    if isinstance(obj, Column):
+        return obj.data.astype(new_dtype.__name__)
+    return new_dtype(obj)
+
+
 @builtins.not_.register(EMBEDDED)
 def not_(a):
     if isinstance(a, Column):
@@ -269,6 +280,13 @@ def or_(a, b):
     if isinstance(a, Column):
         return np.logical_or(a, b)
     return a or b
+
+
+@builtins.xor_.register(EMBEDDED)
+def xor_(a, b):
+    if isinstance(a, Column):
+        return np.logical_xor(a, b)
+    return a ^ b
 
 
 @builtins.tuple_get.register(EMBEDDED)
@@ -307,9 +325,20 @@ def lift(stencil):
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
-                open_offsets = get_open_offsets(*self.offsets)
+                open_offsets = get_open_offsets(*self.incomplete_offsets, *self.offsets)
                 assert open_offsets
                 return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
+
+            @property
+            def incomplete_offsets(self):
+                incomplete_offsets = []
+                for arg in self.args:
+                    if arg.incomplete_offsets:
+                        assert (
+                            not incomplete_offsets or incomplete_offsets == arg.incomplete_offsets
+                        )
+                        incomplete_offsets = arg.incomplete_offsets
+                return incomplete_offsets
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
@@ -405,6 +434,16 @@ def divides(first, second):
     return first / second
 
 
+@builtins.floordiv.register(EMBEDDED)
+def floordiv(first, second):
+    return first // second
+
+
+@builtins.mod.register(EMBEDDED)
+def mod(first, second):
+    return first % second
+
+
 @builtins.eq.register(EMBEDDED)
 def eq(first, second):
     return first == second
@@ -435,11 +474,35 @@ def not_eq(first, second):
     return first != second
 
 
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+
+
+def promote_scalars(val: CompositeOfScalarOrField):
+    """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
+    if isinstance(val, tuple):
+        return tuple(promote_scalars(el) for el in val)
+    val_type = xtyping.infer_type(val)
+    if np.issubdtype(val_type, np.number):
+        return constant_field(val)
+    elif np.issubdtype(val_type, LocatedField):
+        return val
+    else:
+        raise ValueError(
+            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+        )
+
+
 for math_builtin_name in builtins.MATH_BUILTINS:
+    python_builtins = {"int": int, "float": float, "bool": bool, "str": str}
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     if math_builtin_name == "gamma":
         # numpy has no gamma function
         impl = np.vectorize(math.gamma)
+    elif math_builtin_name in python_builtins:
+        # TODO: Should potentially use numpy fixed size types to be consistent
+        #   with compiled backends. Currently using Python types to preserve
+        #   existing behaviour.
+        impl = python_builtins[math_builtin_name]
     else:
         impl = getattr(np, math_builtin_name)
     globals()[math_builtin_name] = decorator(impl)
@@ -531,7 +594,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, int):
+        if not isinstance(offset, (int, np.integer)):
             tag_stack.append(offset)
         else:
             assert tag_stack
@@ -617,7 +680,8 @@ _UNDEFINED = Undefined()
 
 def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
     return all(
-        isinstance(v, int) or (isinstance(v, list) and all(isinstance(e, int) for e in v))
+        isinstance(v, (int, np.integer))
+        or (isinstance(v, list) and all(isinstance(e, (int, np.integer)) for e in v))
         for v in pos.values()
     )
 
@@ -637,7 +701,7 @@ def _make_tuple(
     as_column: bool = False,
 ) -> tuple | Column:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
-        return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+        return tuple(_make_tuple(f, indices, as_column=as_column) for f in field_or_tuple)
     else:
         data = field_or_tuple[indices]
         if as_column:
@@ -675,6 +739,7 @@ class MDIterator:
         return self.pos is not None
 
     def deref(self) -> Any:
+        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -810,7 +875,7 @@ def get_ordered_indices(
                 res.append(elem[sparse_position_tracker[axis.value]])
                 sparse_position_tracker[axis.value] += 1
             else:
-                assert isinstance(elem, (int, slice))
+                assert isinstance(elem, (int, np.integer, slice))
                 res.append(elem)
     return tuple(res)
 
@@ -895,7 +960,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = float) -> LocatedField:
+def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+    if dtype is None:
+        dtype = xtyping.infer_type(value)
     return ConstantField(value, dtype)
 
 
@@ -922,7 +989,8 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        return self.wrapped_iter.deref()[self.k_pos]
+        # TODO(tehrengruber): _make_tuple is for fields
+        return _make_tuple(self.wrapped_iter.deref(), self.k_pos)
 
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
@@ -1100,6 +1168,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         for pos in _domain_iterator(domain):
+            promoted_ins = [promote_scalars(inp) for inp in ins]
             ins_iters = list(
                 make_in_iterator(
                     inp,
@@ -1107,9 +1176,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
-                if not isinstance(inp, numbers.Number)
-                else inp
-                for inp in ins
+                for inp in promoted_ins
             )
             res = sten(*ins_iters)
 

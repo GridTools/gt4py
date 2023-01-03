@@ -18,7 +18,7 @@
 import ast
 import textwrap
 
-from functional.ffront.ast_passes.simple_assign import SingleAssignTargetPass, UnpackedAssignPass
+from functional.ffront.ast_passes.simple_assign import SingleAssignTargetPass
 
 
 def getlines(node: ast.AST) -> list[str]:
@@ -27,10 +27,6 @@ def getlines(node: ast.AST) -> list[str]:
 
 def separate_targets(code: str) -> ast.AST:
     return SingleAssignTargetPass.apply(ast.parse(textwrap.dedent(code)))
-
-
-def unpack_targets(code: str) -> ast.AST:
-    return UnpackedAssignPass.apply(ast.parse(textwrap.dedent(code)))
 
 
 def test_separate():
@@ -42,10 +38,11 @@ def test_separate():
             """
         )
     )
-    assert len(lines) == 3
-    assert lines[0] == "a = foo"
-    assert lines[1] == "b = foo"
-    assert lines[2] == "c = foo"
+    assert len(lines) == 4
+    assert lines[0] == "__sat_tmp0 = foo"
+    assert lines[1] == "a = __sat_tmp0"
+    assert lines[2] == "b = __sat_tmp0"
+    assert lines[3] == "c = __sat_tmp0"
 
 
 def test_separate_unpacking():
@@ -57,57 +54,7 @@ def test_separate_unpacking():
             """
         )
     )
-    assert len(lines) == 2
-    assert lines[0] == "a = [d, e]"
-    assert lines[1] == "[b, c] = [d, e]"
-
-
-def test_unpack():
-    """Single level unpacking assign is explicitly unpacked."""
-    lines = getlines(
-        unpack_targets(
-            """
-            a, b = c, d
-            """
-        )
-    )
     assert len(lines) == 3
-    assert lines[0] == "__tuple_tmp_0 = (c, d)"
-    assert lines[1] == "a = __tuple_tmp_0[0]"
-    assert lines[2] == "b = __tuple_tmp_0[1]"
-
-
-def test_nested_unpack():
-    """Nested unpacking accesses deeper levels from the rhs expression."""
-    lines = getlines(
-        unpack_targets(
-            """
-            a, [b, [c]] = foo()
-            """
-        )
-    )
-    assert len(lines) == 6
-    assert lines[0] == "__tuple_tmp_0 = foo()"
-    assert lines[1] == "a = __tuple_tmp_0[0]"
-    assert lines[2] == "__tuple_tmp_1 = __tuple_tmp_0[1]"
-    assert lines[3] == "b = __tuple_tmp_1[0]"
-    assert lines[4] == "__tuple_tmp_2 = __tuple_tmp_1[1]"
-    assert lines[5] == "c = __tuple_tmp_2[0]"
-
-
-def test_nested_multi_target_unpack():
-    """Unpacking after separating completely linearizes."""
-    lines = getlines(
-        UnpackedAssignPass.apply(
-            separate_targets(
-                """
-                a = [b, c] = [d, e]
-                """
-            )
-        )
-    )
-    assert len(lines) == 4
-    assert lines[0] == "a = [d, e]"
-    assert lines[1] == "__tuple_tmp_0 = [d, e]"
-    assert lines[2] == "b = __tuple_tmp_0[0]"
-    assert lines[3] == "c = __tuple_tmp_0[1]"
+    assert lines[0] == "__sat_tmp0 = [d, e]"
+    assert lines[1] == "a = __sat_tmp0"
+    assert lines[2] == "[b, c] = __sat_tmp0"

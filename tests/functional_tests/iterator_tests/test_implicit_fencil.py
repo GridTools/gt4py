@@ -31,19 +31,19 @@ def copy_stencil(inp):
     return deref(inp)
 
 
-def test_single_argument(fencil_processor, dom):
-    fencil_processor, validate = fencil_processor
+def test_single_argument(program_processor, dom):
+    program_processor, validate = program_processor
 
     inp = a_field()
     out = out_field()
 
-    run_processor(copy_stencil[dom], fencil_processor, inp, out=out, offset_provider={})
+    run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
         assert np.allclose(inp, out)
 
 
-def test_2_arguments(fencil_processor, dom):
-    fencil_processor, validate = fencil_processor
+def test_2_arguments(program_processor, dom):
+    program_processor, validate = program_processor
 
     @fundef
     def fun(inp0, inp1):
@@ -53,19 +53,19 @@ def test_2_arguments(fencil_processor, dom):
     inp1 = a_field()
     out = out_field()
 
-    run_processor(fun[dom], fencil_processor, inp0, inp1, out=out, offset_provider={})
+    run_processor(fun[dom], program_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp0.array() + inp1.array(), out)
 
 
-def test_lambda_domain(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_lambda_domain(program_processor):
+    program_processor, validate = program_processor
     inp = a_field()
     out = out_field()
 
     dom = lambda: cartesian_domain(named_range(I, 0, 10))
-    run_processor(copy_stencil[dom], fencil_processor, inp, out=out, offset_provider={})
+    run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
 
     if validate:
         assert np.allclose(inp, out)

@@ -26,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -34,30 +34,29 @@ from devtools import debug
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError
-from functional.fencil_processors.processor_interface import (
-    FencilExecutor,
-    FencilFormatter,
-    ensure_processor_kind,
-)
-from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
-    symbol_makers,
     type_info,
+    type_specifications as ts,
+    type_translation,
 )
-from functional.ffront.fbuiltins import BUILTINS, Dimension, FieldOffset
+from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
 from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.gtcallable import GTCallable
+from functional.ffront.past_passes.closure_var_type_deduction import (
+    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
+)
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
 from functional.ffront.past_to_itir import ProgramLowering
 from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from functional.iterator import ir as itir
-from functional.iterator.embedded import constant_field
+from functional.program_processors import processor_interface as ppi
+from functional.program_processors.runners import roundtrip
 
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
@@ -96,6 +95,32 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
+def _canonicalize_args(
+    node_params: list[foast.DataSymbol] | list[past.DataSymbol],
+    args: tuple[Any],
+    kwargs: dict[str, Any],
+) -> tuple[tuple, dict]:
+    new_args = []
+    new_kwargs = {**kwargs}
+
+    for param_i, param in enumerate(node_params):
+        if param.id in new_kwargs:
+            if param_i < len(args):
+                raise ProgramTypeError(f"got multiple values for argument {param.id}.")
+            new_args.append(kwargs[param.id])
+            new_kwargs.pop(param.id)
+        elif param_i < len(args):
+            new_args.append(args[param_i])
+        else:
+            # case when param in function definition but not in function call
+            # e.g. function expects 3 parameters, but only 2 were given.
+            # Error covered later in `accept_args`.
+            pass
+
+    args = tuple(new_args)
+    return args, new_kwargs
+
+
 def _deduce_grid_type(
     requested_grid_type: Optional[GridType],
     offsets_and_dimensions: Iterable[FieldOffset | Dimension],
@@ -128,6 +153,23 @@ def _deduce_grid_type(
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
 
+def _field_constituents_shape_and_dims(
+    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
+) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
+    if isinstance(arg_type, ts.TupleType):
+        for el, el_type in zip(arg, arg_type.types):
+            yield from _field_constituents_shape_and_dims(el, el_type)
+    elif isinstance(arg_type, ts.FieldType):
+        dims = type_info.extract_dims(arg_type)
+        if hasattr(arg, "shape"):
+            assert len(arg.shape) == len(dims)
+            yield (arg.shape, dims)
+        else:
+            yield (None, dims)
+    else:
+        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
+
+
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 # TODO(ricoh): factor out the generated ITIR together with arguments rewriting
@@ -152,7 +194,7 @@ class Program:
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    backend: Optional[FencilExecutor]
+    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
     grid_type: Optional[GridType] = None
 
@@ -160,7 +202,7 @@ class Program:
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[FencilExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = None,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -197,7 +239,7 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
 
-    def with_backend(self, backend: FencilExecutor) -> "Program":
+    def with_backend(self, backend: ppi.ProgramExecutor) -> "Program":
         return Program(
             past_node=self.past_node,
             closure_vars=self.closure_vars,
@@ -233,7 +275,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ensure_processor_kind(backend, FencilExecutor)
+        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -247,9 +289,13 @@ class Program:
         )
 
     def format_itir(
-        self, *args, formatter: FencilFormatter, offset_provider: dict[str, Dimension], **kwargs
+        self,
+        *args,
+        formatter: ppi.ProgramFormatter,
+        offset_provider: dict[str, Dimension],
+        **kwargs,
     ) -> str:
-        ensure_processor_kind(formatter, FencilFormatter)
+        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -263,10 +309,10 @@ class Program:
 
     def _validate_args(self, *args, **kwargs) -> None:
         if kwargs:
-            raise NotImplementedError("Keyword arguments are not supported yet.")
+            raise NotImplementedError("Keyword-only arguments are not supported yet.")
 
-        arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
-        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+        arg_types = [type_translation.from_value(arg) for arg in args]
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
         try:
             type_info.accepts_args(
@@ -281,6 +327,8 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
+        args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
+
         self._validate_args(*args, **kwargs)
 
         implicit_domain = any(
@@ -292,19 +340,17 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if isinstance(param.type, ct.ScalarType):
-                dtype = type_info.extract_dtype(param.type)
-                rewritten_args[param_idx] = constant_field(
-                    args[param_idx],
-                    dtype=BUILTINS[dtype.kind.name.lower()],
-                )
-            if implicit_domain and isinstance(param.type, ct.FieldType):
-                has_shape = hasattr(args[param_idx], "shape")
-                for dim_idx in range(0, len(param.type.dims)):
-                    if has_shape:
-                        size_args.append(args[param_idx].shape[dim_idx])
-                    else:
-                        size_args.append(None)
+            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
+                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
+                shape, dims = shapes_and_dims[0]
+                if not all(
+                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
+                ):
+                    raise ValueError(
+                        "Constituents of composite arguments (e.g. the elements of a"
+                        " tuple) need to have the same shape and dimensions."
+                    )
+                size_args.extend(shape if shape else [None] * len(dims))
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property
@@ -316,7 +362,10 @@ class Program:
         for name, gt_callable in _filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
-            if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
+            if isinstance(
+                (type_ := gt_callable.__gt_type__()),
+                ts.ScanOperatorType,
+            ):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
         if len(scanops_per_axis.values()) == 0:
@@ -342,7 +391,7 @@ def program(definition: types.FunctionType) -> Program:
 
 
 @typing.overload
-def program(*, backend: Optional[FencilExecutor]) -> Callable[[types.FunctionType], Program]:
+def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.FunctionType], Program]:
     ...
 
 
@@ -401,14 +450,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[FencilExecutor]
+    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[FencilExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -421,9 +470,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
-            key: foast.Constant(
-                value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
-            )
+            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
             for key, value in operator_attributes.items()
         }
         untyped_foast_node = operator_node_cls(
@@ -440,12 +487,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
         )
 
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type
-        assert isinstance(type_, ct.CallableType)
+        assert isinstance(type_, ts.CallableType)
         return type_
 
-    def with_backend(self, backend: FencilExecutor) -> FieldOperator:
+    def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
@@ -467,7 +514,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return self.closure_vars
 
     def as_program(
-        self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
+        self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
@@ -482,7 +529,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
-                namespace=ct.Namespace.LOCAL,
+                namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
             for arg_type in arg_types
@@ -491,27 +538,26 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
             type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=ct.Namespace.LOCAL,
+            namespace=dialect_ast_enums.Namespace.LOCAL,
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
 
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self, **self.closure_vars}
+        closure_vars = {self.foast_node.id: self}
         closure_symbols = [
             past.Symbol(
-                id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=ct.Namespace.CLOSURE,
+                id=self.foast_node.id,
+                type=ts.DeferredType(constraint=None),
+                namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=loc,
-            )
-            for name, val in closure_vars.items()
+            ),
         ]
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
+            type=ts.DeferredType(constraint=ts.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(
@@ -524,6 +570,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
+        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         return Program(
@@ -539,14 +586,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
+        args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
         for arg in args:
-            arg_types.append(symbol_makers.make_symbol_type_from_value(arg))
+            arg_types.append(type_translation.from_value(arg))
         kwarg_types = {}
         for name, arg in kwargs.items():
-            kwarg_types[name] = symbol_makers.make_symbol_type_from_value(arg)
+            kwarg_types[name] = type_translation.from_value(arg)
 
         return self.as_program(arg_types, kwarg_types)(
             *args, out, offset_provider=offset_provider, **kwargs
@@ -555,14 +603,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 @typing.overload
 def field_operator(
-    definition: types.FunctionType, *, backend: Optional[FencilExecutor]
+    definition: types.FunctionType, *, backend: Optional[ppi.ProgramExecutor]
 ) -> FieldOperator[foast.FieldOperator]:
     ...
 
 
 @typing.overload
 def field_operator(
-    *, backend: Optional[FencilExecutor]
+    *, backend: Optional[ppi.ProgramExecutor]
 ) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
     ...
 

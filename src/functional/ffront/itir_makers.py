@@ -151,6 +151,18 @@ def divides_(left, right):
     return call_("divides")(left, right)
 
 
+def floordiv_(left, right):
+    """Create a floor division FunCall, shorthand for ``call("floordiv")(left, right)``."""
+    # TODO(tehrengruber): Use int(floor(left/right)) as soon as we support integer casting
+    #  and remove the `floordiv` builtin again.
+    return call_("floordiv")(left, right)
+
+
+def mod_(left, right):
+    """Create a modulo FunCall, shorthand for ``call("mod")(left, right)``."""
+    return call_("mod")(left, right)
+
+
 def and__(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
     return call_("and_")(left, right)
@@ -159,6 +171,11 @@ def and__(left, right):
 def or__(left, right):
     """Create an or_ FunCall, shorthand for ``call("or_")(left, right)``."""
     return call_("or_")(left, right)
+
+
+def xor__(left, right):
+    """Create an xor_ FunCall, shorthand for ``call("xor_")(left, right)``."""
+    return call_("xor_")(left, right)
 
 
 def greater_(left, right):

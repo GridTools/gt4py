@@ -31,7 +31,7 @@ MISSING_FILENAME = "<string>"
 
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     (nonlocals, globals, builtins, unbound) = inspect.getclosurevars(function)  # noqa: A001
-    return {**globals, **nonlocals}  # nonlocals override globals
+    return {**builtins, **globals, **nonlocals}  # nonlocals override globals
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
@@ -74,7 +74,7 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
     for name in func_st.get_locals():
         if (s := func_st.lookup(name)).is_imported():
             imported_names.add(name)
-        elif s.is_parameter:
+        elif s.is_parameter():
             param_names.add(name)
         else:
             local_names.add(name)

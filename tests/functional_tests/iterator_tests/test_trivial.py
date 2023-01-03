@@ -2,10 +2,11 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension, DimensionKind
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
+from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -34,10 +35,10 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
+def test_trivial(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
-    if fencil_processor == run_gtfn:
+    if program_processor == run_gtfn:
         pytest.xfail("origin not yet supported in gtfn")
 
     rng = np.random.default_rng()
@@ -50,7 +51,7 @@ def test_trivial(fencil_processor, lift_mode):
 
     run_processor(
         baz[cartesian_domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
-        fencil_processor,
+        program_processor,
         inp_s,
         out=out_s,
         lift_mode=lift_mode,
@@ -59,6 +60,44 @@ def test_trivial(fencil_processor, lift_mode):
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)
+
+
+@fundef
+def stencil_shifted_arg_to_lift(inp):
+    return deref(lift(deref)(shift(I, -1)(inp)))
+
+
+def test_shifted_arg_to_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
+
+    if program_processor == run_gtfn:
+        pytest.xfail("origin not yet supported in gtfn")
+
+    if lift_mode != transforms.LiftMode.FORCE_INLINE:
+        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
+
+    rng = np.random.default_rng()
+    inp = rng.uniform(size=(5, 7))
+    out = np.zeros_like(inp)
+    out[1:, :] = inp[:-1, :]
+    shape = (out.shape[0], out.shape[1])
+
+    inp_s = np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :])
+    out_s = np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :]))
+
+    run_processor(
+        stencil_shifted_arg_to_lift[
+            cartesian_domain(named_range(IDim, 1, shape[0]), named_range(JDim, 0, shape[1]))
+        ],
+        program_processor,
+        inp_s,
+        out=out_s,
+        lift_mode=lift_mode,
+        offset_provider={"I": IDim, "J": JDim},
+    )
+
+    if validate:
+        assert np.allclose(out, out_s)
 
 
 @fendef
@@ -74,9 +113,9 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn:
+def test_direct_deref(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
         pytest.xfail("extract_fundefs_from_closures() doesn't work for builtins in gtfn")
 
     rng = np.random.default_rng()
@@ -88,7 +127,7 @@ def test_direct_deref(fencil_processor, lift_mode):
 
     run_processor(
         fen_direct_deref,
-        fencil_processor,
+        program_processor,
         *out.shape,
         out_s,
         inp_s,
@@ -105,8 +144,8 @@ def vertical_shift(inp):
     return deref(shift(K, 1)(inp))
 
 
-def test_vertical_shift_unstructured(fencil_processor):
-    fencil_processor, validate = fencil_processor
+def test_vertical_shift_unstructured(program_processor):
+    program_processor, validate = program_processor
 
     k_size = 7
 
@@ -120,7 +159,7 @@ def test_vertical_shift_unstructured(fencil_processor):
         vertical_shift[
             unstructured_domain(named_range(IDim, 0, 1), named_range(KDim, 0, k_size - 1))
         ],
-        fencil_processor,
+        program_processor,
         inp_s,
         out=out_s,
         offset_provider={"K": KDim},

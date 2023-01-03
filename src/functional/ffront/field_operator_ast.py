@@ -11,21 +11,35 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import common_types as common_types
+from functional.ffront import dialect_ast_enums, type_specifications as ts
+from functional.utils import RecursionGuard
 
 
 class LocatedNode(Node):
     location: SourceLocation
 
+    def __str__(self):
+        from functional.ffront.foast_pretty_printer import pretty_format
 
-SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+        try:
+            with RecursionGuard(self):
+                return pretty_format(self)
+        except RecursionGuard.RecursionDetected:
+            # If `pretty_format` itself calls `__str__`, i.e. when printing
+            # an error that happend during formatting, just return the regular
+            # string representation, consequently avoiding an infinite recursion.
+            # Note that avoiding circular calls to `__str__` is not possible
+            # as the pretty printer depends on eve utilities that use the string
+            # representation of a node in the error handling.
+            return super().__str__()
+
+
+SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 # TODO(egparedes): this should be an actual generic datamodel but it is not fully working
@@ -34,28 +48,30 @@ SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
-    namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
+    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
+        dialect_ast_enums.Namespace.LOCAL
+    )
 
 
-DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ts.FieldType)
 FieldSymbol = DataSymbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ts.ScalarType)
 ScalarSymbol = DataSymbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ts.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
-DimensionTypeT = TypeVar("DimensionTypeT", bound=common_types.DimensionType)
+DimensionTypeT = TypeVar("DimensionTypeT", bound=ts.DimensionType)
 DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: common_types.SymbolType = common_types.DeferredSymbolType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -71,59 +87,22 @@ class Subscript(Expr):
     index: int
 
 
+class Attribute(Expr):
+    value: Expr
+    attr: str
+
+
 class TupleExpr(Expr):
     elts: list[Expr]
 
 
-class UnaryOperator(StrEnum):
-    UADD = "plus"
-    USUB = "minus"
-    NOT = "not_"
-
-    def __str__(self) -> str:
-        if self is self.UADD:
-            return "+"
-        elif self is self.USUB:
-            return "-"
-        elif self is self.NOT:
-            return "not"
-        return "Unknown UnaryOperator"
-
-
 class UnaryOp(Expr):
-    op: UnaryOperator
+    op: dialect_ast_enums.UnaryOperator
     operand: Expr
 
 
-class BinaryOperator(StrEnum):
-    ADD = "plus"
-    SUB = "minus"
-    MULT = "multiplies"
-    DIV = "divides"
-    BIT_AND = "and_"
-    BIT_OR = "or_"
-    POW = "power"
-
-    def __str__(self) -> str:
-        if self is self.ADD:
-            return "+"
-        elif self is self.SUB:
-            return "-"
-        elif self is self.MULT:
-            return "*"
-        elif self is self.DIV:
-            return "/"
-        elif self is self.BIT_AND:
-            return "&"
-        elif self is self.BIT_OR:
-            return "|"
-        elif self is self.POW:
-            return "**"
-        return "Unknown BinaryOperator"
-
-
 class BinOp(Expr):
-    op: BinaryOperator
+    op: dialect_ast_enums.BinaryOperator
     left: Expr
     right: Expr
 
@@ -135,6 +114,21 @@ class CompareOperator(StrEnum):
     LTE = "less_equal"
     GT = "greater"
     GTE = "greater_equal"
+
+    def __str__(self) -> str:
+        if self is self.EQ:
+            return "=="
+        elif self is self.NOTEQ:
+            return "!="
+        elif self is self.LT:
+            return "<"
+        elif self is self.LTE:
+            return "<="
+        elif self is self.GT:
+            return ">"
+        elif self is self.GTE:
+            return ">="
+        return "Unknown CompareOperator"
 
 
 class Compare(Expr):
@@ -159,8 +153,17 @@ class Stmt(LocatedNode):
     ...
 
 
+class Starred(Expr):
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
+
+
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
+    value: Expr
+
+
+class TupleTargetAssign(Stmt):
+    targets: list[FieldSymbol | TupleSymbol | ScalarSymbol | Starred]
     value: Expr
 
 
@@ -173,13 +176,17 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Optional[common_types.FunctionType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.FunctionType
+    )
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Optional[common_types.FieldOperatorType] = None  # noqa A003  # shadowing a python builtin
+    type: Union[ts.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.FieldOperatorType
+    )
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
@@ -188,4 +195,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Optional[common_types.ScanOperatorType] = None  # noqa A003 # shadowing a python builtin
+    type: Union[ts.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.ScanOperatorType
+    )
