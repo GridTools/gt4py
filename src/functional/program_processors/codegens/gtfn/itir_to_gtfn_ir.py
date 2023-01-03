@@ -153,7 +153,8 @@ def _collect_offset_definitions(
             raise ValueError(f"Missing offset_provider entry for {o.value}")
 
         offset_name = o.value
-        if isinstance(offset_provider[offset_name], common.Dimension):
+        dim_or_conn = offset_provider[offset_name]
+        if isinstance(dim_or_conn, common.Dimension):
             dim_value = offset_provider[offset_name].value  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
             dim_kind = offset_provider[offset_name].kind  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
             if grid_type == common.GridType.CARTESIAN:
