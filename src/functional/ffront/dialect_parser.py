@@ -57,7 +57,7 @@ class DialectSyntaxError(common.GTSyntaxError):
         return cls(
             msg,
             lineno=node.lineno,
-            offset=node.col_offset + 1,
+            offset=node.col_offset + 1, # offset is 1-based for syntax errors
             filename=filename,
             end_lineno=getattr(node, "end_lineno", None),
             end_offset=(node.end_col_offset + 1)
@@ -99,9 +99,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         try:
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = RemoveDocstrings.apply(definition_ast)
-            definition_ast = FixMissingLocations.apply(definition_ast)
             definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
             line_offset -= starting_line - 1
+            definition_ast = FixMissingLocations.apply(definition_ast)
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
@@ -135,17 +135,16 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             if not err.text:
 
                 if err.lineno:
-
                     source_lineno = err.lineno - starting_line
                     source_end_lineno = (
                         (err.end_lineno - starting_line) if err.end_lineno else source_lineno
                     )
-                    err.text = "\n".join(source.split("\n")[source_lineno : source_end_lineno + 1])
+                    err.text = "\n".join(source.splitlines()[source_lineno : source_end_lineno + 1])
 
                 else:
                     err.text = source
 
-                    # `err.offset` determines if carrets (`^^^^`) are printed below `err.text`.
+                    # `err.offset` determines if carets (`^^^^`) are printed below `err.text`.
                     # They would be misleading if we don't know on which line the error occurs!
                     assert err.offset is err.end_offset is None
 

@@ -3,10 +3,10 @@ import traceback
 
 import pytest
 
-from functional.common import Field
-from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.source_utils import CapturedVars, SourceDefinition
+from functional import common
+from functional.ffront.foast_passes import type_deduction
+from functional.ffront import func_to_foast as f2f
+from functional.ffront import source_utils as src_utils
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -35,8 +35,8 @@ def test_invalid_syntax_error_empty_return():
     ]
 
 
-def test_wrong_carret_placement_bug():
-    """Field operator syntax errors respect python's carrets (`^^^^^`) placement."""
+def test_wrong_caret_placement_bug():
+    """Field operator syntax errors respect python's carets (`^^^^^`) placement."""
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
@@ -53,8 +53,8 @@ def test_wrong_carret_placement_bug():
 
     assert (exc.lineno, exc.end_lineno) == (line + 4, line + 4)
 
-    # if `offset` is set, python will display carrets (`^^^^`) after printing `text`.
-    # So `text` has to be the line where the error occurs (otherwise the carrets
+    # if `offset` is set, python will display carets (`^^^^`) after printing `text`.
+    # So `text` has to be the line where the error occurs (otherwise the carets
     # will be very misleading).
 
     # See https://github.com/python/cpython/blob/6ad47b41a650a13b4a9214309c10239726331eb8/Lib/traceback.py#L852-L855
