@@ -57,7 +57,7 @@ class DialectSyntaxError(common.GTSyntaxError):
         return cls(
             msg,
             lineno=node.lineno,
-            offset=node.col_offset + 1, # offset is 1-based for syntax errors
+            offset=node.col_offset + 1,  # offset is 1-based for syntax errors
             filename=filename,
             end_lineno=getattr(node, "end_lineno", None),
             end_offset=(node.end_col_offset + 1)

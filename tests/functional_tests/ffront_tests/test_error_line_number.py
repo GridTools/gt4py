@@ -4,9 +4,8 @@ import traceback
 import pytest
 
 from functional import common
+from functional.ffront import func_to_foast as f2f, source_utils as src_utils
 from functional.ffront.foast_passes import type_deduction
-from functional.ffront import func_to_foast as f2f
-from functional.ffront import source_utils as src_utils
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -17,17 +16,17 @@ def test_invalid_syntax_error_empty_return():
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
-    def wrong_syntax(inp: Field[..., float]):
+    def wrong_syntax(inp: common.Field[..., float]):
         return  # <-- this line triggers the syntax error
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
+        f2f.FieldOperatorSyntaxError,
         match=(
             r"Invalid Field Operator Syntax: "
             r"Empty return not allowed \(test_error_line_number.py, line " + str(line + 3) + r"\)"
         ),
     ) as exc_info:
-        _ = FieldOperatorParser.apply_to_function(wrong_syntax)
+        _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
     assert traceback.format_exception_only(exc_info.value)[1:3] == [
         "    return  # <-- this line triggers the syntax error\n",
@@ -40,14 +39,14 @@ def test_wrong_caret_placement_bug():
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
-    def wrong_line_syntax_error(inp: Field[..., float]):
+    def wrong_line_syntax_error(inp: common.Field[..., float]):
         # the next line triggers the syntax error
         inp = inp.this_attribute_surely_doesnt_exist
 
         return inp
 
-    with pytest.raises(FieldOperatorSyntaxError) as exc_info:
-        _ = FieldOperatorParser.apply_to_function(wrong_line_syntax_error)
+    with pytest.raises(f2f.FieldOperatorSyntaxError) as exc_info:
+        _ = f2f.FieldOperatorParser.apply_to_function(wrong_line_syntax_error)
 
     exc = exc_info.value
 
@@ -79,7 +78,7 @@ def test_wrong_caret_placement_bug():
 def test_syntax_error_without_function():
     """Dialect parsers report line numbers correctly when applied to `SourceDefinition`."""
 
-    source_definition = SourceDefinition(
+    source_definition = src_utils.SourceDefinition(
         starting_line=62,
         source="""
             def invalid_python_syntax():
@@ -89,12 +88,8 @@ def test_syntax_error_without_function():
         """,
     )
 
-    captured_vars = CapturedVars(
-        nonlocals={}, globals={}, annotations={}, builtins=set(), unbound=set()
-    )
-
     with pytest.raises(SyntaxError) as exc_info:
-        _ = FieldOperatorParser.apply(source_definition, captured_vars)
+        _ = f2f.FieldOperatorParser.apply(source_definition, {}, {})
 
     exc = exc_info.value
 
@@ -114,8 +109,8 @@ def test_fo_type_deduction_error():
     def field_operator_with_undeclared_symbol():
         return undeclared_symbol
 
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
-        _ = FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)
+    with pytest.raises(type_deduction.FieldOperatorTypeDeductionError) as exc_info:
+        _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)
 
     exc = exc_info.value
 
