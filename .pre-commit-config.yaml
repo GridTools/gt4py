@@ -25,8 +25,8 @@ repos:
   hooks:
   - id: pretty-format-ini
     args: [--autofix]
-  - id: pretty-format-toml
-    args: [--autofix]
+          # - id: pretty-format-toml # TODO enable once https://github.com/macisamuele/language-formatters-pre-commit-hooks/issues/133 is resolved
+          #   args: [--autofix]
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
@@ -38,7 +38,6 @@ repos:
     exclude: ^\..*$
     types: [python]
     args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
-
 
           # - repo: https://github.com/asottile/yesqa
           #   rev: v1.2.2
