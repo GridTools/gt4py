@@ -13,9 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import abc
 import typing
+from typing import Any, Optional
 
-from functional.ffront import common_types as ct
-from functional.ffront.source_utils import CapturedVars
+from functional.ffront import type_specifications as ts
 from functional.iterator import ir as itir
 
 
@@ -28,7 +28,7 @@ class GTCallable(typing.Protocol):
     from ``ffront`` programs or operators.
     """
 
-    def __gt_captured_vars__(self) -> typing.Optional[CapturedVars]:
+    def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         """
         Return all external variables referenced inside the callable.
 
@@ -38,7 +38,7 @@ class GTCallable(typing.Protocol):
         return None
 
     @abc.abstractmethod
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         """
         Return symbol type, i.e. signature and return type.
 

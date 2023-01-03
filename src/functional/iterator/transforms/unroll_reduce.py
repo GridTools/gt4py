@@ -1,13 +1,23 @@
+import dataclasses
 from collections.abc import Iterable
 
 from eve import NodeTranslator
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.iterator import ir
 
 
+@dataclasses.dataclass(frozen=True)
 class UnrollReduce(NodeTranslator):
+    # we use one UID generator per instance such that the generated ids are
+    # stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+
+    @classmethod
+    def apply(cls, node: ir.Node, **kwargs):
+        return cls().visit(node, **kwargs)
+
     @staticmethod
-    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
+    def _find_connectivities(reduce_args: Iterable[ir.Expr], offset_provider):
         connectivities = []
         for arg in reduce_args:
             if (
@@ -17,6 +27,19 @@ class UnrollReduce(NodeTranslator):
             ):
                 assert isinstance(arg.fun.args[-1], ir.OffsetLiteral), f"{arg.fun.args}"
                 connectivities.append(offset_provider[arg.fun.args[-1].value])
+            # if the argument is a lift call by itself look at its arguments recursively
+            elif (
+                isinstance(arg, ir.FunCall)
+                and isinstance(arg.fun, ir.FunCall)
+                and arg.fun.fun == ir.SymRef(id="lift")
+            ):
+                connectivities.extend(UnrollReduce._find_connectivities(arg.args, offset_provider))
+
+        return connectivities
+
+    @staticmethod
+    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
+        connectivities = UnrollReduce._find_connectivities(reduce_args, offset_provider)
 
         if not connectivities:
             raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
@@ -60,9 +83,9 @@ class UnrollReduce(NodeTranslator):
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
-        acc = ir.SymRef(id=UIDs.sequential_id(prefix="_acc"))
-        offset = ir.SymRef(id=UIDs.sequential_id(prefix="_i"))
-        step = ir.SymRef(id=UIDs.sequential_id(prefix="_step"))
+        acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
+        offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
+        step = ir.SymRef(id=self.uids.sequential_id(prefix="_step"))
 
         assert isinstance(node.fun, ir.FunCall)
         fun, init = node.fun.args

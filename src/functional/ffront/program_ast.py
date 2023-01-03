@@ -17,37 +17,45 @@ from typing import Any, Generic, Literal, Optional, TypeVar, Union
 import eve
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from functional.ffront import common_types
+from functional.ffront import dialect_ast_enums, type_specifications as ts
 
 
 class LocatedNode(Node):
     location: SourceLocation
 
 
-SymbolT = TypeVar("SymbolT", bound=common_types.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, common_types.DeferredSymbolType]  # noqa A003
-    namespace: common_types.Namespace = common_types.Namespace(common_types.Namespace.LOCAL)
+    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
+        dialect_ast_enums.Namespace.LOCAL
+    )
 
 
-DataTypeT = TypeVar("DataTypeT", bound=common_types.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=common_types.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ts.FieldType)
 FieldSymbol = Symbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=common_types.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ts.ScalarType)
 ScalarSymbol = Symbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=common_types.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ts.TupleType)
 TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[common_types.SymbolType] = None  # noqa A003
+    type: Optional[ts.TypeSpec] = None  # noqa A003
+
+
+class BinOp(Expr):
+    op: dialect_ast_enums.BinaryOperator
+    left: Expr
+    right: Expr
 
 
 class Name(Expr):
@@ -73,6 +81,11 @@ class Constant(Expr):
     value: Any  # TODO(tehrengruber): be more restrictive
 
 
+class Dict(Expr):
+    keys_: list[Name]
+    values_: list[TupleExpr]
+
+
 class Slice(Expr):
     lower: Optional[Constant]
     upper: Optional[Constant]
@@ -85,7 +98,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[common_types.ProgramType, common_types.DeferredSymbolType]  # noqa A003
+    type: Union[ts.ProgramType, ts.DeferredType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
-    captured_vars: list[Symbol]
+    closure_vars: list[Symbol]

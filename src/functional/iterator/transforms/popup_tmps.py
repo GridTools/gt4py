@@ -1,13 +1,15 @@
+import dataclasses
 from collections.abc import Callable
 from functools import partial
 from typing import Optional, Union, cast
 
 from eve import NodeTranslator
-from eve.utils import UIDs
+from eve.utils import UIDGenerator
 from functional.iterator import ir
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs
 
 
+@dataclasses.dataclass(frozen=True)
 class PopupTmps(NodeTranslator):
     """Transformation for “popping up” nested lifts to lambda arguments.
 
@@ -21,6 +23,10 @@ class PopupTmps(NodeTranslator):
     as we can not pop the expression to be a closure input (because closures
     just take unmodified fencil arguments as inputs).
     """
+
+    # we use one UID generator per instance such that the generated ids are
+    #  stable across multiple runs (required for caching to properly work)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @staticmethod
     def _extract_lambda(
@@ -36,6 +42,7 @@ class PopupTmps(NodeTranslator):
         So The behavior is the following:
         - For `lift(f)(args...)` it returns `(f, True, wrap)`.
         - For `lift(scan(f, dir, init))(args...)` it returns `(f, True, wrap)`.
+        - For `lift(reduce(f, init))(args...)` it returns `(None, True, wrap)`.
         - For `f(args...)` it returns `(f, False, wrap)`.
         - For any other expression, it returns `None`.
 
@@ -48,11 +55,16 @@ class PopupTmps(NodeTranslator):
             fun = node.fun.args[0]
 
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
+            is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
                 assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
                 params = fun.params[1:]
+            elif is_reduce:
+                fun = fun.args[0]
+                params = fun.params[1:]
             else:
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
@@ -64,6 +76,9 @@ class PopupTmps(NodeTranslator):
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
+                elif is_reduce:
+                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
+                    f = node.fun.args[0]
                 else:
                     f = fun
                 return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
@@ -145,7 +160,7 @@ class PopupTmps(NodeTranslator):
 
             # if this is the first time we lift that expression, create a new
             # symbol for it and register it so the parent node knows about it
-            ref = ir.SymRef(id=UIDs.sequential_id(prefix="_lift"))
+            ref = ir.SymRef(id=self.uids.sequential_id(prefix="_lift"))
             lifts[call] = ref
             return ref
         return self.generic_visit(node, lifts=lifts)

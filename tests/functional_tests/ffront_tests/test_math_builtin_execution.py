@@ -4,18 +4,17 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from functional.fencil_processors.runners import roundtrip
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
-    symbol_makers,
+    type_translation,
 )
 from functional.ffront.decorator import FieldOperator
-from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
+from functional.ffront.fbuiltins import Dimension, Field, float64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from functional.ffront.source_utils import CapturedVars
 from functional.iterator.embedded import np_as_located_field
+from functional.program_processors.runners import roundtrip
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -50,31 +49,25 @@ def make_builtin_field_operator(builtin_name: str):
     else:
         raise AssertionError(f"Unknown builtin `{builtin_name}`")
 
-    captured_vars = CapturedVars(
-        nonlocals={"IDim": IDim},
-        globals={builtin_name: getattr(fbuiltins, builtin_name)},
-        annotations=annotations,
-        builtins=set(),
-        unbound=set(),
-    )
+    closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
     params = [
-        foast.Symbol(id=k, type=symbol_makers.make_symbol_type_from_typing(type), location=loc)
+        foast.Symbol(id=k, type=type_translation.from_type_hint(type), location=loc)
         for k, type in annotations.items()
         if k != "return"
     ]
     args = [foast.Name(id=k, location=loc) for k, _ in annotations.items() if k != "return"]
 
-    captured_vars_nodes = [
+    closure_var_symbols = [
         foast.Symbol(
             id=name,
-            type=symbol_makers.make_symbol_type_from_value(val),
-            namespace=ct.Namespace.CLOSURE,
+            type=type_translation.from_value(val),
+            namespace=dialect_ast_enums.Namespace.CLOSURE,
             location=loc,
         )
-        for name, val in {**captured_vars.globals, **captured_vars.nonlocals}.items()
+        for name, val in closure_vars.items()
     ]
 
     foast_node = foast.FieldOperator(
@@ -92,7 +85,7 @@ def make_builtin_field_operator(builtin_name: str):
                     location=loc,
                 )
             ],
-            captured_vars=captured_vars_nodes,
+            closure_vars=closure_var_symbols,
             params=params,
             location=loc,
         ),
@@ -102,8 +95,7 @@ def make_builtin_field_operator(builtin_name: str):
 
     return FieldOperator(
         foast_node=typed_foast_node,
-        captured_vars=captured_vars,
-        externals={},
+        closure_vars=closure_vars,
         backend=fieldview_backend,
         definition=None,
     )

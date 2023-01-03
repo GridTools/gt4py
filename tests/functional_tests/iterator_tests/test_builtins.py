@@ -4,17 +4,22 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from functional.fencil_processors import type_check
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
+from functional.iterator import builtins as it_builtins
 from functional.iterator.builtins import (
     and_,
+    bool,
     can_deref,
     cartesian_domain,
+    cast_,
     deref,
     divides,
     eq,
+    float32,
+    float64,
     greater,
     if_,
+    int32,
+    int64,
     less,
     lift,
     minus,
@@ -24,13 +29,15 @@ from functional.iterator.builtins import (
     or_,
     plus,
     shift,
+    xor_,
 )
 from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from functional.program_processors.formatters import type_check
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
-from .test_hdiff import I
 
 
 def asarray(*lists):
@@ -115,15 +122,20 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [True, False, False, False],
         ),
         (or_, [[True, True, False, False], [True, False, True, False]], [True, True, True, False]),
+        (
+            xor_,
+            [[True, True, False, False], [True, False, True, False]],
+            [False, True, True, False],
+        ),
     ],
 )
-def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expected, as_column):
-    fencil_processor, validate = fencil_processor
+def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
+    program_processor, validate = program_processor
 
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    fencil(builtin, out, *inps, processor=fencil_processor, as_column=as_column)
+    fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
@@ -131,12 +143,10 @@ def test_arithmetic_and_logical_builtins(fencil_processor, builtin, inputs, expe
 
 @pytest.mark.parametrize("as_column", [False, True])
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_column):
-    from functional.iterator import builtins as it_builtins
+def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
+    program_processor, validate = program_processor
 
-    fencil_processor, validate = fencil_processor
-
-    if fencil_processor == type_check.check:
+    if program_processor == type_check.check:
         pytest.xfail("type inference does not yet support math builtins")
 
     if builtin_name == "gamma":
@@ -154,7 +164,7 @@ def test_math_function_builtins(fencil_processor, builtin_name, inputs, as_colum
         getattr(it_builtins, builtin_name),
         out,
         *inps,
-        processor=fencil_processor,
+        processor=program_processor,
         as_column=as_column,
     )
 
@@ -181,10 +191,10 @@ def _can_deref_lifted(inp):
 
 
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
-def test_can_deref(fencil_processor, stencil):
-    fencil_processor, validate = fencil_processor
+def test_can_deref(program_processor, stencil):
+    program_processor, validate = program_processor
 
-    if fencil_processor == run_gtfn:
+    if program_processor == run_gtfn:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
 
     Node = CartesianAxis("Node")
@@ -195,7 +205,7 @@ def test_can_deref(fencil_processor, stencil):
     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
     run_processor(
         stencil[{Node: range(1)}],
-        fencil_processor,
+        program_processor,
         inp,
         out=out,
         offset_provider={"Neighbor": no_neighbor_tbl},
@@ -207,7 +217,7 @@ def test_can_deref(fencil_processor, stencil):
     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
     run_processor(
         stencil[{Node: range(1)}],
-        fencil_processor,
+        program_processor,
         inp,
         out=out,
         offset_provider={"Neighbor": a_neighbor_tbl},
@@ -217,8 +227,8 @@ def test_can_deref(fencil_processor, stencil):
         assert np.allclose(np.asarray(out), 1.0)
 
 
-# def test_can_deref_lifted(fencil_processor):
-#     fencil_processor, validate = fencil_processor
+# def test_can_deref_lifted(program_processor):
+#     program_processor, validate = program_processor
 
 #     Neighbor = offset("Neighbor")
 #     Node = CartesianAxis("Node")
@@ -233,7 +243,7 @@ def test_can_deref(fencil_processor, stencil):
 
 #     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, fencil_processor=fencil_processor
+#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, program_processor=program_processor
 #     )
 
 #     if validate:
@@ -241,8 +251,51 @@ def test_can_deref(fencil_processor, stencil):
 
 #     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
-#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, fencil_processor=fencil_processor
+#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, program_processor=program_processor
 #     )
 
 #     if validate:
 #         assert np.allclose(np.asarray(out), 1.0)
+
+
+# There is no straight-forward way to test cast, because when we define the
+# output buffer with the cast-to type an implicit conversion will happen even
+# if no explicit cast was done.
+# Therefore, we have to set up the test in a way that the explicit cast is required,
+# e.g. by a combination of explicit an implicit cast.
+# Test setup:
+# - Input buffer is setup with the dtype from `input_value`
+# - Output buffer is setup with the type of the `expected_value`
+# `expected_value` should be chosen with a different type than the explict cast-to type `dtype`.
+@pytest.mark.parametrize(
+    "input_value, dtype, expected_value",
+    [
+        (float64("0.1"), float32, float64(float32("0.1"))),
+        (int64(42), bool, int64(1)),
+        (int64(2147483648), int32, int64(-2147483648)),
+        (int64(2147483648), int64, int64(2147483648)),  # int64 does not accidentally down-cast
+    ],
+)
+@pytest.mark.parametrize("as_column", [False, True])
+def test_cast(program_processor, as_column, input_value, dtype, expected_value):
+    program_processor, validate = program_processor
+    column_axis = IDim if as_column else None
+
+    inp = asfield(*asarray(input_value))[0]
+    out = asfield((np.zeros_like(*asarray(expected_value))))[0]
+
+    @fundef
+    def sten_cast(value):
+        return cast_(deref(value), dtype)
+
+    run_processor(
+        sten_cast[{IDim: range(1)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={},
+        column_axis=column_axis,
+    )
+
+    if validate:
+        assert out[0] == expected_value

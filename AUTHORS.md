@@ -15,6 +15,7 @@
 * Häuselmann, Rico. ETH Zurich - CSCS
 * Kardos, Péter. ETH Zurich - EXCLAIM
 * Kellerhals, Samuel. ETH Zurich - EXCLAIM
+* Luz, Magdalena. ETH Zurich - EXCLAIM
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
 * Müller, Christoph. MeteoSwiss

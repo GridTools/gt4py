@@ -35,12 +35,13 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
-from typing_extensions import *  # type: ignore[misc]  # noqa: F403
+import typing_extensions as _typing_extensions
+from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
 
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[misc]  # isort:skip
+    from builtins import (  # type: ignore[assignment]  # isort:skip
         tuple as Tuple,
         list as List,
         dict as Dict,
@@ -328,7 +329,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
             # Define a patched version of the proto hook which ignores
             # __is_callable_members_only() result at certain points
-            def _patched_proto_hook(other):
+            def _patched_proto_hook(other):  # type: ignore[no-untyped-def]
                 if not cls.__dict__.get("_is_protocol", False):
                     return NotImplemented
 
@@ -385,23 +386,43 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
     return _decorator(maybe_cls) if maybe_cls is not None else _decorator
 
 
+_ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
+    _ArtefactTypes = (_types.GenericAlias,)
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
+    # `Any` is a class since Python 3.11
+    if isinstance(_typing.Any, type):  # Python >= 3.11
+        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
-        This is needed because since Python 3.9: ``isinstance(types.GenericAlias(),  type) is True``.
-        """
-        return isinstance(obj, type) and not isinstance(obj, _types.GenericAlias)
+# `Any` is a class since typing_extensions >= 4.4
+if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
+    typing_exts_any, type
+):
+    _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
+
+
+def is_actual_type(obj: Any) -> TypeGuard[Type]:
+    """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
+
+    This is needed because since Python 3.9:
+        ``isinstance(types.GenericAlias(),  type) is True``
+    and since Python 3.11:
+        ``isinstance(typing.Any,  type) is True``
+    """
+    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
+
+
+if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
+    # When using Python < 3.11 and typing_extensions >= 4.4 there are
+    # two different implementations of `Any`
+
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any or obj is _typing_extensions.Any
 
 else:
 
-    def is_actual_type(obj: Any) -> TypeGuard[Type]:
-        """Check if an object is an actual type and not a GenericAlias.
-
-        This is only needed for Python >= 3.9, where ``isinstance(types.GenericAlias(),  type) is True``.
-        """
-        return isinstance(obj, type)
+    def is_Any(obj: Any) -> bool:
+        return obj is _typing.Any
 
 
 def has_type_parameters(cls: Type) -> bool:
@@ -422,7 +443,7 @@ class HasCustomHash(Hashable):
     """ABC for types defining a custom hash function."""
 
     @classmethod
-    def __subclasshook__(cls, candidate_cls) -> bool:
+    def __subclasshook__(cls, candidate_cls: type) -> bool:
         return is_type_with_custom_hash(candidate_cls)
 
 
@@ -618,14 +639,14 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         dict[str, int]
 
         >>> infer_type({'a': 0, 'b': 'B'})
-        dict[str, typing.Any]
+        dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
-        Result: ...Callable[[typing.Any, typing.Any], typing.Any]
+        Result: ...Callable[[...Any, ...Any], ...Any]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
-        Result: ...Callable[[int, typing.Any], int]
+        Result: ...Callable[[int, ...Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
@@ -700,7 +721,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
                 elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
                     raise TypeError("Variadic callables are not supported")
 
-            result: Any = Callable[arg_types, return_type]  # type: ignore[misc]  # explicitly build annotation at runtime
+            result: Any = Callable[arg_types, return_type]
             if annotate_callable_kwargs:
                 result = Annotated[result, CallableKwargsInfo(kwonly_arg_types)]
             return result

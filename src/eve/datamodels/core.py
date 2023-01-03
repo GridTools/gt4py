@@ -33,10 +33,10 @@ import attrs
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
+    import cytoolz as toolz  # type: ignore[import]
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
+    import toolz  # type: ignore[import] # noqa: F401
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -124,17 +124,12 @@ class GenericDataModelTP(DataModelTP, Protocol):
 
 GenericDataModelT = TypeVar("GenericDataModelT", bound=GenericDataModelTP)
 
-if xtyping.TYPE_CHECKING:
-    AttrsValidator = Callable[[Any, attr.Attribute[_T], _T], Any]
-    FieldValidator = Callable[[DataModelTP, attr.Attribute[_T], _T], None]
-    BoundFieldValidator = Callable[[attr.Attribute[_T], _T], None]
-else:
-    AttrsValidator = Callable[[Any, attr.Attribute, _T], Any]
-    FieldValidator = Callable[[DataModelTP, Attribute, _T], None]
-    BoundFieldValidator = Callable[[Attribute, _T], None]
+AttrsValidator = Callable[[Any, Attribute, _T], Any]
+FieldValidator = Callable[["DataModel", Attribute, _T], None]
+BoundFieldValidator = Callable[[Attribute, _T], None]
 
-RootValidator = Callable[[Type[DataModelTP], DataModelTP], None]
-BoundRootValidator = Callable[[DataModelTP], None]
+RootValidator = Callable[[Type["DataModel"], "DataModel"], None]
+BoundRootValidator = Callable[["DataModel"], None]
 
 FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
 
@@ -183,10 +178,10 @@ class ForwardRefValidator:
     validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
     """Actual type validator created after resolving the forward references."""
 
-    def __call__(self, instance: DataModel, attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, instance: DataModel, attribute: Attribute, value: Any) -> None:
         if self.validator is NOTHING:
             model_cls = instance.__class__
-            update_forward_refs(model_cls)  # type: ignore[type-var]  # model_cls is an actual type
+            update_forward_refs(model_cls)
             self.validator = self.factory(
                 getattr(getattr(model_cls, MODEL_FIELD_DEFINITIONS_ATTR), attribute.name).type,
                 attribute.name,
@@ -203,7 +198,7 @@ class ValidatorAdapter:
     validator: type_val.FixedTypeValidator
     description: str
 
-    def __call__(self, _instance: DataModel, _attribute: attr.Attribute, value: Any) -> None:
+    def __call__(self, _instance: DataModel, _attribute: Attribute, value: Any) -> None:
         self.validator(value)
 
     def __repr__(self) -> str:
@@ -217,7 +212,7 @@ def field_type_validator_factory(
     if use_cache:
         factory = cast(
             type_val.TypeValidatorFactory,
-            utils.optional_lru_cache(func=factory),  # type: ignore[arg-type]  # factory is not detected as callable
+            utils.optional_lru_cache(func=factory),
         )
 
     def _field_type_validator_factory(
@@ -311,7 +306,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
 def datamodel(  # noqa: F811  # redefinion of unused symbol
-    cls: Type[_T] = None,
+    cls: Optional[Type[_T]] = None,
     /,
     *,
     repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
@@ -400,7 +395,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
 class _DataModelDecoratorTP(Protocol[_T]):
     def __call__(
         self,
-        cls: Type[_T] = None,
+        cls: Optional[Type[_T]] = None,
         /,
         *,
         repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
@@ -427,7 +422,15 @@ frozen_model = frozenmodel
 
 # Typing protocols are used instead of the actual classes for type checks
 if xtyping.TYPE_CHECKING:
-    DataModel: TypeAlias = DataModelTP
+
+    class DataModel(DataModelTP):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            ...
+
+        def __pretty__(
+            self, fmt: Callable[[Any], Any], **kwargs: Any
+        ) -> Generator[Any, None, None]:
+            ...
 
 else:
 
@@ -466,9 +469,7 @@ else:
             **kwargs: Any,
         ) -> None:
             dm_opts = kwargs.pop(_DM_OPTS, [])
-            super(DataModel, cls).__init_subclass__(
-                **kwargs
-            )  # type: ignore[call-arg]  # is not guaranteed that superclass does not accept kwargs
+            super(DataModel, cls).__init_subclass__(**kwargs)
             cls_params = getattr(cls, MODEL_PARAM_DEFINITIONS_ATTR, None)
 
             generic: Final = (
@@ -503,7 +504,7 @@ else:
                 cls,
                 slots=False,
                 generic=generic,
-                **datamodel_kwargs,  # type: ignore[arg-type]  # passing actual arguments in the dict
+                **datamodel_kwargs,
                 _stacklevel_offset=1,
             )
 
@@ -582,7 +583,7 @@ def field(
     else:
         defaults_kwargs = {}
 
-    return attrs.field(  # type: ignore[call-overload]  # attrs lies in some typings
+    return attrs.field(
         **defaults_kwargs,
         init=init,
         repr=repr,
@@ -876,7 +877,7 @@ def _get_attribute_from_bases(
 def _substitute_typevars(
     type_hint: Type, type_params_map: Mapping[TypeVar, Union[Type, TypeVar]]
 ) -> Tuple[Union[Type, TypeVar], bool]:
-    if isinstance(type_hint, xtyping.TypeVar):
+    if isinstance(type_hint, typing.TypeVar):
         assert type_hint in type_params_map
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
@@ -915,7 +916,7 @@ def _make_counting_attr_from_attribute(
     if include_type:
         args.append("type")
 
-    result = attr.ib(**{key: getattr(field_attrib, key) for key in args}, **kwargs)  # type: ignore[call-overload]  # too hard for mypy
+    result = attr.ib(**{key: getattr(field_attrib, key) for key in args}, **kwargs)
     for key in ("eq_key", "order_key"):
         object.__setattr__(result, key, getattr(field_attrib, key))
 
@@ -1260,9 +1261,9 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
     if "__attrs_init__" in new_cls.__dict__:
         assert "__auto_init__" not in cls.__dict__
-        new_cls.__auto_init__ = new_cls.__attrs_init__  # type: ignore[attr-defined]  # adding new attribute
+        new_cls.__auto_init__ = new_cls.__attrs_init__
 
-    new_cls.__pretty__ = _make_devtools_pretty()  # type: ignore[attr-defined]  # adding new attribute
+    new_cls.__pretty__ = _make_devtools_pretty()
     setattr(
         new_cls,
         MODEL_PARAM_DEFINITIONS_ATTR,
@@ -1284,11 +1285,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
     setattr(
         new_cls,
         MODEL_FIELD_DEFINITIONS_ATTR,
-        utils.FrozenNamespace(
-            **{
-                f_attr.name: f_attr for f_attr in new_cls.__attrs_attrs__  # type: ignore[attr-defined]  # new_cls.__attrs_attrs__ is valid
-            }
-        ),
+        utils.FrozenNamespace(**{f_attr.name: f_attr for f_attr in new_cls.__attrs_attrs__}),
     )
     new_cls.update_forward_refs = classmethod(update_forward_refs)
 
@@ -1379,7 +1376,8 @@ def _make_concrete_with_cache(
 
 
 if xtyping.TYPE_CHECKING:
-    FrozenModel: TypeAlias = DataModelTP
+    FrozenModel: TypeAlias = DataModel
+
 else:
 
     class FrozenModel(DataModel, frozen=True):
@@ -1387,7 +1385,14 @@ else:
 
 
 if xtyping.TYPE_CHECKING:
-    GenericDataModel: TypeAlias = GenericDataModelTP
+
+    class GenericDataModel(GenericDataModelTP):
+        @classmethod
+        def __class_getitem__(
+            cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
+        ) -> Union[DataModelTP, GenericDataModelTP]:
+            ...
+
 else:
 
     class GenericDataModel(DataModel, __dm_opts=[_GENERIC_DATAMODEL_ROOT_DM_OPT]):

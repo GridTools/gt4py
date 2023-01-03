@@ -2,11 +2,13 @@ import numpy as np
 import pytest
 
 from functional.common import Dimension
-from functional.fencil_processors.formatters.gtfn import format_sourcecode as gtfn_format_sourcecode
-from functional.fencil_processors.runners.gtfn_cpu import run_gtfn
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
+from functional.program_processors.formatters.gtfn import (
+    format_sourcecode as gtfn_format_sourcecode,
+)
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -67,12 +69,12 @@ def basic_stencils(request):
     return request.param
 
 
-def test_basic_column_stencils(fencil_processor, lift_mode, basic_stencils):
-    fencil_processor, validate = fencil_processor
+def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
+    program_processor, validate = program_processor
     stencil, ref_fun, inp_fun, skip_backend = basic_stencils
     if skip_backend is not None:
         skip_backend_fun, msg = skip_backend
-        if skip_backend_fun(fencil_processor):
+        if skip_backend_fun(program_processor):
             pytest.xfail(msg)
 
     shape = [5, 7]
@@ -87,7 +89,7 @@ def test_basic_column_stencils(fencil_processor, lift_mode, basic_stencils):
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
-        fencil_processor,
+        program_processor,
         inp,
         out=out,
         offset_provider={"I": IDim, "K": KDim},
@@ -126,15 +128,15 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
         (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]])),
     ],
 )
-def test_ksum_scan(fencil_processor, lift_mode, kstart, reference):
-    fencil_processor, validate = fencil_processor
+def test_ksum_scan(program_processor, lift_mode, kstart, reference):
+    program_processor, validate = program_processor
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     run_processor(
         ksum_fencil,
-        fencil_processor,
+        program_processor,
         shape[0],
         kstart,
         shape[1],
@@ -163,8 +165,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_back_scan(fencil_processor, lift_mode):
-    fencil_processor, validate = fencil_processor
+def test_ksum_back_scan(program_processor, lift_mode):
+    program_processor, validate = program_processor
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -173,7 +175,7 @@ def test_ksum_back_scan(fencil_processor, lift_mode):
 
     run_processor(
         ksum_back_fencil,
-        fencil_processor,
+        program_processor,
         shape[0],
         shape[1],
         inp,
@@ -225,9 +227,9 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
         ),
     ],
 )
-def test_kdoublesum_scan(fencil_processor, lift_mode, kstart, reference):
-    fencil_processor, validate = fencil_processor
-    if fencil_processor == run_gtfn or fencil_processor == gtfn_format_sourcecode:
+def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn or program_processor == gtfn_format_sourcecode:
         pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
     inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
@@ -236,7 +238,7 @@ def test_kdoublesum_scan(fencil_processor, lift_mode, kstart, reference):
 
     run_processor(
         kdoublesum_fencil,
-        fencil_processor,
+        program_processor,
         shape[0],
         kstart,
         shape[1],

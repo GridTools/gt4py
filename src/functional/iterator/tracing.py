@@ -59,6 +59,10 @@ def _patch_Expr():
         return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
+    def __rsub__(self, other):
+        return FunCall(fun=SymRef(id="minus"), args=[make_node(other), self])
+
+    @monkeypatch_method(Expr)
     def __gt__(self, other):
         return FunCall(fun=SymRef(id="greater"), args=[self, make_node(other)])
 

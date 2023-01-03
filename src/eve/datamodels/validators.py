@@ -29,7 +29,7 @@ import typing
 from typing import Any
 
 import attrs
-from attrs.validators import (  # type: ignore[attr-defined]  # noqa: F401  # imported but unused
+from attrs.validators import (
     and_,
     deep_iterable,
     deep_mapping,
@@ -48,6 +48,26 @@ from attrs.validators import (  # type: ignore[attr-defined]  # noqa: F401  # im
 
 if typing.TYPE_CHECKING:
     from .core import DataModelTP, FieldValidator
+
+
+__all__ = [
+    # reexported from attrs
+    "and_",
+    "deep_iterable",
+    "deep_mapping",
+    "ge",
+    "gt",
+    "in_",
+    "instance_of",
+    "is_callable",
+    "le",
+    "lt",
+    "matches_re",
+    "max_len",
+    "optional",
+    # custom
+    "non_empty",
+]
 
 
 @attrs.define(repr=False, frozen=True, slots=True)

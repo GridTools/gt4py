@@ -4,12 +4,16 @@ tags: [backend]
 
 # Integration of compiled backends
 
-- **Status**: valid 
+- **Status**: superseded 
 - **Authors**: Peter Kardos (@petiaccja), Rico Häuselmann (@DropD)
 - **Created**: 2022-07-13
-- **Updated**: 2022-08-15
+- **Updated**: 2022-09-12
 
 Summary of the key design choices made for the live execution of generated C++ (and other compiled) code.
+
+**This document is superseded by**
+- [0011 - On The Fly Compilation](0011-_On_The_Fly_Compilation.md), which talks about the general architecture and design of on the fly compilation, and
+- [0012 - GridTools C++ OTF](0011-_GridTools_Cpp_OTF.md), which talks the specifics of on-the-fly compilation of the GridTools C++ backend generated code.
 
 ## Context
 
@@ -36,7 +40,7 @@ The chosen design is so that there is a clear interface for every step from ITIR
 
 Translate IteratorIR into "backend language", for example C++ using GridTools.
 
-The `FencilSourceModuleGenerator` protocol in `fencil_processors.processor_interface` interface defines the interface for the first step, from IteratorIR to `fencil_processors.source_modules.source_modules.SourceModule`. This step can optionally make use of a `FencilFormatter` (also defined in `processor_interface.py`) to deliver the source code along with information accessible to further steps. 
+The `SourceModuleGenerator` protocol in `fencil_processors.processor_interface` interface defines the interface for the first step, from IteratorIR to `fencil_processors.source_modules.source_modules.SourceModule`. This step can optionally make use of a `ProgramFormatter` (also defined in `processor_interface.py`) to deliver the source code along with information accessible to further steps. 
 
 The output of this step is a `SourceModule` instance, which is safely hashable.
 
@@ -46,7 +50,7 @@ This is the only step required if one is interested only in the backend language
 
 Generate bindings to call the compiled backend language code from Python (Technically this could be for another language but then the pipeline would not lead to an executable fencil).
 
-The interface for step two is defined in the `fencil_processors.pipeline.BindingsGenerator` protocol. The first example is implemented in `fencil_processors.builders.cpp.bindings.create_bindings`.
+The interface for step two is defined in the `fencil_processors.pipeline.BindingStep` protocol. The first example is implemented in `fencil_processors.builders.cpp.bindings.create_bindings`.
 
 The output of this step is a `BindingsModule` instance and also safely hashable.
 
