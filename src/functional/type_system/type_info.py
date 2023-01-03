@@ -14,7 +14,7 @@
 
 import functools
 from types import EllipsisType
-from typing import Callable, Iterator, Type, TypeGuard, cast
+from typing import Callable, Iterator, Optional, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
@@ -60,7 +60,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
 
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
+    symbol_type: Optional[ts.TypeSpec],
 ) -> XIterable[ts.TypeSpec]:
     """
     Return the primitive types contained in a composite type.
@@ -79,7 +79,7 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.TypeSpec):
+    def constituents_yielder(symbol_type: Optional[ts.TypeSpec]):
         if isinstance(symbol_type, ts.TupleType):
             for el_type in symbol_type.types:
                 yield from constituents_yielder(el_type)
@@ -228,7 +228,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_field_type_or_tuple_of_field_type(type_: ts.TypeSpec) -> bool:
+def is_field_type_or_tuple_of_field_type(type_: Optional[ts.TypeSpec]) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
 
