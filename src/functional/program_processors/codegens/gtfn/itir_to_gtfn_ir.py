@@ -425,7 +425,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _is_scan(node: itir.Node):
         return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
-    def _visit_output_argument(self, node: itir.Expr | itir.FunCall):
+    def _visit_output_argument(self, node: itir.Expr):
         if isinstance(node, itir.SymRef):
             return self.visit(node)
         elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
