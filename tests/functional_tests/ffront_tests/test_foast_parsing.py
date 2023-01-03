@@ -25,12 +25,21 @@ import re
 
 import pytest
 
+from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types
-from functional.ffront.fbuiltins import Dimension, broadcast, float32, float64, int32, int64, where
+from functional.ffront import field_operator_ast as foast, type_specifications as ts
+from functional.ffront.fbuiltins import (
+    Dimension,
+    astype,
+    broadcast,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -48,7 +57,9 @@ from functional.iterator.builtins import (
     or_,
     plus,
     tuple_get,
+    xor_,
 )
+from functional.type_system.type_translation import TypingError
 
 
 DEREF = itir.SymRef(id=deref.fun.__name__)
@@ -65,6 +76,7 @@ LESS = itir.SymRef(id=less.fun.__name__)
 EQ = itir.SymRef(id=eq.fun.__name__)
 AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
+XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
@@ -103,9 +115,9 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -143,9 +155,9 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.annex.symtable["tmp__0"].type == common_types.FieldType(
+    assert parsed.annex.symtable["tmp__0"].type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -164,21 +176,22 @@ def test_binary_pow():
 
     parsed = FieldOperatorParser.apply_to_function(power)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
 def test_binary_mod():
-    def power(inp: Field[..., "int64"]):
+    def modulo(inp: Field[..., "int64"]):
         return inp % 3
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`%` operator not supported!"),
-    ):
-        _ = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(modulo)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.INT64, shape=None),
+    )
 
 
 def test_bool_and():
@@ -201,6 +214,30 @@ def test_bool_or():
         match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+def test_bool_xor():
+    def bool_xor(a: Field[..., "bool"], b: Field[..., "bool"]):
+        return a ^ b
+
+    parsed = FieldOperatorParser.apply_to_function(bool_xor)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+    )
+
+
+def test_unary_tilde():
+    def unary_tilde(a: Field[..., "bool"]):
+        return ~a
+
+    parsed = FieldOperatorParser.apply_to_function(unary_tilde)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+    )
 
 
 def test_scalar_cast():
@@ -286,41 +323,51 @@ def test_no_implicit_broadcast_in_field_op_call():
     FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
 
 
-# TODO implement
-# TODO add execution test
-def test_implicit_broadcast_in_field_op_call():
-    """See ADR 11."""
+def test_astype():
+    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
+        return astype(a, float64)
 
-    def implicit_broadcast_in_field_op_call(scalar: Field[[], float]) -> Field[[], float]:
-        return scalar
+    parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
 
-    def implicit_broadcast_in_field_op_call_caller() -> Field[[], float]:
-        return implicit_broadcast_in_field_op_call(1.0)
-
-    FieldOperatorParser.apply_to_function(implicit_broadcast_in_field_op_call_caller)
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 # --- External symbols ---
 def test_closure_symbols():
     import numpy as np
 
-    nonlocal_unused = 0  # noqa: F841
-    nonlocal_float = 2.3
-    nonlocal_np_scalar = np.float32(3.4)
+    from eve.utils import FrozenNamespace
+
+    nonlocals_unreferenced = FrozenNamespace()
+    nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
 
     def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
-        a = inp + nonlocal_float
-        b = inp2 + nonlocal_np_scalar
+        a = inp + nonlocals.float_value
+        b = inp2 + nonlocals.np_value
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
-    assert parsed.annex.symtable["nonlocal_float"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT64, shape=None
+    assert "nonlocals_unused" not in parsed.annex.symtable
+    assert "nonlocals" not in parsed.annex.symtable
+
+    pattern_node = P(
+        foast.FunctionDefinition,
+        body=[
+            P(
+                foast.Assign,
+                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.float_value)),
+            ),
+            P(
+                foast.Assign,
+                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.np_value)),
+            ),
+            P(foast.Return),
+        ],
     )
-    assert parsed.annex.symtable["nonlocal_np_scalar"].type == common_types.ScalarType(
-        kind=common_types.ScalarKind.FLOAT32, shape=None
-    )
-    assert "nonlocal_unused" not in parsed.annex.symtable
+    assert pattern_node.match(parsed, raise_exception=True)
 
 
 def test_wrong_return_type_annotation():
@@ -346,3 +393,18 @@ def test_empty_dims_type():
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
+
+
+def test_zero_dims_ternary():
+    ADim = Dimension("ADim")
+
+    def zero_dims_ternary(
+        cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]
+    ):
+        return a if cond == 1 else b
+
+    msg = r"Could not deduce type"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+    assert re.search(msg, exc_info.value.args[0]) is not None

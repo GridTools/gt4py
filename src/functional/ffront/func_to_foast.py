@@ -21,20 +21,24 @@ from typing import Any, Callable, Iterable, Mapping, Type, cast
 import eve
 from functional import common
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
-    symbol_makers,
     type_info,
+    type_specifications as ts,
+    type_translation,
 )
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
     StringifyAnnotationsPass,
     UnchainComparesPass,
-    UnpackedAssignPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
+from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
+from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
+from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 
 
@@ -87,29 +91,33 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         sta = StringifyAnnotationsPass.apply(definition_ast)
         ssa = SingleStaticAssignPass.apply(sta)
         sat = SingleAssignTargetPass.apply(ssa)
-        las = UnpackedAssignPass.apply(sat)
-        ucc = UnchainComparesPass.apply(las)
+        ucc = UnchainComparesPass.apply(sat)
         return ucc
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, foast_node: foast.FieldOperator, annotations: dict[str, Any]
-    ) -> foast.FieldOperator:
-        typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        cls,
+        foast_node: foast.FunctionDefinition | foast.FieldOperator,
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
+    ) -> foast.FunctionDefinition:
+        foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
+        foast_node = DeadClosureVarElimination.apply(foast_node)
+        foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
+        foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = UnpackedAssignPass.apply(foast_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
-            annotated_return_type = symbol_makers.make_symbol_type_from_typing(
-                annotations["return"]
-            )
+            annotated_return_type = type_translation.from_type_hint(annotations["return"])
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            if annotated_return_type != typed_foast_node.type.returns:
+            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise common.GTTypeError(
-                    f"Annotated return type does not match deduced return type. Expected `{typed_foast_node.type.returns}`"
+                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                     f", but got `{annotated_return_type}`."
                 )
-        return typed_foast_node
+        return foast_node
 
     def _builtin_type_constructor_symbols(
         self, captured_vars: Mapping[str, Any], location: eve.SourceLocation
@@ -131,16 +139,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             result.append(
                 foast.Symbol(
                     id=name,
-                    type=ct.FunctionType(
+                    type=ts.FunctionType(
                         args=[
-                            ct.DeferredSymbolType(constraint=ct.ScalarType)
+                            ts.DeferredType(constraint=ts.ScalarType)
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         kwargs={},
-                        returns=cast(
-                            ct.DataType, symbol_makers.make_symbol_type_from_typing(value)
-                        ),
+                        returns=cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
-                    namespace=ct.Namespace.CLOSURE,
+                    namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
                 )
             )
@@ -151,14 +157,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self._make_loc(node)
         )
-        for name, val in self.closure_vars.items():
+        for name in self.closure_vars.keys():
             if name in skip_names:
                 continue
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=symbol_makers.make_symbol_type_from_value(val),
-                    namespace=ct.Namespace.CLOSURE,
+                    type=ts.DeferredType(constraint=None),
+                    namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=self._make_loc(node),
                 )
             )
@@ -177,35 +183,63 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
-        new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, ct.DataType):
+        new_type = type_translation.from_type_hint(annotation)
+        if not isinstance(new_type, ts.DataType):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
         return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
 
-    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign:
+    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
+
         if isinstance(target, ast.Tuple):
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Unpacking not allowed, run a preprocessing pass!"
+            new_targets: list[
+                foast.FieldSymbol | foast.TupleSymbol | foast.ScalarSymbol | foast.Starred
+            ] = []
+
+            for elt in target.elts:
+                if isinstance(elt, ast.Starred):
+                    new_targets.append(
+                        foast.Starred(
+                            id=foast.DataSymbol(
+                                id=self.visit(elt.value).id,
+                                location=self._make_loc(elt),
+                                type=ts.DeferredType(constraint=ts.DataType),
+                            ),
+                            location=self._make_loc(elt),
+                            type=ts.DeferredType(constraint=ts.DataType),
+                        )
+                    )
+                else:
+                    new_targets.append(
+                        foast.DataSymbol(
+                            id=self.visit(elt).id,
+                            location=self._make_loc(elt),
+                            type=ts.DeferredType(constraint=ts.DataType),
+                        )
+                    )
+
+            return foast.TupleTargetAssign(
+                targets=new_targets, value=self.visit(node.value), location=self._make_loc(node)
             )
+
         if not isinstance(target, ast.Name):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
         new_value = self.visit(node.value)
-        constraint_type: Type[ct.DataType] = ct.DataType
+        constraint_type: Type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
-            constraint_type = ct.TupleType
+            constraint_type = ts.TupleType
         elif (
             type_info.is_concrete(new_value.type)
-            and type_info.type_class(new_value.type) is ct.ScalarType
+            and type_info.type_class(new_value.type) is ts.ScalarType
         ):
-            constraint_type = ct.ScalarType
+            constraint_type = ts.ScalarType
         return foast.Assign(
             target=foast.DataSymbol(
                 id=target.id,
                 location=self._make_loc(target),
-                type=ct.DeferredSymbolType(constraint=constraint_type),
+                type=ts.DeferredType(constraint=constraint_type),
             ),
             value=new_value,
             location=self._make_loc(node),
@@ -221,12 +255,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ), "Annotations should be ast.Constant(string). Use StringifyAnnotationsPass"
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
-            target_type = symbol_makers.make_symbol_type_from_typing(annotation, globalns=context)
+            target_type = type_translation.from_type_hint(annotation, globalns=context)
         else:
-            target_type = ct.DeferredSymbolType()
+            target_type = ts.DeferredType()
 
         return foast.Assign(
-            target=foast.Symbol[ct.FieldType](
+            target=foast.Symbol[ts.FieldType](
                 id=node.target.id,
                 location=self._make_loc(node.target),
                 type=target_type,
@@ -264,6 +298,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
+    def visit_Attribute(self, node: ast.Attribute) -> Any:
+        return foast.Attribute(
+            value=self.visit(node.value), attr=node.attr, location=self._make_loc(node)
+        )
+
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
         return foast.TupleExpr(
             elts=[self.visit(item) for item in node.elts], location=self._make_loc(node)
@@ -281,6 +320,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
         return [self.visit(node, **kwargs) for node in nodes]
 
+    def visit_Expr(self, node: ast.Expr) -> foast.Expr:
+        return self.visit(node.value)
+
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 
@@ -289,14 +331,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.UADD
+    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> dialect_ast_enums.UnaryOperator:
+        return dialect_ast_enums.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.USUB
+    def visit_USub(self, node: ast.USub, **kwargs) -> dialect_ast_enums.UnaryOperator:
+        return dialect_ast_enums.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> foast.UnaryOperator:
-        return foast.UnaryOperator.NOT
+    def visit_Not(self, node: ast.Not, **kwargs) -> dialect_ast_enums.UnaryOperator:
+        return dialect_ast_enums.UnaryOperator.NOT
+
+    def visit_Invert(self, node: ast.Invert, **kwargs) -> dialect_ast_enums.UnaryOperator:
+        return dialect_ast_enums.UnaryOperator.INVERT
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
         return foast.BinOp(
@@ -306,32 +351,35 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self._make_loc(node),
         )
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.FLOOR_DIV
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.POW
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`%` operator not supported!")
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_AND
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_OR
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_OR
+
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
         raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
@@ -342,7 +390,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             true_expr=self.visit(node.body),
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
-            type=ct.DeferredSymbolType(constraint=ct.DataType),
+            type=ts.DeferredType(constraint=ts.DataType),
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
@@ -432,7 +480,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
         try:
-            type_ = symbol_makers.make_symbol_type_from_value(node.value)
+            type_ = type_translation.from_value(node.value)
         except common.GTTypeError as e:
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg=f"Constants of type {type(node.value)} are not permitted."
