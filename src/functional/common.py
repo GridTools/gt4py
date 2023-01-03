@@ -14,12 +14,12 @@
 
 from __future__ import annotations
 
-import numpy.typing as npt
-
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import Any, Generic, Optional, Protocol, TypeVar, runtime_checkable
+
+import numpy as np
 
 from eve.type_definitions import StrEnum
 
@@ -77,7 +77,11 @@ class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: Dimension
-    tbl: npt.NDArray  # TODO(havogt): define neighbor table concept
+
+    def mapped_index(
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
+    ) -> Optional[int | np.integer]:
+        """Return neighbor index."""
 
 
 @enum.unique

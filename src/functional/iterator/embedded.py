@@ -44,14 +44,11 @@ FieldIndex: TypeAlias = slice | IntIndex
 FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 
-class TupleAxis:
-    ...
-
-
 FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
-Axis: TypeAlias = FieldAxis | TupleAxis
+TupleAxis: TypeAlias = type[None]
+Axis: TypeAlias = Union[FieldAxis, TupleAxis]
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
@@ -68,12 +65,15 @@ class NeighborTableOffsetProvider:
         max_neighbors: int,
         has_skip_values=True,
     ) -> None:
-        self.tbl = tbl
+        self._tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
         assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+
+    def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
+        return self._tbl[(primary, neighbor_idx)]
 
 
 class StridedNeighborOffsetProvider:
@@ -89,17 +89,8 @@ class StridedNeighborOffsetProvider:
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
-    @property
-    def tbl(self):  # TODO(havogt): define Connectivity concept properly
-        class Impl:
-            def __init__(self, stride: int) -> None:
-                self.stride = stride
-
-            def __getitem__(self, indices: tuple[int, int]) -> int:
-                primary, neighbor_idx = indices
-                return primary * self.stride + neighbor_idx
-
-        return Impl(stride=self.max_neighbors)
+    def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
+        return primary * self.max_neighbors + neighbor_idx
 
 
 # Offsets
@@ -495,6 +486,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
 for math_builtin_name in builtins.MATH_BUILTINS:
     python_builtins = {"int": int, "float": float, "bool": bool, "str": str}
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
+    impl: Callable
     if math_builtin_name == "gamma":
         # numpy has no gamma function
         impl = np.vectorize(math.gamma)
@@ -542,6 +534,7 @@ def execute_shift(
         assert isinstance(current_entry, list)
         new_entry = list(current_entry)
         assert None in new_entry
+        assert isinstance(index, int)
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
@@ -565,15 +558,20 @@ def execute_shift(
         assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
-        if offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index] in [
+        cur_index = pos[offset_implementation.origin_axis.value]
+        assert is_int_index(cur_index)
+        # if cur_index is None:
+        #     return None
+        if offset_implementation.mapped_index(cur_index, index) in [
             None,
             -1,
         ]:
             return None
         else:
-            new_pos[offset_implementation.neighbor_axis.value] = int(
-                offset_implementation.tbl[pos[offset_implementation.origin_axis.value], index]
-            )
+            new_index = offset_implementation.mapped_index(cur_index, index)
+            assert new_index is not None
+            new_pos[offset_implementation.neighbor_axis.value] = int(new_index)
+
         return new_pos
 
     raise AssertionError("Unknown object in `offset_provider`")
@@ -848,7 +846,7 @@ def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
-    return not axis or isinstance(axis, TupleAxis)
+    return not axis or isinstance(axis, type(None))
 
 
 def _is_sparse_position_entry(
