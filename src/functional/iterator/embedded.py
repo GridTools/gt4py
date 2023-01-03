@@ -472,7 +472,9 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    val_type = xtyping.infer_type(val)
+    val_type = cast(
+        npt.DTypeLike, xtyping.infer_type(val)
+    )  # TODO(havogt) how can we assert that something is DTypeLike?
     if np.issubdtype(val_type, np.number):
         return constant_field(val)
     elif np.issubdtype(val_type, LocatedField):
@@ -560,8 +562,6 @@ def execute_shift(
         new_pos.pop(offset_implementation.origin_axis.value)
         cur_index = pos[offset_implementation.origin_axis.value]
         assert is_int_index(cur_index)
-        # if cur_index is None:
-        #     return None
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
             -1,
@@ -694,7 +694,7 @@ def _get_axes(
 
 def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
-    indices: int | slice | tuple[int | slice, ...],
+    indices: FieldIndexOrIndices,
     *,
     as_column: bool = False,
 ) -> tuple | Column:  # arbitrary nesting of tuples of field values or `Column`s
@@ -933,8 +933,11 @@ class IndexField(LocatedField):
         self.dtype = np.dtype(dtype)
 
     def __getitem__(self, index: FieldIndexOrIndices) -> Any:
-        assert isinstance(index, int) or (isinstance(index, tuple) and len(index) == 1)
-        return self.dtype.type(index if isinstance(index, int) else index[0])
+        if isinstance(index, int):
+            return self.dtype.type(index)
+        else:
+            assert isinstance(index, tuple) and len(index) == 1 and isinstance(index[0], int)
+            return self.dtype.type(index[0])
 
     @property
     def axes(self) -> tuple[common.Dimension]:
@@ -958,9 +961,9 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: npt.DTypeLike = None) -> LocatedField:
+def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> LocatedField:
     if dtype is None:
-        dtype = xtyping.infer_type(value)
+        dtype = xtyping.infer_type(value)  # type: ignore[assignment]
     return ConstantField(value, dtype)
 
 
