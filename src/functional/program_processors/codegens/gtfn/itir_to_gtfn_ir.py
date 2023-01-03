@@ -154,8 +154,8 @@ def _collect_offset_definitions(
 
         offset_name = o.value
         if isinstance(offset_provider[offset_name], common.Dimension):
-            dim_value = offset_provider[offset_name].kind  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
-            dim_kind = offset_provider[offset_name].value  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
+            dim_value = offset_provider[offset_name].value  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
+            dim_kind = offset_provider[offset_name].kind  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim_value] = TagDefinition(name=Sym(id=dim_value))
