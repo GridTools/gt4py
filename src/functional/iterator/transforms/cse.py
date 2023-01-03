@@ -14,8 +14,9 @@ class CollectSubexpressions(NodeVisitor):
         refs: ChainMap[str, bool] = ChainMap()
         collector_stack: list[bool] = []
 
-        cls().visit(node, subexprs=subexprs, refs=refs, parent=None,
-                    collector_stack=collector_stack)
+        cls().visit(
+            node, subexprs=subexprs, refs=refs, parent=None, collector_stack=collector_stack
+        )
 
         return subexprs
 
@@ -44,7 +45,9 @@ class CollectSubexpressions(NodeVisitor):
         r = refs.new_child({p.id: False for p in node.params})
 
         child_collector_stack = [*collector_stack, True]
-        self.generic_visit(node, subexprs=subexprs, refs=r, parent=node, collector_stack=collector_stack)
+        self.generic_visit(
+            node, subexprs=subexprs, refs=r, parent=node, collector_stack=child_collector_stack
+        )
         if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
         else:
@@ -60,13 +63,14 @@ class CollectSubexpressions(NodeVisitor):
         parent: Optional[ir.Node],
         collector_stack: list[bool],
     ) -> None:
-        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls
-        if node.fun == ir.SymRef(id="shift"):
-            return
+        # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
+        #  visited, to ensure symbol dependencies are recognized correctly.
+        allow_collection = node.fun != ir.SymRef(id="shift")
+        child_collector_stack = [*collector_stack, allow_collection]
 
-        child_collector_stack = [*collector_stack, True]
-
-        self.generic_visit(node, subexprs=subexprs, refs=refs, parent=node, collector_stack=child_collector_stack)
+        self.generic_visit(
+            node, subexprs=subexprs, refs=refs, parent=node, collector_stack=child_collector_stack
+        )
 
         if child_collector_stack[-1]:
             subexprs.setdefault(node, ([], parent))[0].append(id(node))
@@ -128,7 +132,9 @@ class CommonSubexpressionElimination(NodeTranslator):
                     return expr_map[id(node)]
                 return self.generic_visit(node)
 
-        return self.generic_visit(ir.FunCall(
-            fun=ir.Lambda(params=params, expr=Replace().visit(node)),
-            args=args,
-        ))
+        return self.generic_visit(
+            ir.FunCall(
+                fun=ir.Lambda(params=params, expr=Replace().visit(node)),
+                args=args,
+            )
+        )

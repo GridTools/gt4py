@@ -257,7 +257,7 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return to_iterator(node.args[0])(self.visit(node.args[0], **kwargs))
 
-    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.Expr:
+    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args)
 
     def _make_reduction_expr(
@@ -305,16 +305,17 @@ class FieldOperatorLowering(NodeTranslator):
         init_expr = self._make_literal(max_value, node.type.dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
         if isinstance(node.args[0], foast.Constant):
-            target_type = fbuiltins.BUILTINS[node.type.kind.name.lower()]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.kind.name.lower()]
+            node_kind = self.visit(node.type).kind.name.lower()
+            target_type = fbuiltins.BUILTINS[node_kind]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
                 return im.literal_(str(bool(source_type(node.args[0].value))), node.func.id)
-            return im.literal_(str(node.args[0].value), node.type.kind.name.lower())
+            return im.literal_(str(node.args[0].value), node_kind)
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ct.ScalarType | ct.TupleType) -> itir.Literal:
+    def _make_literal(self, val: Any, type_: ct.SymbolType) -> itir.Literal:
         # TODO(tehrengruber): check constant of this type is supported in iterator ir
         if isinstance(type_, ct.TupleType):
             return im.make_tuple_(

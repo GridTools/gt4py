@@ -152,6 +152,7 @@ class TestExtendedProtocol:
         assert not isinstance(IncompleteClass(), NoDataProto)
 
     def test_instance_check_shortcut_performance(self, sample_class_defs):
+        # TODO(egparedes): change testing strategy to avoid timings
         pytest.skip()
 
         PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
