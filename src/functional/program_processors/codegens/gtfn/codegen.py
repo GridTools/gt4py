@@ -99,7 +99,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "gtfn::unstructured_domain<std::tuple<int>, std::tuple<int>>(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
+        "gtfn::unstructured_domain<std::tuple<${', '.join(['int'] * len(_this_node.tagged_sizes.tags))}>, std::tuple<${', '.join(['int'] * len(_this_node.tagged_offsets.tags))}>>(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
