@@ -468,17 +468,25 @@ def not_eq(first, second):
 CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
 
 
+def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
+    return issubclass(t, (np.generic, int, float))
+
+
+def infer_dtype_like_type(t: Any) -> npt.DTypeLike:
+    res = xtyping.infer_type(t)
+    assert is_dtype_like(res), res
+    return res
+
+
 def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    val_type = cast(
-        npt.DTypeLike, xtyping.infer_type(val)
-    )  # TODO(havogt) how can we assert that something is DTypeLike?
+    elif isinstance(val, LocatedField):
+        return val
+    val_type = infer_dtype_like_type(val)
     if np.issubdtype(val_type, np.number):
         return constant_field(val)
-    elif np.issubdtype(val_type, LocatedField):
-        return val
     else:
         raise ValueError(
             f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
@@ -542,8 +550,7 @@ def execute_shift(
             if p is None:
                 new_entry[i] = index
                 break
-        # the assertions above confirm pos is incomplete
-        # casting here to avoid duplicating work in a type guard
+        # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
     assert tag in offset_provider
@@ -846,7 +853,7 @@ def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
-    return not axis or isinstance(axis, type(None))
+    return axis is None
 
 
 def _is_sparse_position_entry(
@@ -963,7 +970,7 @@ class ConstantField(LocatedField):
 
 def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> LocatedField:
     if dtype is None:
-        dtype = xtyping.infer_type(value)  # type: ignore[assignment]
+        dtype = infer_dtype_like_type(value)
     return ConstantField(value, dtype)
 
 
@@ -975,13 +982,13 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
     return impl
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ColumnDescriptor:
     axis: str
     col_range: range  # TODO(havogt) introduce range type that doesn't have step
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
