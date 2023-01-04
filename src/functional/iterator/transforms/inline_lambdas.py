@@ -1,32 +1,95 @@
 import dataclasses
+from typing import Optional
 
-from eve import NodeTranslator, NodeVisitor
+from eve import NodeTranslator
 from functional.iterator import ir
+from functional.iterator.transforms.count_symbol_refs import CountSymbolRefs
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 
 
-@dataclasses.dataclass
-class CountSymbolRefs(NodeVisitor):
-    ref_counts: dict[str, int]
+def inline_lambda(
+    node: ir.FunCall,
+    opcount_preserving=False,
+    force_inline_lift=False,
+    eligible_params: Optional[list[bool]] = None,
+):
+    assert isinstance(node.fun, ir.Lambda)
+    eligible_params = eligible_params or [True] * len(node.fun.params)
 
-    @classmethod
-    def apply(cls, node: ir.Node, symbol_names: list[str]) -> dict[str, int]:
-        ref_counts = {name: 0 for name in symbol_names}
-        active_refs = set(symbol_names)
+    assert len(eligible_params) == len(node.fun.params) == len(node.args)
 
-        obj = cls(ref_counts=ref_counts)
-        obj.visit(node, active_refs=active_refs)
+    if opcount_preserving:
+        ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
-        return ref_counts
+        for i, param in enumerate(node.fun.params):
+            # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
+            #  ignore_shift(...)(it_sym)  # noqa: E800
+            if ref_counts[param.id] != 1 and not isinstance(
+                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
+            ):
+                eligible_params[i] = False
 
-    def visit_SymRef(self, node: ir.SymRef, *, active_refs: set[str]):
-        if node.id in active_refs:
-            self.ref_counts[node.id] += 1
+    if force_inline_lift:
+        for i, arg in enumerate(node.args):
+            if (
+                isinstance(arg, ir.FunCall)
+                and isinstance(arg.fun, ir.FunCall)
+                and isinstance(arg.fun.fun, ir.SymRef)
+                and arg.fun.fun.id == "lift"
+            ):
+                eligible_params[i] = True
 
-    def visit_Lambda(self, node: ir.Lambda, *, active_refs: set[str]):
-        active_refs = active_refs - set(param.id for param in node.params)
+    if node.fun.params and not any(eligible_params):
+        return node
 
-        self.generic_visit(node, active_refs=active_refs)
+    refs = set().union(
+        *(
+            arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
+            for arg, eligible in zip(node.args, eligible_params)
+            if eligible
+        )
+    )
+    syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
+    clashes = refs & syms
+    expr = node.fun.expr
+    if clashes:
+        # TODO(tehrengruber): find a better way of generating new symbols
+        #  in `name_map` that don't collide with each other. E.g. this
+        #  must still work:
+        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: E800
+        name_map = {}
+
+        def new_name(name):
+            while name in refs or name in syms or name in name_map.values():
+                name += "_"
+            return name
+
+        for sym in clashes:
+            name_map[sym] = new_name(sym)
+
+        expr = RenameSymbols().visit(expr, name_map=name_map)
+
+    symbol_map = {
+        param.id: arg
+        for param, arg, eligible in zip(node.fun.params, node.args, eligible_params)
+        if eligible
+    }
+    new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
+
+    if all(eligible_params):
+        return new_expr
+    else:
+        return ir.FunCall(
+            fun=ir.Lambda(
+                params=[
+                    param
+                    for param, eligible in zip(node.fun.params, eligible_params)
+                    if not eligible
+                ],
+                expr=new_expr,
+            ),
+            args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
+        )
 
 
 @dataclasses.dataclass
@@ -35,8 +98,10 @@ class InlineLambdas(NodeTranslator):
 
     opcount_preserving: bool
 
+    force_inline_lift: bool
+
     @classmethod
-    def apply(cls, node: ir.Node, opcount_preserving=False):
+    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False):
         """
         Inline lambda calls by substituting every arguments by its value.
 
@@ -51,64 +116,18 @@ class InlineLambdas(NodeTranslator):
             inline lambda call if the resulting call has the same number of
             operations.
         """
-        return cls(opcount_preserving=opcount_preserving).visit(node)
+        return cls(
+            opcount_preserving=opcount_preserving,
+            force_inline_lift=force_inline_lift,
+        ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):
-            assert len(node.fun.params) == len(node.args)
-
-            eligible_params: list[bool] = [True] * len(node.fun.params)
-            if self.opcount_preserving:
-                ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
-
-                for i, param in enumerate(node.fun.params):
-                    if ref_counts[param.id] != 1 and not isinstance(node.args[i], ir.SymRef):
-                        eligible_params[i] = False
-
-                if not any(eligible_params):
-                    return node
-
-            refs = set().union(
-                *(
-                    arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
-                    for i, arg in enumerate(node.args)
-                    if eligible_params[i]
-                )
+            return inline_lambda(
+                node,
+                opcount_preserving=self.opcount_preserving,
+                force_inline_lift=self.force_inline_lift,
             )
-            syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
-            clashes = refs & syms
-            expr = node.fun.expr
-            if clashes:
-
-                def new_name(name):
-                    while name in refs or name in syms:
-                        name += "_"
-                    return name
-
-                name_map = {sym: new_name(sym) for sym in clashes}
-                expr = RenameSymbols().visit(expr, name_map=name_map)
-
-            symbol_map = {
-                param.id: arg
-                for i, (param, arg) in enumerate(zip(node.fun.params, node.args))
-                if eligible_params[i]
-            }
-            new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
-
-            if all(eligible_params):
-                return new_expr
-            else:
-                return ir.FunCall(
-                    fun=ir.Lambda(
-                        params=[
-                            param
-                            for param, eligable in zip(node.fun.params, eligible_params)
-                            if not eligable
-                        ],
-                        expr=new_expr,
-                    ),
-                    args=[arg for arg, eligable in zip(node.args, eligible_params) if not eligable],
-                )
 
         return node

@@ -16,7 +16,7 @@ from typing import Any, Generic, TypeVar, Union
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import common_types as ct
+from functional.ffront import dialect_ast_enums, type_specifications as ts
 from functional.utils import RecursionGuard
 
 
@@ -39,7 +39,7 @@ class LocatedNode(Node):
             return super().__str__()
 
 
-SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
+SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 # TODO(egparedes): this should be an actual generic datamodel but it is not fully working
@@ -48,28 +48,30 @@ SymbolT = TypeVar("SymbolT", bound=ct.SymbolType)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, ct.DeferredSymbolType]  # noqa A003
-    namespace: ct.Namespace = ct.Namespace(ct.Namespace.LOCAL)
+    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
+        dialect_ast_enums.Namespace.LOCAL
+    )
 
 
-DataTypeT = TypeVar("DataTypeT", bound=ct.DataType)
+DataTypeT = TypeVar("DataTypeT", bound=ts.DataType)
 DataSymbol = Symbol[DataTypeT]
 
-FieldTypeT = TypeVar("FieldTypeT", bound=ct.FieldType)
+FieldTypeT = TypeVar("FieldTypeT", bound=ts.FieldType)
 FieldSymbol = DataSymbol[FieldTypeT]
 
-ScalarTypeT = TypeVar("ScalarTypeT", bound=ct.ScalarType)
+ScalarTypeT = TypeVar("ScalarTypeT", bound=ts.ScalarType)
 ScalarSymbol = DataSymbol[ScalarTypeT]
 
-TupleTypeT = TypeVar("TupleTypeT", bound=ct.TupleType)
+TupleTypeT = TypeVar("TupleTypeT", bound=ts.TupleType)
 TupleSymbol = DataSymbol[TupleTypeT]
 
-DimensionTypeT = TypeVar("DimensionTypeT", bound=ct.DimensionType)
+DimensionTypeT = TypeVar("DimensionTypeT", bound=ts.DimensionType)
 DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ct.SymbolType = ct.DeferredSymbolType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
 
 
 class Name(Expr):
@@ -95,12 +97,12 @@ class TupleExpr(Expr):
 
 
 class UnaryOp(Expr):
-    op: ct.UnaryOperator
+    op: dialect_ast_enums.UnaryOperator
     operand: Expr
 
 
 class BinOp(Expr):
-    op: ct.BinaryOperator
+    op: dialect_ast_enums.BinaryOperator
     left: Expr
     right: Expr
 
@@ -151,8 +153,17 @@ class Stmt(LocatedNode):
     ...
 
 
+class Starred(Expr):
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
+
+
 class Assign(Stmt):
     target: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
+    value: Expr
+
+
+class TupleTargetAssign(Stmt):
+    targets: list[FieldSymbol | TupleSymbol | ScalarSymbol | Starred]
     value: Expr
 
 
@@ -165,16 +176,16 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
     params: list[DataSymbol]
     body: list[Stmt]
     closure_vars: list[Symbol]
-    type: Union[ct.FunctionType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
-        constraint=ct.FunctionType
+    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.FunctionType
     )
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Union[ct.FieldOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
-        constraint=ct.FieldOperatorType
+    type: Union[ts.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.FieldOperatorType
     )
 
 
@@ -184,6 +195,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ct.ScanOperatorType, ct.DeferredSymbolType] = ct.DeferredSymbolType(  # noqa: A003
-        constraint=ct.ScanOperatorType
+    type: Union[ts.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts.ScanOperatorType
     )

@@ -15,7 +15,7 @@ import abc
 import typing
 from typing import Any, Optional
 
-from functional.ffront import common_types as ct
+from functional.ffront import type_specifications as ts
 from functional.iterator import ir as itir
 
 
@@ -38,7 +38,7 @@ class GTCallable(typing.Protocol):
         return None
 
     @abc.abstractmethod
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         """
         Return symbol type, i.e. signature and return type.
 
