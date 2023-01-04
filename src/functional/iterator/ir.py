@@ -69,7 +69,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 
 
 class StencilClosure(Node):
-    domain: FunCall
+    domain: Expr
     stencil: Expr
     output: Union[SymRef, FunCall]
     inputs: List[SymRef]
