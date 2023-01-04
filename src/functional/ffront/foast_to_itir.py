@@ -390,7 +390,7 @@ class FieldOperatorLowering(NodeTranslator):
             **kwargs,
         )
 
-    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall | itir.Literal:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in MATH_BUILTIN_NAMES:
@@ -470,7 +470,7 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._visit_reduce(node, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
             node_kind = self.visit(node.type).kind.name.lower()
             target_type = fbuiltins.BUILTINS[node_kind]
