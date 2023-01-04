@@ -34,11 +34,12 @@ from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
 from functional.common import DimensionKind, GridType, GTTypeError, Scalar
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
-    symbol_makers,
     type_info,
+    type_specifications as ts,
+    type_translation,
 )
 from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -150,12 +151,12 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ct.FieldType | ct.ScalarType | ct.TupleType
+    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
 ) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
-    if isinstance(arg_type, ct.TupleType):
+    if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
             yield from _field_constituents_shape_and_dims(el, el_type)
-    elif isinstance(arg_type, ct.FieldType):
+    elif isinstance(arg_type, ts.FieldType):
         dims = type_info.extract_dims(arg_type)
         if hasattr(arg, "shape"):
             assert len(arg.shape) == len(dims)
@@ -307,8 +308,8 @@ class Program:
         if kwargs:
             raise NotImplementedError("Keyword-only arguments are not supported yet.")
 
-        arg_types = [symbol_makers.make_symbol_type_from_value(arg) for arg in args]
-        kwarg_types = {k: symbol_makers.make_symbol_type_from_value(v) for k, v in kwargs.items()}
+        arg_types = [type_translation.from_value(arg) for arg in args]
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
         try:
             type_info.accepts_args(
@@ -336,7 +337,7 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, (ct.FieldType, ct.TupleType)):
+            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
                 shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
                 shape, dims = shapes_and_dims[0]
                 if not all(
@@ -358,7 +359,10 @@ class Program:
         for name, gt_callable in _filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
-            if isinstance((type_ := gt_callable.__gt_type__()), ct.ScanOperatorType):
+            if isinstance(
+                (type_ := gt_callable.__gt_type__()),
+                ts.ScanOperatorType,
+            ):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
         if len(scanops_per_axis.values()) == 0:
@@ -463,9 +467,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
-            key: foast.Constant(
-                value=value, type=symbol_makers.make_symbol_type_from_value(value), location=loc
-            )
+            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
             for key, value in operator_attributes.items()
         }
         untyped_foast_node = operator_node_cls(
@@ -482,9 +484,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
         )
 
-    def __gt_type__(self) -> ct.CallableType:
+    def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type
-        assert isinstance(type_, ct.CallableType)
+        assert isinstance(type_, ts.CallableType)
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
@@ -509,7 +511,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return self.closure_vars
 
     def as_program(
-        self, arg_types: list[ct.SymbolType], kwarg_types: dict[str, ct.SymbolType]
+        self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
@@ -524,7 +526,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
                 type=arg_type,
-                namespace=ct.Namespace.LOCAL,
+                namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
             for arg_type in arg_types
@@ -533,7 +535,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
             type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=ct.Namespace.LOCAL,
+            namespace=dialect_ast_enums.Namespace.LOCAL,
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
@@ -544,15 +546,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         closure_symbols = [
             past.Symbol(
                 id=self.foast_node.id,
-                type=ct.DeferredSymbolType(constraint=None),
-                namespace=ct.Namespace.CLOSURE,
+                type=ts.DeferredType(constraint=None),
+                namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=loc,
             ),
         ]
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
+            type=ts.DeferredType(constraint=ts.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(
@@ -586,10 +588,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # deduce argument types
         arg_types = []
         for arg in args:
-            arg_types.append(symbol_makers.make_symbol_type_from_value(arg))
+            arg_types.append(type_translation.from_value(arg))
         kwarg_types = {}
         for name, arg in kwargs.items():
-            kwarg_types[name] = symbol_makers.make_symbol_type_from_value(arg)
+            kwarg_types[name] = type_translation.from_value(arg)
 
         return self.as_program(arg_types, kwarg_types)(
             *args, out, offset_provider=offset_provider, **kwargs
