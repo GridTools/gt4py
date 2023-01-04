@@ -70,8 +70,7 @@ _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
 def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
-    assert all(isinstance(d, itir.FunCall) for d in (c.domain for c in closures))
-    return (c.domain for c in closures)  # type: ignore[misc] #domains type asserted to be Iterable[itir.FunCall] in line above
+    return (c.domain for c in closures)
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
