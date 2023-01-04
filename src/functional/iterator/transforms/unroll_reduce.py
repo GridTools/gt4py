@@ -1,5 +1,5 @@
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
@@ -7,9 +7,11 @@ from functional import common
 from functional.iterator import ir
 
 
-def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterable[ir.Expr]:
+def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterator[ir.FunCall]:
     return filter(
-        lambda arg: isinstance(arg, ir.FunCall)
+        lambda arg: isinstance(  # type: ignore [arg-type] # see https://github.com/python/mypy/issues/12682
+            arg, ir.FunCall
+        )
         and isinstance(arg.fun, ir.FunCall)
         and arg.fun.fun == ir.SymRef(id="shift"),
         reduce_args,
@@ -17,9 +19,11 @@ def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterable[ir.Expr]:
 
 
 def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
-    connectivities = [
-        offset_provider[arg.fun.args[-1].value] for arg in _get_shifted_args(reduce_args)
-    ]
+    connectivities = []
+    for arg in _get_shifted_args(reduce_args):
+        assert isinstance(arg.fun, ir.FunCall)
+        assert isinstance(arg.fun.args[-1], ir.OffsetLiteral)
+        connectivities.append(offset_provider[arg.fun.args[-1].value])
 
     if not connectivities:
         raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
