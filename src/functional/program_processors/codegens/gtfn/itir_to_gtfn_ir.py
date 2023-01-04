@@ -173,7 +173,7 @@ def _collect_offset_definitions(
                     name=Sym(id=offset_name), alias=_vertical_dimension
                 )
         else:
-            assert isinstance(offset_provider[offset_name], common.Connectivity)
+            assert isinstance(dim_or_conn, common.Connectivity)
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
     return offset_definitions
 
