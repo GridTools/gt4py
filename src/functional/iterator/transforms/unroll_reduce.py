@@ -3,7 +3,54 @@ from collections.abc import Iterable
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
+from functional import common
 from functional.iterator import ir
+
+
+def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterable[ir.Expr]:
+    return filter(
+        lambda arg: isinstance(arg, ir.FunCall)
+        and isinstance(arg.fun, ir.FunCall)
+        and arg.fun.fun == ir.SymRef(id="shift"),
+        reduce_args,
+    )
+
+
+def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
+    connectivities = [
+        offset_provider[arg.fun.args[-1].value] for arg in _get_shifted_args(reduce_args)
+    ]
+
+    if not connectivities:
+        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+
+    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
+        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
+        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+    return connectivities[0]
+
+
+def _is_reduce(node: ir.FunCall):
+    return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
+
+
+def _make_shift(offsets: list[ir.Expr], iterator: ir.Expr):
+    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets), args=[iterator])
+
+
+def _make_deref(iterator: ir.Expr):
+    return ir.FunCall(fun=ir.SymRef(id="deref"), args=[iterator])
+
+
+def _make_can_deref(iterator: ir.Expr):
+    return ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[iterator])
+
+
+def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
+    return ir.FunCall(
+        fun=ir.SymRef(id="if_"),
+        args=[cond, true_expr, false_expr],
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -16,62 +63,14 @@ class UnrollReduce(NodeTranslator):
     def apply(cls, node: ir.Node, **kwargs):
         return cls().visit(node, **kwargs)
 
-    @staticmethod
-    def _find_connectivity(reduce_args: Iterable[ir.Expr], offset_provider):
-        connectivities = []
-        idx = None
-        for i, arg in enumerate(reduce_args):
-            if (
-                isinstance(arg, ir.FunCall)
-                and isinstance(arg.fun, ir.FunCall)
-                and arg.fun.fun == ir.SymRef(id="shift")
-            ):
-                assert isinstance(arg.fun.args[-1], ir.OffsetLiteral), f"{arg.fun.args}"
-                if idx is None:
-                    idx = i
-                connectivities.append(offset_provider[arg.fun.args[-1].value])
-
-        if not connectivities:
-            raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-
-        if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-            # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-            raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-        return connectivities[0], idx
-
-    @staticmethod
-    def _is_reduce(node: ir.FunCall):
-        return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
-
-    @staticmethod
-    def _make_shift(offsets: list[ir.Expr], iterator: ir.Expr):
-        return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets), args=[iterator])
-
-    @staticmethod
-    def _make_deref(iterator: ir.Expr):
-        return ir.FunCall(fun=ir.SymRef(id="deref"), args=[iterator])
-
-    @staticmethod
-    def _make_can_deref(iterator: ir.Expr):
-        return ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[iterator])
-
-    @staticmethod
-    def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
-        return ir.FunCall(
-            fun=ir.SymRef(id="if_"),
-            args=[cond, true_expr, false_expr],
-        )
-
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
-        if not self._is_reduce(node):
+        if not _is_reduce(node):
             return node
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity, arg_idx_with_connectivity = self._find_connectivity(
-            node.args, offset_provider
-        )
+        connectivity = _get_connectivity(node.args, offset_provider)
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
@@ -82,15 +81,12 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, ir.FunCall)
         fun, init = node.fun.args
 
-        derefed_shifted_args = [
-            self._make_deref(self._make_shift([offset], arg)) for arg in node.args
-        ]
+        derefed_shifted_args = [_make_deref(_make_shift([offset], arg)) for arg in node.args]
         step_fun: ir.Expr = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
-            can_deref = self._make_can_deref(
-                self._make_shift([offset], node.args[arg_idx_with_connectivity])
-            )
-            step_fun = self._make_if(can_deref, step_fun, acc)
+            check_arg = next(_get_shifted_args(node.args))
+            can_deref = _make_can_deref(_make_shift([offset], check_arg))
+            step_fun = _make_if(can_deref, step_fun, acc)
         step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_fun)
         expr = init
         for i in range(max_neighbors):
