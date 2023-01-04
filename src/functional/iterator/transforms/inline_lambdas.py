@@ -19,7 +19,7 @@ class CountSymbolRefs(NodeVisitor):
 
         return ref_counts
 
-    def visit_SymRef(self, node: ir.Node, *, active_refs: set[str]):
+    def visit_SymRef(self, node: ir.SymRef, *, active_refs: set[str]):
         if node.id in active_refs:
             self.ref_counts[node.id] += 1
 
