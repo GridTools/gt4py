@@ -46,7 +46,7 @@ In the following call an implicit broadcast to Field is performed in the decorat
 
 ```python=
 @field_operator
-def foo(scalar: Field[[], float]):
+def foo(scalar: Field[[], float]) -> Field[[], float]:
     return scalar
 
 foo(1.0)
