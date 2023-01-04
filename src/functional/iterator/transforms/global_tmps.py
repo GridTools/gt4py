@@ -40,7 +40,7 @@ Replaces lifted function calls by temporaries using the following steps:
 """
 
 
-AUTO_DOMAIN = ir.SymRef(id="_gtmp_auto_domain")
+AUTO_DOMAIN = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 
 
 # Iterator IR extension nodes
@@ -175,7 +175,9 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
-            params=node.params + [ir.Sym(id=tmp.id) for tmp in tmps] + [ir.Sym(id=AUTO_DOMAIN.id)],
+            params=node.params
+            + [ir.Sym(id=tmp.id) for tmp in tmps]
+            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],
             closures=list(reversed(closures)),
         ),
         params=node.params,
