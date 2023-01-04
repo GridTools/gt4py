@@ -284,7 +284,7 @@ def test_ternary_with_field_condition():
 
 
 def test_correct_return_type_annotation():
-    """See ADR 11."""
+    """See ADR 13."""
 
     def correct_return_type_annotation() -> float:
         return 1.0
@@ -292,18 +292,18 @@ def test_correct_return_type_annotation():
     FieldOperatorParser.apply_to_function(correct_return_type_annotation)
 
 
-def test_wrong_return_type_annotation():
-    """See ADR 11."""
+def test_adr13_wrong_return_type_annotation():
+    """See ADR 13."""
 
     def wrong_return_type_annotation() -> Field[[], float]:
         return 1.0
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Expected `bool`"):
+    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
-def test_fixed_return_type_annotation():
-    """See ADR 11."""
+def test_adr13_fixed_return_type_annotation():
+    """See ADR 13."""
 
     def fixed_return_type_annotation() -> Field[[], float]:
         return broadcast(1.0, ())
@@ -312,7 +312,7 @@ def test_fixed_return_type_annotation():
 
 
 def test_no_implicit_broadcast_in_field_op_call():
-    """See ADR 11."""
+    """See ADR 13."""
 
     def no_implicit_broadcast_in_field_op_call(scalar: float) -> float:
         return scalar
