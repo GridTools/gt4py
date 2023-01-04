@@ -171,6 +171,11 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
+_column_range: Optional[
+    range
+] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+
+
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
     """Represents a column when executed in column mode (`column_axis != None`).
 
@@ -180,12 +185,11 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        self.data = data
+        assert isinstance(data, (np.ndarray, Scalar))
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)
 
     def __getitem__(self, i: int) -> Any:
-        assert isinstance(self.data, (np.ndarray, Scalar))
-        result = self.data[i - self.kstart] if isinstance(self.data, np.ndarray) else self.data
-        # if the element type is a tuple return a regular type instead of a
+        result = self.data[i - self.kstart]
         #  numpy type
         if self.data.dtype.names:
             return tuple(result)
@@ -1100,11 +1104,6 @@ def as_tuple_field(field):
 
     assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
     return field
-
-
-_column_range: Optional[
-    range
-] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
 def _column_dtype(elem: Any) -> np.dtype:
