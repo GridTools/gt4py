@@ -69,10 +69,8 @@ _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
-def _get_domains(closures: Iterable[itir.StencilClosure]) -> list[itir.FunCall]:
-    domains = [c.domain for c in closures]
-    assert all(isinstance(d, itir.FunCall) for d in domains)
-    return domains  # type: ignore[return-value] #domains type asserted to be list[itir.FunCall] in line above
+def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
+    return (c.domain for c in closures)
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -139,7 +137,7 @@ def _collect_dimensions_from_domain(
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
-    offset_provider: dict[str | int, common.Dimension | common.Connectivity],
+    offset_provider: dict[str, common.Dimension | common.Connectivity],
 ):
     offset_tags: Iterable[itir.OffsetLiteral] = (
         node.walk_values()
@@ -153,10 +151,11 @@ def _collect_offset_definitions(
             raise ValueError(f"Missing offset_provider entry for {o.value}")
 
         offset_name = o.value
+        assert isinstance(offset_name, str)
         dim_or_conn = offset_provider[offset_name]
         if isinstance(dim_or_conn, common.Dimension):
-            dim_value = offset_provider[offset_name].value  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
-            dim_kind = offset_provider[offset_name].kind  # type: ignore[union-attr] # dim type asserted to be Dimension in condition above
+            dim_value = dim_or_conn.value
+            dim_kind = dim_or_conn.kind
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim_value] = TagDefinition(name=Sym(id=dim_value))
@@ -174,7 +173,7 @@ def _collect_offset_definitions(
                     name=Sym(id=offset_name), alias=_vertical_dimension
                 )
         else:
-            assert isinstance(offset_provider[o.value], common.Connectivity)
+            assert isinstance(offset_provider[offset_name], common.Connectivity)
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
     return offset_definitions
 
