@@ -295,12 +295,12 @@ def test_function_definition():
 
 def test_stencil_closure():
     testee = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.SymRef(id="deref"),
         output=ir.SymRef(id="y"),
         inputs=[ir.SymRef(id="x")],
     )
-    expected = "y ← (deref)(x) @ d;"
+    expected = "y ← (deref)(x) @ cartesian_domain();"
     actual = pformat(testee)
     assert actual == expected
 
@@ -314,7 +314,7 @@ def test_fencil_definition():
         params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
         closures=[
             ir.StencilClosure(
-                domain=ir.SymRef(id="d"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="y"),
                 inputs=[ir.SymRef(id="x")],
@@ -322,5 +322,5 @@ def test_fencil_definition():
         ],
     )
     actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ d;\n}"
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     assert actual == expected
