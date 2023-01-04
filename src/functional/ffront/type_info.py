@@ -16,7 +16,7 @@ from functools import reduce
 from typing import Iterable, Iterator, cast
 
 import functional.ffront.type_specifications as ts
-from functional.common import GTTypeError
+from functional.common import GTTypeError, Dimension
 from functional.type_system.type_info import (  # noqa: F401
     accepts_args as accepts_args,
     apply_to_primitive_constituents as apply_to_primitive_constituents,
