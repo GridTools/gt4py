@@ -154,12 +154,13 @@ def _collect_offset_definitions(
         assert isinstance(offset_name, str)
         dim_or_conn = offset_provider[offset_name]
         if isinstance(dim_or_conn, common.Dimension):
-            dim_value = dim_or_conn.value
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
-                offset_definitions[dim_value] = TagDefinition(name=Sym(id=dim_value))
+                offset_definitions[dim_or_conn.value] = TagDefinition(
+                    name=Sym(id=dim_or_conn.value)
+                )
                 offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim_value)
+                    name=Sym(id=offset_name), alias=SymRef(id=dim_or_conn.value)
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
