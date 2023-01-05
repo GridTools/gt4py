@@ -24,6 +24,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     CartesianDomain,
+    CastExpr,
     Expr,
     FencilDefinition,
     FunCall,
@@ -69,9 +70,7 @@ _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
 def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
-    domains = [c.domain for c in closures]
-    assert all(isinstance(d, itir.FunCall) for d in domains)
-    return domains
+    return (c.domain for c in closures)
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -96,6 +95,7 @@ def _name_from_named_range(named_range_call: itir.FunCall) -> str:
     assert isinstance(named_range_call, itir.FunCall) and named_range_call.fun == itir.SymRef(
         id="named_range"
     )
+    assert isinstance(named_range_call.args[0], itir.AxisLiteral)
     return named_range_call.args[0].value
 
 
@@ -107,6 +107,7 @@ def _collect_dimensions_from_domain(
     for domain in domains:
         if domain.fun == itir.SymRef(id="cartesian_domain"):
             for nr in domain.args:
+                assert isinstance(nr, itir.FunCall)
                 dim_name = _name_from_named_range(nr)
                 offset_definitions[dim_name] = TagDefinition(name=Sym(id=dim_name))
         elif domain.fun == itir.SymRef(id="unstructured_domain"):
@@ -114,12 +115,14 @@ def _collect_dimensions_from_domain(
                 raise ValueError("unstructured_domain must not have more than 2 arguments.")
             if len(domain.args) > 0:
                 horizontal_range = domain.args[0]
+                assert isinstance(horizontal_range, itir.FunCall)
                 horizontal_name = _name_from_named_range(horizontal_range)
                 offset_definitions[horizontal_name] = TagDefinition(
                     name=Sym(id=horizontal_name), alias=_horizontal_dimension
                 )
             if len(domain.args) > 1:
                 vertical_range = domain.args[1]
+                assert isinstance(vertical_range, itir.FunCall)
                 vertical_name = _name_from_named_range(vertical_range)
                 offset_definitions[vertical_name] = TagDefinition(
                     name=Sym(id=vertical_name), alias=_vertical_dimension
@@ -148,17 +151,20 @@ def _collect_offset_definitions(
             raise ValueError(f"Missing offset_provider entry for {o.value}")
 
         offset_name = o.value
-        if isinstance(offset_provider[o.value], common.Dimension):
-            dim = offset_provider[o.value]
+        assert isinstance(offset_name, str)
+        dim_or_conn = offset_provider[offset_name]
+        if isinstance(dim_or_conn, common.Dimension):
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                offset_definitions[dim_or_conn.value] = TagDefinition(
+                    name=Sym(id=dim_or_conn.value)
+                )
                 offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                    name=Sym(id=offset_name), alias=SymRef(id=dim_or_conn.value)
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
+                if not dim_or_conn.kind == common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
@@ -167,7 +173,7 @@ def _collect_offset_definitions(
                     name=Sym(id=offset_name), alias=_vertical_dimension
                 )
         else:
-            assert isinstance(offset_provider[o.value], common.Connectivity)
+            assert isinstance(dim_or_conn, common.Connectivity)
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
     return offset_definitions
 
@@ -187,6 +193,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "greater_equal": ">=",
         "and_": "&&",
         "or_": "||",
+        "xor_": "^",
+        "mod": "%",
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
@@ -336,6 +344,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         return result
 
+    def _error_on_illegal_function_calls(self, node: itir.FunCall) -> None:
+        assert isinstance(node.fun, itir.SymRef)
+        if node.fun.id == "shift":
+            raise ValueError("unapplied shift call not supported: {node}")
+        elif node.fun.id == "scan":
+            raise ValueError("scans are only supported at the top level of a stencil closure")
+
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
             if node.fun.id in self._unary_op_map:
@@ -357,13 +372,16 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     true_expr=self.visit(node.args[1], **kwargs),
                     false_expr=self.visit(node.args[2], **kwargs),
                 )
+            elif node.fun.id == "cast_":
+                assert len(node.args) == 2
+                return CastExpr(
+                    obj_expr=self.visit(node.args[0], **kwargs),
+                    new_dtype=self.visit(node.args[1], **kwargs),
+                )
             elif self._is_sparse_deref_shift(node):
                 return self._sparse_deref_shift_to_tuple_get(node)
-            elif node.fun.id == "shift":
-                raise ValueError("unapplied shift call not supported: {node}")
-            elif node.fun.id == "scan":
-                raise ValueError("scans are only supported at the top level of a stencil closure")
-            elif node.fun.id == "cartesian_domain":
+            self._error_on_illegal_function_calls(node)
+            if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
             elif node.fun.id == "unstructured_domain":
@@ -383,14 +401,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     tagged_offsets=domain_offsets,
                     connectivities=connectivities,
                 )
-        elif isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="shift"):
-            assert len(node.args) == 1
-            return FunCall(
-                fun=self.visit(node.fun.fun, **kwargs),
-                args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
-            )
-        elif isinstance(node.fun, itir.FunCall) and node.fun == itir.SymRef(id="shift"):
-            raise ValueError("unapplied shift call not supported: {node}")
+        if isinstance(node.fun, itir.FunCall):
+            if node.fun.fun == itir.SymRef(id="shift"):
+                assert len(node.args) == 1
+                return FunCall(
+                    fun=self.visit(node.fun.fun, **kwargs),
+                    args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
+                )
+            elif node.fun == itir.SymRef(id="shift"):
+                raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(
@@ -406,7 +425,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _is_scan(node: itir.Node):
         return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
-    def _visit_output_argument(self, node: itir.SymRef | itir.FunCall):
+    def _visit_output_argument(self, node: itir.Expr):
         if isinstance(node, itir.SymRef):
             return self.visit(node)
         elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):

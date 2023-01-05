@@ -164,16 +164,21 @@ class CompiledbProject(
         logfile = self.root_path / "log_build.txt"
         compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
         assert compile_db
-        with logfile.open(mode="w") as log_file_pointer:
-            for entry in compile_db:
-                log_file_pointer.write(entry["command"] + "\n")
-                subprocess.check_call(
-                    entry["command"],
-                    cwd=self.root_path,
-                    shell=True,
-                    stdout=log_file_pointer,
-                    stderr=log_file_pointer,
-                )
+        try:
+            with logfile.open(mode="w") as log_file_pointer:
+                for entry in compile_db:
+                    log_file_pointer.write(entry["command"] + "\n")
+                    subprocess.check_call(
+                        entry["command"],
+                        cwd=self.root_path,
+                        shell=True,
+                        stdout=log_file_pointer,
+                        stderr=log_file_pointer,
+                    )
+        except subprocess.CalledProcessError as e:
+            with logfile.open(mode="r") as log_file_pointer:
+                print(log_file_pointer.read())
+            raise e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
