@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functools import reduce
 
+import numpy as np
 import pytest as pytest
 
 from functional.ffront.decorator import field_operator, program, scan_operator
@@ -913,14 +914,41 @@ def test_scalar_scan():
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     scalar = 1.0
+    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
 
     @scan_operator(axis=KDim, forward=True, init=(0.0))
-    def _scan_scalar(carry: float, qc_in: float, scalar: float):
+    def _scan_scalar(carry: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + carry + scalar
         return qc
 
     @program
     def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
-        _scan_scalar(qc, scalar, out=(qc))
+        _scan_scalar(qc, scalar, out=qc)
 
     scan_scalar(qc, scalar, offset_provider={})
+    assert np.allclose(np.asarray(qc), expected)
+
+
+def test_tuple_scalar_scan():
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    qc2 = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    scalar = 1.0
+    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
+
+    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
+    def _scan_tuple_scalar(
+        state: tuple[float, float], qc_in: float, scalar: float
+    ) -> tuple[float, float]:
+        return (qc_in + state[0] + scalar, qc_in + state[1] - scalar)
+
+    @field_operator
+    def scan_tuple_scalar(
+        qc: Field[[IDim, KDim], float], scalar: float
+    ) -> tuple[Field[[IDim, KDim], float], Field[[IDim, KDim], float]]:
+        return _scan_tuple_scalar(qc, scalar)
+
+    scan_tuple_scalar(qc, scalar, out=(qc, qc2), offset_provider={})
+    assert np.allclose(np.asarray(qc), expected)
+    assert np.allclose(np.asarray(qc2), -expected)

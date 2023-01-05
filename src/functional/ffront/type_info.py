@@ -96,7 +96,8 @@ def function_signature_incompatibilities_scanop(
         return
 
     new_args = [
-        ts.FieldType(dims=[], dtype=extract_dtype(arg)) if is_instance(arg, ts.ScalarType) else arg for arg in args
+        ts.FieldType(dims=[], dtype=extract_dtype(arg)) if isinstance(arg, ts.ScalarType) else arg
+        for arg in args
     ]
 
     arg_dims = [extract_dims(el) for arg in new_args for el in primitive_constituents(arg)]
