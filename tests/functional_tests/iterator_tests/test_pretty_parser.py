@@ -174,9 +174,9 @@ def test_function_definition():
 
 
 def test_stencil_closure():
-    testee = "y ← (deref)(x) @ d;"
+    testee = "y ← (deref)(x) @ cartesian_domain();"
     expected = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.SymRef(id="deref"),
         output=ir.SymRef(id="y"),
         inputs=[ir.SymRef(id="x")],
@@ -186,7 +186,7 @@ def test_stencil_closure():
 
 
 def test_fencil_definition():
-    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ d;\n}"
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(
         id="f",
         function_definitions=[
@@ -195,7 +195,7 @@ def test_fencil_definition():
         params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
         closures=[
             ir.StencilClosure(
-                domain=ir.SymRef(id="d"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="y"),
                 inputs=[ir.SymRef(id="x")],

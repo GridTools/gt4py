@@ -215,6 +215,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "greater": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "and_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
     "or_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
+    "xor_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
     "not_": FunctionType(
         args=Tuple.from_elems(
             Val_BOOL_T1,
@@ -222,6 +223,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val_BOOL_T1,
     ),
     "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "cast_": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1)
@@ -291,7 +293,7 @@ class _TypeInferrer(eve.NodeTranslator):
             raise TypeError(
                 f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
             )
-        if node.id in ir.BUILTINS:
+        if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
             raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()
