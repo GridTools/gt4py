@@ -9,7 +9,7 @@ class CountSymbolRefs(eve.NodeVisitor):
     ref_counts: dict[str, int]
 
     @classmethod
-    def apply(cls, node: itir.Node, symbol_names: list[str]) -> dict[str, int]:
+    def apply(cls, node: itir.Node | list[itir.Node], symbol_names: list[str]) -> dict[str, int]:
         ref_counts = {name: 0 for name in symbol_names}
         active_refs = set(symbol_names)
 
@@ -18,7 +18,7 @@ class CountSymbolRefs(eve.NodeVisitor):
 
         return obj.ref_counts
 
-    def visit_SymRef(self, node: itir.Node, *, active_refs: set[str]):
+    def visit_SymRef(self, node: itir.SymRef, *, active_refs: set[str]):
         if node.id in active_refs:
             self.ref_counts[node.id] += 1
 
