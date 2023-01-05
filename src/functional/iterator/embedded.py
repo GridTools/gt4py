@@ -544,7 +544,9 @@ def execute_shift(
         assert isinstance(current_entry, list)
         new_entry = list(current_entry)
         assert None in new_entry
-        assert isinstance(index, int)
+        assert isinstance(
+            index, int
+        )  # narrowing to `int` as it's an element of `SparsePositionEntry`
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
