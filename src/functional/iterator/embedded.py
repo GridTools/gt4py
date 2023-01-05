@@ -723,11 +723,15 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         if column_axis_idx is not None:
             assert _column_range
+            assert isinstance(indices, list)
             indices_cpy = list(indices)
-            indices_cpy[column_axis_idx] = indices_cpy[column_axis_idx][0]
+            assert isinstance(indices[column_axis_idx], range)
+            indices_cpy[column_axis_idx] = indices[column_axis_idx][0]
             # construct a Column of tuples
             first = tuple(
-                _make_tuple(f, _single_vertical_idx(indices_cpy, column_axis_idx, _column_range.start))
+                _make_tuple(
+                    f, _single_vertical_idx(indices_cpy, column_axis_idx, _column_range.start)
+                )
                 for f in field_or_tuple
             )
             col = Column(
