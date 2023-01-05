@@ -199,7 +199,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
     offset_provider: dict
-    column_axis: common.Dimension
+    column_axis: Optional[common.Dimension]
     grid_type: common.GridType
 
     # we use one UID generator per instance such that the generated ids are
@@ -212,7 +212,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         node: itir.FencilDefinition | FencilWithTemporaries,
         *,
         offset_provider: dict,
-        column_axis: common.Dimension,
+        column_axis: Optional[common.Dimension],
     ):
         if isinstance(node, FencilWithTemporaries):
             fencil_definition = node.fencil
@@ -457,11 +457,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
                 init=self.visit(node.stencil.args[2], **kwargs),
             )
+            column_axis = self.column_axis
+            assert isinstance(column_axis, common.Dimension)
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
                 args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
-                axis=SymRef(id=self.column_axis.value),
+                axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(
             stencil=self.visit(
