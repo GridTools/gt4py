@@ -24,6 +24,7 @@ Writing a new ADR is simple:
 - [0001 - Field View Frontend Design](0001-Field_View_Frontend_Design.md)
 - [0002 - Field View Lowering](0002-Field_View_Lowering.md)
 - [0010 - Domain in Field View](0010-Domain_in_Field_View.md)
+- [0013 - Scalar vs 0d-Fields](0013-Scalar_vs_0d_Fields.md)
 
 ### Iterator IR #iterator
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
@@ -41,10 +42,14 @@ _None_
 - [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
 
 ### Python Integration
-- [0009 - Compiled Backend Integration](0009-Compiled-Backend-Integration.md)
+- [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md)
+- [0012 - GridTools C++ OTF](0011-_GridTools_Cpp_OTF.md)
 
 ### Miscellanea
 _None_
+
+### Superseded
+- [0009 - Compiled Backend Integration](0009-Compiled-Backend-Integration.md)
 
 ## Other References
 

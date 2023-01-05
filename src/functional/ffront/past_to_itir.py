@@ -130,6 +130,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
+        assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
 
         domain = node.kwargs.get("domain", None)
@@ -193,6 +194,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> itir.FunCall:
         domain_args = []
 
+        assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_field_types0_dims = cast(ts.FieldType, out_field_types[0]).dims
         if any(
