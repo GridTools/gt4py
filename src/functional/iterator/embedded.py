@@ -40,9 +40,13 @@ EMBEDDED = "embedded"
 Tag: TypeAlias = str
 IntIndex: TypeAlias = int | np.integer
 
-FieldIndex: TypeAlias = slice | IntIndex
-FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+ArrayIndex: TypeAlias = slice | IntIndex
+ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 
+FieldIndex: TypeAlias = (
+    range | slice | IntIndex
+)  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
+FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
 
 FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
@@ -866,14 +870,14 @@ class LocatedFieldImpl(MutableLocatedField):
         self.array = array
         self.dtype = dtype
 
-    def __getitem__(self, indices: FieldIndexOrIndices) -> Any:
+    def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         indices = utils.tupelize(indices)
         return self.getter(indices)
 
-    def __setitem__(self, indices: FieldIndexOrIndices, value: Any):
+    def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
         self.array()[indices] = value
 
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
@@ -928,21 +932,31 @@ def get_ordered_indices(
 
 def _shift_range(
     range_or_index: range | numbers.Integral, offset: numbers.Integral
-) -> range | numbers.Integral:
+) -> slice | numbers.Integral:
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
-        return range(range_or_index.start + offset, range_or_index.stop + offset)
+        return slice(range_or_index.start + offset, range_or_index.stop + offset)
     else:
         assert isinstance(range_or_index, numbers.Integral)
         return range_or_index + offset
 
 
+def _range2slice(r: range | numbers.Integral):
+    if isinstance(r, range):
+        assert r.start >= 0 and r.stop >= r.start
+        return slice(r.start, r.stop)
+    return r
+
+
 def _shift_ranges(
     ranges_or_indices: tuple[range | numbers.Integral, ...],
     offsets: tuple[numbers.Integral, ...],
-) -> tuple[range | numbers.Integral, ...]:
-    return tuple(r if o == 0 else _shift_range(r, o) for r, o in zip(ranges_or_indices, offsets))
+) -> tuple[slice | numbers.Integral, ...]:
+    return tuple(
+        _range2slice(r) if o == 0 else _shift_range(r, o)
+        for r, o in zip(ranges_or_indices, offsets)
+    )
 
 
 def np_as_located_field(
