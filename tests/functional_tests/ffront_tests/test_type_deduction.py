@@ -69,7 +69,7 @@ def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
             },
         ),
         (
-            ts.FieldType(dims=Ellipsis, dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+            ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)),
             {
                 "is_concrete": True,
                 "type_class": ts.FieldType,
@@ -242,7 +242,7 @@ def callable_type_info_cases():
             {},
             [
                 r"Expected 0-th argument to be of type tuple\[Field\[\[I, J, K\], int64\], "
-                r"Field\[\[\], int64\]\], but got tuple\[Field\[\[I, J, K\], int64\]\]."
+                r"Field\[\[\.\.\.\], int64\]\], but got tuple\[Field\[\[I, J, K\], int64\]\]."
             ],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
