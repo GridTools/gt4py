@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Generic,
+    Optional, 
     Protocol,
     SupportsFloat,
     SupportsInt,
@@ -87,6 +88,12 @@ class Backend:
 class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
+    origin_axis: Dimension
+
+    def mapped_index(
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
+    ) -> Optional[int | np.integer]:
+        """Return neighbor index."""
 
 
 @enum.unique

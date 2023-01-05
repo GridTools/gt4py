@@ -28,7 +28,16 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import field_operator_ast as foast, type_specifications as ts
-from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import (
+    Dimension,
+    astype,
+    broadcast,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.iterator import ir as itir
@@ -264,6 +273,54 @@ def test_conditional_wrong_arg_type():
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_ternary_with_field_condition():
+    def ternary_with_field_condition(cond: Field[[], bool]):
+        return 1 if cond else 2
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
+        _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
+
+
+def test_correct_return_type_annotation():
+    """See ADR 13."""
+
+    def correct_return_type_annotation() -> float:
+        return 1.0
+
+    FieldOperatorParser.apply_to_function(correct_return_type_annotation)
+
+
+def test_adr13_wrong_return_type_annotation():
+    """See ADR 13."""
+
+    def wrong_return_type_annotation() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+def test_adr13_fixed_return_type_annotation():
+    """See ADR 13."""
+
+    def fixed_return_type_annotation() -> Field[[], float]:
+        return broadcast(1.0, ())
+
+    FieldOperatorParser.apply_to_function(fixed_return_type_annotation)
+
+
+def test_no_implicit_broadcast_in_field_op_call():
+    """See ADR 13."""
+
+    def no_implicit_broadcast_in_field_op_call(scalar: float) -> float:
+        return scalar
+
+    def no_implicit_broadcast_in_field_op_call_caller() -> float:
+        return no_implicit_broadcast_in_field_op_call(1.0)
+
+    FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
 
 
 def test_astype():
