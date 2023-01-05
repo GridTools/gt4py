@@ -27,7 +27,8 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
     column_axis = kwargs.get("column_axis")
-    assert isinstance(offset_provider, dict) and isinstance(column_axis, Dimension)
+    assert isinstance(offset_provider, dict)
+    assert isinstance(column_axis, Dimension)
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
