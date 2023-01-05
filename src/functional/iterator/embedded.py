@@ -457,7 +457,9 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = (
+    Scalar | LocatedField | tuple
+)  # of ["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -704,10 +706,11 @@ def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndexOrIndices,
     *,
-    column_axis_idx: int = None,
+    column_axis_idx: Optional[int] = None,
 ) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
         if column_axis_idx is not None:
+            assert _column_range
             # construct a Column of tuples
             first = tuple(
                 _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
@@ -735,7 +738,7 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[Dimension], axis: Tag) -> int:
+def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> int:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
@@ -781,7 +784,7 @@ class MDIterator:
         if __debug__:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
-        slice_column = dict[Tag, FieldIndex]()
+        slice_column = dict[Tag, range]()
         if self.column_axis is not None:
             assert _column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
@@ -925,11 +928,11 @@ def get_ordered_indices(
 
 def _shift_range(
     range_or_index: range | numbers.Integral, offset: numbers.Integral
-) -> slice | numbers.Integral:
+) -> range | numbers.Integral:
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
-        return slice(range_or_index.start + offset, range_or_index.stop + offset)
+        return range(range_or_index.start + offset, range_or_index.stop + offset)
     else:
         assert isinstance(range_or_index, numbers.Integral)
         return range_or_index + offset
@@ -938,7 +941,7 @@ def _shift_range(
 def _shift_ranges(
     ranges_or_indices: tuple[range | numbers.Integral, ...],
     offsets: tuple[numbers.Integral, ...],
-) -> tuple[slice | numbers.Integral, ...]:
+) -> tuple[range | numbers.Integral, ...]:
     return tuple(r if o == 0 else _shift_range(r, o) for r, o in zip(ranges_or_indices, offsets))
 
 
