@@ -17,6 +17,7 @@ from typing import Any
 
 import functional.iterator.ir as itir
 from eve import codegen
+from functional.common import Dimension
 from functional.iterator.transforms.pass_manager import apply_common_transforms
 from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
@@ -25,6 +26,8 @@ from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_low
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
+    column_axis = kwargs.get("column_axis")
+    assert isinstance(offset_provider, dict) and isinstance(column_axis, Dimension)
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
@@ -35,7 +38,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
-        column_axis=kwargs.get("column_axis"),
+        column_axis=column_axis,
     )
     generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")
