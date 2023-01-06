@@ -3,7 +3,7 @@ import pytest
 
 from functional.common import Dimension
 from functional.iterator import transforms
-from functional.iterator.builtins import deref, lift, reduce, shift
+from functional.iterator.builtins import deref, lift, plus, reduce, shift
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -131,7 +131,7 @@ def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode):
 
 @fundef
 def sum_edges_to_vertices_reduce(in_edges):
-    return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
+    return reduce(plus, 0)(shift(V2E)(in_edges))
 
 
 def test_sum_edges_to_vertices_reduce(program_processor_no_gtfn_exec, lift_mode):

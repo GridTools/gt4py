@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
-from typing import Any, ClassVar, Iterable, Optional, Type, Union
+from typing import Any, Iterable, Optional, Type, Union
 
 import eve
 from eve.concepts import SymbolName
@@ -67,6 +67,24 @@ def pytype_to_cpptype(t: str):
 
 _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
+
+_binary_op_map: dict[str, str] = {
+    "plus": "+",
+    "minus": "-",
+    "multiplies": "*",
+    "divides": "/",
+    "eq": "==",
+    "not_eq": "!=",
+    "less": "<",
+    "less_equal": "<=",
+    "greater": ">",
+    "greater_equal": ">=",
+    "and_": "&&",
+    "or_": "||",
+    "xor_": "^",
+    "mod": "%",
+}
+_unary_op_map: dict[str, str] = {"not_": "!"}
 
 
 def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
@@ -178,25 +196,28 @@ def _collect_offset_definitions(
     return offset_definitions
 
 
+class UnappliedOperatorToLambda(eve.NodeTranslator):
+    def visit_SymRef(self, node: itir.SymRef) -> itir.Expr:
+        if node.id in _binary_op_map:
+            return itir.Lambda(
+                params=[itir.Sym(id="a"), itir.Sym(id="b")],
+                expr=itir.FunCall(
+                    fun=itir.SymRef(id=node.id), args=[itir.SymRef(id="a"), itir.SymRef(id="b")]
+                ),
+            )
+        return node
+
+    def visit_Node(self, node: itir.Node) -> itir.Node:
+        return self.generic_visit(node, in_funcall=False)
+
+    def visit_FunCall(self, node: itir.FunCall):
+        return itir.FunCall(
+            fun=self.visit(node.fun, in_funcall=True), args=self.visit(node.args, in_funcall=False)
+        )
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-    _binary_op_map: ClassVar[dict[str, str]] = {
-        "plus": "+",
-        "minus": "-",
-        "multiplies": "*",
-        "divides": "/",
-        "eq": "==",
-        "not_eq": "!=",
-        "less": "<",
-        "less_equal": "<=",
-        "greater": ">",
-        "greater_equal": ">=",
-        "and_": "&&",
-        "or_": "||",
-        "xor_": "^",
-        "mod": "%",
-    }
-    _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
     offset_provider: dict
     column_axis: Optional[common.Dimension]
@@ -353,15 +374,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
-            if node.fun.id in self._unary_op_map:
+            if node.fun.id in _unary_op_map:
                 assert len(node.args) == 1
                 return UnaryExpr(
-                    op=self._unary_op_map[node.fun.id], expr=self.visit(node.args[0], **kwargs)
+                    op=_unary_op_map[node.fun.id], expr=self.visit(node.args[0], **kwargs)
                 )
-            elif node.fun.id in self._binary_op_map:
+            elif node.fun.id in _binary_op_map:
                 assert len(node.args) == 2
                 return BinaryExpr(
-                    op=self._binary_op_map[node.fun.id],
+                    op=_binary_op_map[node.fun.id],
                     lhs=self.visit(node.args[0], **kwargs),
                     rhs=self.visit(node.args[1], **kwargs),
                 )
