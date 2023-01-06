@@ -490,7 +490,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_type__(self) -> ts.CallableType:
-        assert isinstance(self.foast_node, foast.FieldOperator)
+        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
         type_ = self.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
@@ -546,7 +546,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
-        assert isinstance(self.foast_node, foast.FieldOperator)
+        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
         closure_vars = {self.foast_node.id: self}
@@ -574,7 +574,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
-        assert isinstance(closure_symbols, dict)
+        # assert isinstance(closure_symbols, dict)
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
@@ -591,7 +591,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        assert isinstance(self.foast_node, foast.FieldOperator)
+        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
         args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
