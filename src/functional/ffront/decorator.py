@@ -33,7 +33,7 @@ from devtools import debug
 
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
-from functional.common import DimensionKind, GridType, GTTypeError
+from functional.common import Dimension, DimensionKind, GridType, GTTypeError
 from functional.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -42,7 +42,7 @@ from functional.ffront import (
     type_specifications as ts,
     type_translation,
 )
-from functional.ffront.fbuiltins import Dimension, FieldOffset
+from functional.ffront.fbuiltins import FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
@@ -97,13 +97,14 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
 
 def _canonicalize_args(
     node_params: list[foast.DataSymbol] | list[past.DataSymbol],
-    args: tuple[Any],
+    args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[tuple, dict]:
     new_args = []
     new_kwargs = {**kwargs}
 
     for param_i, param in enumerate(node_params):
+        assert isinstance(param, (foast.Symbol, past.Symbol))
         if param.id in new_kwargs:
             if param_i < len(args):
                 raise ProgramTypeError(f"got multiple values for argument {param.id}.")
@@ -154,7 +155,7 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
+    arg, arg_type: ts.DataType
 ) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
     if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
@@ -459,7 +460,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
         *,
-        operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
+        operator_node_cls: OperatorNodeT = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
