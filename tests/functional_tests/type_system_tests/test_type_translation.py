@@ -85,8 +85,8 @@ def test_invalid_scalar_kind():
             ),
         ),
         (
-            common.Field[[TDim], float],
-            ts.FieldType(dims=..., dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            common.Field[[IDim], float],
+            ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
         (
             common.Field[[IDim, JDim], float],
