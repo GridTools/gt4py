@@ -172,7 +172,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.FunctionDefinition(
             id=node.name,
             params=self.visit(node.args, **kwargs),
-            body=self.visit_stmt_list(node.body, **kwargs),
+            body=self._visit_stmts(node.body, self._make_loc(node), **kwargs),
             closure_vars=closure_var_symbols,
             location=self._make_loc(node),
         )
@@ -313,13 +313,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
-    def visit_stmt_list(self, nodes: list[ast.stmt], **kwargs) -> list[foast.Expr]:
-        if not isinstance(last_node := nodes[-1], ast.Return):
-            raise FieldOperatorSyntaxError.from_AST(
-                last_node, msg="Field operator must return a field expression on the last line!"
-            )
-        return [self.visit(node, **kwargs) for node in nodes]
-
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
@@ -391,6 +384,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
             type=ts.DeferredType(constraint=ts.DataType),
+        )
+
+    def _visit_stmts(
+        self, stmts: list[ast.stmt], location: eve.SourceLocation, **kwargs
+    ) -> foast.BlockStmt:
+        return foast.BlockStmt(
+            stmts=[self.visit(el, **kwargs) for el in stmts if not isinstance(el, ast.Pass)],
+            location=location,
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:

@@ -297,11 +297,11 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.annex.symtable["tmp_a__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable["tmp_a__0"].type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.annex.symtable["tmp_b__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable["tmp_b__0"].type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -359,7 +359,7 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.annex.symtable["tmp__0"].type == ts.TupleType(
+    assert parsed.body.annex.symtable["tmp__0"].type == ts.TupleType(
         types=[
             ts.FieldType(
                 dims=Ellipsis,
@@ -453,7 +453,7 @@ def test_remap(remap_setup):
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
@@ -466,7 +466,7 @@ def test_remap_nbfield(remap_setup):
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y, Y2XDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
@@ -479,7 +479,7 @@ def test_remap_reduce(remap_setup):
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
@@ -492,7 +492,7 @@ def test_remap_reduce_sparse(remap_setup):
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
 
@@ -518,7 +518,7 @@ def test_broadcast_multi_dim():
 
     parsed = FieldOperatorParser.apply_to_function(simple_broadcast)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[ADim, BDim, CDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
 
@@ -562,7 +562,7 @@ def test_where_dim():
 
     parsed = FieldOperatorParser.apply_to_function(simple_where)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[ADim, BDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
 
@@ -575,7 +575,7 @@ def test_where_broadcast_dim():
 
     parsed = FieldOperatorParser.apply_to_function(simple_where)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[ADim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
 
@@ -588,7 +588,7 @@ def test_where_tuple_dim():
 
     parsed = FieldOperatorParser.apply_to_function(tuple_where)
 
-    assert parsed.body[0].value.type == ts.TupleType(
+    assert parsed.body.stmts[0].value.type == ts.TupleType(
         types=[
             ts.TupleType(
                 types=[
@@ -630,7 +630,7 @@ def test_where_mixed_dims():
 
     parsed = FieldOperatorParser.apply_to_function(tuple_where_mix_dims)
 
-    assert parsed.body[0].value.type == ts.TupleType(
+    assert parsed.body.stmts[0].value.type == ts.TupleType(
         types=[
             ts.TupleType(
                 types=[
@@ -658,7 +658,7 @@ def test_astype_dtype():
 
     parsed = FieldOperatorParser.apply_to_function(simple_astype)
 
-    assert parsed.body[0].value.type == ts.FieldType(
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[ADim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
     )
 

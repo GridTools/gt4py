@@ -113,6 +113,17 @@ def promote_to_mask_type(
         return input_type
 
 
+def deduce_return_type(node: foast.BlockStmt):
+    for stmt in node.stmts:
+        if isinstance(stmt, foast.Return):
+            return stmt.value.type
+
+    raise FieldOperatorTypeDeductionError.from_foast_node(
+        node,
+        msg="Block statement must return a value.",
+    )
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -173,8 +184,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        assert isinstance(new_body[-1], foast.Return)
-        return_type = new_body[-1].value.type
+        return_type = deduce_return_type(new_body)
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -248,7 +258,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Undeclared symbol {node.id}"
+                node, msg=f"Undeclared symbol `{node.id}`."
             )
 
         symbol = symtable[node.id]
