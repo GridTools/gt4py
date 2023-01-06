@@ -41,7 +41,6 @@ def _is_reduce(node: gtfn_ir.FunCall):
 # it visits the gtfn_ir tree eagerly depth first, and it is only doing one pass. This entails
 # that some constructs can not be treated. This visitor checks for such constructs, and makes
 # the contract on the gtfn_ir for ToImpIR to suceed explicit
-@dataclasses.dataclass
 class IsImpCompatible(NodeVisitor):
     incompatible_node: Optional[gtfn_ir_common.Expr] = None
     compatible: bool = True
@@ -72,11 +71,8 @@ class IsImpCompatible(NodeVisitor):
         self.generic_visit(node, **kwargs)
 
 
-@dataclasses.dataclass(frozen=True)
-class ToImpIR(NodeVisitor):
-    imp_list_ir: List[Union[Stmt, Conditional]]
-    sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef]
-    localized_symbols: List[str]
+@dataclasses.dataclass(frozen=False)
+class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
@@ -87,21 +83,10 @@ class ToImpIR(NodeVisitor):
             return f"{value}."
         return value
 
-    def visit_Node(self, node, **kwargs):
-        return node
-
     def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs):
         if node.id in self.localized_symbols:
             return gtfn_ir_common.SymRef(id=f"{node.id}_local")
         return node
-
-    def visit_UnaryExpr(self, node: gtfn_ir.UnaryExpr, **kwargs):
-        return gtfn_ir.UnaryExpr(op=node.op, expr=self.visit(node.expr, **kwargs))
-
-    def visit_BinaryExpr(self, node: gtfn_ir.BinaryExpr, **kwargs):
-        return gtfn_ir.BinaryExpr(
-            op=node.op, lhs=self.visit(node.lhs, **kwargs), rhs=self.visit(node.rhs, **kwargs)
-        )
 
     @staticmethod
     def _make_shift(offsets: list[gtfn_ir_common.Expr], iterator: gtfn_ir_common.Expr):
@@ -113,6 +98,27 @@ class ToImpIR(NodeVisitor):
     @staticmethod
     def _make_deref(iterator: gtfn_ir_common.Expr):
         return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[iterator])
+
+    @staticmethod
+    def _make_dense_acess(shift_call: gtfn_ir.FunCall, nbh_iter: int):
+        return gtfn_ir.FunCall(
+            fun=gtfn_ir_common.SymRef(id="deref"),
+            args=[
+                gtfn_ir.FunCall(
+                    fun=gtfn_ir_common.SymRef(id="shift"), args=shift_call.args + [nbh_iter]
+                )
+            ],
+        )
+
+    @staticmethod
+    def _make_sparse_acess(field_ref: gtfn_ir_common.SymRef, nbh_iter: int):
+        return gtfn_ir.FunCall(
+            fun=gtfn_ir_common.SymRef(id="tuple_get"),
+            args=[
+                nbh_iter,
+                gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[field_ref]),
+            ],
+        )
 
     def handle_Reduction(self, node, **kwargs):
         offset_provider = kwargs["offset_provider"]
@@ -128,37 +134,20 @@ class ToImpIR(NodeVisitor):
         nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
             if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":
-                new_args.append(
-                    gtfn_ir.FunCall(
-                        fun=gtfn_ir_common.SymRef(id="deref"),
-                        args=[
-                            gtfn_ir.FunCall(
-                                fun=gtfn_ir_common.SymRef(id="shift"), args=arg.args + [nbh_iter]
-                            )
-                        ],
-                    )
-                )
+                new_args.append(self._make_dense_acess(arg, nbh_iter))
             if isinstance(arg, gtfn_ir_common.SymRef):
-                new_args.append(
-                    gtfn_ir.FunCall(
-                        fun=gtfn_ir_common.SymRef(id="tuple_get"),
-                        args=[
-                            nbh_iter,
-                            gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[arg]),
-                        ],
-                    )
-                )
+                new_args.append(self._make_sparse_acess(arg, nbh_iter))
 
-        old_to_new_args = dict(zip([param.id for param in fun.params[1:]], new_args))
+        param_to_args = dict(zip([param.id for param in fun.params[1:]], new_args))
         acc = fun.params[0]
 
-        class ReplaceArgs(NodeTranslator):
+        class InlineArgs(NodeTranslator):
             def visit_Expr(self, node):
-                if hasattr(node, "id") and node.id in old_to_new_args:
-                    return old_to_new_args[node.id]
+                if hasattr(node, "id") and node.id in param_to_args:
+                    return param_to_args[node.id]
                 return self.generic_visit(node)
 
-        new_fun = ReplaceArgs().visit(fun.expr)
+        new_body = InlineArgs().visit(fun.expr)
 
         red_idx = self.uids.sequential_id(prefix="red")
         red_lit = gtfn_ir_common.Sym(id=f"{red_idx}")
@@ -176,7 +165,7 @@ class ToImpIR(NodeVisitor):
                 self.cur_idx = cur_idx
 
         for i in range(max_neighbors):
-            new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_fun)
+            new_expr = PlugInCurrentIdx(cur_idx=gtfn_ir.OffsetLiteral(value=i)).visit(new_body)
             rhs = self.visit(new_expr, **kwargs)
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
@@ -190,7 +179,7 @@ class ToImpIR(NodeVisitor):
             )
             for arg in node.args
         ):
-            # do not try to lower lambdas that take lambdas as arugment to something more readable
+            # do not try to lower lambdas that take lambdas as argument to something more readable
             red_idx = self.uids.sequential_id(prefix="red")
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{red_idx}"), rhs=node))
             return gtfn_ir_common.SymRef(id=f"{red_idx}")
@@ -201,14 +190,19 @@ class ToImpIR(NodeVisitor):
             for param, arg in zip(params, args):
                 if param.id in self.sym_table:
                     self.localized_symbols.append(param.id)
-                self.imp_list_ir.append(
-                    InitStmt(
-                        lhs=gtfn_ir_common.Sym(id=f"{param.id}_local")
-                        if param.id in self.sym_table
-                        else gtfn_ir_common.Sym(id=f"{param.id}"),
-                        rhs=arg,
+                    self.imp_list_ir.append(
+                        InitStmt(
+                            lhs=gtfn_ir_common.Sym(id=f"{param.id}_local"),
+                            rhs=arg,
+                        )
                     )
-                )
+                else:
+                    self.imp_list_ir.append(
+                        InitStmt(
+                            lhs=gtfn_ir_common.Sym(id=f"{param.id}"),
+                            rhs=arg,
+                        )
+                    )
             expr = self.visit(node.fun.expr, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
@@ -254,21 +248,22 @@ class ToImpIR(NodeVisitor):
         )
         return gtfn_ir_common.SymRef(id=cond_idx)
 
-
-@dataclasses.dataclass(frozen=True)
-class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FunctionDefinition(
         self, node: gtfn_ir.FunctionDefinition, **kwargs: Any
     ) -> ImperativeFunctionDefinition:
-        check_compat = IsImpCompatible(compatible=True, incompatible_node=None)
+        check_compat = IsImpCompatible()
         check_compat.visit(node.expr, **kwargs)
         if not check_compat.compatible:
             raise RuntimeError(f"gtfn_im can not handle {check_compat.incompatible_node}")
 
-        to_imp_ir = ToImpIR(imp_list_ir=[], sym_table=node.annex.symtable, localized_symbols=[])
-        ret = to_imp_ir.visit(node.expr, **kwargs)
+        self.imp_list_ir: List[Union[Stmt, Conditional]] = []
+        self.sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
+        self.localized_symbols: List[str] = []
+        ret = self.visit(node.expr, **kwargs)
+        self.localized_symbols = []
+
         return ImperativeFunctionDefinition(
             id=node.id,
             params=node.params,
-            fun=to_imp_ir.imp_list_ir + [ReturnStmt(ret=ret)],
+            fun=self.imp_list_ir + [ReturnStmt(ret=ret)],
         )
