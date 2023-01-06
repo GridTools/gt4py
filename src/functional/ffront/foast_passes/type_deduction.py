@@ -113,7 +113,8 @@ def promote_to_mask_type(
         return input_type
 
 
-def deduce_return_type(node: foast.BlockStmt):
+def deduce_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
+    """Deduce type of value returned inside a block statement."""
     for stmt in node.stmts:
         if isinstance(stmt, foast.Return):
             return stmt.value.type
