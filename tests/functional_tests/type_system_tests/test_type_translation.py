@@ -152,9 +152,9 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(common.Field[[int, int], int])
 
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[[TDim], str])
+        type_translation.from_type_hint(common.Field[[IDim], str])
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[[TDim], None])
+        type_translation.from_type_hint(common.Field[[IDim], None])
 
     # Functions
     with pytest.raises(
