@@ -489,6 +489,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_type__(self) -> ts.CallableType:
+        assert isinstance(self.foast_node, foast.FieldOperator)
         type_ = self.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
@@ -543,7 +544,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
-
+        assert isinstance(self.foast_node, foast.FieldOperator)
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
         closure_vars = {self.foast_node.id: self}
@@ -587,6 +588,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
+        assert isinstance(self.foast_node, foast.FieldOperator)
         args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
