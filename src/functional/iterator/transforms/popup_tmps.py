@@ -64,6 +64,7 @@ class PopupTmps(NodeTranslator):
                 fun = fun.args[0]
                 params = fun.params[1:]
             else:
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:

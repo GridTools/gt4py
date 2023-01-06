@@ -4,7 +4,7 @@ from functional.iterator.transforms.prune_closure_inputs import PruneClosureInpu
 
 def test_simple():
     testee = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.Lambda(
             params=[ir.Sym(id="x"), ir.Sym(id="y"), ir.Sym(id="z")],
             expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="y")]),
@@ -13,7 +13,7 @@ def test_simple():
         inputs=[ir.SymRef(id="foo"), ir.SymRef(id="bar"), ir.SymRef(id="baz")],
     )
     expected = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.Lambda(
             params=[ir.Sym(id="y")],
             expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="y")]),
@@ -27,7 +27,7 @@ def test_simple():
 
 def test_shadowing():
     testee = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.Lambda(
             params=[ir.Sym(id="x"), ir.Sym(id="y"), ir.Sym(id="z")],
             expr=ir.FunCall(
@@ -42,7 +42,7 @@ def test_shadowing():
         inputs=[ir.SymRef(id="foo"), ir.SymRef(id="bar"), ir.SymRef(id="baz")],
     )
     expected = ir.StencilClosure(
-        domain=ir.SymRef(id="d"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
         stencil=ir.Lambda(
             params=[ir.Sym(id="y")],
             expr=ir.FunCall(
