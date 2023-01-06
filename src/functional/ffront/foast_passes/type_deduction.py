@@ -113,11 +113,15 @@ def promote_to_mask_type(
         return input_type
 
 
-def deduce_return_type(node: foast.BlockStmt, *, requires_unconditional_return=True):
+def deduce_return_type(
+    node: foast.BlockStmt, *, requires_unconditional_return=True
+) -> ts.TypeSpec | None:
+    """Deduce type of value returned inside a block statement."""
     conditional_return_type: ts.TypeSpec | None = None
 
     for stmt in node.stmts:
         is_unconditional_return = False
+        return_type: ts.TypeSpec | None
 
         if isinstance(stmt, foast.Return):
             is_unconditional_return = True
