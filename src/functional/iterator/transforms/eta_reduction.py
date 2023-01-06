@@ -23,7 +23,7 @@ class EtaReduction(NodeTranslator):
         return self.generic_visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        if isinstance(node.fun, ir.SymRef) and node.fun.id == "reduce":
+        if node.fun == ir.SymRef(id="reduce"):
             fun = self.visit(node.fun, in_reduce=True)
             args = [self.visit(arg, in_reduce=True) for arg in node.args]
             return ir.FunCall(fun=fun, args=args)

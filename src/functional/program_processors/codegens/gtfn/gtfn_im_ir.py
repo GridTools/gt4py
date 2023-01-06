@@ -28,7 +28,7 @@ class Stmt(Node):
 class AssignStmt(Stmt):
     op: str = "="
     lhs: Union[Sym, SymRef]
-    rhs: Union[SymRef, Expr]
+    rhs: Expr
 
 
 class InitStmt(AssignStmt):
@@ -38,7 +38,7 @@ class InitStmt(AssignStmt):
 class Conditional(Stmt):
     cond_type: str
     init_stmt: Stmt
-    cond: Union[SymRef, Expr]
+    cond: Expr
     if_stmt: AssignStmt
     else_stmt: AssignStmt
 

@@ -137,7 +137,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend(backend, {domain})")  # TODO: make_backend
+    Backend = as_fmt("make_backend(backend, {domain})")
 
     StencilExecution = as_mako(
         """
@@ -225,7 +225,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
-            auto tmp_alloc__ = tmp_allocator(backend);
+            auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
             ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };
