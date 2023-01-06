@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 import numpy as np
 import pytest
@@ -14,7 +14,17 @@ def foo(inp):
     return deref(inp)
 
 
-connectivity = SimpleNamespace(max_neighbors=0, has_skip_values=True)
+@dataclass
+class DummyConnectivity:
+    max_neighbors: int
+    has_skip_values: int
+    origin_axis: Dimension = Dimension("dummy")
+
+    def mapped_index(_, __) -> int:
+        return 0
+
+
+connectivity = DummyConnectivity(max_neighbors=0, has_skip_values=True)
 
 
 def test_deduce_domain():
