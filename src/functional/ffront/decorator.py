@@ -316,6 +316,7 @@ class Program:
         kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
         try:
+            assert isinstance(self.past_node.type, ts.CallableType)
             type_info.accepts_args(
                 self.past_node.type,
                 with_args=arg_types,
@@ -460,7 +461,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
         *,
-        operator_node_cls: OperatorNodeT = foast.FieldOperator,
+        operator_node_cls=foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
@@ -506,7 +507,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         if hasattr(self, "__cached_itir"):
             return getattr(self, "__cached_itir")  # noqa: B009
 
-        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
+        itir_node = FieldOperatorLowering.apply(self.foast_node)
+        assert isinstance(itir_node, itir.FunctionDefinition)
 
         object.__setattr__(self, "__cached_itir", itir_node)
 
@@ -548,7 +550,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
         closure_vars = {self.foast_node.id: self}
-        closure_symbols = [
+        closure_symbols: list = [
             past.Symbol(
                 id=self.foast_node.id,
                 type=ts.DeferredType(constraint=None),
@@ -572,6 +574,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
+        assert isinstance(closure_symbols, dict)
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
