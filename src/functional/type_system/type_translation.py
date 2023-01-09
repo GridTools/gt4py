@@ -24,10 +24,10 @@ import numpy.typing as npt
 
 from eve import extended_typing as xtyping
 from functional import common
-from functional.ffront import common_types as ct
+from functional.type_system import type_specifications as ts
 
 
-def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
+def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
     # make int & float precision platform independent.
     if dtype is builtins.int:
         dt = np.dtype("int64")
@@ -42,32 +42,30 @@ def make_scalar_kind(dtype: npt.DTypeLike) -> ct.ScalarKind:
     if dt.shape == () and dt.fields is None:
         match dt:
             case np.bool_:
-                return ct.ScalarKind.BOOL
+                return ts.ScalarKind.BOOL
             case np.int32:
-                return ct.ScalarKind.INT32
+                return ts.ScalarKind.INT32
             case np.int64:
-                return ct.ScalarKind.INT64
+                return ts.ScalarKind.INT64
             case np.float32:
-                return ct.ScalarKind.FLOAT32
+                return ts.ScalarKind.FLOAT32
             case np.float64:
-                return ct.ScalarKind.FLOAT64
-            case np.str:
-                return ct.ScalarKind.STRING
+                return ts.ScalarKind.FLOAT64
+            case np.str_:
+                return ts.ScalarKind.STRING
             case _:
                 raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
         raise common.GTTypeError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
 
 
-def make_symbol_type_from_typing(
+def from_type_hint(
     type_hint: Any,
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> ct.SymbolType:
-    recursive_make_symbol = functools.partial(
-        make_symbol_type_from_typing, globalns=globalns, localns=localns
-    )
+) -> ts.TypeSpec:
+    recursive_make_symbol = functools.partial(from_type_hint, globalns=globalns, localns=localns)
     extra_args = ()
 
     # ForwardRef
@@ -96,14 +94,14 @@ def make_symbol_type_from_typing(
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
-            return ct.ScalarType(kind=make_scalar_kind(type_hint))
+            return ts.ScalarType(kind=get_scalar_kind(type_hint))
 
         case builtins.tuple:
             if not args:
                 raise TypingError(f"Tuple annotation ({type_hint}) requires at least one argument!")
             if Ellipsis in args:
                 raise TypingError(f"Unbound tuples ({type_hint}) are not allowed!")
-            return ct.TupleType(types=[recursive_make_symbol(arg) for arg in args])
+            return ts.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if (n_args := len(args)) != 2:
@@ -127,9 +125,9 @@ def make_symbol_type_from_typing(
                 raise TypingError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')!"
                 ) from error
-            if not isinstance(dtype, ct.ScalarType) or dtype.kind == ct.ScalarKind.STRING:
+            if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
                 raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
-            return ct.FieldType(dims=dims, dtype=dtype)
+            return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
             if not args:
@@ -150,14 +148,14 @@ def make_symbol_type_from_typing(
             }
 
             # TODO(tehrengruber): print better error when no return type annotation is given
-            return ct.FunctionType(
+            return ts.FunctionType(
                 args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
             )
 
     raise TypingError(f"'{type_hint}' type is not supported")
 
 
-def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
+def from_value(value: Any) -> ts.TypeSpec:
     # TODO(tehrengruber): use protocol from functional.common when available
     #  instead of importing from the embedded implementation
     from functional.iterator.embedded import LocatedField
@@ -168,22 +166,22 @@ def make_symbol_type_from_value(value: Any) -> ct.SymbolType:
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
     elif isinstance(value, common.Dimension):
-        symbol_type = ct.DimensionType(dim=value)
+        symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
         dims = list(value.axes)
-        dtype = make_symbol_type_from_typing(value.dtype.type)
-        symbol_type = ct.FieldType(dims=dims, dtype=dtype)
+        dtype = from_type_hint(value.dtype.type)
+        symbol_type = ts.FieldType(dims=dims, dtype=dtype)
     elif isinstance(value, tuple):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
         # manually here. If we get rid of all the special cases this is
         # not needed anymore.
-        return ct.TupleType(types=[make_symbol_type_from_value(el) for el in value])
+        return ts.TupleType(types=[from_value(el) for el in value])
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
-        symbol_type = make_symbol_type_from_typing(type_)
+        symbol_type = from_type_hint(type_)
 
-    if isinstance(symbol_type, (ct.DataType, ct.CallableType, ct.OffsetType, ct.DimensionType)):
+    if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type
     else:
         raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")

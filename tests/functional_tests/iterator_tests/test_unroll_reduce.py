@@ -7,6 +7,11 @@ from functional.iterator import ir
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
 
 
+@pytest.fixture(params=[True, False])
+def has_skip_values(request):
+    return request.param
+
+
 @pytest.fixture
 def basic_reduction():
     UIDs.reset_sequence()
@@ -91,7 +96,7 @@ def reduction_with_irrelevant_full_shift():
     )
 
 
-def _expected(red, dim, max_neighbors, has_skip_values):
+def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
     acc = ir.SymRef(id="_acc_1")
     offset = ir.SymRef(id="_i_2")
     step = ir.SymRef(id="_step_3")
@@ -118,7 +123,7 @@ def _expected(red, dim, max_neighbors, has_skip_values):
             args=[
                 ir.FunCall(
                     fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[offset]),
-                    args=[red.args[0]],
+                    args=[red.args[shifted_arg]],
                 )
             ],
         )
@@ -132,26 +137,18 @@ def _expected(red, dim, max_neighbors, has_skip_values):
     return ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=step_app), args=[step_fun])
 
 
-def test_no_skip_values(basic_reduction):
-    expected = _expected(basic_reduction, "dim", 3, False)
+def test_basic(basic_reduction, has_skip_values):
+    expected = _expected(basic_reduction, "dim", 3, has_skip_values)
 
-    offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
+    offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=has_skip_values)}
     actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
     assert actual == expected
 
 
-def test_skip_values(basic_reduction):
-    expected = _expected(basic_reduction, "dim", 3, True)
+def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, has_skip_values):
+    expected = _expected(reduction_with_shift_on_second_arg, "dim", 1, has_skip_values, 1)
 
-    offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=True)}
-    actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
-    assert actual == expected
-
-
-def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg):
-    expected = _expected(reduction_with_shift_on_second_arg, "dim", 3, False)
-
-    offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
+    offset_provider = {"dim": SimpleNamespace(max_neighbors=1, has_skip_values=has_skip_values)}
     actual = UnrollReduce.apply(reduction_with_shift_on_second_arg, offset_provider=offset_provider)
     assert actual == expected
 

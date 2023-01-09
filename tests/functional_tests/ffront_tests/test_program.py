@@ -13,22 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
-import pathlib
 import re
 
 import numpy as np
 import pytest
 
-import eve
-from eve.pattern_matching import ObjectPattern as P
-from functional.common import Field, GridType, GTTypeError
-from functional.ffront import common_types, program_ast as past
+from functional.common import Field, GTTypeError
 from functional.ffront.decorator import field_operator, program
-from functional.ffront.fbuiltins import broadcast
-from functional.ffront.func_to_past import ProgramParser
 from functional.ffront.past_passes.type_deduction import ProgramTypeError
-from functional.ffront.past_to_itir import ProgramLowering
-from functional.iterator import ir as itir
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
@@ -252,8 +244,8 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        "- Expected 0-th argument to be of type Field\[\[IDim], dtype=float64\],"
-        " but got Field\[\[JDim\], dtype=float64\].",
+        "- Expected 0-th argument to be of type Field\[\[IDim], float64\],"
+        " but got Field\[\[JDim\], float64\].",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None

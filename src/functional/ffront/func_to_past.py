@@ -17,7 +17,12 @@ import ast
 from dataclasses import dataclass
 from typing import Any, cast
 
-from functional.ffront import common_types as ct, program_ast as past, symbol_makers
+from functional.ffront import (
+    dialect_ast_enums,
+    program_ast as past,
+    type_specifications as ts,
+    type_translation,
+)
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
@@ -37,6 +42,8 @@ class ProgramParser(DialectParser[past.Program]):
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
+        if "return" in annotations and not isinstance(None, annotations["return"]):
+            raise ProgramSyntaxError("Program should not have a return value!")
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
 
@@ -44,8 +51,8 @@ class ProgramParser(DialectParser[past.Program]):
         closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,
-                type=symbol_makers.make_symbol_type_from_value(val),
-                namespace=ct.Namespace.CLOSURE,
+                type=type_translation.from_value(val),
+                namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=self._make_loc(node),
             )
             for name, val in self.closure_vars.items()
@@ -53,7 +60,7 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
-            type=ct.DeferredSymbolType(constraint=ct.ProgramType),
+            type=ts.DeferredType(constraint=ts.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             closure_vars=closure_symbols,
@@ -66,8 +73,8 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
-        new_type = symbol_makers.make_symbol_type_from_typing(annotation)
-        if not isinstance(new_type, ct.DataType):
+        new_type = type_translation.from_type_hint(annotation)
+        if not isinstance(new_type, ts.DataType):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
@@ -76,35 +83,35 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.ADD
+    def visit_Add(self, node: ast.Add, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.SUB
+    def visit_Sub(self, node: ast.Sub, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.MULT
+    def visit_Mult(self, node: ast.Mult, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.DIV
+    def visit_Div(self, node: ast.Div, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.FLOOR_DIV
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.POW
+    def visit_Pow(self, node: ast.Pow, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.MOD
+    def visit_Mod(self, node: ast.Mod, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_AND
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_OR
+    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_OR
 
-    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> ct.BinaryOperator:
-        return ct.BinaryOperator.BIT_XOR
+    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> dialect_ast_enums.BinaryOperator:
+        return dialect_ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
         return past.BinOp(
@@ -147,7 +154,7 @@ class ProgramParser(DialectParser[past.Program]):
         return past.TupleExpr(
             elts=[self.visit(item) for item in node.elts],
             location=self._make_loc(node),
-            type=ct.DeferredSymbolType(constraint=ct.TupleType),
+            type=ts.DeferredType(constraint=ts.TupleType),
         )
 
     def visit_Slice(self, node: ast.Slice) -> past.Slice:
@@ -160,12 +167,12 @@ class ProgramParser(DialectParser[past.Program]):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
-            symbol_type = symbol_makers.make_symbol_type_from_value(node.operand.value)
+            symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
             )
         raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
-        symbol_type = symbol_makers.make_symbol_type_from_value(node.value)
+        symbol_type = type_translation.from_value(node.value)
         return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))
