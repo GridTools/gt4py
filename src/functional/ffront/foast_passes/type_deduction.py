@@ -156,7 +156,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
     >>> assert typed_fieldop.body[0].value.type == ts.FieldType(dtype=ts.ScalarType(
-    ...     kind=ts.ScalarKind.FLOAT64), dims=Ellipsis)
+    ...     kind=ts.ScalarKind.FLOAT64), dims=[IDim])
     """
 
     @classmethod

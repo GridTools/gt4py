@@ -207,7 +207,7 @@ def pretty_format(node: foast.LocatedNode) -> str:
     ...     return a+1
     >>> print(pretty_format(field_op.foast_node))
     @field_operator
-    def field_op(a: Field[[TDim], int64]) -> Field[[TDim], int64]:
+    def field_op(a: Field[[IDim], int64]) -> Field[[IDim], int64]:
       return a + 1
     """
     return _PrettyPrinter().apply(node)
