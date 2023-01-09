@@ -28,11 +28,11 @@ from functional.type_system.type_info import (  # noqa: F401
     is_arithmetic as is_arithmetic,
     is_concrete as is_concrete,
     is_concretizable as is_concretizable,
-    is_field_type_or_tuple_of_field_type as is_field_type_or_tuple_of_field_type,
     is_floating_point as is_floating_point,
     is_integral as is_integral,
     is_logical as is_logical,
     is_number as is_number,
+    is_type_or_tuple_of_type as is_type_or_tuple_of_type,
     primitive_constituents as primitive_constituents,
     promote as promote,
     promote_dims as promote_dims,
@@ -51,19 +51,56 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     )
 
 
+def create_new_function_type(
+    type_function_type: ts.FunctionType,
+    function_type: ts.TupleType,
+    return_type,
+) -> ts.FieldOperatorType | ts.ProgramType:
+    if type_function_type == ts.FieldOperatorType:
+        return ts.FieldOperatorType(
+            definition=ts.FunctionType(args=function_type.types, kwargs={}, returns=return_type)  # type: ignore
+        )
+    return ts.ProgramType(
+        definition=ts.FunctionType(args=function_type.types, kwargs={}, returns=return_type)  # type: ignore
+    )
+
+
 def promote_zero_dims(
     args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    new_args = args.copy()
-    for arg_i, arg in enumerate(args):
+    current_args = args.types if isinstance(args, ts.TupleType) else args
+    new_args = current_args.copy()  # type: ignore
+    for arg_i, arg in enumerate(current_args):  # type: ignore
         def_type = function_type.definition.args[arg_i]
+
         if _is_zero_dim_field(def_type) and is_number(arg):
             if extract_dtype(def_type) == extract_dtype(arg):
                 new_args[arg_i] = def_type
             else:
                 raise GTTypeError(f"{arg} is not compatible with {def_type}.")
+        elif isinstance(def_type, ts.TupleType):
+            type_function_type = (
+                ts.FieldOperatorType
+                if isinstance(function_type, ts.FieldOperatorType)
+                else ts.ProgramType
+            )
+            new_func_type = create_new_function_type(
+                type_function_type,  # type: ignore
+                function_type.definition.args[arg_i],  # type: ignore
+                function_type.definition.returns,
+            )
+            new_args[arg_i] = ts.TupleType(types=promote_zero_dims(arg.types, new_func_type))
     return new_args
+
+
+def unfold_scanop_tuples(arg_i: ts.TupleType, types_ls: list) -> list:
+    for i, arg_i_type in enumerate(arg_i.types):
+        if isinstance(arg_i_type, ts.TupleType):
+            types_ls[i] = ts.TupleType(types=unfold_scanop_tuples(arg_i_type, arg_i_type.types))
+        else:
+            types_ls[i] = ts.FieldType(dims=[], dtype=extract_dtype(arg_i_type))
+    return types_ls
 
 
 @return_type.register
@@ -89,16 +126,21 @@ def function_signature_incompatibilities_fieldop(
 def function_signature_incompatibilities_scanop(
     scanop_type: ts.ScanOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    if not all(
-        is_field_type_or_tuple_of_field_type(arg) or isinstance(arg, ts.ScalarType) for arg in args
-    ):
+    if not all(is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args):
         yield "Arguments to scan operator must be fields, scalars or tuples thereof."
         return
 
-    new_args = [
-        ts.FieldType(dims=[], dtype=extract_dtype(arg)) if isinstance(arg, ts.ScalarType) else arg
-        for arg in args
-    ]
+    new_args = []
+    new_el: ts.TypeSpec
+    for arg_i in args:
+        if is_type_or_tuple_of_type(arg_i, ts.ScalarType):
+            if isinstance(arg_i, ts.TupleType):
+                new_el = ts.TupleType(types=unfold_scanop_tuples(arg_i, arg_i.types))
+            else:
+                new_el = ts.FieldType(dims=[], dtype=extract_dtype(arg_i))
+        else:
+            new_el = arg_i
+        new_args.append(new_el)
 
     arg_dims = [extract_dims(el) for arg in new_args for el in primitive_constituents(arg)]
     try:

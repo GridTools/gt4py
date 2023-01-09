@@ -177,8 +177,8 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        assert isinstance(data, (np.ndarray, Scalar))
-        self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)
+        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)  # type: ignore[arg-type]
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -707,7 +707,7 @@ def _get_axes(
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: LocatedField | tuple | ConstantField,
     indices: FieldIndexOrIndices,
     *,
     as_column: bool = False,
@@ -1004,7 +1004,6 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        # TODO(tehrengruber): _make_tuple is for fields
         return _make_tuple(self.wrapped_iter.deref(), self.k_pos)
 
     def can_deref(self) -> bool:

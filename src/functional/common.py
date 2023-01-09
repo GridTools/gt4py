@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Generic,
-    Optional, 
+    Optional,
     Protocol,
     SupportsFloat,
     SupportsInt,

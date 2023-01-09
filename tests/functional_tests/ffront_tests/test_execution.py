@@ -933,22 +933,20 @@ def test_tuple_scalar_scan():
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
-    qc2 = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
-    scalar = 1.0
+    tuple_scalar = (1.0, (1.0, 0.0))
     expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
 
-    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
+    @scan_operator(axis=KDim, forward=True, init=0.0)
     def _scan_tuple_scalar(
-        state: tuple[float, float], qc_in: float, scalar: float
-    ) -> tuple[float, float]:
-        return (qc_in + state[0] + scalar, qc_in + state[1] - scalar)
+        state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
+    ) -> float:
+        return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
     @field_operator
     def scan_tuple_scalar(
-        qc: Field[[IDim, KDim], float], scalar: float
-    ) -> tuple[Field[[IDim, KDim], float], Field[[IDim, KDim], float]]:
-        return _scan_tuple_scalar(qc, scalar)
+        qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
+    ) -> Field[[IDim, KDim], float]:
+        return _scan_tuple_scalar(qc, tuple_scalar)
 
-    scan_tuple_scalar(qc, scalar, out=(qc, qc2), offset_provider={})
+    scan_tuple_scalar(qc, tuple_scalar, out=qc, offset_provider={})
     assert np.allclose(np.asarray(qc), expected)
-    assert np.allclose(np.asarray(qc2), -expected)

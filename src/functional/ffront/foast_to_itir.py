@@ -176,7 +176,7 @@ class FieldOperatorLowering(NodeTranslator):
         #  rest of the lowering inside the body. See ADR-0002 for more details.
         new_body = func_definition.expr
         for i, param in enumerate(func_definition.params):
-            if isinstance(node.definition.params[i].type, ts.ScalarType):
+            if iterator_type_kind(node.definition.params[i].type) == ITIRTypeKind.VALUE:
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
         return itir.FunctionDefinition(

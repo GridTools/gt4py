@@ -163,6 +163,8 @@ def _field_constituents_shape_and_dims(
             yield (arg.shape, dims)
         else:
             yield (None, dims)
+    elif isinstance(arg_type, ts.ScalarType):
+        yield (None, [])
     else:
         raise ValueError("Expected `FieldType` or `TupleType` thereof.")
 
