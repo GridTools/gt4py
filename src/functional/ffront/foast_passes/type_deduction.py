@@ -113,15 +113,17 @@ def promote_to_mask_type(
         return input_type
 
 
-def deduce_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
+def deduce_stmt_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
     """Deduce type of value returned inside a block statement."""
     for stmt in node.stmts:
         if isinstance(stmt, foast.Return):
             return stmt.value.type
 
-    raise FieldOperatorTypeDeductionError.from_foast_node(
-        node,
-        msg="Block statement must return a value.",
+    # If the node was constructed by the foast parsing we should never get here, but instead
+    # have gotten an error there.
+    raise AssertionError(
+        "Malformed block statement. Expected a return statement in this context, "
+        "but none was found. Please submit a bug report."
     )
 
 
@@ -185,7 +187,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        return_type = deduce_return_type(new_body)
+        return_type = deduce_stmt_return_type(new_body)
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,

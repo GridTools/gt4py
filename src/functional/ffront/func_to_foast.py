@@ -35,6 +35,7 @@ from functional.ffront.ast_passes import (
     UnchainComparesPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
@@ -169,10 +170,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 )
             )
 
+        new_body = self._visit_stmts(node.body, self._make_loc(node), **kwargs)
+
+        if deduce_stmt_return_kind(new_body) != StmtReturnKind.UNCONDITIONAL_RETURN:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Function must return a value, but no return statement was found."
+            )
+
         return foast.FunctionDefinition(
             id=node.name,
             params=self.visit(node.args, **kwargs),
-            body=self._visit_stmts(node.body, self._make_loc(node), **kwargs),
+            body=new_body,
             closure_vars=closure_var_symbols,
             location=self._make_loc(node),
         )
