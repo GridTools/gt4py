@@ -37,7 +37,7 @@ def test_funcall_to_op():
 
 def test_unapplied_funcall_to_function_object():
     testee = itir.SymRef(id="plus")
-    expected = gtfn_ir.SymRef(id="std::plus<void>")
+    expected = gtfn_ir.SymRef(id="std::plus<void>{}")
 
     actual = it2gtfn.GTFN_lowering(
         grid_type=common.GridType.CARTESIAN, offset_provider={}, column_axis=None
