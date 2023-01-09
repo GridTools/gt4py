@@ -33,6 +33,8 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
         # required since backend has no `reduce` builtin
         unroll_reduce=True,
     )
+    print("after transformations")
+    print(transformed)
     gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
