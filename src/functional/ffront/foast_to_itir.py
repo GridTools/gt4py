@@ -119,7 +119,7 @@ def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], it
     ...    return a, b
 
     >>> parsed = FieldOperatorParser.apply_to_function(foo)
-    >>> field_a, scalar_b = parsed.body[-1].value.elts
+    >>> field_a, scalar_b = parsed.body.stmts[-1].value.elts
     >>> to_value(field_a)(im.ref("a"))
     FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))])
     >>> to_value(scalar_b)(im.ref("a"))

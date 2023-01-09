@@ -67,7 +67,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     FunctionDefinition(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
     [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
-    >>> foast_tree.body  # doctest: +ELLIPSIS
+    >>> foast_tree.body.stmts  # doctest: +ELLIPSIS
     [Return(..., value=Name(..., id=SymbolRef('inp')))]
 
 

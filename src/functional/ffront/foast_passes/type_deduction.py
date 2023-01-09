@@ -216,11 +216,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> untyped_fieldop = FieldOperatorParser(
     ...     source_definition=source_definition, closure_vars=closure_vars, annotations=annotations
     ... ).visit(ast.parse(source_definition.source).body[0])
-    >>> untyped_fieldop.body[0].value.type
+    >>> untyped_fieldop.body.stmts[0].value.type
     DeferredType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body[0].value.type == ts.FieldType(dtype=ts.ScalarType(
+    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(dtype=ts.ScalarType(
     ...     kind=ts.ScalarKind.FLOAT64), dims=Ellipsis)
     """
 
