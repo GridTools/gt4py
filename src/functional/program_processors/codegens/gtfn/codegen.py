@@ -57,6 +57,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
+        "float": "double",
+        "float32": "float",
+        "float64": "double",
+        "int": "long",
+        "int32": "std::int32_t",
+        "int64": "std::int64_t",
+        "bool": "bool",
     }
 
     Sym = as_fmt("{id}")
@@ -64,6 +71,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
+        if node.id in self._builtins_mapping:
+            return self._builtins_mapping[node.id]
+        if node.id in gtfn_ir.GTFN_BUILTINS:
+            qualified_fun_name = f"gtfn::{node.id}"
+            return qualified_fun_name
+
         return node.id
 
     @staticmethod
@@ -88,6 +101,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
+    CastExpr = as_fmt("static_cast<{new_dtype}>({obj_expr})")
 
     def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
         tags = self.visit(node.tags)
@@ -110,11 +124,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self._builtins_mapping:
-            return self.generic_visit(node, fun_name=self._builtins_mapping[node.fun.id])
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in gtfn_ir.GTFN_BUILTINS:
-            qualified_fun_name = f"gtfn::{node.fun.id}"
-            return self.generic_visit(node, fun_name=qualified_fun_name)
         return self.generic_visit(node, fun_name=self.visit(node.fun))
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
@@ -131,7 +140,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Scan = as_fmt("assign({output}, {function}(), {init}, {', '.join(inputs)})")
+    Scan = as_fmt("assign({output}, {function}(), {', '.join([init] + inputs)})")
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
@@ -192,6 +201,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     FencilDefinition = as_mako(
         """
     #include <cmath>
+    #include <cstdint>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{

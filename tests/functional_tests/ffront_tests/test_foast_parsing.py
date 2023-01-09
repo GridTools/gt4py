@@ -27,11 +27,19 @@ import pytest
 
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
-from functional.ffront import common_types, field_operator_ast as foast
-from functional.ffront.fbuiltins import Dimension, float32, float64, int32, int64, where
+from functional.ffront import field_operator_ast as foast, type_specifications as ts
+from functional.ffront.fbuiltins import (
+    Dimension,
+    astype,
+    broadcast,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from functional.ffront.symbol_makers import TypingError
 from functional.iterator import ir as itir
 from functional.iterator.builtins import (
     and_,
@@ -49,7 +57,9 @@ from functional.iterator.builtins import (
     or_,
     plus,
     tuple_get,
+    xor_,
 )
+from functional.type_system.type_translation import TypingError
 
 
 DEREF = itir.SymRef(id=deref.fun.__name__)
@@ -66,6 +76,7 @@ LESS = itir.SymRef(id=less.fun.__name__)
 EQ = itir.SymRef(id=eq.fun.__name__)
 AND = itir.SymRef(id=and_.fun.__name__)
 OR = itir.SymRef(id=or_.fun.__name__)
+XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
 
@@ -104,9 +115,9 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -144,9 +155,9 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.annex.symtable["tmp__0"].type == common_types.FieldType(
+    assert parsed.annex.symtable["tmp__0"].type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -165,9 +176,9 @@ def test_binary_pow():
 
     parsed = FieldOperatorParser.apply_to_function(power)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.FLOAT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
@@ -177,9 +188,9 @@ def test_binary_mod():
 
     parsed = FieldOperatorParser.apply_to_function(modulo)
 
-    assert parsed.body[-1].value.type == common_types.FieldType(
+    assert parsed.body[-1].value.type == ts.FieldType(
         dims=Ellipsis,
-        dtype=common_types.ScalarType(kind=common_types.ScalarKind.INT64, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.INT64, shape=None),
     )
 
 
@@ -203,6 +214,30 @@ def test_bool_or():
         match=(r"`and`/`or` operator not allowed!"),
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
+
+
+def test_bool_xor():
+    def bool_xor(a: Field[..., "bool"], b: Field[..., "bool"]):
+        return a ^ b
+
+    parsed = FieldOperatorParser.apply_to_function(bool_xor)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+    )
+
+
+def test_unary_tilde():
+    def unary_tilde(a: Field[..., "bool"]):
+        return ~a
+
+    parsed = FieldOperatorParser.apply_to_function(unary_tilde)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+    )
 
 
 def test_scalar_cast():
@@ -238,6 +273,66 @@ def test_conditional_wrong_arg_type():
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
+
+
+def test_ternary_with_field_condition():
+    def ternary_with_field_condition(cond: Field[[], bool]):
+        return 1 if cond else 2
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
+        _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
+
+
+def test_correct_return_type_annotation():
+    """See ADR 13."""
+
+    def correct_return_type_annotation() -> float:
+        return 1.0
+
+    FieldOperatorParser.apply_to_function(correct_return_type_annotation)
+
+
+def test_adr13_wrong_return_type_annotation():
+    """See ADR 13."""
+
+    def wrong_return_type_annotation() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+def test_adr13_fixed_return_type_annotation():
+    """See ADR 13."""
+
+    def fixed_return_type_annotation() -> Field[[], float]:
+        return broadcast(1.0, ())
+
+    FieldOperatorParser.apply_to_function(fixed_return_type_annotation)
+
+
+def test_no_implicit_broadcast_in_field_op_call():
+    """See ADR 13."""
+
+    def no_implicit_broadcast_in_field_op_call(scalar: float) -> float:
+        return scalar
+
+    def no_implicit_broadcast_in_field_op_call_caller() -> float:
+        return no_implicit_broadcast_in_field_op_call(1.0)
+
+    FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
+
+
+def test_astype():
+    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
+        return astype(a, float64)
+
+    parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
+
+    assert parsed.body[-1].value.type == ts.FieldType(
+        dims=Ellipsis,
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+    )
 
 
 # --- External symbols ---
@@ -298,3 +393,18 @@ def test_empty_dims_type():
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
+
+
+def test_zero_dims_ternary():
+    ADim = Dimension("ADim")
+
+    def zero_dims_ternary(
+        cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]
+    ):
+        return a if cond == 1 else b
+
+    msg = r"Could not deduce type"
+    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
+
+    assert re.search(msg, exc_info.value.args[0]) is not None

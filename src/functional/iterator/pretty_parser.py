@@ -116,6 +116,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def bool_not(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="not_"), args=[arg])
 
+    def bool_xor(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="xor_"), args=[arg])
+
     def plus(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="plus"), args=[lhs, rhs])
 
@@ -148,6 +151,9 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
+
+    def astype(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])
 
     def shift(self, *offsets: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="shift"), args=list(offsets))
