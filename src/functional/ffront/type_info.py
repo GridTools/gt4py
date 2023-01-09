@@ -51,20 +51,6 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     )
 
 
-def create_new_function_type(
-    type_function_type: ts.FunctionType,
-    function_type: ts.TupleType,
-    return_type,
-) -> ts.FieldOperatorType | ts.ProgramType:
-    if type_function_type == ts.FieldOperatorType:
-        return ts.FieldOperatorType(
-            definition=ts.FunctionType(args=function_type.types, kwargs={}, returns=return_type)  # type: ignore
-        )
-    return ts.ProgramType(
-        definition=ts.FunctionType(args=function_type.types, kwargs={}, returns=return_type)  # type: ignore
-    )
-
-
 def promote_zero_dims(
     args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
 ) -> list:
@@ -80,16 +66,15 @@ def promote_zero_dims(
             else:
                 raise GTTypeError(f"{arg} is not compatible with {def_type}.")
         elif isinstance(def_type, ts.TupleType):
-            type_function_type = (
-                ts.FieldOperatorType
-                if isinstance(function_type, ts.FieldOperatorType)
-                else ts.ProgramType
+            new_func_definition = ts.FunctionType(
+                args=function_type.definition.args[arg_i].types,  # type: ignore
+                kwargs={},
+                returns=function_type.definition.returns,
             )
-            new_func_type = create_new_function_type(
-                type_function_type,  # type: ignore
-                function_type.definition.args[arg_i],  # type: ignore
-                function_type.definition.returns,
-            )
+            if isinstance(function_type, ts.FieldOperatorType):
+                new_func_type = ts.FieldOperatorType(definition=new_func_definition)
+            else:
+                new_func_type = ts.ProgramType(definition=new_func_definition)  # type: ignore
             new_args[arg_i] = ts.TupleType(types=promote_zero_dims(arg.types, new_func_type))
     return new_args
 
