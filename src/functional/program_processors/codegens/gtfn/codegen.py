@@ -124,7 +124,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        return self.generic_visit(node, fun_name=self.visit(node.fun))
+        if "fun_name" in kwargs:
+            kwargs.pop("fun_name")
+        if (
+            isinstance(node.fun, gtfn_ir.SymRef)
+            and node.fun.id in kwargs["user_defined_function_ids"]
+        ):
+            fun_name = f"{self.visit(node.fun)}{{}}()"
+        else:
+            fun_name = self.visit(node.fun)
+
+        return self.generic_visit(node, fun_name=fun_name, **kwargs)
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -191,6 +201,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
+            user_defined_function_ids=list(str(fundef.id) for fundef in node.function_definitions),
             **kwargs,
         )
 
@@ -202,6 +213,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <cstdint>
+    #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
