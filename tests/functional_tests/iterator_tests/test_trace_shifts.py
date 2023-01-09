@@ -7,7 +7,7 @@ def test_trivial():
         stencil=ir.SymRef(id="deref"),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
-        domain=ir.SymRef(id="dom"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {"inp": [()]}
 
@@ -35,7 +35,7 @@ def test_shift():
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
-        domain=ir.SymRef(id="dom"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
 
@@ -68,7 +68,7 @@ def test_lift():
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
-        domain=ir.SymRef(id="dom"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
 
@@ -85,7 +85,7 @@ def test_reduce():
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
-        domain=ir.SymRef(id="dom"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {"inp": [(ALL_NEIGHBORS,)]}
 

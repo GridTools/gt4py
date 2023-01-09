@@ -6,7 +6,7 @@ from typing import Final, TypeAlias, Union
 
 import functional.ffront.field_operator_ast as foast
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako, TemplatedGenerator
-from functional.ffront import common_types
+from functional.ffront import dialect_ast_enums, type_specifications as ts
 
 
 PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
@@ -111,7 +111,7 @@ class _PrettyPrinter(TemplatedGenerator):
     UnaryOp = as_fmt("{op}{operand}")
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> str:
-        if node.op is common_types.UnaryOperator.NOT:
+        if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
         else:
             op = str(node.op)
@@ -151,16 +151,14 @@ class _PrettyPrinter(TemplatedGenerator):
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         params = self.visit(node.params)
         types = [
-            str(param.type) if not isinstance(param.type, common_types.DeferredSymbolType) else None
+            str(param.type) if not isinstance(param.type, ts.DeferredType) else None
             for param in node.params
         ]
         params_annotated = [
             f"{param}: {type_}" if type_ else param for param, type_ in zip(params, types)
         ]
         return_type = (
-            f" -> {node.type.returns}"
-            if not isinstance(node.type, common_types.DeferredSymbolType)
-            else ""
+            f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredType) else ""
         )
         return self.generic_visit(node, params_annotated=params_annotated, return_type=return_type)
 

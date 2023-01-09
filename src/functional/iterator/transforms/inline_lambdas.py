@@ -13,6 +13,7 @@ def inline_lambda(
     force_inline_lift=False,
     eligible_params: Optional[list[bool]] = None,
 ):
+    assert isinstance(node.fun, ir.Lambda)
     eligible_params = eligible_params or [True] * len(node.fun.params)
 
     assert len(eligible_params) == len(node.fun.params) == len(node.args)

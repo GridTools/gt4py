@@ -20,7 +20,7 @@ import numpy as np
 
 from eve.utils import content_hash
 from functional.common import Connectivity
-from functional.ffront.symbol_makers import make_symbol_type_from_value
+from functional.ffront.type_translation import from_value
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, pybind
@@ -62,7 +62,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
                 program,
                 # TODO(tehrengruber): as the resulting frontend types contain lists they are
                 #  not hashable. As a workaround we just use content_hash here.
-                content_hash(tuple(make_symbol_type_from_value(arg) for arg in args)),
+                content_hash(tuple(from_value(arg) for arg in args)),
                 id(kwargs["offset_provider"]),
                 kwargs["column_axis"],
             )
@@ -73,7 +73,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
                 return inp(
                     *[convert_arg(arg) for arg in args],
                     *[
-                        op.tbl
+                        op._tbl  # TODO(tehrengruber): fix interface
                         for op in kwargs["offset_provider"].values()
                         if isinstance(op, Connectivity)
                     ],

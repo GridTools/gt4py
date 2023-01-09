@@ -69,7 +69,7 @@ class FunctionDefinition(Node, SymbolTableTrait):
 
 
 class StencilClosure(Node):
-    domain: Expr
+    domain: FunCall
     stencil: Expr
     output: Union[SymRef, FunCall]
     inputs: List[SymRef]
@@ -106,6 +106,8 @@ UNARY_MATH_FP_BUILTINS = {
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
 
+TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+
 BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
@@ -133,6 +135,7 @@ BUILTINS = {
     "less_equal",
     "not_eq",
     "if_",
+    "cast_",
     "not_",
     "and_",
     "or_",
@@ -141,6 +144,7 @@ BUILTINS = {
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
     *BINARY_MATH_NUMBER_BUILTINS,
+    *TYPEBUILTINS,
 }
 
 

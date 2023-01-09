@@ -20,6 +20,7 @@ import re
 import pytest
 
 import eve
+import eve.utils
 
 from .. import definitions
 

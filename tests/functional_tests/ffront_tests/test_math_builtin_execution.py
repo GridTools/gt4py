@@ -5,20 +5,19 @@ import numpy as np
 import pytest
 
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
-    symbol_makers,
+    type_translation,
 )
 from functional.ffront.decorator import FieldOperator
-from functional.ffront.fbuiltins import Dimension, Field, float64, int32, int64
+from functional.ffront.fbuiltins import Dimension, Field, float64
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.processor_interface import ProgramExecutor
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
-
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
@@ -58,7 +57,7 @@ def make_builtin_field_operator(builtin_name: str, backend: ProgramExecutor):
     loc = foast.SourceLocation(line=1, column=1, source="none")
 
     params = [
-        foast.Symbol(id=k, type=symbol_makers.make_symbol_type_from_typing(type), location=loc)
+        foast.Symbol(id=k, type=type_translation.from_type_hint(type), location=loc)
         for k, type in annotations.items()
         if k != "return"
     ]
@@ -67,8 +66,8 @@ def make_builtin_field_operator(builtin_name: str, backend: ProgramExecutor):
     closure_var_symbols = [
         foast.Symbol(
             id=name,
-            type=symbol_makers.make_symbol_type_from_value(val),
-            namespace=ct.Namespace.CLOSURE,
+            type=type_translation.from_value(val),
+            namespace=dialect_ast_enums.Namespace.CLOSURE,
             location=loc,
         )
         for name, val in closure_vars.items()

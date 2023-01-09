@@ -47,6 +47,7 @@ class RemoveShiftsTransformer(NodeTranslator):
 
         return self.generic_visit(node)
 
+
 # Note that `ignore_shift` and `translate_shift` on a lifted stencil call do not propagate
 # to the arguments as otherwise this:
 #

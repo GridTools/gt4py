@@ -1,9 +1,64 @@
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from functools import reduce
+from typing import TypeGuard
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
 from functional.iterator import ir
+
+
+def _is_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
+    return (
+        isinstance(arg, ir.FunCall)
+        and isinstance(arg.fun, ir.FunCall)
+        and arg.fun.fun == ir.SymRef(id="shift")
+    )
+
+
+def _is_applied_lift(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
+    return (
+        isinstance(arg, ir.FunCall)
+        and isinstance(arg.fun, ir.FunCall)
+        and arg.fun.fun == ir.SymRef(id="lift")
+    )
+
+
+def _is_shifted_or_lifted_and_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
+    return _is_shifted(arg) or (
+        _is_applied_lift(arg)
+        and any(_is_shifted_or_lifted_and_shifted(nested_arg) for nested_arg in arg.args)
+    )
+
+
+def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterator[ir.FunCall]:
+    return filter(
+        _is_shifted_or_lifted_and_shifted,
+        reduce_args,
+    )
+
+
+def _is_reduce(node: ir.FunCall):
+    return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
+
+
+def _make_shift(offsets: list[ir.Expr], iterator: ir.Expr):
+    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets), args=[iterator])
+
+
+def _make_deref(iterator: ir.Expr):
+    return ir.FunCall(fun=ir.SymRef(id="deref"), args=[iterator])
+
+
+def _make_can_deref(iterator: ir.Expr):
+    return ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[iterator])
+
+
+def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
+    return ir.FunCall(
+        fun=ir.SymRef(id="if_"),
+        args=[cond, true_expr, false_expr],
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -16,32 +71,9 @@ class UnrollReduce(NodeTranslator):
     def apply(cls, node: ir.Node, **kwargs):
         return cls().visit(node, **kwargs)
 
-    @staticmethod
-    def _is_reduce(node: ir.FunCall):
-        return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
-
-    @staticmethod
-    def _make_shift(offsets: list[ir.Expr], iterator: ir.Expr):
-        return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets), args=[iterator])
-
-    @staticmethod
-    def _make_deref(iterator: ir.Expr):
-        return ir.FunCall(fun=ir.SymRef(id="deref"), args=[iterator])
-
-    @staticmethod
-    def _make_can_deref(iterator: ir.Expr):
-        return ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[iterator])
-
-    @staticmethod
-    def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
-        return ir.FunCall(
-            fun=ir.SymRef(id="if_"),
-            args=[cond, true_expr, false_expr],
-        )
-
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
-        if not self._is_reduce(node):
+        if not _is_reduce(node):
             return node
 
         offset_provider = kwargs["offset_provider"]
@@ -62,12 +94,16 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, ir.FunCall)
         fun, init, axis = node.fun.args
 
-        shifted_args_expr = [self._make_shift([axis, offset], arg) for arg in node.args]
-        derefed_shifted_args = [self._make_deref(shifted_arg) for shifted_arg in shifted_args]
+        shifted_args_expr = [_make_shift([axis, offset], arg) for arg in node.args]
+        derefed_shifted_args = [_make_deref(shifted_arg) for shifted_arg in shifted_args]
         step_fun: ir.Expr = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
-            can_deref = self._make_can_deref(shifted_args[0])
-            step_fun = self._make_if(can_deref, step_fun, acc)
+            can_deref = reduce(
+                lambda prev, el: ir.FunCall(fun=ir.SymRef("and"), args=[prev, _make_can_deref(el)]),
+                shifted_args[1:],
+                _make_can_deref(shifted_args[0]),
+            )
+            step_fun = _make_if(can_deref, step_fun, acc)
         step_fun = ir.FunCall(
             fun=ir.Lambda(
                 params=[ir.Sym(id=shifted_arg.id) for shifted_arg in shifted_args], expr=step_fun

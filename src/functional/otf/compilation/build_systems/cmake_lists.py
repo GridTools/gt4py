@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import textwrap
 from typing import Sequence
 
 import eve
@@ -84,15 +83,9 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()})"
             case "gridtools":
-                return textwrap.dedent(
-                    """\
-                    FetchContent_Declare(GridTools
-                        GIT_REPOSITORY https://github.com/petiaccja/gridtools.git
-                        GIT_TAG        fix-shift-overloads
-                    )
-                    FetchContent_MakeAvailable(GridTools)\
-                    """
-                )
+                import gridtools_cpp  # type: ignore
+
+                return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()})"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 

@@ -13,18 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import numpy as np
 
 from eve import NodeTranslator
-from functional.common import DimensionKind
+from functional.common import Dimension, DimensionKind
 from functional.ffront import (
-    common_types as ct,
+    dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
     itir_makers as im,
     type_info,
+    type_specifications as ts,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
@@ -35,15 +36,15 @@ class ITIRTypeKind(enum.Enum):
     ITERATOR = 1
 
 
-def is_local_kind(symbol_type: ct.FieldType) -> bool:
-    assert isinstance(symbol_type, ct.FieldType)
+def is_local_kind(symbol_type: ts.FieldType) -> bool:
+    assert isinstance(symbol_type, ts.FieldType)
     if symbol_type.dims == ...:
         return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
+    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
 
 
 def iterator_type_kind(
-    symbol_type: ct.ScalarType | ct.FieldType | ct.TupleType,
+    symbol_type: ts.ScalarType | ts.FieldType | ts.TupleType,
 ) -> ITIRTypeKind:
     """
     Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
@@ -64,7 +65,8 @@ def iterator_type_kind(
     | (1, field)                         | ITERATOR               |
     +------------------------------------+------------------------+
     """
-    if any(type_info.primitive_constituents(symbol_type).if_isinstance(ct.FieldType)):
+    assert not isinstance(symbol_type, ts.DeferredType)
+    if any(type_info.primitive_constituents(symbol_type).if_isinstance(ts.FieldType)):
         return ITIRTypeKind.ITERATOR
     return ITIRTypeKind.VALUE
 
@@ -111,7 +113,7 @@ class FieldOperatorLowering(NodeTranslator):
         #  rest of the lowering inside the body. See ADR-0002 for more details.
         new_body = func_definition.expr
         for i, param in enumerate(func_definition.params):
-            if isinstance(node.definition.params[i].type, ct.ScalarType):
+            if isinstance(node.definition.params[i].type, ts.ScalarType):
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
         return itir.FunctionDefinition(
@@ -192,7 +194,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        if node.op in [ct.UnaryOperator.NOT, ct.UnaryOperator.INVERT]:
+        if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             # TODO: invert only for bool right now
             return self._map("not_", node.value)
 
@@ -225,8 +227,8 @@ class FieldOperatorLowering(NodeTranslator):
                 )(self.visit(node.func, **kwargs))
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        if type_info.type_class(node.func.type) is ct.FieldType:
+    def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall | itir.Literal:
+        if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
         elif node.func.id in MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
@@ -235,7 +237,7 @@ class FieldOperatorLowering(NodeTranslator):
             return visitor(node, **kwargs)
         elif node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
-        elif isinstance(node.func.type, (ct.FieldOperatorType, ct.ScanOperatorType)):
+        elif isinstance(node.func.type, (ts.FieldOperatorType, ts.ScanOperatorType)):
             # operators are lowered into stencils and only accept iterator
             #  arguments. As such transform all value arguments, e.g. scalars
             #  and tuples thereof, into iterators. See ADR-0002 for more
@@ -244,12 +246,17 @@ class FieldOperatorLowering(NodeTranslator):
             lowered_args = [to_iterator(arg)(self.visit(arg, **kwargs)) for arg in node.args]
             args = [f"__arg{i}" for i in range(len(lowered_args))]
             return im.lift_(im.lambda__(*args)(im.call_(lowered_func)(*args)))(*lowered_args)
-        elif isinstance(node.func.type, ct.FunctionType):
+        elif isinstance(node.func.type, ts.FunctionType):
             return im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
 
         raise AssertionError(
             f"Call to object of type {type(node.func.type).__name__} not understood."
         )
+
+    def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        assert len(node.args) == 2
+        dtype = node.args[1].id
+        return self._map(lambda val: im.call_("cast_")(val, dtype), node.args[0])
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map(im.call_("if_"), *node.args)
@@ -305,7 +312,7 @@ class FieldOperatorLowering(NodeTranslator):
         init_expr = self._make_literal(max_value, node.type.dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
         if isinstance(node.args[0], foast.Constant):
             node_kind = self.visit(node.type).kind.name.lower()
             target_type = fbuiltins.BUILTINS[node_kind]
@@ -315,13 +322,13 @@ class FieldOperatorLowering(NodeTranslator):
             return im.literal_(str(node.args[0].value), node_kind)
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ct.SymbolType) -> itir.Literal:
+    def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Literal:
         # TODO(tehrengruber): check constant of this type is supported in iterator ir
-        if isinstance(type_, ct.TupleType):
+        if isinstance(type_, ts.TupleType):
             return im.make_tuple_(
                 *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
             )
-        elif isinstance(type_, ct.ScalarType):
+        elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.literal_(str(val), typename)
         raise ValueError(f"Unsupported literal type {type_}.")
@@ -335,7 +342,7 @@ class FieldOperatorLowering(NodeTranslator):
 
         def is_local_type_kind(type_):
             return any(
-                isinstance(t, ct.FieldType) and is_local_kind(t)
+                isinstance(t, ts.FieldType) and is_local_kind(t)
                 for t in type_info.primitive_constituents(type_)
             )
 

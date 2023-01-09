@@ -21,6 +21,7 @@ def is_eligible_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bo
       inlined into the scans, leading to reduced parallelism/scan-only computation)
     """
     assert _is_lift(node)
+    assert isinstance(node.fun, ir.FunCall)  # for mypy
 
     (stencil,) = node.fun.args
     # Don’t inline scans, i.e. exclude `↑(scan(...))(...)`

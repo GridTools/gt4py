@@ -56,7 +56,7 @@ class CollectSubexpressions(NodeVisitor):
 
     def visit_FunCall(
         self,
-        node: ir.Lambda,
+        node: ir.FunCall,
         *,
         subexprs: dict[ir.Node, tuple[list[int], Optional[ir.Node]]],
         refs: ChainMap[str, bool],
