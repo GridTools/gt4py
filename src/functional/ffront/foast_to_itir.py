@@ -31,6 +31,7 @@ from functional.ffront import (
     type_specifications as ts,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
+from functional.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from functional.iterator import ir as itir
 
 
@@ -98,68 +99,6 @@ def is_expr_with_iterator_type_kind(it_type_kind: ITIRTypeKind) -> Callable[[foa
         return iterator_type_kind(node.type) is it_type_kind
 
     return predicate
-
-
-class StmtReturnKind(enum.IntEnum):
-    UNCONDIOTIONAL_RETURN = 0
-    CONDITIONAL_RETURN = 1
-    NO_RETURN = 2
-
-
-def deduce_return_kind(node: foast.Stmt) -> StmtReturnKind:
-    """
-    Deduce if a statement returns and if so, whether it does unconditionally.
-
-    Example with ``StmtReturnKind.UNCONDIOTIONAL_RETURN``
-    -----------------------------------------
-    .. code-block:: python
-
-        if cond:
-          return 1
-        else:
-          return 2
-
-    Example with ``StmtReturnKind.NO_RETURN``
-    -----------------------------------------
-    .. code-block:: python
-
-        if cond:
-          result = 1
-        else:
-          result = 2
-
-    Example with ``StmtReturnKind.CONDITIONAL_RETURN``
-    -----------------------------------------
-    .. code-block:: python
-
-        if cond:
-          return 1
-        else:
-          result = 2
-    """
-    if isinstance(node, foast.IfStmt):
-        return_kinds = (deduce_return_kind(node.true_branch), deduce_return_kind(node.false_branch))
-        if all(return_kind is StmtReturnKind.UNCONDIOTIONAL_RETURN for return_kind in return_kinds):
-            return StmtReturnKind.UNCONDIOTIONAL_RETURN
-        elif any(
-            return_kind in (StmtReturnKind.UNCONDIOTIONAL_RETURN, StmtReturnKind.CONDITIONAL_RETURN)
-            for return_kind in return_kinds
-        ):
-            return StmtReturnKind.CONDITIONAL_RETURN
-        assert all(return_kind is StmtReturnKind.NO_RETURN for return_kind in return_kinds)
-        return StmtReturnKind.NO_RETURN
-    elif isinstance(node, foast.Return):
-        return StmtReturnKind.UNCONDIOTIONAL_RETURN
-    elif isinstance(node, foast.BlockStmt):
-        for stmt in node.stmts:
-            return_kind = deduce_return_kind(stmt)
-            if return_kind != StmtReturnKind.NO_RETURN:
-                return return_kind
-        return StmtReturnKind.NO_RETURN
-    elif isinstance(node, (foast.Assign, foast.TupleTargetAssign)):
-        return StmtReturnKind.NO_RETURN
-    else:
-        raise AssertionError(f"Statements of type `{type(node).__name__} not understood.`")
 
 
 def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], itir.Expr]:
@@ -318,7 +257,7 @@ class FieldOperatorLowering(NodeTranslator):
     ) -> itir.Expr:
         cond = self.visit(node.condition, **kwargs)
 
-        return_kind = deduce_return_kind(node)
+        return_kind: StmtReturnKind = deduce_stmt_return_kind(node)
 
         common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
 
@@ -353,7 +292,7 @@ class FieldOperatorLowering(NodeTranslator):
                 im.if_(cond, true_branch, false_branch)
             )
 
-        assert return_kind is StmtReturnKind.UNCONDIOTIONAL_RETURN
+        assert return_kind is StmtReturnKind.UNCONDITIONAL_RETURN
 
         # note that we do not duplicate `inner_expr` here since if both branches
         #  return, `inner_expr` is ignored.

@@ -113,7 +113,7 @@ def promote_to_mask_type(
         return input_type
 
 
-def deduce_return_type(
+def deduce_stmt_return_type(
     node: foast.BlockStmt, *, requires_unconditional_return=True
 ) -> ts.TypeSpec | None:
     """Deduce type of value returned inside a block statement."""
@@ -128,8 +128,8 @@ def deduce_return_type(
             return_type = stmt.value.type
         elif isinstance(stmt, foast.IfStmt):
             return_types = (
-                deduce_return_type(stmt.true_branch, requires_unconditional_return=False),
-                deduce_return_type(stmt.false_branch, requires_unconditional_return=False),
+                deduce_stmt_return_type(stmt.true_branch, requires_unconditional_return=False),
+                deduce_stmt_return_type(stmt.false_branch, requires_unconditional_return=False),
             )
             # if both branches return
             if return_types[0] and return_types[1]:
@@ -144,7 +144,7 @@ def deduce_return_type(
             return_type = return_types[0] or return_types[1]
         elif isinstance(stmt, foast.BlockStmt):
             # just forward to nested BlockStmt
-            return_type = deduce_return_type(
+            return_type = deduce_stmt_return_type(
                 stmt, requires_unconditional_return=requires_unconditional_return
             )
         elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
@@ -166,8 +166,11 @@ def deduce_return_type(
             conditional_return_type = return_type
 
     if requires_unconditional_return:
-        raise FieldOperatorTypeDeductionError.from_foast_node(
-            node, msg="Return statement required."
+        # If the node was constructed by the foast parsing we should never get here, but instead
+        # have gotten an error there.
+        raise AssertionError(
+            "Malformed block statement. Expected a return statement in this context, "
+            "but none was found. Please submit a bug report."
         )
 
     return None
@@ -233,7 +236,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        return_type = deduce_return_type(new_body)
+        return_type = deduce_stmt_return_type(new_body)
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,

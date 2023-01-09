@@ -115,7 +115,7 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -129,7 +129,7 @@ def test_invalid_syntax_no_return():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match="Field operator must return a field expression on the last line!",
+        match="Function must return a value, but no return statement was found\.",
     ):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
@@ -155,7 +155,7 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.annex.symtable["tmp__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable["tmp__0"].type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -176,7 +176,7 @@ def test_binary_pow():
 
     parsed = FieldOperatorParser.apply_to_function(power)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -188,7 +188,7 @@ def test_binary_mod():
 
     parsed = FieldOperatorParser.apply_to_function(modulo)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.INT64, shape=None),
     )
@@ -222,7 +222,7 @@ def test_bool_xor():
 
     parsed = FieldOperatorParser.apply_to_function(bool_xor)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
@@ -234,7 +234,7 @@ def test_unary_tilde():
 
     parsed = FieldOperatorParser.apply_to_function(unary_tilde)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
@@ -329,7 +329,7 @@ def test_astype():
 
     parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
 
-    assert parsed.body[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=Ellipsis,
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -350,22 +350,25 @@ def test_closure_symbols():
         return a, b
 
     parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
-    assert "nonlocals_unused" not in parsed.annex.symtable
-    assert "nonlocals" not in parsed.annex.symtable
+    assert "nonlocals_unreferenced" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+    assert "nonlocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
 
     pattern_node = P(
         foast.FunctionDefinition,
-        body=[
-            P(
-                foast.Assign,
-                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.float_value)),
-            ),
-            P(
-                foast.Assign,
-                value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.np_value)),
-            ),
-            P(foast.Return),
-        ],
+        body=P(
+            foast.BlockStmt,
+            stmts=[
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.float_value)),
+                ),
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.np_value)),
+                ),
+                P(foast.Return),
+            ],
+        ),
     )
     assert pattern_node.match(parsed, raise_exception=True)
 

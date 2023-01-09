@@ -57,7 +57,7 @@ def test_copy():
     lowered = FieldOperatorLowering.apply(parsed)
 
     assert lowered.id == "copy_field"
-    assert lowered.expr == im.deref_("inp")
+    assert lowered.expr == im.ref("inp")
 
 
 def test_scalar_arg():
@@ -68,9 +68,7 @@ def test_scalar_arg():
     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
-    )
+    reference = im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
 
     assert lowered.expr == reference
 
@@ -82,11 +80,9 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2"))))(
-            "inp1", "inp2"
-        )
-    )
+    reference = im.lift_(
+        im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
+    )("inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -99,11 +95,9 @@ def test_arithmetic():
     parsed = FieldOperatorParser.apply_to_function(arithmetic)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("inp1", "inp2")(im.plus_(im.deref_("inp1"), im.deref_("inp2"))))(
-            "inp1", "inp2"
-        )
-    )
+    reference = im.lift_(
+        im.lambda__("inp1", "inp2")(im.plus_(im.deref_("inp1"), im.deref_("inp2")))
+    )("inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -118,7 +112,7 @@ def test_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.shift_("Ioff", 1)("inp"))
+    reference = im.shift_("Ioff", 1)("inp")
 
     assert lowered.expr == reference
 
@@ -133,7 +127,7 @@ def test_negative_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.shift_("Ioff", -1)("inp"))
+    reference = im.shift_("Ioff", -1)("inp")
 
     assert lowered.expr == reference
 
@@ -149,7 +143,7 @@ def test_temp_assignment():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let("tmp__0", "inp")(
-        im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")(im.deref_("tmp2__0")))
+        im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")("tmp2__0"))
     )
 
     assert lowered.expr == reference
@@ -171,7 +165,7 @@ def test_unary_ops():
         im.let(
             "tmp__1",
             im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
-        )(im.deref_("tmp__1"))
+        )("tmp__1")
     )
 
     assert lowered.expr == reference
@@ -198,7 +192,7 @@ def test_unpacking():
     )("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
-        im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)(im.deref_("tmp1__0")))
+        im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)("tmp1__0"))
     )
     assert lowered.expr == reference
 
@@ -211,7 +205,7 @@ def test_annotated_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp__0", "inp")(im.deref_("tmp__0"))
+    reference = im.let("tmp__0", "inp")("tmp__0")
 
     assert lowered.expr == reference
 
@@ -233,7 +227,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.lift_(im.lambda__("inp")(im.call_("identity")("inp")))("inp"))
+    reference = im.lift_(im.lambda__("inp")(im.call_("identity")("inp")))("inp")
 
     assert lowered.expr == reference
 
@@ -251,7 +245,7 @@ def test_temp_tuple():
     tuple_expr = im.lift_(im.lambda__("a", "b")(im.make_tuple_(im.deref_("a"), im.deref_("b"))))(
         "a", "b"
     )
-    reference = im.let("tmp__0", tuple_expr)(im.deref_("tmp__0"))
+    reference = im.let("tmp__0", tuple_expr)("tmp__0")
 
     assert lowered.expr == reference
 
@@ -263,7 +257,7 @@ def test_unary_not():
     parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(im.lift_(im.lambda__("cond")(im.not__(im.deref_("cond"))))("cond"))
+    reference = im.lift_(im.lambda__("cond")(im.not__(im.deref_("cond"))))("cond")
 
     assert lowered.expr == reference
 
@@ -275,9 +269,7 @@ def test_binary_plus():
     parsed = FieldOperatorParser.apply_to_function(plus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.plus_(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.plus_(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -289,8 +281,8 @@ def test_add_scalar_literal_to_field():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a")(im.plus_(im.literal_("2.0", "float64"), im.deref_("a"))))("a")
+    reference = im.lift_(im.lambda__("a")(im.plus_(im.literal_("2.0", "float64"), im.deref_("a"))))(
+        "a"
     )
 
     assert lowered.expr == reference
@@ -310,7 +302,7 @@ def test_add_scalar_literals():
             im.literal_("1", "int32"),
             im.literal_("1", "int32"),
         ),
-    )(im.deref_(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a")))
+    )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
 
     assert lowered.expr == reference
 
@@ -322,8 +314,8 @@ def test_binary_mult():
     parsed = FieldOperatorParser.apply_to_function(mult)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.multiplies_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.lift_(im.lambda__("a", "b")(im.multiplies_(im.deref_("a"), im.deref_("b"))))(
+        "a", "b"
     )
 
     assert lowered.expr == reference
@@ -336,9 +328,7 @@ def test_binary_minus():
     parsed = FieldOperatorParser.apply_to_function(minus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.minus_(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.minus_(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -350,8 +340,8 @@ def test_binary_div():
     parsed = FieldOperatorParser.apply_to_function(division)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.divides_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.lift_(im.lambda__("a", "b")(im.divides_(im.deref_("a"), im.deref_("b"))))(
+        "a", "b"
     )
 
     assert lowered.expr == reference
@@ -364,9 +354,7 @@ def test_binary_and():
     parsed = FieldOperatorParser.apply_to_function(bit_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.and__(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.and__(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -378,8 +366,8 @@ def test_scalar_and():
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.literal_("False", "bool"))))("a")
+    reference = im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.literal_("False", "bool"))))(
+        "a"
     )
 
     assert lowered.expr == reference
@@ -392,9 +380,7 @@ def test_binary_or():
     parsed = FieldOperatorParser.apply_to_function(bit_or)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.or__(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.or__(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -418,8 +404,8 @@ def test_compare_gt():
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.lift_(im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b"))))(
+        "a", "b"
     )
 
     assert lowered.expr == reference
@@ -432,9 +418,7 @@ def test_compare_lt():
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.less_(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.less_(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -446,9 +430,7 @@ def test_compare_eq():
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(im.lambda__("a", "b")(im.eq_(im.deref_("a"), im.deref_("b"))))("a", "b")
-    )
+    reference = im.lift_(im.lambda__("a", "b")(im.eq_(im.deref_("a"), im.deref_("b"))))("a", "b")
 
     assert lowered.expr == reference
 
@@ -462,24 +444,22 @@ def test_compare_chain():
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(
-            im.lambda__("a", "b", "c")(
-                im.and__(
-                    im.deref_(
-                        im.lift_(
-                            im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b")))
-                        )("a", "b")
-                    ),
-                    im.deref_(
-                        im.lift_(
-                            im.lambda__("b", "c")(im.greater_(im.deref_("b"), im.deref_("c")))
-                        )("b", "c")
-                    ),
-                )
+    reference = im.lift_(
+        im.lambda__("a", "b", "c")(
+            im.and__(
+                im.deref_(
+                    im.lift_(im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b"))))(
+                        "a", "b"
+                    )
+                ),
+                im.deref_(
+                    im.lift_(im.lambda__("b", "c")(im.greater_(im.deref_("b"), im.deref_("c"))))(
+                        "b", "c"
+                    )
+                ),
             )
-        )("a", "b", "c")
-    )
+        )
+    )("a", "b", "c")
 
     assert lowered.expr == reference
 
@@ -491,14 +471,12 @@ def test_reduction_lowering_simple():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.deref_(
-        im.lift_(
-            im.call_("reduce")(
-                im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
-                0,
-            )
-        )(im.shift_("V2E")("edge_f"))
-    )
+    reference = im.lift_(
+        im.call_("reduce")(
+            im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
+            0,
+        )
+    )(im.shift_("V2E")("edge_f"))
 
     assert lowered.expr == reference
 
@@ -512,21 +490,19 @@ def test_reduction_lowering_expr():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
-        im.deref_(
-            im.lift_(
-                im.call_("reduce")(
-                    im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
-                        im.plus_(
-                            "acc",
-                            im.multiplies_(
-                                im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
-                            ),
-                        )
-                    ),
-                    0,
-                )
-            )("e1_nbh__0", "e2")
-        )
+        im.lift_(
+            im.call_("reduce")(
+                im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
+                    im.plus_(
+                        "acc",
+                        im.multiplies_(
+                            im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
+                        ),
+                    )
+                ),
+                0,
+            )
+        )("e1_nbh__0", "e2")
     )
 
     assert lowered.expr == reference

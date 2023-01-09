@@ -11,6 +11,8 @@ from functional.ffront import dialect_ast_enums, type_specifications as ts
 
 PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.LocatedNode], str]]
 
+INDENTATION_PREFIX: Final[str] = "  "
+
 # See https://docs.python.org/3/reference/expressions.html#operator-precedence
 # The following list contains all entries from the above link. Operators that
 # are not modeled in FOAST are kept for ease of comparability and future
@@ -139,11 +141,13 @@ class _PrettyPrinter(TemplatedGenerator):
 
     Return = as_fmt("return {value}")
 
+    BlockStmt = as_mako("${'\\n  '.join(stmts)}")
+
     FunctionDefinition = as_mako(
         textwrap.dedent(
             """
             def ${id}(${', '.join(params_annotated)})${return_type}:
-              ${'\\n  '.join(body)}
+            ${indented_body}
             """
         ).strip()
     )
@@ -160,7 +164,13 @@ class _PrettyPrinter(TemplatedGenerator):
         return_type = (
             f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredType) else ""
         )
-        return self.generic_visit(node, params_annotated=params_annotated, return_type=return_type)
+        indented_body = textwrap.indent(self.visit(node.body), "  ")
+        return self.generic_visit(
+            node,
+            indented_body=indented_body,
+            params_annotated=params_annotated,
+            return_type=return_type,
+        )
 
     FieldOperator = as_fmt("@field_operator\n{definition}")
 
