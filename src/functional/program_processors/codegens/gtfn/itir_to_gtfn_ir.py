@@ -147,7 +147,7 @@ def _collect_dimensions_from_offsets(
     ).to_set()
     if not used_offset_tags.issubset(set(offset_provider.keys())):
         raise ValueError()
-    offset_definitions = {}
+    offset_definitions: dict[str, TagDefinition] = {}
     for dim_or_connectivity in offset_provider.items():
         if isinstance(dim_or_connectivity, common.Dimension):
             dim = dim_or_connectivity

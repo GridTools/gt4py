@@ -530,6 +530,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_types = [arg.type for arg in new_args]
         kwarg_types = {name: arg.type for name, arg in new_kwargs.items()}
 
+        func_str_repr: str
+        if isinstance(new_func.type, (ts.FunctionType, ts.FieldOperatorType, ts.ScanOperatorType)):
+            # Since we use the `id` attribute in the later part of the toolchain ensure we
+            # have the proper format here.
+            if not isinstance(
+                new_func, (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator)
+            ):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node, msg=f"Functions can only be called directly!"
+                )
+            func_str_repr = new_func.id
+        elif isinstance(new_func.type, ts.FieldType):
+            func_str_repr = str(new_func)
+        else:
+            raise AssertionError("Unexpected function argument.")
+
         # ensure signature is valid
         try:
             type_info.accepts_args(
@@ -540,7 +556,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to `{new_func.id}`!"
+                node, msg=f"Invalid argument types in call to `{func_str_repr}`!"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
