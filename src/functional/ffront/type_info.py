@@ -80,15 +80,6 @@ def promote_zero_dims(
     return new_args
 
 
-def unfold_scanop_tuples(arg_i: ts.TupleType, types_ls: list) -> list:
-    for i, arg_i_type in enumerate(arg_i.types):
-        if isinstance(arg_i_type, ts.TupleType):
-            types_ls[i] = ts.TupleType(types=unfold_scanop_tuples(arg_i_type, arg_i_type.types))
-        else:
-            types_ls[i] = ts.FieldType(dims=[], dtype=extract_dtype(arg_i_type))
-    return types_ls
-
-
 @return_type.register
 def return_type_fieldop(
     fieldop_type: ts.FieldOperatorType,
@@ -120,10 +111,9 @@ def function_signature_incompatibilities_scanop(
     new_el: ts.TypeSpec
     for arg_i in args:
         if is_type_or_tuple_of_type(arg_i, ts.ScalarType):
-            new_el = (
-                ts.TupleType(types=unfold_scanop_tuples(arg_i, arg_i.types))
-                if isinstance(arg_i, ts.TupleType)
-                else ts.FieldType(dims=[], dtype=extract_dtype(arg_i))
+            new_el = apply_to_primitive_constituents(
+                arg_i,
+                lambda primitive_type: ts.FieldType(dims=[], dtype=extract_dtype(primitive_type)),
             )
         else:
             new_el = arg_i
