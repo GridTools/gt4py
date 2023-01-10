@@ -84,8 +84,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return value
 
     def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs):
-        if node.id in self.localized_symbols:
-            return gtfn_ir_common.SymRef(id=f"{node.id}_local")
+        if "localized_symbols" in kwargs and node.id in kwargs["localized_symbols"]:
+            return gtfn_ir_common.SymRef(id=kwargs["localized_symbols"][node.id])
         return node
 
     @staticmethod
@@ -119,6 +119,13 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[field_ref]),
             ],
         )
+
+    def commit_args(self, node: gtfn_ir.FunCall, tmp_id: str, fun_id: str, **kwargs):
+        for i, arg in enumerate(node.args):
+            expr = self.visit(arg, **kwargs)
+            self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tmp_id}_{i}"), rhs=expr))
+        tup_args = [gtfn_ir_common.SymRef(id=f"{tmp_id}_{i}") for i in range(len(node.args))]
+        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)
 
     def handle_Reduction(self, node, **kwargs):
         offset_provider = kwargs["offset_provider"]
@@ -172,15 +179,15 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtfn_ir_common.SymRef(id=red_idx)
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.Lambda) and any(
+        if any(
             isinstance(
                 arg,
                 gtfn_ir.Lambda,
             )
             for arg in node.args
         ):
-            # do not try to lower lambdas that take lambdas as argument to something more readable
-            red_idx = self.uids.sequential_id(prefix="red")
+            # do not try to lower constructs that take lambdas as argument to something more readable
+            red_idx = self.uids.sequential_id(prefix="lam")
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{red_idx}"), rhs=node))
             return gtfn_ir_common.SymRef(id=f"{red_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
@@ -189,10 +196,12 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
                 if param.id in self.sym_table:
-                    self.localized_symbols.append(param.id)
+                    kwargs["localized_symbols"][
+                        param.id
+                    ] = f"{param.id}_{self.uids.sequential_id()}_local"
                     self.imp_list_ir.append(
                         InitStmt(
-                            lhs=gtfn_ir_common.Sym(id=f"{param.id}_local"),
+                            lhs=gtfn_ir_common.Sym(id=kwargs["localized_symbols"][param.id]),
                             rhs=arg,
                         )
                     )
@@ -208,21 +217,13 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if _is_reduce(node):
             return self.handle_Reduction(node, **kwargs)
-        if (
-            isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple"
-        ):  # TODO: bad hardcoded string
-            tupl_idx = self.uids.sequential_id(prefix="tupl")
-            for i, arg in enumerate(node.args):
-                expr = self.visit(arg, **kwargs)
-                self.imp_list_ir.append(
-                    InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_idx}_{i}"), rhs=expr)
-                )
-            tup_args = [gtfn_ir_common.SymRef(id=f"{tupl_idx}_{i}") for i in range(len(node.args))]
-            tuple_fun = gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="make_tuple"), args=tup_args)
+        if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple":
+            tupl_id = self.uids.sequential_id(prefix="tupl")
+            tuple_fun = self.commit_args(node, tupl_id, "make_tuple", **kwargs)
             self.imp_list_ir.append(
-                InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_idx}"), rhs=tuple_fun)
+                InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_id}"), rhs=tuple_fun)
             )
-            return gtfn_ir_common.SymRef(id=f"{tupl_idx}")
+            return gtfn_ir_common.SymRef(id=f"{tupl_id}")
         return gtfn_ir.FunCall(
             fun=self.visit(node.fun, **kwargs),
             args=[self.visit(arg, **kwargs) for arg in node.args],
@@ -258,9 +259,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         self.imp_list_ir: List[Union[Stmt, Conditional]] = []
         self.sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
-        self.localized_symbols: List[str] = []
-        ret = self.visit(node.expr, **kwargs)
-        self.localized_symbols = []
+        ret = self.visit(node.expr, localized_symbols={}, **kwargs)
 
         return ImperativeFunctionDefinition(
             id=node.id,
