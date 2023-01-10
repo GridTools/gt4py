@@ -6,6 +6,22 @@ import eve
 from functional.iterator import ir
 from functional.iterator.transforms.inline_lifts import InlineLifts
 
+"""
+scan(λ(state, isym0, isym1) → body(state, isym0, isym1), forward, init)(sym0, f(sym0,sym1,sym2))
+to
+scan(λ(state, sym0, sym1, sym2) → (λ(isym0, isym1) → body(state, isym0, isym1))(sym0, f(sym0,sym1,sym2)), forward, init)(sym0, sym1,sym2)
+
+algorithm:
+- take args of scan: `sym0`, `f(sym0, sym1, sym2)`
+- extract all symrefs that are not builtins: `sym0`, `sym1`, `sym2`
+- create a lambda with first (state/carry) param taken from original scanpass (`state`) and new Symbols with the name of the extracted symrefs: `λ(state, sym0, sym1, sym2)`
+- the body is a call to the original scanpass, but with `state` param removed `λ(isym0, isym1) → body(state, isym0, isym1)` (`state` is captured)
+- it is called with the original args of the scan: `sym0, f(sym0,sym1,sym2)`
+- wrap the new scanpass in a scan call with the original `forward` and `init`
+- call it with the extrated symrefs
+- note: there is no symbol clash, re-used 
+"""
+
 
 def _generate_unique_symbol(
     desired_name: Optional[eve.SymbolName | tuple[ir.Lambda | ir.SymRef, int]] = None,
@@ -80,7 +96,8 @@ def _transform_and_extract_lift_args(
                         expr=ir.FunCall(fun=inner_stencil, args=[*extracted_args.values()]),
                         # params=[acc, *extracted_args.keys()],
                         params=[acc, *(ir.Sym(id=str(r.id)) for r in new_args)],
-                    ), *node.fun.args[1:]
+                    ),
+                    *node.fun.args[1:],
                 ],
             ),
             args=[*new_args],
