@@ -540,7 +540,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to `{node.func.id}`!"
+                node, msg=f"Invalid argument types in call to `{new_func.id}`!"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)

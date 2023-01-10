@@ -48,7 +48,7 @@ class ConnectivityParameter:
 @dataclasses.dataclass(frozen=True)
 class Function:
     name: str
-    parameters: tuple[ScalarParameter | BufferParameter, ...]
+    parameters: tuple[ScalarParameter | BufferParameter | ConnectivityParameter, ...]
 
 
 @dataclasses.dataclass(frozen=True)

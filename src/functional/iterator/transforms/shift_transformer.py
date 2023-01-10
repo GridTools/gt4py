@@ -1,4 +1,4 @@
-from eve import NOTHING, NodeTranslator
+from eve import NodeTranslator
 from eve.pattern_matching import ObjectPattern as P
 from functional.iterator import ir
 
@@ -15,7 +15,7 @@ class RemoveShiftsTransformer(NodeTranslator):
             fun=ir.SymRef(id="deref"),
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
         ).match(node):
-            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))
+            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))  # type: ignore[attr-defined]
 
         # deref(translate_shift(...)(it)) -> deref(it)
         if P(
@@ -23,7 +23,7 @@ class RemoveShiftsTransformer(NodeTranslator):
             fun=ir.SymRef(id="deref"),
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
         ).match(node):
-            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))
+            return self.visit(ir.FunCall(fun=ir.SymRef(id="deref"), args=[node.args[0].args[0]]))  # type: ignore[attr-defined]
 
         # can_deref(ignore_shift(...)(it)) -> deref(it)
         if P(
@@ -32,7 +32,7 @@ class RemoveShiftsTransformer(NodeTranslator):
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
         ).match(node):
             return self.visit(
-                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])
+                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])  # type: ignore[attr-defined]
             )
 
         # can_deref(translate_shift(...)(it)) -> deref(it)
@@ -42,7 +42,7 @@ class RemoveShiftsTransformer(NodeTranslator):
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
         ).match(node):
             return self.visit(
-                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])
+                ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[node.args[0].args[0]])  # type: ignore[attr-defined]
             )
 
         return self.generic_visit(node)
@@ -71,15 +71,16 @@ class PropagateShiftTransformer(NodeTranslator):
             fun=P(ir.FunCall, fun=ir.SymRef(id="shift")),
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="translate_shift")))],
         ).match(node):
-            assert len(node.fun.args) == 2
+            assert isinstance(node.fun, ir.FunCall) and len(node.fun.args) == 2
+            assert len(node.args[0].fun.args) == 2  # type: ignore[attr-defined]
             shift_tag, shift_index = node.fun.args
-            old_tag, new_tag = node.args[0].fun.args
+            old_tag, new_tag = node.args[0].fun.args  # type: ignore[attr-defined]
             if old_tag == shift_tag:
                 shift_tag = new_tag
 
             new_shift = ir.FunCall(fun=ir.SymRef(id="shift"), args=[shift_tag, shift_index])
-            translate_shift = node.args[0].fun
-            it = node.args[0].args
+            translate_shift = node.args[0].fun  # type: ignore[attr-defined]
+            it = node.args[0].args  # type: ignore[attr-defined]
 
             return ir.FunCall(
                 fun=translate_shift, args=[self.visit(ir.FunCall(fun=new_shift, args=it))]
@@ -90,15 +91,16 @@ class PropagateShiftTransformer(NodeTranslator):
             fun=P(ir.FunCall, fun=ir.SymRef(id="shift")),
             args=[P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="ignore_shift")))],
         ).match(node):
-            assert len(node.fun.args) == 2
+            assert isinstance(node.fun, ir.FunCall) and len(node.fun.args) == 2
+            assert len(node.args[0].fun.args) == 1  # type: ignore[attr-defined]
             shift_tag, shift_index = node.fun.args
-            ignored_tag = node.args[0].fun.args[0]
+            ignored_tag = node.args[0].fun.args[0]  # type: ignore[attr-defined]
             if ignored_tag == shift_tag:
                 return node.args[0]
 
             shift = node.fun
-            it = node.args[0].args
-            ignore_shift = node.args[0].fun
+            it = node.args[0].args  # type: ignore[attr-defined]
+            ignore_shift = node.args[0].fun  # type: ignore[attr-defined]
 
             return ir.FunCall(fun=ignore_shift, args=[self.visit(ir.FunCall(fun=shift, args=it))])
 

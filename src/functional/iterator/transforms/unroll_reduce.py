@@ -76,6 +76,12 @@ class UnrollReduce(NodeTranslator):
         if not _is_reduce(node):
             return node
 
+        assert isinstance(node.fun, ir.FunCall)
+        assert len(node.fun.args) == 3
+        assert isinstance(node.fun.args[2], ir.OffsetLiteral) and isinstance(
+            node.fun.args[2].value, str
+        )
+
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = offset_provider[

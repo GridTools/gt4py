@@ -139,7 +139,7 @@ def _collect_dimensions_from_offsets(
     grid_type: common.GridType,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ) -> dict[str, TagDefinition]:
-    used_offset_tags: Iterable[itir.OffsetLiteral] = (
+    used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
@@ -148,16 +148,15 @@ def _collect_dimensions_from_offsets(
     if not used_offset_tags.issubset(set(offset_provider.keys())):
         raise ValueError()
     offset_definitions = {}
-    for offset_name in set(offset_provider.keys()):
-        if offset_name not in offset_provider:
-            raise ValueError(f"Missing offset_provider entry for {offset_name}")
-        if isinstance(offset_provider[offset_name], common.Dimension):
-            dim = offset_provider[offset_name]
+    for dim_or_connectivity in offset_provider.items():
+        if isinstance(dim_or_connectivity, common.Dimension):
+            dim = dim_or_connectivity
             offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-        elif isinstance(offset_provider[offset_name], common.Connectivity):
+        elif isinstance(dim_or_connectivity, common.Connectivity):
+            connectivity = dim_or_connectivity
             for dim in [
-                offset_provider[offset_name].origin_axis,
-                offset_provider[offset_name].neighbor_axis,
+                connectivity.origin_axis,
+                connectivity.neighbor_axis,
             ]:
                 if grid_type == common.GridType.CARTESIAN:
                     offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
@@ -178,22 +177,19 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ):
-    used_offset_tags: Iterable[itir.OffsetLiteral] = (
+    used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
         .getattr("value")
     ).to_set()
     if not used_offset_tags.issubset(set(offset_provider.keys())):
-        raise ValueError()
+        raise ValueError()  # TODO(tehrengruber): give meaningful error message
     offset_definitions = {}
 
-    for offset_name in set(offset_provider.keys()):
-        if offset_name not in offset_provider:
-            raise ValueError(f"Missing offset_provider entry for {offset_name}")
-
-        if isinstance(offset_provider[offset_name], common.Dimension):
-            dim = offset_provider[offset_name]
+    for offset_name, dim_or_connectivity in offset_provider.items():
+        if isinstance(dim_or_connectivity, common.Dimension):
+            dim: common.Dimension = dim_or_connectivity
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 assert dim.value != offset_name
@@ -222,9 +218,10 @@ def _collect_offset_definitions(
                     offset_definitions[offset_name] = TagDefinition(
                         name=Sym(id=offset_name), alias=_vertical_dimension
                     )
-        else:
-            assert isinstance(offset_provider[offset_name], common.Connectivity)
+        elif isinstance(dim_or_connectivity, common.Connectivity):
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+        else:
+            raise AssertionError()
     return offset_definitions
 
 

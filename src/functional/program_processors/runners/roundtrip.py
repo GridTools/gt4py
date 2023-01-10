@@ -120,6 +120,7 @@ def fencil_generator(
                       to debug.
         offset_provider: A mapping from offset names to offset providers.
     """
+    debug = True
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
     cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))

@@ -80,7 +80,8 @@ def render_python_type(python_type: Type) -> str:
 
 
 def _render_function_param(
-    param: interface.ScalarParameter | interface.BufferParameter, index: int
+    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
+    index: int,
 ) -> str:
     if isinstance(param, interface.ScalarParameter):
         return f"{render_python_type(param.scalar_type.type)} {param.name}"

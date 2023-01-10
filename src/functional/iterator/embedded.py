@@ -129,10 +129,6 @@ class ItIterator(Protocol):
     def shift(self, *offsets: OffsetPart) -> ItIterator:
         ...
 
-    # TODO(tehrengruber): remove, not needed anymore
-    def max_neighbors(self) -> int:
-        ...
-
     def can_deref(self) -> bool:
         ...
 
@@ -339,25 +335,6 @@ def lift(stencil):
                     if new_offset_provider := arg.offset_provider:
                         offset_provider = new_offset_provider
                 return offset_provider
-
-            def max_neighbors(self):
-                if not self.incomplete_offsets:
-                    breakpoint()
-                assert self.incomplete_offsets
-                return _get_connectivity(
-                    self.args[0].offset_provider, self.incomplete_offsets[0]
-                ).max_neighbors
-
-            @property
-            def incomplete_offsets(self):
-                incomplete_offsets = []
-                for arg in self.args:
-                    if arg.incomplete_offsets:
-                        assert (
-                            not incomplete_offsets or incomplete_offsets == arg.incomplete_offsets
-                        )
-                        incomplete_offsets = arg.incomplete_offsets
-                return incomplete_offsets
 
             def _shifted_args(self):
                 if not self.offsets:
@@ -595,12 +572,20 @@ def execute_shift(
             new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
-        if (
-            offset_implementation.kind == DimensionKind.LOCAL
-            and new_pos[offset_implementation.value]
-            >= offset_provider[offset_implementation.value].max_neighbors
-        ):
-            return None
+
+        # If this is a local dimension limit the shift to `max_neighbors` of the respective
+        # non-local dimensions connectivity, i.e. for V2EDim use `max_neighbors` of the V2E
+        # connectivity. Otherwise a call to `reduce` of an iterator pointing to a sparse field
+        # never returns as it can be shifted indefinitely.
+        if offset_implementation.kind == DimensionKind.LOCAL:
+            linked_offset_provider = offset_provider[offset_implementation.value]
+            if not isinstance(linked_offset_provider, common.Connectivity):
+                raise ValueError(
+                    f"Offset provider for tag {offset_implementation.value} "
+                    f"must be a `Connectivity`, but got {type(linked_offset_provider)}."
+                )
+            if value >= linked_offset_provider.max_neighbors:
+                return None
         return new_pos
     else:
         assert isinstance(offset_implementation, common.Connectivity)
@@ -777,10 +762,6 @@ class MDIterator:
             offset_provider=self.offset_provider,
             column_axis=self.column_axis,
         )
-
-    def max_neighbors(self) -> int:
-        assert self.incomplete_offsets
-        return _get_connectivity(self.offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
@@ -1014,48 +995,54 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
     return impl
 
 
+class IgnoreShiftIt:
+    def __init__(self, tag: runtime.Offset, it):
+        self.tag = tag
+        self.it = it
+
+    def shift(self, tag: runtime.Offset, index: IntIndex, *tail):
+        assert isinstance(self.tag.value, str)
+        if tag == self.tag.value:
+            return self
+
+        result = IgnoreShiftIt(self.tag, shift(tag, index)(self.it))
+        if tail:
+            return shift(*tail)(result)
+        return result
+
+    def __getattr__(self, item):
+        return getattr(self.it, item)
+
+
 @builtins.ignore_shift.register(EMBEDDED)
-def ignore_shift(tag: Tag) -> ItIterator:
-    class IgnoreShiftIt:
-        def __init__(self, tag: Offset, it):
-            self.tag = tag
-            self.it = it
-
-        def shift(self, tag: Offset, index: int, *tail):
-            if tag == self.tag.value:
-                return self
-
-            result = IgnoreShiftIt(self.tag, shift(tag, index)(self.it))
-            if tail:
-                return shift(*tail)(result)
-            return result
-
-        def __getattr__(self, item):
-            return getattr(self.it, item)
-
+def ignore_shift(tag: runtime.Offset) -> Callable[[ItIterator], IgnoreShiftIt]:
     return lambda it: IgnoreShiftIt(tag, it)
 
 
+class TranslateShiftIt:
+    def __init__(self, tag: runtime.Offset, new_tag: runtime.Offset, it):
+        self.tag = tag
+        self.new_tag = new_tag
+        self.it = it
+
+    def shift(self, tag: Tag, index: IntIndex, *tail):
+        assert isinstance(self.tag.value, str) and isinstance(self.new_tag.value, str)
+        if tag == self.tag.value:
+            tag = self.new_tag.value
+
+        result = TranslateShiftIt(self.tag, self.new_tag, shift(tag, index)(self.it))
+        if tail:
+            return shift(*tail)(result)
+        return result
+
+    def __getattr__(self, item):
+        return getattr(self.it, item)
+
+
 @builtins.translate_shift.register(EMBEDDED)
-def translate_shift(tag: Tag, new_tag: Tag) -> ItIterator:
-    class TranslateShiftIt:
-        def __init__(self, tag: Offset, new_tag: Tag, it):
-            self.tag = tag
-            self.new_tag = new_tag
-            self.it = it
-
-        def shift(self, tag: Tag, index: int, *tail):
-            if tag == self.tag.value:
-                tag = self.new_tag.value
-
-            result = TranslateShiftIt(self.tag, self.new_tag, shift(tag, index)(self.it))
-            if tail:
-                return shift(*tail)(result)
-            return result
-
-        def __getattr__(self, item):
-            return getattr(self.it, item)
-
+def translate_shift(
+    tag: runtime.Offset, new_tag: runtime.Offset
+) -> Callable[[ItIterator], TranslateShiftIt]:
     return lambda it: TranslateShiftIt(tag, new_tag, it)
 
 

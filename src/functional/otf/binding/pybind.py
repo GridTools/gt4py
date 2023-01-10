@@ -149,7 +149,9 @@ class BindingCodeGenerator(TemplatedGenerator):
 
 
 def make_parameter(
-    parameter: interface.ScalarParameter | interface.BufferParameter,
+    parameter: interface.ScalarParameter
+    | interface.BufferParameter
+    | interface.ConnectivityParameter,
 ) -> FunctionParameter:
     if isinstance(parameter, interface.ConnectivityParameter):
         return FunctionParameter(
@@ -162,7 +164,8 @@ def make_parameter(
 
 
 def make_argument(
-    index: int, param: interface.ScalarParameter | interface.BufferParameter
+    index: int,
+    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
 ) -> str | SidConversion:
     if isinstance(param, interface.ScalarParameter):
         return param.name

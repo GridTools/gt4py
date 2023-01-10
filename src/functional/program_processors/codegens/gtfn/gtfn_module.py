@@ -57,7 +57,9 @@ class GTFNTranslationStep(
     ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program = inp.program
-        parameters = [
+        parameters: list[
+            interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter
+        ] = [
             get_param_description(program_param.id, obj)
             for obj, program_param in zip(inp.args, program.params)
         ]

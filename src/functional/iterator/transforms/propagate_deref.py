@@ -16,8 +16,8 @@ class PropagateDeref(NodeTranslator):
         if P(ir.FunCall, fun=ir.SymRef(id="deref"), args=[P(ir.FunCall, fun=P(ir.Lambda))]).match(
             node
         ):
-            lambda_fun: ir.Lambda = node.args[0].fun
-            lambda_args: list[ir.Expr] = node.args[0].args
+            lambda_fun: ir.Lambda = node.args[0].fun  # type: ignore[attr-defined]
+            lambda_args: list[ir.Expr] = node.args[0].args  # type: ignore[attr-defined]
             node = ir.FunCall(
                 fun=ir.Lambda(
                     params=lambda_fun.params,

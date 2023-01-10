@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Any, Optional, cast
+from typing import Any, Optional, SupportsFloat, SupportsInt, cast
 
 import numpy as np
 
@@ -44,7 +44,7 @@ def is_local_kind(symbol_type: ts.FieldType) -> bool:
 
 
 def iterator_type_kind(
-    symbol_type: ts.ScalarType | ts.FieldType | ts.TupleType,
+    symbol_type: ts.TypeSpec,
 ) -> ITIRTypeKind:
     """
     Return the corresponding type kind (on iterator level) to a FOAST expression of the given symbol type.
@@ -71,7 +71,7 @@ def iterator_type_kind(
     return ITIRTypeKind.VALUE
 
 
-def to_iterator(node: foast.LocatedNode):
+def to_iterator(node: foast.Symbol | foast.Expr):
     if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
         return lambda x: im.lift_(im.lambda__()(x))()
     return lambda x: x
@@ -161,7 +161,9 @@ class FieldOperatorLowering(NodeTranslator):
         *assigns, return_stmt = body
         current_expr = self.visit(return_stmt, **kwargs)
 
-        for assign in reversed(assigns):
+        # TODO(tehrengruber): the following incorrectly assumes assigns can only
+        #  contain `foast.Assign`s. Fixed in #1118.
+        for assign in reversed(cast(list[foast.Assign], assigns)):
             target = self.visit(assign.target, **kwargs)
             expr = self.visit(assign.value, **kwargs)
             current_expr = im.let(target, expr)(current_expr)
@@ -196,7 +198,7 @@ class FieldOperatorLowering(NodeTranslator):
         # TODO(tehrengruber): extend iterator ir to support unary operators
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             # TODO: invert only for bool right now
-            return self._map("not_", node.value)
+            return self._map("not_", node.operand)
 
         return self._map(node.op.value, im.literal_("0", "int"), node.operand)
 
@@ -254,9 +256,9 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert len(node.args) == 2
-        dtype = node.args[1].id
-        return self._map(lambda val: im.call_("cast_")(val, dtype), node.args[0])
+        assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
+        obj, dtype = node.args[0], node.args[1].id
+        return self._map(lambda val: im.call_("cast_")(val, dtype), obj)
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map(im.call_("if_"), *node.args)
@@ -275,6 +277,7 @@ class FieldOperatorLowering(NodeTranslator):
         **kwargs,
     ):
         it = self.visit(node.args[0], **kwargs)
+        assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
         reduction_axis = im.ensure_offset(str(node.kwargs["axis"].type.dim.value) + "Dim")
         val = im.call_(im.call_("reduce")(op, init_expr, reduction_axis))("it")
         return im.call_(im.call_("ignore_shift")(reduction_axis))(
@@ -285,7 +288,9 @@ class FieldOperatorLowering(NodeTranslator):
         return self._make_reduction_expr(node, "plus", 0, **kwargs)
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        assert isinstance(node.type, ts.FieldType)
         np_type = getattr(np, node.type.dtype.kind.name.lower())
+        min_value: SupportsInt | SupportsFloat
         if type_info.is_integral(node.type):
             min_value = np.iinfo(np.int32).min  # not sure why int64 min is converted into an int128
         elif type_info.is_floating_point(node.type):
@@ -299,7 +304,9 @@ class FieldOperatorLowering(NodeTranslator):
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        assert isinstance(node.type, ts.FieldType)
         np_type = getattr(np, node.type.dtype.kind.name.lower())
+        max_value: SupportsInt | SupportsFloat
         if type_info.is_integral(node.type):
             max_value = np.iinfo(np.int32).max
         elif type_info.is_floating_point(node.type):
@@ -356,12 +363,12 @@ class FieldOperatorLowering(NodeTranslator):
                     for dim in field_type.dims:
                         if dim.kind == DimensionKind.LOCAL:
                             return dim
-                    assert False
+                    raise AssertionError()
 
                 nb_dims = [local_dim(arg.type) for arg in args if is_local_type_kind(arg.type)]
                 assert all(nb_dim == nb_dims[0] for nb_dim in nb_dims)
                 nb_dim = im.ensure_offset(str(nb_dims[0].value) + "Dim")
-                for i, (arg, lowered_arg) in enumerate(zip(args, lowered_args)):
+                for i, arg in enumerate(args):
                     if not is_local_type_kind(arg.type):
                         lowered_args[i] = im.call_(im.call_("ignore_shift")(nb_dim))(
                             lowered_args[i]
