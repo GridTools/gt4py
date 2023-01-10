@@ -167,3 +167,30 @@ def test_vertical_shift_unstructured(program_processor):
 
     if validate:
         assert np.allclose(inp_s[:, 1:], np.asarray(out_s)[:, :-1])
+
+
+# TODO We should bypass all passes to ensure that we actually test this code as is
+def test_unapplied_op(program_processor):
+    program_processor, validate = program_processor
+
+    @fundef
+    def takes_op(op, inp):
+        return op(deref(inp), 2)
+
+    @fundef
+    def entry(inp):
+        return takes_op(plus, inp)
+
+    dummy = np_as_located_field(IDim)(np.ones((1,)))
+    out_s = np_as_located_field(IDim)(np.zeros((1,)))
+
+    run_processor(
+        entry[cartesian_domain(named_range(IDim, 0, 1))],
+        program_processor,
+        dummy,
+        out=out_s,
+        offset_provider={},
+    )
+
+    if validate:
+        assert 1 + 2 == out_s[0]

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import ClassVar, Optional, Union
 
 from eve import Coerced, Node, SymbolName
@@ -22,6 +23,9 @@ from functional import common
 from functional.iterator import ir as itir
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
 from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
+
+
+
 
 
 class UnaryExpr(Expr):
@@ -55,6 +59,13 @@ class OffsetLiteral(Expr):
     value: Union[int, str]
 
 
+<<<<<<< HEAD
+=======
+class SymRef(Expr):
+    id: Coerced[SymbolRefWithCppTemplate]  # noqa: A003
+
+
+>>>>>>> hannes/unapplied_op_to_lambda
 class Lambda(Expr, SymbolTableTrait):
     params: list[Sym]
     expr: Expr
@@ -140,6 +151,23 @@ GTFN_BUILTINS = [
     "named_range",
     "reduce",
 ]
+CPP_FUN_OBJ_BUILTINS = [
+    "std::plus<void>{}",
+    "std::minus<void>{}",
+    "std::multiplies<void>{}",
+    "std::divides<void>{}",
+    "std::equal_to<void>{}",
+    "std::not_equal_to<void>{}",
+    "std::less<void>{}",
+    "std::less_equal<void>{}",
+    "std::greater<void>{}",
+    "std::greater_equal<void>{}",
+    "std::logical_and<void>{}",
+    "std::logical_or<void>{}",
+    "std::bit_xor<void>{}",
+    "std::modulos<void>{}",
+    "std::logical_not<void>{}",
+]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
 UNARY_MATH_FP_PREDICATE_BUILTINS = itir.UNARY_MATH_FP_PREDICATE_BUILTINS
@@ -148,6 +176,7 @@ TYPEBUILTINS = itir.TYPEBUILTINS
 
 BUILTINS = {
     *GTFN_BUILTINS,
+    *CPP_FUN_OBJ_BUILTINS,
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,

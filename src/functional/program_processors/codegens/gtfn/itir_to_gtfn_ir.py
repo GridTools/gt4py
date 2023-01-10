@@ -197,6 +197,23 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         "mod": "%",
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
+    _cpp_funobj_map: ClassVar[dict[str, str]] = {
+        "plus": "std::plus<void>{}",
+        "minus": "std::minus<void>{}",
+        "multiplies": "std::multiplies<void>{}",
+        "divides": "std::divides<void>{}",
+        "eq": "std::equal_to<void>{}",
+        "not_eq": "std::not_equal_to<void>{}",
+        "less": "std::less<void>{}",
+        "less_equal": "std::less_equal<void>{}",
+        "greater": "std::greater<void>{}",
+        "greater_equal": "std::greater_equal<void>{}",
+        "and_": "std::logical_and<void>{}",
+        "or_": "std::logical_or<void>{}",
+        "xor_": "std::bit_xor<void>{}",
+        "mod": "std::modulos<void>{}",
+        "not": "std::logical_not<void>{}",
+    }
 
     offset_provider: dict
     column_axis: Optional[common.Dimension]
@@ -238,9 +255,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         extracted_functions: Optional[list] = None,
         **kwargs: Any,
     ) -> SymRef:
-        if force_function_extraction:
+        if force_function_extraction and node.id == "deref":
             assert extracted_functions is not None
-            assert node.id == "deref"
             fun_id = self.uids.sequential_id(prefix="_fun")
             fun_def = FunctionDefinition(
                 id=fun_id,
@@ -249,6 +265,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
             extracted_functions.append(fun_def)
             return SymRef(id=fun_id)
+        if node.id in self._cpp_funobj_map:
+            return SymRef(id=self._cpp_funobj_map[node.id])
         return SymRef(id=node.id)
 
     def visit_Lambda(

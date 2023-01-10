@@ -14,6 +14,7 @@
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef
+import re
 
 
 @eve.utils.noninstantiable
@@ -21,13 +22,20 @@ class Node(eve.Node):
     pass
 
 
+_SYMNAME_CPP_REGEX = re.compile(r"^[a-zA-Z_][\w<>:{}]*$")
+
+
+class SymbolNameWithCppTemplate(SymbolName, regex=_SYMNAME_CPP_REGEX):
+    __slots__ = ()
+
+
+class SymbolRefWithCppTemplate(SymbolRef, regex=_SYMNAME_CPP_REGEX):
+    __slots__ = ()
+
+
 class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolNameWithCppTemplate]  # noqa: A003
 
 
 class Expr(Node):
     ...
-
-
-class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
