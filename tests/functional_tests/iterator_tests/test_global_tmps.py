@@ -2,6 +2,7 @@ from eve.utils import UIDs
 from functional.iterator import ir
 from functional.iterator.runtime import CartesianAxis
 from functional.iterator.transforms.global_tmps import (
+    AUTO_DOMAIN,
     FencilWithTemporaries,
     Temporary,
     collect_tmps_info,
@@ -18,7 +19,7 @@ def test_split_closures():
         params=[ir.Sym(id="d"), ir.Sym(id="inp"), ir.Sym(id="out")],
         closures=[
             ir.StencilClosure(
-                domain=ir.SymRef(id="d"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
                 stencil=ir.Lambda(
                     params=[ir.Sym(id="baz_inp")],
                     expr=ir.FunCall(
@@ -79,7 +80,7 @@ def test_split_closures():
         ],
         closures=[
             ir.StencilClosure(
-                domain=ir.SymRef(id="_gtmp_auto_domain"),
+                domain=AUTO_DOMAIN,
                 stencil=ir.Lambda(
                     params=[ir.Sym(id="foo_inp")],
                     expr=ir.FunCall(
@@ -91,7 +92,7 @@ def test_split_closures():
                 inputs=[ir.SymRef(id="inp")],
             ),
             ir.StencilClosure(
-                domain=ir.SymRef(id="_gtmp_auto_domain"),
+                domain=AUTO_DOMAIN,
                 stencil=ir.Lambda(
                     params=[
                         ir.Sym(id="bar_inp"),
@@ -108,7 +109,7 @@ def test_split_closures():
                 inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_1")],
             ),
             ir.StencilClosure(
-                domain=ir.SymRef(id="d"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
                 stencil=ir.Lambda(
                     params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                     expr=ir.FunCall(
@@ -143,7 +144,7 @@ def test_update_cartesian_domains():
             ],
             closures=[
                 ir.StencilClosure(
-                    domain=ir.SymRef(id="_gtmp_auto_domain"),
+                    domain=AUTO_DOMAIN,
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="foo_inp")],
                         expr=ir.FunCall(
@@ -155,7 +156,7 @@ def test_update_cartesian_domains():
                     inputs=[ir.SymRef(id="inp")],
                 ),
                 ir.StencilClosure(
-                    domain=ir.SymRef(id="_gtmp_auto_domain"),
+                    domain=AUTO_DOMAIN,
                     stencil=ir.SymRef(id="deref"),
                     output=ir.SymRef(id="_gtmp_0"),
                     inputs=[ir.SymRef(id="_gtmp_1")],

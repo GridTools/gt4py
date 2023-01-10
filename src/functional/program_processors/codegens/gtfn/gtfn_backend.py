@@ -27,6 +27,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
     do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
+    assert isinstance(offset_provider, dict)
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),
