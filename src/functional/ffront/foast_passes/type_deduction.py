@@ -538,7 +538,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 new_func, (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator)
             ):
                 raise FieldOperatorTypeDeductionError.from_foast_node(
-                    node, msg=f"Functions can only be called directly!"
+                    node, msg="Functions can only be called directly!"
                 )
             func_str_repr = new_func.id
         elif isinstance(new_func.type, ts.FieldType):

@@ -459,11 +459,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
-        # if not isinstance(node.func, ast.Name):
-        #    raise FieldOperatorSyntaxError.from_AST(
-        #        node, msg="Functions can only be called directly!"
-        #    )
-
+        # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
         if isinstance(node.func, ast.Name):
             func_name = self._func_name(node)
 
