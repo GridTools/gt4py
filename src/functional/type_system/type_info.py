@@ -228,7 +228,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type) -> bool:
+def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:
     """
     Return True if ``type_`` matches any of the expected.
 
