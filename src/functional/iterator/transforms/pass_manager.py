@@ -6,9 +6,9 @@ from functional.iterator.transforms.cse import CommonSubexpressionElimination
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
+from functional.iterator.transforms.inline_into_scan import InlineIntoScan
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
-from functional.iterator.transforms.inline_into_scan import InlineIntoScan
 from functional.iterator.transforms.merge_let import MergeLet
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
@@ -65,17 +65,10 @@ def apply_common_transforms(
         )
 
     ir = NormalizeShifts().visit(ir)
-    print("before")
-    print(ir)
     ir = InlineIntoScan().visit(ir)
-    print("after")
-    print(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=False, force_inline_lift=True)
     ir = _inline_lifts(ir, lift_mode)
     ir = EtaReduction().visit(ir)
-
-    print("after eta")
-    print(ir)
 
     if unroll_reduce:
         for _ in range(10):

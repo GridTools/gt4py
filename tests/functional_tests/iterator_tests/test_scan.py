@@ -1,3 +1,5 @@
+import numpy as np
+
 from functional.common import DimensionKind
 from functional.ffront.decorator import field_operator, program, scan_operator
 from functional.ffront.fbuiltins import (
@@ -18,10 +20,8 @@ from functional.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from functional.program_processors.runners import gtfn_cpu, roundtrip
 from functional.program_processors.codegens.gtfn import gtfn_backend
-
-import numpy as np
+from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
 def test_scan_in_field_op():
@@ -48,12 +48,4 @@ def test_scan_in_field_op():
     def prog(inp: Field[[IDim, KDim], float], out: Field[[IDim, KDim], float]):
         wrapped(inp, out=out, domain={IDim: (0, 4), KDim: (0, 4)})
 
-    print(prog.itir)
-    print(
-        gtfn_backend.generate(
-            prog.itir, offset_provider={Koff.value: KDim, "I": IDim}, column_axis=KDim
-        )
-    )
-
-
-test_scan_in_field_op()
+    # TODO test
