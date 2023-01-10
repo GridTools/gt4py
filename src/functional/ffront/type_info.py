@@ -71,10 +71,11 @@ def promote_zero_dims(
                 kwargs={},
                 returns=function_type.definition.returns,
             )
-            if isinstance(function_type, ts.FieldOperatorType):
-                new_func_type = ts.FieldOperatorType(definition=new_func_definition)
-            else:
-                new_func_type = ts.ProgramType(definition=new_func_definition)
+            new_func_type = (
+                ts.FieldOperatorType(definition=new_func_definition)
+                if isinstance(function_type, ts.FieldOperatorType)
+                else ts.ProgramType(definition=new_func_definition)
+            )
             new_args[arg_i] = ts.TupleType(types=promote_zero_dims(arg.types, new_func_type))
     return new_args
 
@@ -119,10 +120,11 @@ def function_signature_incompatibilities_scanop(
     new_el: ts.TypeSpec
     for arg_i in args:
         if is_type_or_tuple_of_type(arg_i, ts.ScalarType):
-            if isinstance(arg_i, ts.TupleType):
-                new_el = ts.TupleType(types=unfold_scanop_tuples(arg_i, arg_i.types))
-            else:
-                new_el = ts.FieldType(dims=[], dtype=extract_dtype(arg_i))
+            new_el = (
+                ts.TupleType(types=unfold_scanop_tuples(arg_i, arg_i.types))
+                if isinstance(arg_i, ts.TupleType)
+                else ts.FieldType(dims=[], dtype=extract_dtype(arg_i))
+            )
         else:
             new_el = arg_i
         new_args.append(new_el)
