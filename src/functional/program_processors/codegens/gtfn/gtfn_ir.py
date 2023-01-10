@@ -25,9 +25,6 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFun
 from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
 
 
-
-
-
 class UnaryExpr(Expr):
     op: str
     expr: Expr
@@ -59,13 +56,6 @@ class OffsetLiteral(Expr):
     value: Union[int, str]
 
 
-<<<<<<< HEAD
-=======
-class SymRef(Expr):
-    id: Coerced[SymbolRefWithCppTemplate]  # noqa: A003
-
-
->>>>>>> hannes/unapplied_op_to_lambda
 class Lambda(Expr, SymbolTableTrait):
     params: list[Sym]
     expr: Expr

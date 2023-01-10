@@ -39,3 +39,7 @@ class Sym(Node):  # helper
 
 class Expr(Node):
     ...
+
+
+class SymRef(Expr):
+    id: Coerced[SymbolRefWithCppTemplate]  # noqa: A003
