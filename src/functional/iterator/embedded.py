@@ -718,16 +718,17 @@ def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndexOrIndices,
     *,
-    column_axis_idx: Optional[int] = None,
+    column_axis: Optional[Tag] = None,
 ) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
     if isinstance(field_or_tuple, tuple):
-        if column_axis_idx is not None:
+        if column_axis is not None:
             assert _column_range
             assert isinstance(indices, list)
             indices_cpy = list(indices)
             assert isinstance(indices[column_axis_idx], range)
             indices_cpy[column_axis_idx] = indices[column_axis_idx][0]
             # construct a Column of tuples
+            column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
             first = tuple(
                 _make_tuple(
                     f, _single_vertical_idx(indices_cpy, column_axis_idx, _column_range.start)
@@ -749,7 +750,7 @@ def _make_tuple(
             return tuple(_make_tuple(f, indices) for f in field_or_tuple)
     else:
         data = field_or_tuple.field_getitem(indices)
-        if column_axis_idx is not None:
+        if column_axis is not None:
             # wraps a vertical slice of an input field into a `Column`
             assert _column_range is not None
             return Column(_column_range.start, data)
@@ -820,9 +821,7 @@ class MDIterator:
         return _make_tuple(
             self.field,
             ordered_indices,
-            column_axis_idx=_axis_idx(axes, self.column_axis)
-            if self.column_axis is not None
-            else None,
+            column_axis=self.column_axis,
         )
 
 
