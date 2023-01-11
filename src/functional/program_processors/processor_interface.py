@@ -100,7 +100,8 @@ def is_processor_kind(
 
 
 def ensure_processor_kind(
-    obj: ProgramProcessor[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
+    obj: ProgramProcessor[OutputT, ProcessorKindT],
+    kind: type[ProcessorKindT],
 ) -> None:
     if not is_processor_kind(obj, kind):
         raise TypeError(f"{obj} is not a {kind.__name__}!")

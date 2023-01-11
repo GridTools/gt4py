@@ -154,9 +154,7 @@ def _deduce_grid_type(
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
 
-def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.DataType
-) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
+def _field_constituents_shape_and_dims(arg, arg_type: ts.DataType) -> Generator:
     if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
             yield from _field_constituents_shape_and_dims(el, el_type)
@@ -276,7 +274,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
+        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)  # type: ignore
         if "debug" in kwargs:
             debug(self.itir)
 
