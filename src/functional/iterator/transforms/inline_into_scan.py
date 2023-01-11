@@ -95,8 +95,10 @@ class TupleMerger(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
             for arg in node.args
         ):
+            assert isinstance(node.args[0], ir.FunCall)
             first_expr = node.args[0].args[1]
             for i, v in enumerate(node.args):
+                assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
                 if not (int(v.args[0].value) == i and v.args[1] == first_expr):
                     return self.generic_visit(node)

@@ -462,7 +462,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
-                args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
+                args=[self._visit_output_argument(node.output)] + self.visit(node.inputs),
                 axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(
@@ -486,7 +486,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             assert a.axis == b.axis
 
             index_map = dict[int, int]()
-            compacted_b_args = list[SymRef]()
+            compacted_b_args = list[Expr]()
             for b_idx, b_arg in enumerate(b.args):
                 try:
                     a_idx = a.args.index(b_arg)
