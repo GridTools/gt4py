@@ -55,9 +55,8 @@ def promote_zero_dims(
     args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    current_args: tuple = tuple(args.types if isinstance(args, ts.TupleType) else args)  # type: ignore
-    new_args = list(current_args)
-    for arg_i, arg in enumerate(current_args):
+    new_args = args
+    for arg_i, arg in enumerate(args):
         def_type = function_type.definition.args[arg_i]
 
         def _as_field(def_type: ts.TypeSpec, path: tuple):
