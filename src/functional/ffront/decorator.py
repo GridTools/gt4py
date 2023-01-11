@@ -294,7 +294,7 @@ class Program:
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> str:
-        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
+        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)  # type: ignore
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -572,7 +572,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
-        # assert isinstance(closure_symbols, dict)
+
+        assert isinstance(closure_vars, str)
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
