@@ -59,24 +59,22 @@ def promote_zero_dims(
     new_args = list(current_args)
     for arg_i, arg in enumerate(current_args):
         def_type = function_type.definition.args[arg_i]
-        new_func_type: ts.ProgramType | ts.FieldOperatorType
-        if _is_zero_dim_field(def_type) and is_number(arg):
-            if extract_dtype(def_type) == extract_dtype(arg):
-                new_args[arg_i] = def_type
-            else:
-                raise GTTypeError(f"{arg} is not compatible with {def_type}.")
-        elif isinstance(def_type, ts.TupleType):
-            new_func_definition = ts.FunctionType(
-                args=def_type.types,  # type: ignore
-                kwargs={},
-                returns=function_type.definition.returns,
+
+        def _as_field(def_type: ts.DataType | tuple[ts.DataType], path: tuple[int, ...]):
+            arg_type = (
+                reduce(lambda type_, idx: type_.types[idx], path, arg)
+                if isinstance(arg, ts.TupleType)
+                else arg
             )
-            new_func_type = (
-                ts.FieldOperatorType(definition=new_func_definition)
-                if isinstance(function_type, ts.FieldOperatorType)
-                else ts.ProgramType(definition=new_func_definition)
-            )
-            new_args[arg_i] = ts.TupleType(types=promote_zero_dims(arg.types, new_func_type))
+            if _is_zero_dim_field(def_type) and is_number(arg_type):
+                if extract_dtype(def_type) == extract_dtype(arg_type):
+                    return def_type
+                else:
+                    raise GTTypeError(f"{arg_type} is not compatible with {def_type}.")
+            return arg_type
+
+        new_args[arg_i] = apply_to_primitive_constituents(def_type, _as_field, with_path_arg=True)
+
     return new_args
 
 
