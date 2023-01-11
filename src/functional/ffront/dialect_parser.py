@@ -79,6 +79,17 @@ class DialectSyntaxError(common.GTSyntaxError):
         )
 
 
+def _ensure_syntax_errror_invariants(err: SyntaxError):
+    # If offsets are provided so must not line numbers. For example `err.offset` determines
+    # if carets (`^^^^`) are printed below `err.text`. They would be misleading if we
+    # don't know on which line the error occurs.
+    assert err.lineno or not err.offset
+    assert err.end_lineno or not err.end_offset
+    # If the ends are provided so must starts.
+    assert err.lineno or not err.end_lineno
+    assert err.offset or not err.end_offset
+
+
 @dataclass(frozen=True, kw_only=True)
 class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
@@ -95,12 +106,13 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     ) -> DialectRootT:
 
         source, filename, starting_line = source_definition
-        line_offset = starting_line - 1
         try:
+            line_offset = starting_line - 1
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
-            definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = ast.increment_lineno(definition_ast, line_offset)
-            line_offset = 0
+            line_offset = 0  # line numbers are correct from now on
+
+            definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = FixMissingLocations.apply(definition_ast)
             output_ast = cls._postprocess_dialect_ast(
                 cls(
@@ -112,6 +124,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 annotations,
             )
         except SyntaxError as err:
+            _ensure_syntax_errror_invariants(err)
+
             # The ast nodes do not contain information about the path of the
             #  source file or its contents. We add this information here so
             #  that raising an error using :func:`DialectSyntaxError.from_AST`
@@ -125,28 +139,15 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             if err.end_lineno:
                 err.end_lineno = err.end_lineno + line_offset
 
-            # if offsets are provided, but not line numbers, things get weird…
-            assert err.lineno or not err.offset
-            assert err.end_lineno or not err.end_offset
-            # if the ends are provided, but not the starts, things get weird…
-            assert err.lineno or not err.end_lineno
-            assert err.offset or not err.end_offset
-
             if not err.text:
-
                 if err.lineno:
                     source_lineno = err.lineno - starting_line
                     source_end_lineno = (
                         (err.end_lineno - starting_line) if err.end_lineno else source_lineno
                     )
                     err.text = "\n".join(source.splitlines()[source_lineno : source_end_lineno + 1])
-
                 else:
                     err.text = source
-
-                    # `err.offset` determines if carets (`^^^^`) are printed below `err.text`.
-                    # They would be misleading if we don't know on which line the error occurs!
-                    assert err.offset is err.end_offset is None
 
             raise err
 
