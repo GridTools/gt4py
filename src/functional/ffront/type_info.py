@@ -60,13 +60,15 @@ def promote_zero_dims(
     for arg_i, arg in enumerate(current_args):
         def_type = function_type.definition.args[arg_i]
 
-        def _as_field(def_type: ts.DataType | tuple[ts.DataType], path: tuple[int, ...]):
+        def _as_field(def_type: ts.TypeSpec, path: tuple):
             arg_type = (
-                reduce(lambda type_, idx: type_.types[idx], path, arg)
-                if isinstance(arg, ts.TupleType)
-                else arg
+                reduce(lambda type_, idx: type_.types[idx], path, arg)  # noqa: B023
+                if isinstance(arg, ts.TupleType)  # noqa: B023
+                else arg  # noqa: B023
             )
+            assert isinstance(def_type, (ts.TypeSpec, ts.TupleType))
             if _is_zero_dim_field(def_type) and is_number(arg_type):
+                assert isinstance(def_type, ts.TypeSpec)
                 if extract_dtype(def_type) == extract_dtype(arg_type):
                     return def_type
                 else:
