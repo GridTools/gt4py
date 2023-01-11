@@ -13,6 +13,7 @@ PropertyIdentifier: TypeAlias = Union[type[foast.LocatedNode], tuple[type[foast.
 
 INDENTATION_PREFIX: Final[str] = "  "
 
+
 # See https://docs.python.org/3/reference/expressions.html#operator-precedence
 # The following list contains all entries from the above link. Operators that
 # are not modeled in FOAST are kept for ease of comparability and future
@@ -141,7 +142,7 @@ class _PrettyPrinter(TemplatedGenerator):
 
     Return = as_fmt("return {value}")
 
-    BlockStmt = as_mako("${'\\n  '.join(stmts)}")
+    BlockStmt = as_mako("${'\\n'.join(stmts)}")
 
     FunctionDefinition = as_mako(
         textwrap.dedent(
@@ -164,7 +165,7 @@ class _PrettyPrinter(TemplatedGenerator):
         return_type = (
             f" -> {node.type.returns}" if not isinstance(node.type, ts.DeferredType) else ""
         )
-        indented_body = textwrap.indent(self.visit(node.body), "  ")
+        indented_body = textwrap.indent(self.visit(node.body), INDENTATION_PREFIX)
         return self.generic_visit(
             node,
             indented_body=indented_body,

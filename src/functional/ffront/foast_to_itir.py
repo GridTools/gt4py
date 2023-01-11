@@ -99,7 +99,7 @@ def is_expr_with_iterator_type_kind(it_type_kind: ITIRTypeKind) -> Callable[[foa
     return predicate
 
 
-def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], itir.Expr]:
+def to_value(node: foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
 
@@ -123,15 +123,14 @@ def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], it
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id=SymbolRef('a'))
     """
-    type_ = node_or_type.type if isinstance(node_or_type, foast.LocatedNode) else node_or_type
-    if iterator_type_kind(type_) is ITIRTypeKind.ITERATOR:
+    if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
         # just to ensure we don't accidentally deref a local field
-        assert not (isinstance(type_, ts.FieldType) and is_local_kind(type_))
+        assert not (isinstance(node.type, ts.FieldType) and is_local_kind(node.type))
         return im.deref_
-    elif iterator_type_kind(type_) is ITIRTypeKind.VALUE:
+    elif iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
         return lambda x: x
 
-    raise AssertionError(f"Type {type_} can not be turned into a value.")
+    raise AssertionError(f"Type {node.type} can not be turned into a value.")
 
 
 class FieldOperatorLowering(NodeTranslator):

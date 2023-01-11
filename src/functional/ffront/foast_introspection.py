@@ -25,17 +25,15 @@ def deduce_stmt_return_kind(node: foast.Stmt) -> StmtReturnKind:
     """
     Deduce if a statement returns and if so, whether it does unconditionally.
 
-    Example with ``StmtReturnKind.UNCONDIOTIONAL_RETURN``
-    -----------------------------------------
-    .. code-block:: python
+    Example with ``StmtReturnKind.UNCONDITIONAL_RETURN``::
+
         if cond:
           return 1
         else:
           return 2
 
-    Example with ``StmtReturnKind.NO_RETURN``
-    -----------------------------------------
-    .. code-block:: python
+    Example with ``StmtReturnKind.NO_RETURN``::
+
         if cond:
           result = 1
         else:
