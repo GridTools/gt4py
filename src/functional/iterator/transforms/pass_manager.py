@@ -6,7 +6,7 @@ from functional.iterator.transforms.cse import CommonSubexpressionElimination
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
-from functional.iterator.transforms.inline_into_scan import InlineIntoScan
+from functional.iterator.transforms.inline_into_scan import InlineIntoScan, TupleMerger
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.merge_let import MergeLet
@@ -65,6 +65,14 @@ def apply_common_transforms(
         )
 
     ir = NormalizeShifts().visit(ir)
+    ir = TupleMerger().visit(ir)
+    ir = InlineIntoScan().visit(ir)
+
+    ir = InlineLambdas.apply(ir, opcount_preserving=False, force_inline_lift=True)
+    ir = _inline_lifts(ir, lift_mode)
+    ir = EtaReduction().visit(ir)
+
+    # repeating...
     ir = InlineIntoScan().visit(ir)
     ir = InlineLambdas.apply(ir, opcount_preserving=False, force_inline_lift=True)
     ir = _inline_lifts(ir, lift_mode)

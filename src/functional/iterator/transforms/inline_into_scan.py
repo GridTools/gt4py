@@ -84,5 +84,23 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
-            return ir.FunCall(fun=new_scan, args=[*refs_in_args])
-        return node
+            result = ir.FunCall(fun=new_scan, args=[*refs_in_args])
+            return result
+        return self.generic_visit(node, **kwargs)
+
+
+class TupleMerger(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+    def visit_FunCall(self, node: ir.FunCall, **kwargs):
+        if node.fun == ir.SymRef(id="make_tuple") and all(
+            isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
+            for arg in node.args
+        ):
+            first_expr = node.args[0].args[1]
+            for i, v in enumerate(node.args):
+                assert isinstance(v.args[0], ir.Literal)
+                if not (int(v.args[0].value) == i and v.args[1] == first_expr):
+                    return self.generic_visit(node)
+            # TODO at this point we don't know if the inner tuple has maybe more elements than the tuple we are removing
+
+            return first_expr
+        return self.generic_visit(node)
