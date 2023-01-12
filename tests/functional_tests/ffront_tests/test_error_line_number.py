@@ -3,6 +3,8 @@ import traceback
 
 import pytest
 
+from functional.common import Dimension, Field
+from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional import common
 from functional.ffront import func_to_foast as f2f, source_utils as src_utils
 from functional.ffront.foast_passes import type_deduction
@@ -10,13 +12,15 @@ from functional.ffront.foast_passes import type_deduction
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
 
+TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+
 
 def test_invalid_syntax_error_empty_return():
     """Field operator syntax errors point to the file, line and column."""
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
-    def wrong_syntax(inp: common.Field[..., float]):
+    def wrong_syntax(inp: common.Field[[TDim], float]):
         return  # <-- this line triggers the syntax error
 
     with pytest.raises(
@@ -39,7 +43,7 @@ def test_wrong_caret_placement_bug():
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
-    def wrong_line_syntax_error(inp: common.Field[..., float]):
+    def wrong_line_syntax_error(inp: common.Field[[TDim], float]):
         # the next line triggers the syntax error
         inp = inp.this_attribute_surely_doesnt_exist
 

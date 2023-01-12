@@ -13,8 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
-from types import EllipsisType
-from typing import Callable, Iterator, Optional, Type, TypeGuard, cast
+from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
 from functional.common import Dimension, GTTypeError
@@ -60,7 +59,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
 
 def primitive_constituents(
-    symbol_type: Optional[ts.TypeSpec],
+    symbol_type: ts.TypeSpec,
 ) -> XIterable[ts.TypeSpec]:
     """
     Return the primitive types contained in a composite type.
@@ -79,7 +78,7 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: Optional[ts.TypeSpec]):
+    def constituents_yielder(symbol_type: ts.TypeSpec):
         if isinstance(symbol_type, ts.TupleType):
             for el_type in symbol_type.types:
                 yield from constituents_yielder(el_type)
@@ -228,7 +227,7 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_field_type_or_tuple_of_field_type(type_: Optional[ts.TypeSpec]) -> bool:
+def is_field_type_or_tuple_of_field_type(type_: ts.TypeSpec) -> bool:
     """
      Return True if ``type_`` is FieldType or FieldType nested in TupleType.
 
@@ -265,8 +264,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
         case ts.ScalarType():
             return []
         case ts.FieldType(dims):
-            # TODO: This code does not handle ellipses for dimensions. Fix it.
-            return dims  # type: ignore
+            return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
@@ -362,9 +360,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
     raise TypeError("Expected a FieldType or ScalarType.")
 
 
-def promote_dims(
-    *dims_list: list[Dimension] | EllipsisType,
-) -> list[Dimension] | EllipsisType:
+def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.
 
@@ -395,9 +391,6 @@ def promote_dims(
     #  (contrary to successors) we also use this directionality here.
     graph: dict[Dimension, set[Dimension]] = {}
     for dims in dims_list:
-        if dims == Ellipsis:
-            return Ellipsis
-        dims = cast(list[Dimension], dims)
         if len(dims) == 0:
             continue
         # create a vertex for each dimension

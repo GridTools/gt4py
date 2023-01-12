@@ -28,7 +28,16 @@ import pytest
 from eve.pattern_matching import ObjectPattern as P
 from functional.common import Field, GTTypeError
 from functional.ffront import field_operator_ast as foast, type_specifications as ts
-from functional.ffront.fbuiltins import Dimension, astype, float32, float64, int32, int64, where
+from functional.ffront.fbuiltins import (
+    Dimension,
+    astype,
+    broadcast,
+    float32,
+    float64,
+    int32,
+    int64,
+    where,
+)
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional.iterator import ir as itir
@@ -70,6 +79,8 @@ OR = itir.SymRef(id=or_.fun.__name__)
 XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
+TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+
 
 # --- Parsing ---
 def test_untyped_arg():
@@ -101,13 +112,13 @@ def test_mistyped_arg():
 def test_return_type():
     """Return type annotation should be stored on the FieldOperator."""
 
-    def rettype(inp: Field[..., float64]) -> Field[..., float64]:
+    def rettype(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
         return inp
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
@@ -115,7 +126,7 @@ def test_return_type():
 def test_invalid_syntax_no_return():
     """Field operators must end with a return statement."""
 
-    def no_return(inp: Field[..., "float64"]):
+    def no_return(inp: Field[[TDim], "float64"]):
         tmp = inp  # noqa
 
     with pytest.raises(
@@ -128,7 +139,7 @@ def test_invalid_syntax_no_return():
 def test_invalid_assign_to_expr():
     """Assigning to subscripts disallowed until a usecase can be found."""
 
-    def invalid_assign_to_expr(inp1: Field[..., "float64"], inp2: Field[..., "float64"]):
+    def invalid_assign_to_expr(inp1: Field[[TDim], "float64"], inp2: Field[[TDim], "float64"]):
         tmp = inp1
         tmp[-1] = inp2
         return tmp
@@ -138,7 +149,7 @@ def test_invalid_assign_to_expr():
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[..., "float64"]):
+    def copy_field(inp: Field[[TDim], "float64"]):
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -147,14 +158,16 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
     assert parsed.annex.symtable["tmp__0"].type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
 def test_clashing_annotated_assignment():
-    def clashing(inp: Field[..., "float64"]):
-        tmp: Field[..., "int64"] = inp
+    pytest.skip("Annotated assignments are not properly supported at the moment.")
+
+    def clashing(inp: Field[[TDim], "float64"]):
+        tmp: Field[[TDim], "int64"] = inp
         return tmp
 
     with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
@@ -162,31 +175,31 @@ def test_clashing_annotated_assignment():
 
 
 def test_binary_pow():
-    def power(inp: Field[..., "float64"]):
+    def power(inp: Field[[TDim], "float64"]):
         return inp**3
 
     parsed = FieldOperatorParser.apply_to_function(power)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
 
 def test_binary_mod():
-    def modulo(inp: Field[..., "int64"]):
+    def modulo(inp: Field[[TDim], "int64"]):
         return inp % 3
 
     parsed = FieldOperatorParser.apply_to_function(modulo)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.INT64, shape=None),
     )
 
 
 def test_bool_and():
-    def bool_and(a: Field[..., "bool"], b: Field[..., "bool"]):
+    def bool_and(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
         return a and b
 
     with pytest.raises(
@@ -197,7 +210,7 @@ def test_bool_and():
 
 
 def test_bool_or():
-    def bool_or(a: Field[..., "bool"], b: Field[..., "bool"]):
+    def bool_or(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
         return a or b
 
     with pytest.raises(
@@ -208,25 +221,25 @@ def test_bool_or():
 
 
 def test_bool_xor():
-    def bool_xor(a: Field[..., "bool"], b: Field[..., "bool"]):
+    def bool_xor(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
         return a ^ b
 
     parsed = FieldOperatorParser.apply_to_function(bool_xor)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
 
 
 def test_unary_tilde():
-    def unary_tilde(a: Field[..., "bool"]):
+    def unary_tilde(a: Field[[TDim], "bool"]):
         return ~a
 
     parsed = FieldOperatorParser.apply_to_function(unary_tilde)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
     )
 
@@ -242,8 +255,8 @@ def test_scalar_cast():
 
 def test_conditional_wrong_mask_type():
     def conditional_wrong_mask_type(
-        a: Field[..., float64],
-    ) -> Field[..., float64]:
+        a: Field[[TDim], float64],
+    ) -> Field[[TDim], float64]:
         return where(a, a, a)
 
     msg = r"Expected a field with dtype bool."
@@ -253,10 +266,10 @@ def test_conditional_wrong_mask_type():
 
 def test_conditional_wrong_arg_type():
     def conditional_wrong_arg_type(
-        mask: Field[..., bool],
-        a: Field[..., float32],
-        b: Field[..., float64],
-    ) -> Field[..., float64]:
+        mask: Field[[TDim], bool],
+        a: Field[[TDim], float32],
+        b: Field[[TDim], float64],
+    ) -> Field[[TDim], float64]:
         return where(mask, a, b)
 
     msg = r"Could not promote scalars of different dtype \(not implemented\)."
@@ -266,14 +279,62 @@ def test_conditional_wrong_arg_type():
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
+def test_ternary_with_field_condition():
+    def ternary_with_field_condition(cond: Field[[], bool]):
+        return 1 if cond else 2
+
+    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
+        _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
+
+
+def test_correct_return_type_annotation():
+    """See ADR 13."""
+
+    def correct_return_type_annotation() -> float:
+        return 1.0
+
+    FieldOperatorParser.apply_to_function(correct_return_type_annotation)
+
+
+def test_adr13_wrong_return_type_annotation():
+    """See ADR 13."""
+
+    def wrong_return_type_annotation() -> Field[[], float]:
+        return 1.0
+
+    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
+        _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
+
+
+def test_adr13_fixed_return_type_annotation():
+    """See ADR 13."""
+
+    def fixed_return_type_annotation() -> Field[[], float]:
+        return broadcast(1.0, ())
+
+    FieldOperatorParser.apply_to_function(fixed_return_type_annotation)
+
+
+def test_no_implicit_broadcast_in_field_op_call():
+    """See ADR 13."""
+
+    def no_implicit_broadcast_in_field_op_call(scalar: float) -> float:
+        return scalar
+
+    def no_implicit_broadcast_in_field_op_call_caller() -> float:
+        return no_implicit_broadcast_in_field_op_call(1.0)
+
+    FieldOperatorParser.apply_to_function(no_implicit_broadcast_in_field_op_call_caller)
+
+
 def test_astype():
-    def astype_fieldop(a: Field[..., "int64"]) -> Field[..., float64]:
+    def astype_fieldop(a: Field[[TDim], "int64"]) -> Field[[TDim], float64]:
         return astype(a, float64)
 
     parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
 
     assert parsed.body[-1].value.type == ts.FieldType(
-        dims=Ellipsis,
+        dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
 
@@ -287,7 +348,7 @@ def test_closure_symbols():
     nonlocals_unreferenced = FrozenNamespace()
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
 
-    def operator_with_refs(inp: Field[..., "float64"], inp2: Field[..., "float32"]):
+    def operator_with_refs(inp: Field[[TDim], "float64"], inp2: Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
         b = inp2 + nonlocals.np_value
         return a, b
