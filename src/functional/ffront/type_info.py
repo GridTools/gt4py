@@ -65,7 +65,7 @@ def promote_zero_dims(
 
         def _as_field(arg: ts.TypeSpec, path: tuple):
             try:
-                def_t = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
+                el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
             except (IndexError, AssertionError):
                 return def_t
 
