@@ -274,7 +274,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)  # type: ignore
+        ppi.ensure_processor_kind(backend, ppi.ProgramFormatter)  # type: ignore[arg-type, type-var] # backend type is inspected inside function
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -294,7 +294,7 @@ class Program:
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> str:
-        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)  # type: ignore
+        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)  # type: ignore[type-abstract] # formatter type is inspected inside function
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
