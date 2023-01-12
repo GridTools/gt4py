@@ -15,7 +15,7 @@
 import enum
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 import numpy as np
 
