@@ -44,14 +44,14 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return sym
 
     def visit_BlockStmt(self, node: foast.BlockStmt, **kwargs) -> foast.BlockStmt:
-        unrolled: list[foast.Assign | foast.LocatedNode] = []
+        unrolled_stmts: list[foast.Assign | foast.BlockStmt | foast.Return] = []
 
         for stmt in node.stmts:
             if isinstance(stmt, foast.TupleTargetAssign):
                 num_elts, targets = len(stmt.value.type.types), stmt.targets  # type: ignore
                 indices = compute_assign_indices(targets, num_elts)
                 tuple_symbol = self._unique_tuple_symbol(stmt)
-                unrolled.append(
+                unrolled_stmts.append(
                     foast.Assign(target=tuple_symbol, value=stmt.value, location=stmt.location)
                 )
 
@@ -88,8 +88,8 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                             ),
                             location=stmt.location,
                         )
-                    unrolled.append(new_assign)
+                    unrolled_stmts.append(new_assign)
             else:
-                unrolled.append(self.generic_visit(stmt, **kwargs))
+                unrolled_stmts.append(self.generic_visit(stmt, **kwargs))
 
-        return foast.BlockStmt(stmts=unrolled, location=node.location)
+        return foast.BlockStmt(stmts=unrolled_stmts, location=node.location)
