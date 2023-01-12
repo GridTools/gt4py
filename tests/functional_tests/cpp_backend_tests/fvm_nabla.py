@@ -72,9 +72,10 @@ class DummyConnectivity:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
+    if len(sys.argv) != 3:
+        raise RuntimeError(f"Usage: {sys.argv[0]} <output_file> <imperative>")
     output_file = sys.argv[1]
+    imperative = bool(sys.argv[2])
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
     prog = trace(nabla_fencil, [None] * 7)

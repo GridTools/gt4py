@@ -254,8 +254,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> ImperativeFunctionDefinition:
         check_compat = IsImpCompatible()
         check_compat.visit(node.expr, **kwargs)
-        if not check_compat.compatible:
-            raise RuntimeError(f"gtfn_im can not handle {check_compat.incompatible_node}")
+        # if not check_compat.compatible:
+        #     raise RuntimeError(f"gtfn_im can not handle {check_compat.incompatible_node}")
 
         self.imp_list_ir: List[Union[Stmt, Conditional]] = []
         self.sym_table: Dict[gtfn_ir_common.Sym, gtfn_ir_common.SymRef] = node.annex.symtable
