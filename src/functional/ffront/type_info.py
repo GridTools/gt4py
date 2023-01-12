@@ -52,12 +52,16 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
 
 
 def promote_zero_dims(
-    args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
+    args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType | ts.FunctionType
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
     new_args = args
     for arg_i, arg in enumerate(args):
-        def_type = function_type.definition.args[arg_i]
+        def_type = (
+            function_type.args[arg_i]
+            if isinstance(function_type, ts.FunctionType)
+            else function_type.definition.args[arg_i]
+        )
 
         def _as_field(def_type: ts.TypeSpec, path: tuple):
             arg_type = reduce(lambda type_, idx: type_.types[idx], path, arg)  # type: ignore[attr-defined] # noqa: B023
@@ -102,26 +106,14 @@ def function_signature_incompatibilities_scanop(
         yield "Arguments to scan operator must be fields, scalars or tuples thereof."
         return
 
-    new_args = []
-    new_el: ts.TypeSpec
-    for arg_i in args:
-        if is_type_or_tuple_of_type(arg_i, ts.ScalarType):
-            new_el = apply_to_primitive_constituents(
-                arg_i,
-                lambda primitive_type: ts.FieldType(dims=[], dtype=extract_dtype(primitive_type)),
-            )
-        else:
-            new_el = arg_i
-        new_args.append(new_el)
-
-    arg_dims = [extract_dims(el) for arg in new_args for el in primitive_constituents(arg)]
+    arg_dims = [extract_dims(el) for arg in args for el in primitive_constituents(arg)]
     try:
         promote_dims(*arg_dims)
     except GTTypeError as e:
         yield e.args[0]
 
-    if len(new_args) != len(scanop_type.definition.args) - 1:
-        yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(new_args)} were given."
+    if len(args) != len(scanop_type.definition.args) - 1:
+        yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(args)} were given."
         return
 
     promoted_args = []
@@ -132,7 +124,7 @@ def function_signature_incompatibilities_scanop(
         # as we capture `i`.
         def _as_field(dtype: ts.ScalarType, path: tuple[int, ...]) -> ts.FieldType:
             try:
-                el_type = reduce(lambda type_, idx: type_.types[idx], path, new_args[i])  # type: ignore[attr-defined] # noqa: B023
+                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
                 return ts.FieldType(dims=extract_dims(el_type), dtype=dtype)
             except (IndexError, AttributeError):
                 # The structure of the scan passes argument and the requested
@@ -152,7 +144,9 @@ def function_signature_incompatibilities_scanop(
         returns=ts.DeferredType(constraint=None),
     )
 
-    yield from function_signature_incompatibilities(function_type, promote_zero_dims(args, function_type), kwargs)
+    yield from function_signature_incompatibilities(
+        function_type, promote_zero_dims(args, function_type), kwargs
+    )
 
 
 @function_signature_incompatibilities.register
