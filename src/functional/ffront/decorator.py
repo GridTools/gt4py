@@ -26,7 +26,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generic, Iterator, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -154,7 +154,9 @@ def _deduce_grid_type(
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
 
-def _field_constituents_shape_and_dims(arg, arg_type: ts.DataType) -> Generator:
+def _field_constituents_shape_and_dims(
+    arg, arg_type: ts.DataType
+) -> Iterator[tuple[Any, list[Dimension]]]:
     if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
             yield from _field_constituents_shape_and_dims(el, el_type)
@@ -459,7 +461,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
         *,
-        operator_node_cls=foast.FieldOperator,
+        operator_node_cls: type[foast.LocatedNode] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}

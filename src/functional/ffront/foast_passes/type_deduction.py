@@ -162,7 +162,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     """
 
     @classmethod
-    def apply(cls, node: foast.FunctionDefinition) -> foast.FunctionDefinition:
+    def apply(cls, node: foast.FunctionDefinition | foast.LocatedNode) -> foast.FunctionDefinition:
         typed_foast_node = cls().visit(node)
 
         FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
