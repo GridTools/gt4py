@@ -63,18 +63,20 @@ def promote_zero_dims(
             else function_type.definition.args[arg_i]
         )
 
-        def _as_field(def_type: ts.TypeSpec, path: tuple):
-            arg_type = reduce(lambda type_, idx: type_.types[idx], path, arg)  # type: ignore[attr-defined] # noqa: B023
-            assert isinstance(def_type, (ts.TypeSpec, ts.TupleType))
-            if _is_zero_dim_field(def_type) and is_number(arg_type):
-                assert isinstance(def_type, ts.TypeSpec)
-                if extract_dtype(def_type) == extract_dtype(arg_type):
-                    return def_type
-                else:
-                    raise GTTypeError(f"{arg_type} is not compatible with {def_type}.")
-            return arg_type
+        def _as_field(arg: ts.TypeSpec, path: tuple):
+            try:
+                def_t = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
+            except (IndexError, AssertionError):
+                return def_t
 
-        new_args[arg_i] = apply_to_primitive_constituents(def_type, _as_field, with_path_arg=True)
+            if _is_zero_dim_field(def_t) and is_number(arg):
+                if extract_dtype(def_t) == extract_dtype(arg):
+                    return def_t
+                else:
+                    raise GTTypeError(f"{arg} is not compatible with {def_t}.")
+            return arg
+
+        new_args[arg_i] = apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
 
     return new_args
 
