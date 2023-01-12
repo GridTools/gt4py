@@ -156,7 +156,7 @@ def _deduce_grid_type(
 
 def _field_constituents_shape_and_dims(
     arg, arg_type: ts.DataType
-) -> Iterator[tuple[Any, list[Dimension]]]:
+) -> Iterator[tuple[Optional[tuple[Any]], list[Dimension]]]:
     if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
             yield from _field_constituents_shape_and_dims(el, el_type)
