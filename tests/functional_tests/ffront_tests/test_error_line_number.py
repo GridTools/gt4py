@@ -3,11 +3,11 @@ import traceback
 
 import pytest
 
-from functional.common import Dimension, Field
-from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 from functional import common
+from functional.common import Dimension, Field
 from functional.ffront import func_to_foast as f2f, source_utils as src_utils
 from functional.ffront.foast_passes import type_deduction
+from functional.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
