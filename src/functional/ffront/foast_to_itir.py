@@ -15,13 +15,13 @@
 import enum
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 import numpy as np
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
-from functional.common import Dimension, DimensionKind
+from functional.common import DimensionKind
 from functional.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -36,10 +36,7 @@ from functional.iterator import ir as itir
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    assert isinstance(symbol_type, ts.FieldType)
-    if symbol_type.dims == ...:
-        return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 class ITIRTypeKind(enum.Enum):
@@ -101,7 +98,7 @@ def is_expr_with_iterator_type_kind(it_type_kind: ITIRTypeKind) -> Callable[[foa
     return predicate
 
 
-def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], itir.Expr]:
+def to_value(node: foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     """
     Either ``deref_`` or noop callable depending on the input node.
 
@@ -113,8 +110,9 @@ def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], it
     ---------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
-    >>> def foo(a: Field[..., "float64"]):
+    >>> from functional.common import Field, Dimension
+    >>> IDim = Dimension("IDim")
+    >>> def foo(a: Field[[IDim], "float64"]):
     ...    b = 5
     ...    return a, b
 
@@ -125,15 +123,14 @@ def to_value(node_or_type: foast.Expr | ts.DataType) -> Callable[[itir.Expr], it
     >>> to_value(scalar_b)(im.ref("a"))
     SymRef(id=SymbolRef('a'))
     """
-    type_ = node_or_type.type if isinstance(node_or_type, foast.LocatedNode) else node_or_type
-    if iterator_type_kind(type_) is ITIRTypeKind.ITERATOR:
+    if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
         # just to ensure we don't accidentally deref a local field
-        assert not (isinstance(type_, ts.FieldType) and is_local_kind(type_))
+        assert not (isinstance(node.type, ts.FieldType) and is_local_kind(node.type))
         return im.deref_
-    elif iterator_type_kind(type_) is ITIRTypeKind.VALUE:
+    elif iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
         return lambda x: x
 
-    raise AssertionError(f"Type {type_} can not be turned into a value.")
+    raise AssertionError(f"Type {node.type} can not be turned into a value.")
 
 
 @dataclass
@@ -145,9 +142,10 @@ class FieldOperatorLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>>
-    >>> def fieldop(inp: Field[..., "float64"]):
+    >>> IDim = Dimension("IDim")
+    >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...    return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)

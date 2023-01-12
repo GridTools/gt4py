@@ -26,30 +26,24 @@ def deduce_stmt_return_kind(node: foast.Stmt) -> StmtReturnKind:
     """
     Deduce if a statement returns and if so, whether it does unconditionally.
 
-    Example with ``StmtReturnKind.UNCONDIOTIONAL_RETURN``
-    -----------------------------------------
-    .. code-block:: python
+    Example with ``StmtReturnKind.UNCONDITIONAL_RETURN``::
 
         if cond:
           return 1
         else:
           return 2
 
-    Example with ``StmtReturnKind.NO_RETURN``
-    -----------------------------------------
-    .. code-block:: python
-
-        if cond:
-          result = 1
-        else:
-          result = 2
-
-    Example with ``StmtReturnKind.CONDITIONAL_RETURN``
-    -----------------------------------------
-    .. code-block:: python
+    Example with ``StmtReturnKind.CONDITIONAL_RETURN``::
 
         if cond:
           return 1
+        else:
+          result = 2
+
+    Example with ``StmtReturnKind.NO_RETURN``::
+
+        if cond:
+          result = 1
         else:
           result = 2
     """
@@ -78,4 +72,4 @@ def deduce_stmt_return_kind(node: foast.Stmt) -> StmtReturnKind:
     elif isinstance(node, (foast.Assign, foast.TupleTargetAssign)):
         return StmtReturnKind.NO_RETURN
     else:
-        raise AssertionError(f"Statements of type `{type(node).__name__} not understood.`")
+        raise AssertionError(f"Statements of type `{type(node).__name__}` not understood.")
