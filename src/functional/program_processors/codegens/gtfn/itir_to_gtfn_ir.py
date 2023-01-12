@@ -192,9 +192,7 @@ def _collect_offset_definitions(
             dim: common.Dimension = dim_or_connectivity
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value)
-                )
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
                 offset_definitions[offset_name] = TagDefinition(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
