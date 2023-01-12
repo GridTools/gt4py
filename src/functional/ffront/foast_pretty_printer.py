@@ -210,14 +210,15 @@ def pretty_format(node: foast.LocatedNode) -> str:
     """
     Pretty print (to string) an `foast.LocatedNode`.
 
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>> from functional.ffront.decorator import field_operator
+    >>> IDim = Dimension("IDim")
     >>> @field_operator
-    ... def field_op(a: Field[..., int]) -> Field[..., int]:
+    ... def field_op(a: Field[[IDim], int]) -> Field[[IDim], int]:
     ...     return a+1
     >>> print(pretty_format(field_op.foast_node))
     @field_operator
-    def field_op(a: Field[..., int64]) -> Field[..., int64]:
+    def field_op(a: Field[[IDim], int64]) -> Field[[IDim], int64]:
       return a + 1
     """
     return _PrettyPrinter().apply(node)
