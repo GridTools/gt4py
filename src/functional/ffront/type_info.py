@@ -65,15 +65,17 @@ def promote_zero_dims(
 
         def _as_field(arg: ts.TypeSpec, path: tuple):
             try:
-                el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
+                el_def_type = reduce(
+                    lambda type_, idx: type_.types[idx], path, def_type  # noqa: B023
+                )
             except (IndexError, AssertionError):
-                return def_t
+                return el_def_type
 
-            if _is_zero_dim_field(def_t) and is_number(arg):
-                if extract_dtype(def_t) == extract_dtype(arg):
-                    return def_t
+            if _is_zero_dim_field(el_def_type) and is_number(arg):
+                if extract_dtype(el_def_type) == extract_dtype(arg):
+                    return el_def_type
                 else:
-                    raise GTTypeError(f"{arg} is not compatible with {def_t}.")
+                    raise GTTypeError(f"{arg} is not compatible with {el_def_type}.")
             return arg
 
         new_args[arg_i] = apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
