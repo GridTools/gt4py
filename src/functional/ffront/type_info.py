@@ -152,7 +152,7 @@ def function_signature_incompatibilities_scanop(
         returns=ts.DeferredType(constraint=None),
     )
 
-    yield from function_signature_incompatibilities(function_type, new_args, kwargs)
+    yield from function_signature_incompatibilities(function_type, promote_zero_dims(args, function_type), kwargs)
 
 
 @function_signature_incompatibilities.register
