@@ -93,7 +93,7 @@ def test_multicopy(fieldview_backend):
     assert np.allclose(b_I_float, out_I_float_1)
 
 
-def test_shift(fieldview_backend):
+def test_cartesian_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
@@ -108,6 +108,26 @@ def test_shift(fieldview_backend):
     fencil(a, out_I_float, offset_provider={"Ioff": IDim})
 
     assert np.allclose(out_I_float.array(), np.arange(1, 11))
+
+
+def test_unstructured_shift(reduction_setup, fieldview_backend):
+    Vertex = reduction_setup.Vertex
+    Edge = reduction_setup.Edge
+    E2V = reduction_setup.E2V
+
+    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
+
+    @field_operator(backend=fieldview_backend)
+    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+
+    # TODO(tehrengruber): respect mapped_index sig
+    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].mapped_index(slice(0, None), 0)]
+
+    assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
@@ -163,9 +183,6 @@ def test_tuples(fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -180,9 +197,6 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 

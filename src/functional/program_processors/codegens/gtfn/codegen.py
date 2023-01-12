@@ -109,11 +109,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         if self.is_cartesian:
             return f"::gridtools::hymap::keys<{','.join(t + '_t' for t in tags)}>::make_values({','.join(values)})"
         else:
-            return f"::gridtools::tuple({','.join(values)})"
+            return "{" + f"{','.join(values)}" + "}"
 
     CartesianDomain = as_fmt("gtfn::cartesian_domain({tagged_sizes}, {tagged_offsets})")
     UnstructuredDomain = as_mako(
-        "gtfn::unstructured_domain(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
+        "gtfn::unstructured_domain<std::tuple<${', '.join(['int'] * len(_this_node.tagged_sizes.tags))}>, std::tuple<${', '.join(['int'] * len(_this_node.tagged_offsets.tags))}>>(${tagged_sizes}, ${tagged_offsets}, connectivities__...)"
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
@@ -203,6 +203,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <cmath>
     #include <cstdint>
     #include <gridtools/fn/${grid_type_str}.hpp>
+    #include <gridtools/fn/sid_neighbor_table.hpp>
 
     namespace generated{
 

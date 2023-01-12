@@ -18,6 +18,7 @@ from typing import Any, Callable, Final, Optional
 
 import numpy as np
 
+from functional import common
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, pybind
@@ -55,7 +56,14 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
         def convert_args(inp: Callable) -> Callable:
             def decorated_program(*args):
-                return inp(*[convert_arg(arg) for arg in args])
+                return inp(
+                    *[convert_arg(arg) for arg in args],
+                    *[
+                        op._tbl  # TODO(tehrengruber): fix interface
+                        for op in kwargs["offset_provider"].values()
+                        if isinstance(op, common.Connectivity)
+                    ],
+                )
 
             return decorated_program
 
