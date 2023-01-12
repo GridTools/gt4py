@@ -57,9 +57,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>> float64 = float
-    >>> def field_op(inp: Field[..., float64]):
+    >>> IDim = Dimension("IDim")
+    >>> def field_op(inp: Field[[IDim], float64]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
@@ -72,7 +73,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     If a syntax error is encountered, it will point to the location in the source code.
 
-    >>> def wrong_syntax(inp: Field[..., int]):
+    >>> def wrong_syntax(inp: Field[[IDim], int]):
     ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp

@@ -18,7 +18,7 @@ from typing import Any, Optional, SupportsFloat, SupportsInt, cast
 import numpy as np
 
 from eve import NodeTranslator
-from functional.common import Dimension, DimensionKind
+from functional.common import DimensionKind
 from functional.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -37,10 +37,7 @@ class ITIRTypeKind(enum.Enum):
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    assert isinstance(symbol_type, ts.FieldType)
-    if symbol_type.dims == ...:
-        return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 def iterator_type_kind(
@@ -85,9 +82,10 @@ class FieldOperatorLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>>
-    >>> def fieldop(inp: Field[..., "float64"]):
+    >>> IDim = Dimension("IDim")
+    >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...    return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
