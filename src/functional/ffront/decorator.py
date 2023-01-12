@@ -276,7 +276,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramFormatter)  # type: ignore[arg-type, type-var] # backend type is inspected inside function
+        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)  # type: ignore[arg-type, type-abstract] # backend type is inspected inside function
         if "debug" in kwargs:
             debug(self.itir)
 
