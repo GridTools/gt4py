@@ -18,26 +18,26 @@ def _is_userdefined_symbolref(node: ir.Expr, symtable: dict[eve.SymbolName, ir.S
         and node.id
         not in [
             n.id for n in ir.FencilDefinition._NODE_SYMBOLS_
-        ]  # TODO this is relatively expensive, should we provide a way to exclude non-userdefined builtins from eve?
+        ]  # TODO this might be relatively expensive, should we provide a way to exclude non-userdefined builtins from eve?
     )
 
 
 def _extract_symrefs(
     nodes: list[ir.Expr], symtable: dict[eve.SymbolName, ir.Sym]
 ) -> set[ir.SymRef]:
-    symrefs = set()
+    symrefs = []
     for n in nodes:
         if isinstance(n, ir.SymRef):
             if _is_userdefined_symbolref(n, symtable):
-                symrefs.add(n)
+                symrefs.append(n)
         else:
-            symrefs.update(
+            symrefs.extend(
                 n.pre_walk_values()  # type: ignore [arg-type]
                 .if_isinstance(ir.SymRef)
                 .filter(lambda x: _is_userdefined_symbolref(x, symtable))
-                .to_set()
+                .to_list()
             )
-    return symrefs
+    return dict.fromkeys(symrefs).keys()  # sorted set
 
 
 class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
