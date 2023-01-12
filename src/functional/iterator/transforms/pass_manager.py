@@ -43,9 +43,6 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
 ):
-    if ir.id == "__field_operator_fvm_advect":
-        breakpoint()
-
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
@@ -91,9 +88,6 @@ def apply_common_transforms(
             ir = inlined
         else:
             raise RuntimeError("Inlining lift did not converge.")
-
-    # if ir.id == "__field_operator_fvm_advect":
-    #    ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
