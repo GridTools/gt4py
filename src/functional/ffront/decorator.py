@@ -548,7 +548,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self}
+        closure_vars: dict[str, Any] = {self.foast_node.id: self}
         closure_symbols: list = [
             past.Symbol(
                 id=self.foast_node.id,
@@ -574,7 +574,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
 
-        # assert isinstance(closure_vars, str) or isinstance(closure_vars, dict)
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
