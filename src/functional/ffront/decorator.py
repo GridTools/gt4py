@@ -480,6 +480,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+        assert isinstance(foast_node, (foast.ScanOperator, foast.FieldOperator))
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
@@ -573,7 +574,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
 
-        assert isinstance(closure_vars, str)
+        # assert isinstance(closure_vars, str) or isinstance(closure_vars, dict)
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
