@@ -405,7 +405,7 @@ def program(
 
     Examples:
         >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
 
@@ -413,7 +413,7 @@ def program(
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
         >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
@@ -624,14 +624,14 @@ def field_operator(
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
         >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
     """
 

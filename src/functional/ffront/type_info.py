@@ -16,7 +16,7 @@ from functools import reduce
 from typing import Iterable, Iterator, cast
 
 import functional.ffront.type_specifications as ts
-from functional.common import GTTypeError
+from functional.common import Dimension, GTTypeError
 from functional.type_system.type_info import (  # noqa: F401
     accepts_args as accepts_args,
     apply_to_primitive_constituents as apply_to_primitive_constituents,
@@ -132,7 +132,8 @@ def function_signature_incompatibilities_scanop(
                 # The structure of the scan passes argument and the requested
                 # argument type differ. As such we can not extract the dimensions
                 # and just return a generic field shown in the error later on.
-                return ts.FieldType(dims=..., dtype=dtype)
+                # TODO: we want some generic field type here, but our type system does not support it yet.
+                return ts.FieldType(dims=[Dimension("...")], dtype=dtype)
 
         promoted_args.append(
             apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
