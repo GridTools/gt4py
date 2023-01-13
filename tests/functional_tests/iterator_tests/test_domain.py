@@ -18,7 +18,8 @@ def foo(inp):
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int
-    origin_axis: Dimension = Dimension("dummy")
+    origin_axis: Dimension = Dimension("dummy_origin")
+    neighbor_axis: Dimension = Dimension("dummy_neighbor")
 
     def mapped_index(_, __) -> int:
         return 0
