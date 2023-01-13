@@ -74,9 +74,8 @@ class GTFNTranslationStep(
                 pass
             else:
                 raise ValueError(
-                    f"Expected offset provider `{name}` to be a "
-                    f"`Connectivity` or `Dimension`, but got "
-                    f"{type(connectivity).__name__}"
+                    f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
+                    f"but got {type(connectivity).__name__}."
                 )
         function = interface.Function(program.id, tuple(parameters))
 
