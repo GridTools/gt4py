@@ -11,7 +11,7 @@ from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.inline_tuple_get import InlineTupleGet
 from functional.iterator.transforms.merge_let import MergeLet
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
-from functional.iterator.transforms.propagate_deref import PropagateDeref
+from functional.iterator.transforms.propagate_builtins import PropagateBuiltins
 from functional.iterator.transforms.shift_transformer import (
     PropagateShiftTransformer,
     RemoveShiftsTransformer,
@@ -58,7 +58,7 @@ def apply_common_transforms(
                 opcount_preserving=True,
                 force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
             )
-            inlined = PropagateDeref.apply(inlined)
+            inlined = PropagateBuiltins.apply(inlined)
             inlined = InlineTupleGet.apply(inlined)
             inlined = RemoveShiftsTransformer.apply(inlined)
             inlined = PropagateShiftTransformer.apply(inlined)
