@@ -80,7 +80,8 @@ class DialectSyntaxError(common.GTSyntaxError):
 
 
 def _ensure_syntax_error_invariants(err: SyntaxError):
-    # If offsets are provided so must not line numbers. For example `err.offset` determines
+    """Ensure syntax error invariants required to print meaningful error messages."""
+    # If offsets are provided so must line numbers. For example `err.offset` determines
     # if carets (`^^^^`) are printed below `err.text`. They would be misleading if we
     # don't know on which line the error occurs.
     assert err.lineno or not err.offset
@@ -108,6 +109,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         source, filename, starting_line = source_definition
         try:
             line_offset = starting_line - 1
+            definition_ast: ast.AST
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = ast.increment_lineno(definition_ast, line_offset)
             line_offset = 0  # line numbers are correct from now on
