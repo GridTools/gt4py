@@ -110,6 +110,20 @@ def promote_to_mask_type(
         return input_type
 
 
+def deduce_stmt_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
+    """Deduce type of value returned inside a block statement."""
+    for stmt in node.stmts:
+        if isinstance(stmt, foast.Return):
+            return stmt.value.type
+
+    # If the node was constructed by the foast parsing we should never get here, but instead
+    # have gotten an error there.
+    raise AssertionError(
+        "Malformed block statement. Expected a return statement in this context, "
+        "but none was found. Please submit a bug report."
+    )
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -151,11 +165,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> untyped_fieldop = FieldOperatorParser(
     ...     source_definition=source_definition, closure_vars=closure_vars, annotations=annotations
     ... ).visit(ast.parse(source_definition.source).body[0])
-    >>> untyped_fieldop.body[0].value.type
+    >>> untyped_fieldop.body.stmts[0].value.type
     DeferredType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body[0].value.type == ts.FieldType(dtype=ts.ScalarType(
+    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(dtype=ts.ScalarType(
     ...     kind=ts.ScalarKind.FLOAT64), dims=[IDim])
     """
 
@@ -171,8 +185,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        assert isinstance(new_body[-1], foast.Return)
-        return_type = new_body[-1].value.type
+        return_type = deduce_stmt_return_type(new_body)
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -246,7 +259,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Undeclared symbol {node.id}"
+                node, msg=f"Undeclared symbol `{node.id}`."
             )
 
         symbol = symtable[node.id]

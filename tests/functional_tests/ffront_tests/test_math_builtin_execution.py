@@ -74,17 +74,20 @@ def make_builtin_field_operator(builtin_name: str):
         id=builtin_name + "_field_operator",
         definition=foast.FunctionDefinition(
             id=builtin_name + "_field_operator",
-            body=[
-                foast.Return(
-                    value=foast.Call(
-                        func=foast.Name(id=builtin_name, location=loc),
-                        args=args,
-                        kwargs={},
+            body=foast.BlockStmt(
+                stmts=[
+                    foast.Return(
+                        value=foast.Call(
+                            func=foast.Name(id=builtin_name, location=loc),
+                            args=args,
+                            kwargs={},
+                            location=loc,
+                        ),
                         location=loc,
-                    ),
-                    location=loc,
-                )
-            ],
+                    )
+                ],
+                location=loc,
+            ),
             closure_vars=closure_var_symbols,
             params=params,
             location=loc,

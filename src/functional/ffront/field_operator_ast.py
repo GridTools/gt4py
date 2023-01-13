@@ -11,6 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
 from typing import Any, Generic, TypeVar, Union
 
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
@@ -171,10 +174,14 @@ class Return(Stmt):
     value: Expr
 
 
+class BlockStmt(Stmt, SymbolTableTrait):
+    stmts: list[Stmt]
+
+
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     params: list[DataSymbol]
-    body: list[Stmt]
+    body: BlockStmt
     closure_vars: list[Symbol]
     type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
         constraint=ts.FunctionType

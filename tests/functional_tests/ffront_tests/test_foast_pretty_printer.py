@@ -62,12 +62,14 @@ def test_scanop():
 
     @scan_operator(axis=KDim, forward=False, init=1.0)
     def scan(inp: int64) -> int64:
+        foo = inp
         return inp
 
     expected = textwrap.dedent(
         """
         @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.0)
         def scan(inp: int64) -> int64:
+          foo__0 = inp
           return inp
         """
     ).strip()
