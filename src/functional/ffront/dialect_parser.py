@@ -79,7 +79,7 @@ class DialectSyntaxError(common.GTSyntaxError):
         )
 
 
-def _ensure_syntax_errror_invariants(err: SyntaxError):
+def _ensure_syntax_error_invariants(err: SyntaxError):
     # If offsets are provided so must not line numbers. For example `err.offset` determines
     # if carets (`^^^^`) are printed below `err.text`. They would be misleading if we
     # don't know on which line the error occurs.
@@ -124,7 +124,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 annotations,
             )
         except SyntaxError as err:
-            _ensure_syntax_errror_invariants(err)
+            _ensure_syntax_error_invariants(err)
 
             # The ast nodes do not contain information about the path of the
             #  source file or its contents. We add this information here so
