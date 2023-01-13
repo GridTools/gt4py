@@ -14,8 +14,7 @@
 
 from __future__ import annotations
 
-import re
-from typing import ClassVar, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -64,6 +63,12 @@ class Lambda(Expr, SymbolTableTrait):
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
     args: list[Expr]
+    conn: Any
+
+    def __init__(self, fun: Expr, args: list[Expr], conn: Any = None):
+        self.fun = fun
+        self.args = args
+        self.conn = conn
 
 
 class FunctionDefinition(Node, SymbolTableTrait):

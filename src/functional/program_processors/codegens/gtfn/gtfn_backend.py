@@ -32,12 +32,12 @@ def _lower(program: itir.FencilDefinition, do_unroll: bool, **kwargs: Any):
         lift_mode=kwargs.get("lift_mode"),
         offset_provider=offset_provider,
         unroll_reduce=do_unroll,
-    )   
+    )
     gtfn_ir = GTFN_lowering.apply(
         transformed,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
-    )    
+    )
     return gtfn_ir
 
 
@@ -45,7 +45,7 @@ def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
     try:
         gtfn_ir = _lower(program=program, do_unroll=do_unroll, **kwargs)
-    except:
+    except EveValueError:
         # if we don't unroll, there may be lifts left in the itir which can't be lowered to gtfn. in this case
         # case, just retry with unrolled reductions
         gtfn_ir = _lower(program=program, do_unroll=True, **kwargs)

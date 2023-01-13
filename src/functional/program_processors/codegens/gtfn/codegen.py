@@ -124,7 +124,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self.user_defined_function_ids:
+        if (
+            isinstance(node.fun, gtfn_ir_common.SymRef)
+            and node.fun.id in self.user_defined_function_ids
+        ):
             fun_name = f"{self.visit(node.fun)}{{}}()"
         else:
             fun_name = self.visit(node.fun)
@@ -229,7 +232,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
-            auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
+            auto tmp_alloc__ = tmp_allocator(backend);
             ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };

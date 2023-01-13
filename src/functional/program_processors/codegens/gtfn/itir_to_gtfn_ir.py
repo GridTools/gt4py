@@ -25,21 +25,17 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     BinaryExpr,
     CartesianDomain,
     CastExpr,
-    Expr,
     FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
     Literal,
-    Node,
     OffsetLiteral,
     Scan,
     ScanExecution,
     ScanPassDefinition,
     SidComposite,
     StencilExecution,
-    Sym,
-    SymRef,
     TagDefinition,
     TaggedValues,
     TemporaryAllocation,
@@ -47,6 +43,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     UnaryExpr,
     UnstructuredDomain,
 )
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
 def pytype_to_cpptype(t: str):
@@ -428,7 +425,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif node.fun == itir.SymRef(id="shift"):
                 raise ValueError("unapplied shift call not supported: {node}")
-        return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
+        return FunCall(
+            fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs), conn=node.conn
+        )
 
     def visit_FunctionDefinition(
         self, node: itir.FunctionDefinition, **kwargs: Any

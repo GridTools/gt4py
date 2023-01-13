@@ -1,4 +1,4 @@
-from typing import ClassVar, List, Union
+from typing import Any, ClassVar, List, Union
 
 import eve
 from eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -60,6 +60,12 @@ class Lambda(Expr, SymbolTableTrait):
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
     args: List[Expr]
+    conn: Any  # TODO move to annex
+
+    def __init__(self, fun: Expr, args: List[Expr], conn: Any = None):
+        self.fun = fun
+        self.args = args
+        self.conn = conn
 
 
 class FunctionDefinition(Node, SymbolTableTrait):

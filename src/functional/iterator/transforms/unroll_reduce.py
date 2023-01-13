@@ -4,7 +4,6 @@ from typing import TypeGuard
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
-from functional import common
 from functional.iterator import ir
 
 
@@ -36,38 +35,6 @@ def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterator[ir.FunCall]:
         _is_shifted_or_lifted_and_shifted,
         reduce_args,
     )
-
-
-def _is_list_of_funcalls(lst: list) -> TypeGuard[list[ir.FunCall]]:
-    return all(isinstance(f, ir.FunCall) for f in lst)
-
-
-def _get_partial_offset(arg: ir.FunCall) -> ir.OffsetLiteral:
-    if _is_shifted(arg):
-        assert isinstance(arg.fun, ir.FunCall)
-        offset = arg.fun.args[-1]
-        assert isinstance(offset, ir.OffsetLiteral)
-        return offset
-    else:
-        assert _is_applied_lift(arg)
-        assert _is_list_of_funcalls(arg.args)
-        partial_offsets = [_get_partial_offset(arg) for arg in arg.args]
-        assert all(o == partial_offsets[0] for o in partial_offsets)
-        return partial_offsets[0]
-
-
-def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
-    connectivities = []
-    for arg in _get_shifted_args(reduce_args):
-        connectivities.append(offset_provider[_get_partial_offset(arg).value])
-
-    if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-
-    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-    return connectivities[0]
 
 
 def _is_reduce(node: ir.FunCall):
@@ -110,7 +77,7 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = _get_connectivity(node.args, offset_provider)
+        connectivity = node.conn
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 

@@ -3,6 +3,7 @@ import enum
 from functional.iterator import ir
 from functional.iterator.transforms import simple_inline_heuristic
 from functional.iterator.transforms.cse import CommonSubexpressionElimination
+from functional.iterator.transforms.deduce_conn_of_reductions import DeduceConnOfReductions
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
@@ -65,6 +66,7 @@ def apply_common_transforms(
 
     ir = NormalizeShifts().visit(ir)
 
+    ir = DeduceConnOfReductions.apply(ir, offset_provider=offset_provider)
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)

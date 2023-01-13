@@ -12,9 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import re
+
 import eve
 from eve import Coerced, SymbolName, SymbolRef
-import re
 
 
 @eve.utils.noninstantiable
