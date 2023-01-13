@@ -109,7 +109,7 @@ Backend source code wrapped together with information on how it wants to be call
 **`otf.stages.CompilableSource`:**
 `ProgramSource` wrapped together with optional language bindings (source code that enables the backend source code to be called from another language).
 
-**`otf.stages.CompiledProgram:**
+**`otf.stages.CompiledProgram`:**
 A python object that executes the GT4Py program when called with the same arguments as stored in the `ProgramCall`.
 
 Similarly the steps to go from one of the above stages to another have names.
