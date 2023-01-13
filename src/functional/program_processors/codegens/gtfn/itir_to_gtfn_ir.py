@@ -151,7 +151,15 @@ def _collect_dimensions_from_offsets(
     for dim_or_connectivity in offset_provider.values():
         if isinstance(dim_or_connectivity, common.Dimension):
             dim = dim_or_connectivity
-            offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+            if grid_type == common.GridType.CARTESIAN:
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+            else:
+                assert grid_type == common.GridType.UNSTRUCTURED
+                if not dim.kind == common.DimensionKind.VERTICAL:
+                    raise ValueError(
+                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
+                    )
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value), alias=_vertical_dimension)
         elif isinstance(dim_or_connectivity, common.Connectivity):
             connectivity = dim_or_connectivity
             for dim in [
@@ -204,7 +212,7 @@ def _collect_offset_definitions(
                     )
                 # create alias from vertical offset to vertical dimension
                 offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=_vertical_dimension
+                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
         elif isinstance(dim_or_connectivity, common.Connectivity):
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
