@@ -23,7 +23,7 @@ link program_source to bindings_source--><g id="link_program_source_bindings_sou
 link program_source to compilable_source--><g id="link_program_source_compilable_source"><path d="M843.73,555.96 C856.25,581.17 874.06,610.74 896.5,632 C914.63,649.18 936.74,663.84 958.99,676 " fill="none" id="program_source-to-compilable_source" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="965.85,679.66,960.1982,673.2524,957.3786,678.5486,965.85,679.66" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="70" x="960.5" y="614.6016">is added to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="196" x="897.5" y="628.7344">[otf.binding.pybind.bind_source()]</text></g><!--MD5=[61baf0f7b25f4a095ccf568ba328442a]
 link bindings_source to compilable_source--><g id="link_bindings_source_compilable_source"><path d="M1156.6,570.26 C1144.59,579.98 1133.21,590.6 1123.5,602 C1110.79,616.91 1100.4,635.24 1092.21,653 " fill="none" id="bindings_source-to-compilable_source" style="stroke:#666666;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#666666" points="1088.97,660.27,1094.9694,654.1866,1089.4901,651.7418,1088.97,660.27" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="70" x="1187.5" y="614.6016">is added to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="196" x="1124.5" y="628.7344">[otf.binding.pybind.bind_source()]</text></g><!--MD5=[64b90fdc4c35e4684f6e1e2fd011b227]
 link compilable_source to compiled_program--><g id="link_compilable_source_compiled_program"><path d="M1169.9,721.5 C1238.76,721.5 1329.62,721.5 1399.28,721.5 " fill="none" id="compilable_source-to-compiled_program" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="1407.02,721.5,1399.02,718.5,1399.02,724.5,1407.02,721.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="89" x="1244.75" y="701.1016">is compiled to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="203" x="1187.75" y="715.2344">[otf.compilation.compiler.Compiler]</text></g><!--MD5=[039d942a625650c5607abedc36609adb]
-link inputs to compiled_program--><g id="link_inputs_compiled_program"><path d="M666.8,196.09 C844.22,201.42 1285.73,224.11 1392.5,319 C1493.9,409.12 1506.85,582.57 1506.52,668.97 " fill="none" id="inputs-to-compiled_program" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="1506.44,676.79,1509.5113,668.8171,1503.5115,668.7635,1506.44,676.79" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="96" x="1501.5" y="509.1016">are passed into</text></g><!--MD5=[b3b2c8684b6034bd7331f8c42c93d579]
+link inputs to compiled_program--><g id="link_inputs_compiled_program"><path d="M666.8,196.09 C844.22,201.42 1285.73,224.11 1392.5,319 C1493.9,409.12 1506.85,582.57 1506.52,668.97 " fill="none" id="inputs-to-compiled_program" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="1506.44,676.79,1509.5113,668.8171,1503.5115,668.7635,1506.44,676.79" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="96" x="1501.5" y="509.1016">are passed into</text></g><!--MD5=[16c3da64a2182d6784f4217e8478ffd2]
 @startuml 0011-on-the-fly-overview
 !include <C4/C4_Component>
 
@@ -33,16 +33,7 @@ AddRelTag('optional', $lineStyle=DashedLine())
 
 Person(user, 'User')
 
-'Container_Boundary(dsl, "Program") {'
-'  Component(fieldview, 'FieldView', 'decorated python function', 'High level language')'
-'  Component(iteratorview, 'IteratorView', 'decorated python function', 'Low level language')'
-'}'
-'Rel(user, fieldview, 'supplies')'
-'Rel(user, iteratorview, 'supplies')'
-
 Component(iteratorir, 'Iterator IR', 'IR', 'Canonical representation')
-'Rel(fieldview, iteratorir, 'is lowered to', 'ffront.decorator.Program.itir')'
-'Rel(iteratorview, iteratorir, 'is lowered to', 'iterator.runtime.FendefDispatcher.itir()')'
 
 Component_Ext(dslcode, "DSL Code", "FieldView or IteratorView")
 
@@ -689,7 +680,6 @@ skinparam arrow<<optional>> {
 
 
 rectangle "<$person>\n==User" <<person>> as user 
-
 
 rectangle "==Iterator IR\n//<size:12>[IR]</size>//\n\n Canonical representation" <<component>> as iteratorir 
 

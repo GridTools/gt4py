@@ -40,16 +40,7 @@ AddRelTag('optional', $lineStyle=DashedLine())
 
 Person(user, 'User')
 
-'Container_Boundary(dsl, "Program") {'
-'  Component(fieldview, 'FieldView', 'decorated python function', 'High level language')'
-'  Component(iteratorview, 'IteratorView', 'decorated python function', 'Low level language')'
-'}'
-'Rel(user, fieldview, 'supplies')'
-'Rel(user, iteratorview, 'supplies')'
-
 Component(iteratorir, 'Iterator IR', 'IR', 'Canonical representation')
-'Rel(fieldview, iteratorir, 'is lowered to', 'ffront.decorator.Program.itir')'
-'Rel(iteratorview, iteratorir, 'is lowered to', 'iterator.runtime.FendefDispatcher.itir()')'
 
 Component_Ext(dslcode, "DSL Code", "FieldView or IteratorView")
 
@@ -92,7 +83,7 @@ Container_Boundary(workflow, 'Workflow', 'otf.workflow.Workflow') {
 -->
 ![](_static/0011-on-the-fly-overview.svg)
 
-The main use case is to execute GT4Py GT4Py programs in a performance portable way from Python. Other use cases may include generating performance portable code to be integrated in external applications, generating code for debugging purposes, pre-compiling libraries of GT4Py programs for use from separate Python applications etc.
+The main use case is to execute GT4Py programs in a performance portable way from Python. Other use cases may include generating performance portable code to be integrated in external applications, generating code for debugging purposes, pre-compiling libraries of GT4Py programs for use from separate Python applications etc.
 
 Much of the goals and the resulting architecture comes from lessons learned in GT4Py Cartesian, where originally all the steps of on-the-fly compilation together with code generation were approached as one monolithic implementation per "backend" (method of generating external source files). This had to be refactored to account for some use cases and lead to tight coupling with small changes rippling though more code than necessary.
 
