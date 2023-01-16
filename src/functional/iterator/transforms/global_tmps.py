@@ -14,7 +14,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Optional
 
-from eve import Coerced, NodeTranslator
+from eve import Coerced, NodeTranslator, SymbolName
 from eve.traits import SymbolTableTrait
 from functional.common import DimensionKind
 from functional.iterator import ir, type_inference
@@ -49,7 +49,7 @@ AUTO_DOMAIN = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
-    id: Coerced[ir.SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
@@ -170,7 +170,7 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
             )
             closures.append(closure)
             domain = AUTO_DOMAIN
-
+    assert isinstance(AUTO_DOMAIN.fun, ir.SymRef)
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
             id=node.id,
@@ -219,7 +219,7 @@ def _offset_limits(
         offset_sum = {k: 0 for k in offset_provider.keys()}
         for k, v in zip(o[0::2], o[1::2]):
             assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
-            offset_sum[k.value] += v.value
+            offset_sum[str(k.value)] += v.value
         for k, v in offset_sum.items():
             old_min, old_max = offset_limits[k]
             offset_limits[k] = (min(old_min, v), max(old_max, v))
@@ -250,7 +250,7 @@ def _named_range_with_offsets(
 
 
 def _extend_cartesian_domain(
-    domain: ir.FunCall, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
+    domain: ir.Expr, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
 ):
     if not any(offsets):
         return domain
@@ -290,6 +290,7 @@ def update_cartesian_domains(
     domains = dict[str, ir.Expr]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
+            assert isinstance(closure.output, ir.SymRef)
             domain = domains[closure.output.id]
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
@@ -323,6 +324,7 @@ def _location_type_from_offsets(
     domain: ir.FunCall, offsets: Sequence, offset_provider: Mapping[str, Any]
 ):
     """Derive the location type of an iterator from given offsets relative to an initial domain."""
+    assert isinstance(domain.args, ir.FunCall)
     location = domain.args[0].args[0].value
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
@@ -382,6 +384,7 @@ def _domain_ranges(closures: Sequence[ir.StencilClosure]):
         if isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="unstructured_domain"):
             for arg in domain.args:
                 assert isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="named_range")
+                assert isinstance(arg.args, ir.FunCall)
                 axis = arg.args[0].value
                 ranges.setdefault(axis, []).append(arg)
     return ranges
@@ -401,6 +404,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
     domains = dict[str, ir.Expr]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
+            assert isinstance(closure.output, ir.SymRef)
             domain = domains[closure.output.id]
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
@@ -442,7 +446,7 @@ def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
     domains: dict[str, ir.Expr] = {
         closure.output.id: closure.domain
         for closure in node.fencil.closures
-        if closure.output.id in tmps
+        if isinstance(closure.output, ir.SymRef) and closure.output.id in tmps
     }
 
     def convert_type(dtype):
