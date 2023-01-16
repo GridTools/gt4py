@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from types import EllipsisType
 from typing import Optional
 
 import numpy as np
@@ -109,7 +108,7 @@ class TupleType(DataType):
 
 @dataclass(frozen=True)
 class FieldType(DataType, CallableType):
-    dims: list[func_common.Dimension] | EllipsisType
+    dims: list[func_common.Dimension]
     dtype: ScalarType
 
     def __str__(self):

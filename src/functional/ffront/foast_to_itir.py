@@ -15,12 +15,12 @@
 import enum
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable
 
 import numpy as np
 
 from eve import NodeTranslator
-from functional.common import Dimension, DimensionKind
+from functional.common import DimensionKind
 from functional.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -34,10 +34,7 @@ from functional.iterator import ir as itir
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    assert isinstance(symbol_type, ts.FieldType)
-    if symbol_type.dims == ...:
-        return False
-    return any(dim.kind == DimensionKind.LOCAL for dim in cast(list[Dimension], symbol_type.dims))
+    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
 class ITIRTypeKind(enum.Enum):
@@ -111,13 +108,14 @@ def to_value(node: foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     ---------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
-    >>> def foo(a: Field[..., "float64"]):
+    >>> from functional.common import Field, Dimension
+    >>> IDim = Dimension("IDim")
+    >>> def foo(a: Field[[IDim], "float64"]):
     ...    b = 5
     ...    return a, b
 
     >>> parsed = FieldOperatorParser.apply_to_function(foo)
-    >>> field_a, scalar_b = parsed.body[-1].value.elts
+    >>> field_a, scalar_b = parsed.body.stmts[-1].value.elts
     >>> to_value(field_a)(im.ref("a"))
     FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))])
     >>> to_value(scalar_b)(im.ref("a"))
@@ -141,9 +139,10 @@ class FieldOperatorLowering(NodeTranslator):
     --------
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
     >>> from functional.ffront.fbuiltins import float64
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>>
-    >>> def fieldop(inp: Field[..., "float64"]):
+    >>> IDim = Dimension("IDim")
+    >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...    return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
@@ -179,6 +178,10 @@ class FieldOperatorLowering(NodeTranslator):
             if isinstance(node.definition.params[i].type, ts.ScalarType):
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
+        assert isinstance(node.type, ts.FieldOperatorType)
+        if iterator_type_kind(node.type.definition.returns) == ITIRTypeKind.ITERATOR:
+            new_body = im.deref_(new_body)
+
         return itir.FunctionDefinition(
             id=func_definition.id,
             params=func_definition.params,
@@ -193,7 +196,7 @@ class FieldOperatorLowering(NodeTranslator):
         return itir.FunctionDefinition(
             id=node.id,
             params=params,
-            expr=self._visit_body(node.body, params=params, symtable=symtable),
+            expr=self.visit_BlockStmt(node.body, inner_expr=None, symtable=symtable),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
@@ -219,26 +222,33 @@ class FieldOperatorLowering(NodeTranslator):
             expr=body,
         )
 
-    def _visit_body(
-        self, body: list[foast.Stmt], params: Optional[list[itir.Sym]] = None, **kwargs
-    ) -> itir.FunCall:
-        *assigns, return_stmt = body
-        current_expr = self.visit(return_stmt, **kwargs)
+    def visit_Stmt(self, node: foast.Stmt, **kwargs):
+        raise AssertionError("Statements must always be visited in the context of a function.")
 
-        for assign in reversed(assigns):
-            current_expr = im.let(*self._visit_assign(cast(foast.Assign, assign), **kwargs))(
-                current_expr
-            )
+    def visit_Return(
+        self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
+        return self.visit(node.value, **kwargs)
 
-        return current_expr
+    def visit_BlockStmt(
+        self, node: foast.BlockStmt, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
+        for stmt in reversed(node.stmts):
+            inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
+        assert inner_expr
+        return inner_expr
+
+    def visit_Assign(
+        self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs
+    ) -> itir.Expr:
+        return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
+            inner_expr
+        )
 
     def _visit_assign(self, node: foast.Assign, **kwargs) -> tuple[itir.Sym, itir.Expr]:
         sym = self.visit(node.target, **kwargs)
         expr = self.visit(node.value, **kwargs)
         return sym, expr
-
-    def visit_Return(self, node: foast.Return, **kwargs) -> itir.Expr:
-        return to_value(node.value)(self.visit(node.value, **kwargs))
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         return im.sym(node.id)
@@ -329,7 +339,7 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_false_expr = self.visit(node.false_expr, **kwargs)
 
         return self._lift_if_field(node)(
-            im.call_("if_")(
+            im.if_(
                 lowered_node_cond,
                 to_value(node.true_expr)(lowered_true_expr),
                 to_value(node.false_expr)(lowered_false_expr),

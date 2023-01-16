@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, Set
 
-from eve import NodeTranslator
+from eve import NodeTranslator, SymbolTableTrait
 from functional.iterator import ir
 
 
@@ -17,7 +17,7 @@ class RemapSymbolRefs(NodeTranslator):
         )
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
-        assert isinstance(node, ir.SymbolTableTrait) == isinstance(
+        assert isinstance(node, SymbolTableTrait) == isinstance(
             node, ir.Lambda
         ), "found unexpected new symbol scope"
         return super().generic_visit(node, **kwargs)
@@ -41,7 +41,7 @@ class RenameSymbols(NodeTranslator):
     def generic_visit(  # type: ignore[override]
         self, node: ir.Node, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
-        if isinstance(node, ir.SymbolTableTrait):
+        if isinstance(node, SymbolTableTrait):
             if active is None:
                 active = set()
             active = active | set(node.annex.symtable)
