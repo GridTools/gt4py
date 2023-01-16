@@ -57,11 +57,14 @@ class PopupTmps(NodeTranslator):
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
-                assert isinstance(fun, ir.FunCall)  # just for mypy
+                assert isinstance(fun, ir.FunCall)
                 fun = fun.args[0]
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             elif is_reduce:
+                assert isinstance(fun, ir.FunCall)
                 fun = fun.args[0]
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             else:
                 assert isinstance(fun, ir.Lambda)
@@ -77,6 +80,9 @@ class PopupTmps(NodeTranslator):
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
                 elif is_reduce:
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
+                    )
                     assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
                     f = node.fun.args[0]
                 else:
@@ -140,7 +146,7 @@ class PopupTmps(NodeTranslator):
             new_params = [ir.Sym(id=p.id) for p in nested_lifts.values()]
             fun = ir.Lambda(params=fun.params + new_params, expr=fun.expr)
             # for the arguments, we have to resolve possible cross-references of lifts
-            symbol_map = {v.id: k for k, v in nested_lifts.items()}
+            symbol_map = {v.id: k for k, v in nested_lifts.items()}  # type: ignore[misc] # key expression automatically filled
             new_args = [
                 RemapSymbolRefs().visit(a, symbol_map=symbol_map) for a in nested_lifts.keys()
             ]
