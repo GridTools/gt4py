@@ -241,6 +241,8 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
     True
     >>> is_type_or_tuple_of_type(scalar_type, ts.FieldType)
     False
+    >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+    False
     """
     return all(isinstance(t, expected_type) for t in primitive_constituents(type_))
 
