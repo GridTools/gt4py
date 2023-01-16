@@ -83,7 +83,7 @@ Container_Boundary(workflow, 'Workflow', 'otf.workflow.Workflow') {
 -->
 ![](_static/0011-on-the-fly-overview.svg)
 
-The main use case is to execute GT4Py programs in a performance portable way from Python. Other use cases may include generating performance portable code to be integrated in external applications, generating code for debugging purposes, pre-compiling libraries of GT4Py programs for use from separate Python applications etc.
+The main use case is to execute GT4Py programs in a performance portable way from Python. Other use cases may include generating performance portable code to be integrated in external applications, generating code for debugging purposes, pre-compiling libraries of GT4Py programs for use from separate Python applications, etc.
 
 Much of the goals and the resulting architecture comes from lessons learned in GT4Py Cartesian, where originally all the steps of on-the-fly compilation together with code generation were approached as one monolithic implementation per "backend" (method of generating external source files). This had to be refactored to account for some use cases and lead to tight coupling with small changes rippling though more code than necessary.
 
@@ -119,7 +119,7 @@ As a special case a `BindingStep` for a `ProgramSource`, which does not require 
 ## Architecture
 
 The goals of the on-the-fly compilation (OTFC) architecture and design are:
-- guide and inform the design and implementation of future components in this part of the code (code generators, builders, bindings generators, caching strategies etc)
+- guide and inform the design and implementation of future components in this part of the code (code generators, builders, bindings generators, caching strategies, etc)
 - ensure consistency and readability of components
 - keep components easy to reason about
 - keep components (including future ones) intercompatible as much as reasonably possible
