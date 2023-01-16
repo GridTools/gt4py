@@ -59,7 +59,7 @@ class PopupTmps(NodeTranslator):
             if is_scan:
                 assert isinstance(fun, ir.FunCall)
                 fun = fun.args[0]
-                assert isinstance(fun, ir.Lambda)
+                assert isinstance(fun, ir.Lambda) "Only Lambda functions supported."
                 params = fun.params[1:]
             elif is_reduce:
                 assert isinstance(fun, ir.FunCall)
