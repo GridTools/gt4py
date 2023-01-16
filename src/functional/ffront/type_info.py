@@ -55,7 +55,7 @@ def promote_zero_dims(
     args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType | ts.FunctionType
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    new_args = args
+    new_args = []
     for arg_i, arg in enumerate(args):
         def_type = (
             function_type.args[arg_i]
@@ -64,12 +64,7 @@ def promote_zero_dims(
         )
 
         def _as_field(arg: ts.TypeSpec, path: tuple):
-            try:
-                el_def_type = reduce(
-                    lambda type_, idx: type_.types[idx], path, def_type  # noqa: B023
-                )
-            except (IndexError, AssertionError):
-                return el_def_type
+            el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
 
             if _is_zero_dim_field(el_def_type) and is_number(arg):
                 if extract_dtype(el_def_type) == extract_dtype(arg):
@@ -78,7 +73,7 @@ def promote_zero_dims(
                     raise GTTypeError(f"{arg} is not compatible with {el_def_type}.")
             return arg
 
-        new_args[arg_i] = apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
+        new_args.append(apply_to_primitive_constituents(arg, _as_field, with_path_arg=True))
 
     return new_args
 

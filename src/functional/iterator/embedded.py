@@ -707,7 +707,7 @@ def _get_axes(
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple | ConstantField,
+    field_or_tuple: LocatedField | tuple,
     indices: FieldIndexOrIndices,
     *,
     as_column: bool = False,
