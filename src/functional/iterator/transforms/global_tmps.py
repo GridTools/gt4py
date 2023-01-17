@@ -212,7 +212,8 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
 
 
 def _offset_limits(
-    offsets: Sequence[tuple[ir.OffsetLiteral, ...]], offset_provider: Mapping[str, CartesianAxis]
+    offsets: Sequence[tuple[ir.OffsetLiteral, ...]],
+    offset_provider: Mapping[str, CartesianAxis],
 ):
     offset_limits = {k: (0, 0) for k in offset_provider.keys()}
     for o in offsets:
@@ -220,9 +221,9 @@ def _offset_limits(
         for k, v in zip(o[0::2], o[1::2]):
             assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
             offset_sum[str(k.value)] += v.value
-        for k, v in offset_sum.items():
-            old_min, old_max = offset_limits[k]
-            offset_limits[k] = (min(old_min, v), max(old_max, v))
+        for i_k, i_v in offset_sum.items():
+            old_min, old_max = offset_limits[i_k]
+            offset_limits[i_k] = (min(old_min, i_v), max(old_max, i_v))
 
     return {v.value: offset_limits[k] for k, v in offset_provider.items()}
 
@@ -324,7 +325,8 @@ def _location_type_from_offsets(
     domain: ir.FunCall, offsets: Sequence, offset_provider: Mapping[str, Any]
 ):
     """Derive the location type of an iterator from given offsets relative to an initial domain."""
-    assert isinstance(domain.args, ir.FunCall)
+    assert isinstance(domain.args[0], ir.FunCall)
+    assert isinstance(domain.args[0].args[0], ir.AxisLiteral)
     location = domain.args[0].args[0].value
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
@@ -384,7 +386,7 @@ def _domain_ranges(closures: Sequence[ir.StencilClosure]):
         if isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="unstructured_domain"):
             for arg in domain.args:
                 assert isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="named_range")
-                assert isinstance(arg.args, ir.FunCall)
+                assert isinstance(arg.args[0], ir.AxisLiteral)
                 axis = arg.args[0].value
                 ranges.setdefault(axis, []).append(arg)
     return ranges
@@ -420,6 +422,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
 
         local_shifts = TraceShifts.apply(closure)
         for param, shifts in local_shifts.items():
+            assert isinstance(domain, ir.FunCall)  # just for mypy
             loctypes = {_location_type_from_offsets(domain, s, offset_provider) for s in shifts}
             assert len(loctypes) == 1
             loctype = loctypes.pop()
