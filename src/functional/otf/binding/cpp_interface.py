@@ -19,7 +19,7 @@ from typing import Final, Sequence, Type
 
 import numpy as np
 
-import functional.type_system.type_specifications as ts
+import functional.otf.binding.type_specifications as ts
 from functional.otf import languages
 from functional.otf.binding import interface
 
@@ -98,7 +98,7 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
 def _render_function_param(param: interface.Parameter, index: int) -> str:
     if isinstance(param.type_, ts.ScalarType):
         return f"{render_scalar_type(param.type_)} {param.name}"
-    elif isinstance(param.type_, ts.FieldType):
+    elif isinstance(param.type_, (ts.FieldType, ts.IndexFieldType)):
         return f"BufferT{index}&& {param.name}"
     else:
         raise ValueError("unsupported type for parameters")
@@ -114,7 +114,7 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param.type_, ts.FieldType)
+        if isinstance(param.type_, (ts.FieldType, ts.IndexFieldType))
     ]
     if template_params:
         return f"""

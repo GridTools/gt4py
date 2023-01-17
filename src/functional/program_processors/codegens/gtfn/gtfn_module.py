@@ -18,7 +18,7 @@ from typing import Any, Final, TypeVar
 
 import numpy as np
 
-import functional.type_system.type_specifications as ts
+import functional.otf.binding.type_specifications as ts
 from functional.otf import languages, stages, step_types, workflow
 from functional.otf.binding import cpp_interface, interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
@@ -29,6 +29,10 @@ T = TypeVar("T")
 
 
 def get_param_description(name: str, obj: Any) -> interface.Parameter:
+    from functional.iterator.embedded import (  # TODO: remove IndexField from iterator to avoid circular imports
+        IndexField,
+    )
+
     view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
         assert hasattr(obj, "axes")
@@ -37,9 +41,14 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
             raise ValueError("Field arguments must have scalars as dtype.")
         dims = obj.axes
         return interface.Parameter(name, ts.FieldType(dims=dims, dtype=dtype))
+    elif isinstance(obj, IndexField):
+        dtype = type_translation.from_type_hint(obj.dtype.type)
+        if not isinstance(dtype, ts.ScalarType):
+            raise ValueError("Field arguments must have scalars as dtype.")
+        return interface.Parameter(name, ts.IndexFieldType(axis=obj.axis, dtype=dtype))
     else:
-        dtype = type_translation.from_value(obj)
-        return interface.Parameter(name, dtype)
+        type_ = type_translation.from_value(obj)
+        return interface.Parameter(name, type_)
 
 
 @dataclasses.dataclass(frozen=True)

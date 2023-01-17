@@ -202,7 +202,7 @@ def test_nested_scalar_arg(fieldview_backend):
 
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields and ConstantFields are not supported yet.")
+        pytest.skip("ConstantFields are not supported yet.")
 
     inp = index_field(Edge, dtype=float64)
     factor = 3.0
@@ -723,8 +723,6 @@ def test_domain_tuple(fieldview_backend):
 
 
 def test_where_k_offset(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("IndexFields are not supported yet.")
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)

@@ -350,7 +350,7 @@ class Program:
                         "Constituents of composite arguments (e.g. the elements of a"
                         " tuple) need to have the same shape and dimensions."
                     )
-                size_args.extend(shape if shape else [None] * len(dims))
+                size_args.extend(shape if shape else [0] * len(dims))
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property

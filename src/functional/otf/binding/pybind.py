@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import eve
-import functional.type_system.type_specifications as ts
+import functional.otf.binding.type_specifications as ts
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, interface
@@ -33,11 +33,15 @@ class DimensionType(Expr):
     name: str
 
 
-class SidConversion(Expr):
-    buffer_name: str
+class BufferIterator(Expr):
+    source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
     dim_config: int
+
+
+class PositionalIterator(Expr):
+    dimension: DimensionType
 
 
 class FunctionCall(Expr):
@@ -51,8 +55,7 @@ class ReturnStmt(eve.Node):
 
 class FunctionParameter(eve.Node):
     name: str
-    ndim: int
-    dtype: ts.ScalarType
+    type_: ts.TypeSpec
 
 
 class WrapperFunction(eve.Node):
@@ -107,11 +110,15 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     def visit_FunctionParameter(self, param: FunctionParameter):
-        if param.ndim > 0:
+        if isinstance(param.type_, ts.FieldType):
             type_str = "pybind11::buffer"
+        elif isinstance(param.type_, ts.IndexFieldType):
+            type_str = "pybind11::none"
+        elif isinstance(param.type_, ts.ScalarType):
+            type_str = cpp_interface.render_scalar_type(param.type_)
         else:
-            type_str = cpp_interface.render_scalar_type(param.dtype)
-        return type_str + " " + param.name
+            raise ValueError("Invalid type.")
+        return f"{type_str} {param.name}"
 
     ReturnStmt = as_jinja("""return {{expr}};""")
 
@@ -130,40 +137,41 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_SidConversion(self, sid: SidConversion):
+    def visit_BufferIterator(self, sid: BufferIterator):
         return self.generic_visit(
             sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
         )
 
-    SidConversion = as_jinja(
+    BufferIterator = as_jinja(
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
                                   gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{buffer_name}})
+                                  999'999'999>({{source_buffer}})
             )"""
     )
+
+    PositionalIterator = as_jinja("gridtools::stencil::positional<{{dimension}}>{0}")
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
 def make_parameter(parameter: interface.Parameter) -> FunctionParameter:
-    name = parameter.name
-    ndim = len(parameter.type_.dims) if isinstance(parameter.type_, ts.FieldType) else 0
-    scalar_type = (
-        parameter.type_.dtype if isinstance(parameter.type_, ts.FieldType) else parameter.type_
-    )
-    return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
+    return FunctionParameter(name=parameter.name, type_=parameter.type_)
 
 
-def make_argument(index: int, param: interface.Parameter) -> str | SidConversion:
+def make_argument(
+    index: int, param: interface.Parameter
+) -> str | BufferIterator | PositionalIterator:
     if isinstance(param.type_, ts.FieldType):
-        return SidConversion(
-            buffer_name=param.name,
+        return BufferIterator(
+            source_buffer=param.name,
             dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
             scalar_type=param.type_.dtype,
             dim_config=index,
         )
+    elif isinstance(param.type_, ts.IndexFieldType):
+        return PositionalIterator(dimension=DimensionType(name=param.type_.axis.value))
     else:
         return param.name
 

@@ -19,6 +19,7 @@ from typing import Any, Callable, Final, Optional
 import numpy as np
 
 from functional.iterator import ir as itir
+from functional.iterator.embedded import IndexField
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, pybind
 from functional.otf.compilation import cache, compiler
@@ -31,6 +32,8 @@ from functional.program_processors.codegens.gtfn import gtfn_module
 def convert_arg(arg: Any) -> Any:
     if hasattr(arg, "__array__"):
         return np.asarray(arg)
+    elif isinstance(arg, IndexField):
+        return None
     else:
         return arg
 
