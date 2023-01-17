@@ -57,7 +57,7 @@ def inline_lambda(
         #  in `name_map` that don't collide with each other. E.g. this
         #  must still work:
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: E800
-        name_map: dict = {}
+        name_map: dict[ir.SymRef, str] = {}
 
         def new_name(name):
             while name in refs or name in syms or name in name_map.values():
