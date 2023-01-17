@@ -68,7 +68,7 @@ def _transform_and_extract_lift_args(
     being ``{sym1: sym1, sym2: expr1}``.
     """
     assert _is_lift(node)
-    assert isinstance(node.fun, ir.FunCall)
+    assert isinstance(node.fun, ir.FunCall)  # just for mypy
     inner_stencil = node.fun.args[0]
 
     new_args = []
@@ -124,7 +124,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             shift = node.fun
             assert len(node.args) == 1
             lift_call = node.args[0]
-            assert isinstance(lift_call, ir.FunCall)
+            assert isinstance(lift_call, ir.FunCall)  # just for mypy
             new_args = [
                 self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False, **kwargs)
                 for arg in lift_call.args
@@ -175,7 +175,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # or when a better readible expression of a lift statement is needed during debugging.
             # Due to it's complexity we might want to remove this branch at some point again,
             # when we see that it is not required.
-            assert isinstance(node.fun, ir.FunCall)
+            assert isinstance(node.fun, ir.FunCall)  # just for mypy
             stencil = node.fun.args[0]
             eligible_lifted_args = [
                 _is_lift(arg) and self.predicate(arg, is_scan_pass_context) for arg in node.args
@@ -189,7 +189,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 inlined_args = []
                 for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
                     if eligible:
-                        assert isinstance(arg, ir.FunCall)
+                        assert isinstance(arg, ir.FunCall)  # just for mypy
                         inlined_arg, _ = _transform_and_extract_lift_args(
                             arg, symtable, new_args_dict
                         )

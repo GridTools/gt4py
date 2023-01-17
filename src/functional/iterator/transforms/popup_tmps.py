@@ -57,12 +57,12 @@ class PopupTmps(NodeTranslator):
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
-                assert isinstance(fun, ir.FunCall)
+                assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
                 assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             elif is_reduce:
-                assert isinstance(fun, ir.FunCall)
+                assert isinstance(fun, ir.FunCall)  # just for mypy
                 fun = fun.args[0]
                 assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
@@ -74,7 +74,7 @@ class PopupTmps(NodeTranslator):
                 if is_scan:
                     assert isinstance(node.fun, ir.FunCall) and isinstance(
                         node.fun.args[0], ir.FunCall
-                    )
+                    )  # just for mypy
                     scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
@@ -82,7 +82,7 @@ class PopupTmps(NodeTranslator):
                 elif is_reduce:
                     assert isinstance(node.fun, ir.FunCall) and isinstance(
                         node.fun.args[0], ir.FunCall
-                    )
+                    )  # just for mypy
                     assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
                     f = node.fun.args[0]
                 else:
