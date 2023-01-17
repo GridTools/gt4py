@@ -17,24 +17,33 @@ import jinja2
 import numpy as np
 import pytest
 
+import functional.common as common
+import functional.type_system.type_specifications as ts
 from functional.otf import languages, stages
 from functional.otf.binding import cpp_interface, interface, pybind
 from functional.otf.compilation import cache
+
+
+IDim = common.Dimension("IDim")
+JDim = common.Dimension("JDim")
 
 
 def make_program_source(name: str) -> stages.ProgramSource:
     entry_point = interface.Function(
         name,
         parameters=[
-            interface.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
-            interface.ScalarParameter("sc", np.dtype(np.float32)),
+            interface.Parameter(
+                "buf",
+                ts.FieldType(dims=[IDim, JDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
+            ),
+            interface.Parameter("sc", ts.ScalarType(kind=ts.ScalarKind.FLOAT32)),
         ],
     )
     func = cpp_interface.render_function_declaration(
         entry_point,
         """\
-        const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
-        const auto ydim = gridtools::at_key<generated::J_t>(sid_get_upper_bounds(buf));
+        const auto xdim = gridtools::at_key<generated::IDim_t>(sid_get_upper_bounds(buf));
+        const auto ydim = gridtools::at_key<generated::JDim_t>(sid_get_upper_bounds(buf));
         return xdim * ydim * sc;\
         """,
     )
@@ -43,8 +52,8 @@ def make_program_source(name: str) -> stages.ProgramSource:
         #include <gridtools/fn/cartesian.hpp>
         #include <gridtools/fn/unstructured.hpp>
         namespace generated {
-        struct I_t {} constexpr inline I;
-        struct J_t {} constexpr inline J;
+        struct IDim_t {} constexpr inline IDim;
+        struct JDim_t {} constexpr inline JDim;
         }
         {{func}}\
         """

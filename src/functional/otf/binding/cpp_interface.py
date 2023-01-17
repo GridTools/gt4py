@@ -19,6 +19,7 @@ from typing import Final, Sequence, Type
 
 import numpy as np
 
+import functional.type_system.type_specifications as ts
 from functional.otf import languages
 from functional.otf.binding import interface
 
@@ -79,13 +80,28 @@ def render_python_type(python_type: Type) -> str:
     return _TYPE_MAPPING[python_type]
 
 
-def _render_function_param(
-    param: interface.ScalarParameter | interface.BufferParameter, index: int
-) -> str:
-    if isinstance(param, interface.ScalarParameter):
-        return f"{render_python_type(param.scalar_type.type)} {param.name}"
+def render_scalar_type(scalar_type: ts.ScalarType) -> str:
+    if scalar_type.kind == ts.ScalarKind.BOOL:
+        return "bool"
+    elif scalar_type.kind == ts.ScalarKind.INT32:
+        return "int32_t"
+    elif scalar_type.kind == ts.ScalarKind.INT64:
+        return "int64_t"
+    elif scalar_type.kind == ts.ScalarKind.FLOAT32:
+        return "float"
+    elif scalar_type.kind == ts.ScalarKind.FLOAT64:
+        return "double"
     else:
+        raise ValueError("unsupported scalar type")
+
+
+def _render_function_param(param: interface.Parameter, index: int) -> str:
+    if isinstance(param.type_, ts.ScalarType):
+        return f"{render_scalar_type(param.type_)} {param.name}"
+    elif isinstance(param.type_, ts.FieldType):
         return f"BufferT{index}&& {param.name}"
+    else:
+        raise ValueError("unsupported type for parameters")
 
 
 def render_function_declaration(function: interface.Function, body: str) -> str:
@@ -98,7 +114,7 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param, interface.BufferParameter)
+        if isinstance(param.type_, ts.FieldType)
     ]
     if template_params:
         return f"""

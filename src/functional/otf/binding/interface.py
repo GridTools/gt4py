@@ -15,9 +15,8 @@ from __future__ import annotations
 
 import dataclasses
 
-import numpy as np
-
 import eve.codegen
+import functional.type_system.type_specifications as ts
 from functional.otf import languages
 
 
@@ -26,22 +25,15 @@ def format_source(settings: languages.LanguageSettings, source):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScalarParameter:
+class Parameter:
     name: str
-    scalar_type: np.dtype
-
-
-@dataclasses.dataclass(frozen=True)
-class BufferParameter:
-    name: str
-    dimensions: tuple[str, ...]
-    scalar_type: np.dtype
+    type_: ts.TypeSpec
 
 
 @dataclasses.dataclass(frozen=True)
 class Function:
     name: str
-    parameters: tuple[ScalarParameter | BufferParameter, ...]
+    parameters: tuple[Parameter, ...]
 
 
 @dataclasses.dataclass(frozen=True)

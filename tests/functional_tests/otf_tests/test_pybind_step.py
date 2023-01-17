@@ -32,8 +32,8 @@ def test_bindings(program_source_example):
 
         decltype(auto) stencil_wrapper(pybind11::buffer buf, float sc) {
           return stencil(
-              gridtools::sid::rename_numbered_dimensions<generated::I_t,
-                                                         generated::J_t>(
+              gridtools::sid::rename_numbered_dimensions<generated::IDim_t,
+                                                         generated::JDim_t>(
                   gridtools::as_sid<float, 2, gridtools::integral_constant<int, 0>,
                                     999'999'999>(buf)),
               sc);

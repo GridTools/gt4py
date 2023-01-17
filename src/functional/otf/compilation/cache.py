@@ -19,6 +19,7 @@ import hashlib
 import pathlib
 import tempfile
 
+import functional.type_system.type_specifications as ts
 from functional.otf import stages
 from functional.otf.binding import interface
 
@@ -35,13 +36,14 @@ _persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(
-    parameter: interface.ScalarParameter | interface.BufferParameter,
+    parameter: interface.Parameter,
 ) -> str:
-    if isinstance(parameter, interface.ScalarParameter):
-        return f"{parameter.name}: {str(parameter.scalar_type)}"
-    elif isinstance(parameter, interface.BufferParameter):
-        return f"{parameter.name}: {str(parameter.scalar_type)}<{', '.join(parameter.dimensions)}>"
-    raise ValueError("Invalid parameter type. This is a bug.")
+    if isinstance(parameter.type_, ts.ScalarType):
+        return f"{parameter.name}: {str(parameter.type_)}"
+    elif isinstance(parameter.type_, ts.FieldType):
+        dim_names = (dim.value for dim in parameter.type_.dims)
+        return f"{parameter.name}: {str(parameter.type_)}<{', '.join(dim_names)}>"
+    raise ValueError("unsupported parameter type")
 
 
 def _serialize_library_dependency(dependency: interface.LibraryDependency) -> str:
