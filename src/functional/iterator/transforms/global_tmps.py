@@ -221,9 +221,10 @@ def _offset_limits(
         for k, v in zip(o[0::2], o[1::2]):
             assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
             offset_sum[str(k.value)] += v.value
-        for i_k, i_v in offset_sum.items():
-            old_min, old_max = offset_limits[i_k]
-            offset_limits[i_k] = (min(old_min, i_v), max(old_max, i_v))
+
+        for k_sum, v_sum in offset_sum.items():
+            old_min, old_max = offset_limits[k_sum]
+            offset_limits[k_sum] = (min(old_min, v_sum), max(old_max, v_sum))
 
     return {v.value: offset_limits[k] for k, v in offset_provider.items()}
 
