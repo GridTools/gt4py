@@ -63,12 +63,7 @@ class CollectSubexpressions(NodeVisitor):
         parent: Optional[ir.Node],
         collector_stack: list[bool],
     ) -> None:
-        allow_collection = node.fun != ir.SymRef(id="shift") and not (
-            isinstance(
-                node.fun, ir.FunCall
-            )  # TODO: want to remove the guard after the `or` (gtfn_im backend)
-            and node.fun.fun == ir.SymRef(id="shift")
-        )
+        allow_collection = node.fun != ir.SymRef(id="shift")
         child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(
