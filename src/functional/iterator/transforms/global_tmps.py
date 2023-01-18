@@ -170,14 +170,14 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
             )
             closures.append(closure)
             domain = AUTO_DOMAIN
-    assert isinstance(AUTO_DOMAIN.fun, ir.SymRef)
+
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
             params=node.params
             + [ir.Sym(id=tmp.id) for tmp in tmps]
-            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],
+            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined] # AUTO_DOMAIN structure defined at beginning of file
             closures=list(reversed(closures)),
         ),
         params=node.params,
@@ -429,7 +429,6 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
 
         local_shifts = TraceShifts.apply(closure)
         for param, shifts in local_shifts.items():
-            assert isinstance(domain, ir.FunCall)  # just for mypy
             loctypes = {_location_type_from_offsets(domain, s, offset_provider) for s in shifts}
             assert len(loctypes) == 1
             loctype = loctypes.pop()
