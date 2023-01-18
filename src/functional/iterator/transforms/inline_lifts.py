@@ -68,7 +68,7 @@ def _transform_and_extract_lift_args(
     being ``{sym1: sym1, sym2: expr1}``.
     """
     assert _is_lift(node)
-    assert isinstance(node.fun, ir.FunCall)  # just for mypy
+    assert isinstance(node.fun, ir.FunCall)
     inner_stencil = node.fun.args[0]
 
     new_args = []
@@ -124,12 +124,11 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             shift = node.fun
             assert len(node.args) == 1
             lift_call = node.args[0]
-            assert isinstance(lift_call, ir.FunCall)  # just for mypy
             new_args = [
                 self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False, **kwargs)
-                for arg in lift_call.args
+                for arg in lift_call.args  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             ]
-            result = ir.FunCall(fun=lift_call.fun, args=new_args)
+            result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             return self.visit(result, recurse=False, **kwargs)
         elif node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
@@ -150,10 +149,8 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert len(node.args) == 1
             if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
-                assert isinstance(node.args[0], ir.FunCall)
-                assert isinstance(node.args[0].fun, ir.FunCall)
-                assert len(node.args[0].fun.args) == 1
-                args = node.args[0].args
+                assert len(node.args[0].fun.args) == 1  # type: ignore[attr-defined] # node.args[0] already asserted to be of type ir.FunCall
+                args = node.args[0].args  # type: ignore[attr-defined] # node.args[0] already asserted to be of type ir.FunCall
                 if len(args) == 0:
                     return ir.Literal(value="True", type="bool")
 
@@ -175,8 +172,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             # or when a better readible expression of a lift statement is needed during debugging.
             # Due to it's complexity we might want to remove this branch at some point again,
             # when we see that it is not required.
-            assert isinstance(node.fun, ir.FunCall)  # just for mypy
-            stencil = node.fun.args[0]
+            stencil = node.fun.args[0]  # type: ignore[attr-defined] # node already asserted to be of type ir.FunCall
             eligible_lifted_args = [
                 _is_lift(arg) and self.predicate(arg, is_scan_pass_context) for arg in node.args
             ]
@@ -189,7 +185,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 inlined_args = []
                 for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
                     if eligible:
-                        assert isinstance(arg, ir.FunCall)  # just for mypy
+                        assert isinstance(arg, ir.FunCall)
                         inlined_arg, _ = _transform_and_extract_lift_args(
                             arg, symtable, new_args_dict
                         )
