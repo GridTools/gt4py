@@ -4,8 +4,8 @@ from functional.iterator import ir
 
 
 # TODO(tehrengruber): This pass can be generalized to all builtins, e.g.
-#  `plus((λ(...) → plus(...))(...), ...)` can be transformed into
-#  `(λ(...) → plus(plus(...), ...))(...)`.
+#  `plus((λ(...) → multiplies(...))(...), ...)` can be transformed into
+#  `(λ(...) → plus(multiplies(...), ...))(...)`.
 
 
 class PropagateDeref(NodeTranslator):
