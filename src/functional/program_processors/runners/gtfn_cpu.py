@@ -41,6 +41,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
+    apply_transforms: bool = True
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -60,7 +61,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
             return decorated_program
 
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-            gtfn_module.GTFNTranslationStep(self.language_settings)
+            gtfn_module.GTFNTranslationStep(self.language_settings, self.apply_transforms)
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
@@ -82,3 +83,6 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
 
 run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")
+run_gtfn_no_transforms: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
+    name="run_gtfn", apply_transforms=False
+)

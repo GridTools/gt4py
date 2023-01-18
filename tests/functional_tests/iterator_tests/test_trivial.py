@@ -6,7 +6,7 @@ from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_no_transforms
 
 from .conftest import run_processor
 
@@ -169,9 +169,9 @@ def test_vertical_shift_unstructured(program_processor):
         assert np.allclose(inp_s[:, 1:], np.asarray(out_s)[:, :-1])
 
 
-# TODO We should bypass all passes to ensure that we actually test this code as is
-def test_unapplied_op(program_processor):
-    program_processor, validate = program_processor
+def test_unapplied_op():
+    program_processor = run_gtfn_no_transforms
+    validate = True
 
     @fundef
     def takes_op(op, inp):
