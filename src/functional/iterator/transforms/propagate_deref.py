@@ -22,7 +22,7 @@ class PropagateDeref(NodeTranslator):
 
             (λ(inner_it) → ·(lift(stencil)(inner_it)))(outer_it)
 
-        After this pass calls to deref are grouped together (better) with lambda functions
+        After this pass calls to `deref` are grouped together (better) with lambda functions
         being propagated outwards. This increases the ability of the lift inliner to remove the
         deref + lift combination.
         """
@@ -33,8 +33,8 @@ class PropagateDeref(NodeTranslator):
             node
         ):
             builtin = node.fun
-            lambda_fun: ir.Lambda = node.args[0].fun  # type: ignore[attr-defined] # invariant ensure by pattern match above
-            lambda_args: list[ir.Expr] = node.args[0].args  # type: ignore[attr-defined] # invariant ensure by pattern match above
+            lambda_fun: ir.Lambda = node.args[0].fun  # type: ignore[attr-defined] # invariant ensured by pattern match above
+            lambda_args: list[ir.Expr] = node.args[0].args  # type: ignore[attr-defined] # invariant ensured by pattern match above
             node = ir.FunCall(
                 fun=ir.Lambda(
                     params=lambda_fun.params,
