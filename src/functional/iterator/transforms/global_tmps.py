@@ -295,7 +295,7 @@ def update_cartesian_domains(
             domain = (
                 domains[closure.output.id]
                 if isinstance(closure.output, ir.SymRef)
-                else closure.output # not sure if this is correct
+                else closure.output  # not sure if this is correct
             )
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
@@ -407,13 +407,13 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
         vertical_ranges.pop(k, None)
 
     closures = []
-    domains = dict[str, ir.Expr]()
+    domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
             domain = (
                 domains[closure.output.id]
                 if isinstance(closure.output, ir.SymRef)
-                else closure.output # not sure if this is correct
+                else closure.output  # not sure if this is correct
             )
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
