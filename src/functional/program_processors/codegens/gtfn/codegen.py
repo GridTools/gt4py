@@ -64,6 +64,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "int32": "std::int32_t",
         "int64": "std::int64_t",
         "bool": "bool",
+        "plus": "std::plus<void>{}",
+        "minus": "std::minus<void>{}",
+        "multiplies": "std::multiplies<void>{}",
+        "divides": "std::divides<void>{}",
+        "eq": "std::equal_to<void>{}",
+        "not_eq": "std::not_equal_to<void>{}",
+        "less": "std::less<void>{}",
+        "less_equal": "std::less_equal<void>{}",
+        "greater": "std::greater<void>{}",
+        "greater_equal": "std::greater_equal<void>{}",
+        "and_": "std::logical_and<void>{}",
+        "or_": "std::logical_or<void>{}",
+        "xor_": "std::bit_xor<void>{}",
+        "mod": "std::modulos<void>{}",
+        "not": "std::logical_not<void>{}",
     }
 
     Sym = as_fmt("{id}")

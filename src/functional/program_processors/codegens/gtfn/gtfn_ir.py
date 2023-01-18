@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import ClassVar, Optional, Union
 
 import eve
@@ -29,19 +28,8 @@ class Node(eve.Node):
     pass
 
 
-_SYMNAME_CPP_REGEX = re.compile(r"^[a-zA-Z_][\w<>:{}]*$")
-
-
-class SymbolNameWithCppTemplate(SymbolName, regex=_SYMNAME_CPP_REGEX):
-    __slots__ = ()
-
-
-class SymbolRefWithCppTemplate(SymbolRef, regex=_SYMNAME_CPP_REGEX):
-    __slots__ = ()
-
-
 class Sym(Node):  # helper
-    id: Coerced[SymbolNameWithCppTemplate]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
 
 
 class Expr(Node):
@@ -80,7 +68,7 @@ class OffsetLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRefWithCppTemplate]  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -167,23 +155,6 @@ GTFN_BUILTINS = [
     "unstructured_domain",
     "named_range",
 ]
-CPP_FUN_OBJ_BUILTINS = [
-    "std::plus<void>{}",
-    "std::minus<void>{}",
-    "std::multiplies<void>{}",
-    "std::divides<void>{}",
-    "std::equal_to<void>{}",
-    "std::not_equal_to<void>{}",
-    "std::less<void>{}",
-    "std::less_equal<void>{}",
-    "std::greater<void>{}",
-    "std::greater_equal<void>{}",
-    "std::logical_and<void>{}",
-    "std::logical_or<void>{}",
-    "std::bit_xor<void>{}",
-    "std::modulos<void>{}",
-    "std::logical_not<void>{}",
-]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
 UNARY_MATH_FP_PREDICATE_BUILTINS = itir.UNARY_MATH_FP_PREDICATE_BUILTINS
@@ -192,7 +163,6 @@ TYPEBUILTINS = itir.TYPEBUILTINS
 
 BUILTINS = {
     *GTFN_BUILTINS,
-    *CPP_FUN_OBJ_BUILTINS,
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
