@@ -57,13 +57,11 @@ class PopupTmps(NodeTranslator):
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
-                assert isinstance(fun, ir.FunCall)  # just for mypy
-                fun = fun.args[0]
+                fun = fun.args[0]  # type: ignore[attr-defined] # fun already asserted to be of type ir.FunCall
                 assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             elif is_reduce:
-                assert isinstance(fun, ir.FunCall)  # just for mypy
-                fun = fun.args[0]
+                fun = fun.args[0]  # type: ignore[attr-defined] # fun already asserted to be of type ir.FunCall
                 assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             else:
@@ -72,19 +70,15 @@ class PopupTmps(NodeTranslator):
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 if is_scan:
-                    assert isinstance(node.fun, ir.FunCall) and isinstance(
-                        node.fun.args[0], ir.FunCall
-                    )  # just for mypy
-                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
+                    assert isinstance(node.fun.args[0], ir.FunCall)  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
+                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
                 elif is_reduce:
-                    assert isinstance(node.fun, ir.FunCall) and isinstance(
-                        node.fun.args[0], ir.FunCall
-                    )  # just for mypy
-                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
-                    f = node.fun.args[0]
+                    assert isinstance(node.fun.args[0], ir.FunCall)  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
+                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
+                    f = node.fun.args[0]  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
                 else:
                     f = fun
                 return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
