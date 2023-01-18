@@ -252,7 +252,7 @@ def _named_range_with_offsets(
 
 
 def _extend_cartesian_domain(
-    domain: ir.Expr, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
+    domain: ir.FunCall, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
 ):
     if not any(offsets):
         return domain
@@ -289,11 +289,14 @@ def update_cartesian_domains(
     Naive extent analysis, does not handle boundary conditions etc. in a smart way.
     """
     closures = []
-    domains = dict[str, ir.Expr]()
+    domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
-            assert isinstance(closure.output, ir.SymRef)
-            domain = domains[closure.output.id]
+            domain = (
+                domains[closure.output.id]
+                if isinstance(closure.output, ir.SymRef)
+                else closure.output # not sure if this is correct
+            )
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
             )
@@ -407,8 +410,11 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
     domains = dict[str, ir.Expr]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
-            assert isinstance(closure.output, ir.SymRef)
-            domain = domains[closure.output.id]
+            domain = (
+                domains[closure.output.id]
+                if isinstance(closure.output, ir.SymRef)
+                else closure.output # not sure if this is correct
+            )
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
             )
@@ -447,7 +453,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
 def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
-    domains: dict[str, ir.Expr] = {
+    domains: dict[str, ir.FunCall] = {
         closure.output.id: closure.domain
         for closure in node.fencil.closures
         if isinstance(closure.output, ir.SymRef) and closure.output.id in tmps
