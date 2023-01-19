@@ -398,7 +398,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
-                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
             elif node.fun.id == "unstructured_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 connectivities = []
@@ -415,7 +415,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     tagged_sizes=sizes,
                     tagged_offsets=domain_offsets,
                     connectivities=connectivities,
-                )
+                )  # type: ignore
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1

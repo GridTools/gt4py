@@ -1,9 +1,7 @@
-import dataclasses
 from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
 from eve import NodeTranslator
-from eve.utils import UIDGenerator
 from functional import common
 from functional.iterator import ir
 
@@ -37,8 +35,10 @@ def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterator[ir.FunCall]:
         reduce_args,
     )
 
+
 def _is_list_of_funcalls(lst: list) -> TypeGuard[list[ir.FunCall]]:
     return all(isinstance(f, ir.FunCall) for f in lst)
+
 
 def _get_partial_offset(arg: ir.FunCall) -> ir.OffsetLiteral:
     if _is_shifted(arg):
@@ -51,7 +51,8 @@ def _get_partial_offset(arg: ir.FunCall) -> ir.OffsetLiteral:
         assert _is_list_of_funcalls(arg.args)
         partial_offsets = [_get_partial_offset(arg) for arg in arg.args]
         assert all(o == partial_offsets[0] for o in partial_offsets)
-        return partial_offsets[0]    
+        return partial_offsets[0]
+
 
 def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
     connectivities = []
@@ -64,13 +65,14 @@ def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
         raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-    return connectivities[0]    
+    return connectivities[0]
+
 
 def _is_reduce(node: ir.FunCall):
-    return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")    
+    return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
 
-class DeduceConnOfReductions(NodeTranslator):    
 
+class DeduceConnOfReductions(NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node, **kwargs):
         return cls().visit(node, **kwargs)
@@ -86,4 +88,3 @@ class DeduceConnOfReductions(NodeTranslator):
         node.conn = connectivity
 
         return node
-

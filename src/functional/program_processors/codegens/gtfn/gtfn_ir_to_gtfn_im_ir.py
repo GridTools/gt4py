@@ -93,14 +93,13 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             expr = self.visit(arg, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tmp_id}_{i}"), rhs=expr))
         tup_args = [gtfn_ir_common.SymRef(id=f"{tmp_id}_{i}") for i in range(len(node.args))]
-        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)
+        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)  # type: ignore
 
     def _expand_lambda(
         self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, **kwargs
     ):
         max_neighbors = node.conn.max_neighbors
-        nodefun: gtfn_ir.FunCall = node.fun
-        fun, init = nodefun.args
+        fun, init = node.fun.args  # type: ignore
         param_to_args = dict(zip([param.id for param in fun.params[1:]], new_args))
         acc = fun.params[0]
 
@@ -126,7 +125,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, **kwargs
     ):
         max_neighbors = node.conn.max_neighbors
-        fun, init = node.fun.args
+        fun, init = node.fun.args  # type: ignore
 
         red_lit = gtfn_ir_common.Sym(id=f"{red_idx}")
         self.imp_list_ir.append(InitStmt(lhs=red_lit, rhs=self.visit(init, **kwargs)))
@@ -155,15 +154,15 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         new_args = []
         nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
-            if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":
+            if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":  # type: ignore
                 new_args.append(self._make_dense_acess(arg, nbh_iter))
             if isinstance(arg, gtfn_ir_common.SymRef):
                 new_args.append(self._make_sparse_acess(arg, nbh_iter))
 
         red_idx = self.uids.sequential_id(prefix="red")
-        if isinstance(node.fun.args[0], gtfn_ir.Lambda):
+        if isinstance(node.fun.args[0], gtfn_ir.Lambda):  # type: ignore
             self._expand_lambda(node, new_args, red_idx, **kwargs)
-        elif isinstance(node.fun.args[0], gtfn_ir_common.SymRef):
+        elif isinstance(node.fun.args[0], gtfn_ir_common.SymRef):  # type: ignore
             self._expand_symref(node, new_args, red_idx)
 
         return gtfn_ir_common.SymRef(id=red_idx)
