@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functools import reduce
 
+import numpy as np
 import pytest as pytest
 
 from functional.ffront.decorator import field_operator, program, scan_operator
@@ -223,6 +224,49 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
+
+
+def test_scalar_scan():
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    scalar = 1.0
+    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
+
+    @scan_operator(axis=KDim, forward=True, init=(0.0))
+    def _scan_scalar(carry: float, qc_in: float, scalar: float) -> float:
+        qc = qc_in + carry + scalar
+        return qc
+
+    @program
+    def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
+        _scan_scalar(qc, scalar, out=qc)
+
+    scan_scalar(qc, scalar, offset_provider={})
+    assert np.allclose(np.asarray(qc), expected)
+
+
+def test_tuple_scalar_scan():
+    size = 10
+    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
+    tuple_scalar = (1.0, (1.0, 0.0))
+    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
+
+    @scan_operator(axis=KDim, forward=True, init=0.0)
+    def _scan_tuple_scalar(
+        state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
+    ) -> float:
+        return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
+
+    @field_operator
+    def scan_tuple_scalar(
+        qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
+    ) -> Field[[IDim, KDim], float]:
+        return _scan_tuple_scalar(qc, tuple_scalar)
+
+    scan_tuple_scalar(qc, tuple_scalar, out=qc, offset_provider={})
+    assert np.allclose(np.asarray(qc), expected)
 
 
 def test_astype_int(fieldview_backend):
@@ -744,8 +788,6 @@ def test_where_k_offset(fieldview_backend):
 
 
 def test_undefined_symbols():
-    from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
 
         @field_operator
@@ -800,7 +842,7 @@ def test_tuple_unpacking(fieldview_backend):
     out4 = np_as_located_field(IDim)(np.ones((size)))
 
     @field_operator
-    def _unpack(
+    def unpack(
         inp: Field[[IDim], float64],
     ) -> tuple[
         Field[[IDim], float64],
@@ -811,17 +853,7 @@ def test_tuple_unpacking(fieldview_backend):
         a, b, c, d = (inp + 2.0, inp + 3.0, inp + 5.0, inp + 7.0)
         return a, b, c, d
 
-    @program(backend=fieldview_backend)
-    def unpack(
-        inp: Field[[IDim], float64],
-        out1: Field[[IDim], float64],
-        out2: Field[[IDim], float64],
-        out3: Field[[IDim], float64],
-        out4: Field[[IDim], float64],
-    ):
-        _unpack(inp, out=(out1, out2, out3, out4))
-
-    unpack(inp, out1, out2, out3, out4, offset_provider={})
+    unpack(inp, out=(out1, out2, out3, out4), offset_provider={})
 
     arr = inp.array()
 
