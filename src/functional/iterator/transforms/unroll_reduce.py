@@ -6,6 +6,7 @@ from eve import NodeTranslator
 from eve.utils import UIDGenerator
 from functional import common
 from functional.iterator import ir
+from functional.iterator.transforms.deduce_conn_of_reductions import DeduceConnOfReductions
 
 
 def _is_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
@@ -38,38 +39,6 @@ def _get_shifted_args(reduce_args: Iterable[ir.Expr]) -> Iterator[ir.FunCall]:
     )
 
 
-def _is_list_of_funcalls(lst: list) -> TypeGuard[list[ir.FunCall]]:
-    return all(isinstance(f, ir.FunCall) for f in lst)
-
-
-def _get_partial_offset(arg: ir.FunCall) -> ir.OffsetLiteral:
-    if _is_shifted(arg):
-        assert isinstance(arg.fun, ir.FunCall)
-        offset = arg.fun.args[-1]
-        assert isinstance(offset, ir.OffsetLiteral)
-        return offset
-    else:
-        assert _is_applied_lift(arg)
-        assert _is_list_of_funcalls(arg.args)
-        partial_offsets = [_get_partial_offset(arg) for arg in arg.args]
-        assert all(o == partial_offsets[0] for o in partial_offsets)
-        return partial_offsets[0]
-
-
-def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
-    connectivities = []
-    for arg in _get_shifted_args(reduce_args):
-        connectivities.append(offset_provider[_get_partial_offset(arg).value])
-
-    if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-
-    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-    return connectivities[0]
-
-
 def _is_reduce(node: ir.FunCall):
     return isinstance(node.fun, ir.FunCall) and node.fun.fun == ir.SymRef(id="reduce")
 
@@ -93,6 +62,20 @@ def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
     )
 
 
+def _get_connectivity(partial_offsets: Iterable[str], offset_provider) -> common.Connectivity:
+    connectivities = []
+    for o in partial_offsets:
+        connectivities.append(offset_provider[o])
+
+    if not connectivities:
+        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+
+    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
+        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
+        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+    return connectivities[0]
+
+
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
@@ -104,15 +87,17 @@ class UnrollReduce(NodeTranslator):
         return cls().visit(node, **kwargs)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        node = self.generic_visit(node, **kwargs)
+        # we lose annex here: node = self.generic_visit(node, **kwargs)
         if not _is_reduce(node):
-            return node
+            return self.generic_visit(node)
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = _get_connectivity(node.args, offset_provider)
+        connectivity = _get_connectivity(node.annex.reduction_offsets, offset_provider)
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
+
+        node = self.generic_visit(node)  # here it's safe as annex is consumed
 
         acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
@@ -134,3 +119,8 @@ class UnrollReduce(NodeTranslator):
         expr = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=expr), args=[step_fun])
 
         return expr
+
+
+def apply_unroll_reduce(node: ir.Node, offset_provider):
+    deduced_conns = DeduceConnOfReductions.apply(node)
+    return UnrollReduce.apply(deduced_conns, offset_provider=offset_provider)

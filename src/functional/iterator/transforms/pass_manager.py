@@ -11,7 +11,7 @@ from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.merge_let import MergeLet
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 from functional.iterator.transforms.propagate_deref import PropagateDeref
-from functional.iterator.transforms.unroll_reduce import UnrollReduce
+from functional.iterator.transforms.unroll_reduce import apply_unroll_reduce
 
 
 @enum.unique
@@ -69,7 +69,7 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
+            unrolled = apply_unroll_reduce(ir, offset_provider=offset_provider)
             if unrolled == ir:
                 break
             ir = unrolled
