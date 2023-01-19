@@ -61,7 +61,7 @@ from functional.program_processors.runners import roundtrip
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
-DEFAULT_BACKEND: Callable = roundtrip.executor
+DEFAULT_BACKEND: roundtrip.executor_class = roundtrip.executor
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
@@ -276,7 +276,7 @@ class Program:
             )
         backend = self.backend or DEFAULT_BACKEND
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)  # type: ignore[arg-type, type-abstract] # backend type is inspected inside function
+        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)  # type: ignore[type-abstract] # fixes to come later with issue #1132
         if "debug" in kwargs:
             debug(self.itir)
 
@@ -482,7 +482,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             **operator_attribute_nodes,
         )
         foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
-        assert isinstance(foast_node, (foast.ScanOperator, foast.FieldOperator))
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
@@ -491,7 +490,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_type__(self) -> ts.CallableType:
-        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
+        assert hasattr(self.foast_node, "type")
         type_ = self.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
@@ -547,7 +546,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
-        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
+        assert hasattr(self.foast_node, "id")
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
         closure_vars: dict[str, Any] = {self.foast_node.id: self}

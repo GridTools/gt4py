@@ -27,7 +27,7 @@ from functional.iterator import ir as itir
 from functional.iterator.embedded import NeighborTableOffsetProvider
 from functional.iterator.transforms import LiftMode, apply_common_transforms
 from functional.iterator.transforms.global_tmps import FencilWithTemporaries
-from functional.program_processors.processor_interface import program_executor
+from functional.program_processors import processor_interface as ppi
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -211,6 +211,12 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-@program_executor
-def executor(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    execute_roundtrip(program, *args, **kwargs)
+# TODO: issue #1132 put this in a more general solution in the processor_interface
+class executor_class:
+    kind = ppi.ProgramExecutor
+
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
+        execute_roundtrip(program, *args, **kwargs)
+
+
+executor = executor_class()
