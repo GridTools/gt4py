@@ -296,7 +296,7 @@ class Program:
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> str:
-        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)  # type: ignore[type-abstract] # formatter type is inspected inside function
+        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)  # type: ignore[type-abstract] # fixes to come later with issue #1132
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
         if "debug" in kwargs:
             debug(self.itir)
@@ -591,7 +591,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        assert isinstance(self.foast_node, (foast.FieldOperator, past.Program, foast.ScanOperator))
+        assert hasattr(self.foast_node, "definition")
         args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
