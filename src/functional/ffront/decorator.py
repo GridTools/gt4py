@@ -155,7 +155,7 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.DataType
+    arg: Any, arg_type: ts.DataType
 ) -> Iterator[tuple[Optional[tuple[Any]], list[Dimension]]]:
     if isinstance(arg_type, ts.TupleType):
         for el, el_type in zip(arg, arg_type.types):
@@ -450,7 +450,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             was created from.
     """
 
-    foast_node: OperatorNodeT
+    foast_node: OperatorNodeT | foast.FunctionDefinition
     closure_vars: dict[str, Any]
     backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
