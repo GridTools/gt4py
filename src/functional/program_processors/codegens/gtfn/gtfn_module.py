@@ -41,7 +41,7 @@ class GTFNTranslationStep(
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
-    apply_transforms: bool = True
+    apply_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
 
     def __call__(
         self,

@@ -41,7 +41,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
-    apply_transforms: bool = True
+    apply_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -83,6 +83,3 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
 
 run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")
-run_gtfn_no_transforms: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
-    name="run_gtfn", apply_transforms=False
-)
