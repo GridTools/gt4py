@@ -19,7 +19,7 @@ from functional.otf.compilation.build_systems import cmake
 
 def test_default_cmake_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = cmake.CMakeFactory()(
-        source=compilable_source_example, cache_strategy=cache.Strategy.PERSISTENT
+        source=compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
     assert not build_data.contains_data(otf_builder.root_path)
 

@@ -19,7 +19,7 @@ from functional.otf.compilation.build_systems import compiledb
 
 def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_strategy=cache.Strategy.PERSISTENT
+        compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
 
     # make sure the example project has not been written yet
