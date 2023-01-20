@@ -908,6 +908,7 @@ class LocatedFieldImpl(MutableLocatedField):
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
+    # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         indices = utils.tupelize(indices)
         return self.getter(indices)
