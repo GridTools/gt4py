@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Iterator
-from typing import TypeGuard
+from typing import TypeGuard, Union
 
 from eve import NodeTranslator
 from functional import common
@@ -54,13 +54,15 @@ def _get_partial_offset(arg: ir.FunCall) -> ir.OffsetLiteral:
         return partial_offsets[0]
 
 
-def _get_connectivity(reduce_args: Iterable[ir.Expr], offset_provider) -> common.Connectivity:
+def _get_connectivity(
+    reduce_args: Iterable[ir.Expr], offset_provider
+) -> Union[common.Connectivity, None]:
     connectivities = []
     for arg in _get_shifted_args(reduce_args):
         connectivities.append(offset_provider[_get_partial_offset(arg).value])
 
     if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+        return None
 
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.

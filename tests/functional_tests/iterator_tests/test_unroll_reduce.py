@@ -4,8 +4,8 @@ import pytest
 
 from eve.utils import UIDs
 from functional.iterator import ir
-from functional.iterator.transforms.unroll_reduce import UnrollReduce
 from functional.iterator.transforms.deduce_conn_of_reductions import DeduceConnOfReductions
+from functional.iterator.transforms.unroll_reduce import UnrollReduce
 
 
 @pytest.fixture(params=[True, False])

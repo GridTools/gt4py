@@ -78,6 +78,8 @@ class UnrollReduce(NodeTranslator):
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = node.conn
+        if connectivity is None:
+            raise RuntimeError("trying to unroll reduction without deduced connectivity")
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
