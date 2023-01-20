@@ -46,7 +46,8 @@ ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 FieldIndex: TypeAlias = (
     range | slice | IntIndex
 )  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
-FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+FieldIndices: TypeAlias = tuple[FieldIndex, ...]
+FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
 
 FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
@@ -150,6 +151,7 @@ class LocatedField(Protocol):
     def axes(self) -> tuple[common.Dimension, ...]:
         ...
 
+    # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
@@ -158,6 +160,7 @@ class LocatedField(Protocol):
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
+    # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...
@@ -461,9 +464,7 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = (
-    Scalar | LocatedField | tuple
-)  # of ["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -699,7 +700,9 @@ def _get_axes(
     )
 
 
-def _single_vertical_idx(indices, column_axis_idx, column_index):
+def _single_vertical_idx(
+    indices: FieldIndices, column_axis_idx: int, column_index: IntIndex
+) -> tuple[FieldIndex, ...]:
     transformed = tuple(
         index if i != column_axis_idx else column_index for i, index in enumerate(indices)
     )
@@ -708,7 +711,7 @@ def _single_vertical_idx(indices, column_axis_idx, column_index):
 
 def _make_tuple(
     field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndexOrIndices,
+    indices: FieldIndices,
     *,
     column_axis: Optional[Tag] = None,
 ) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
