@@ -12,6 +12,7 @@ from typing import (
     Any,
     Callable,
     Iterable,
+    Literal,
     Mapping,
     Optional,
     Protocol,
@@ -22,6 +23,7 @@ from typing import (
     TypeGuard,
     Union,
     cast,
+    overload,
     runtime_checkable,
 )
 
@@ -709,12 +711,44 @@ def _single_vertical_idx(
     return transformed
 
 
+@overload
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndices,
     *,
-    column_axis: Optional[Tag] = None,
-) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
+    column_axis: Tag,
+) -> Column:
+    ...
+
+
+@overload
+def _make_tuple(
+    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
+    indices: FieldIndices,
+    *,
+    column_axis: Literal[None],
+) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    ...
+
+
+@overload
+def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+    ...
+
+
+@overload
+def _make_tuple(
+    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None]
+) -> npt.DTypeLike:
+    ...
+
+
+def _make_tuple(
+    field_or_tuple,
+    indices,
+    *,
+    column_axis,
+):
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert _column_range
@@ -750,7 +784,7 @@ def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> int:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
-    raise AssertionError()
+    raise AssertionError(f"{axis} not in {axes}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -932,9 +966,17 @@ def get_ordered_indices(
     return tuple(res)
 
 
-def _shift_range(
-    range_or_index: range | numbers.Integral, offset: numbers.Integral
-) -> slice | numbers.Integral:
+@overload
+def _shift_range(range_or_index: range, offset: int) -> slice:
+    ...
+
+
+@overload
+def _shift_range(range_or_index: IntIndex, offset: int) -> IntIndex:
+    ...
+
+
+def _shift_range(range_or_index, offset):
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
@@ -944,7 +986,17 @@ def _shift_range(
         return range_or_index + offset
 
 
-def _range2slice(r: range | numbers.Integral):
+@overload
+def _range2slice(r: range) -> slice:
+    ...
+
+
+@overload
+def _range2slice(r: IntIndex) -> IntIndex:
+    ...
+
+
+def _range2slice(r):
     if isinstance(r, range):
         assert r.start >= 0 and r.stop >= r.start
         return slice(r.start, r.stop)
@@ -952,9 +1004,9 @@ def _range2slice(r: range | numbers.Integral):
 
 
 def _shift_ranges(
-    ranges_or_indices: tuple[range | numbers.Integral, ...],
-    offsets: tuple[numbers.Integral, ...],
-) -> tuple[slice | numbers.Integral, ...]:
+    ranges_or_indices: tuple[range | IntIndex, ...],
+    offsets: tuple[int, ...],
+) -> tuple[slice | IntIndex, ...]:
     return tuple(
         _range2slice(r) if o == 0 else _shift_range(r, o)
         for r, o in zip(ranges_or_indices, offsets)
