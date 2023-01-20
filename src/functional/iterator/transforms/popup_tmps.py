@@ -70,15 +70,19 @@ class PopupTmps(NodeTranslator):
 
             def wrap(fun: ir.Lambda, args: list[ir.Expr]) -> ir.FunCall:
                 if is_scan:
-                    assert isinstance(node.fun.args[0], ir.FunCall)  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
-                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
+                    )  # TODO thaler: first part of the assertion already checked above, however mypy doe snot catch it
+                    scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
                 elif is_reduce:
-                    assert isinstance(node.fun.args[0], ir.FunCall)  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
-                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
-                    f = node.fun.args[0]  # type: ignore[attr-defined] # node.fun already asserted to be of type ir.FunCall
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
+                    )  # TODO thaler: first part of the assertion already checked above, however mypy doe snot catch it
+                    assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
+                    f = node.fun.args[0]
                 else:
                     f = fun
                 return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[f]), args=args)
@@ -125,7 +129,7 @@ class PopupTmps(NodeTranslator):
 
             # remap referenced function parameters in lift expression to passed argument values
             assert len(params) == len(args)
-            symbol_map = {param.id: arg for param, arg in zip(params, args)}
+            symbol_map = {str(param.id): arg for param, arg in zip(params, args)}
             remap = partial(RemapSymbolRefs().visit, symbol_map=symbol_map)
 
             nested_lifts = {remap(expr): ref for expr, ref in nested_lifts.items()}
@@ -140,7 +144,7 @@ class PopupTmps(NodeTranslator):
             new_params = [ir.Sym(id=p.id) for p in nested_lifts.values()]
             fun = ir.Lambda(params=fun.params + new_params, expr=fun.expr)
             # for the arguments, we have to resolve possible cross-references of lifts
-            symbol_map = {v.id: k for k, v in nested_lifts.items()}  # type: ignore[misc] # key expression automatically filled
+            symbol_map = {str(v.id): k for k, v in nested_lifts.items()}
             new_args = [
                 RemapSymbolRefs().visit(a, symbol_map=symbol_map) for a in nested_lifts.keys()
             ]
