@@ -158,8 +158,8 @@ def stencil(
     definition=None,
     *,
     build_info=None,
-    dtypes=None,
     externals=None,
+    dtypes=None,
     format_source=True,
     name=None,
     rebuild=False,
@@ -323,8 +323,8 @@ def lazy_stencil(
     definition=None,
     *,
     build_info=None,
-    dtypes=None,
     externals=None,
+    dtypes=None,
     format_source=True,
     name=None,
     rebuild=False,
@@ -452,14 +452,14 @@ def lazy_stencil(
             stencil = DaCeLazyStencil(
                 StencilBuilder(definition_func, backend=backend, options=build_options)
                 .with_externals(externals or {})
-                .with_externals(dtypes or {})
+                .with_dtypes(dtypes or {})
             )
 
         else:
             stencil = LazyStencil(
                 StencilBuilder(definition_func, backend=backend, options=build_options)
                 .with_externals(externals or {})
-                .with_externals(dtypes or {})
+                .with_dtypes(dtypes or {})
             )
         if eager:
             stencil = stencil.implementation
