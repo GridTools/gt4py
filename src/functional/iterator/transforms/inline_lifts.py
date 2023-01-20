@@ -134,8 +134,9 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert len(node.args) == 1
             if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
                 # deref(lift(f)(args...)) -> f(args...)
-                assert isinstance(node.args[0], ir.FunCall)
-                assert isinstance(node.args[0].fun, ir.FunCall)
+                assert isinstance(node.args[0], ir.FunCall) and isinstance(
+                    node.args[0].fun, ir.FunCall
+                )
                 assert len(node.args[0].fun.args) == 1
                 f = node.args[0].fun.args[0]
                 args = node.args[0].args
@@ -149,8 +150,11 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert len(node.args) == 1
             if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
                 # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
-                assert len(node.args[0].fun.args) == 1  # type: ignore[attr-defined] # node.args[0] already asserted to be of type ir.FunCall
-                args = node.args[0].args  # type: ignore[attr-defined] # node.args[0] already asserted to be of type ir.FunCall
+                assert isinstance(node.args[0], ir.FunCall) and isinstance(
+                    node.args[0].fun, ir.FunCall
+                )
+                assert len(node.args[0].fun.args) == 1
+                args = node.args[0].args
                 if len(args) == 0:
                     return ir.Literal(value="True", type="bool")
 
