@@ -26,14 +26,13 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generator, Generic, TypeVar
 
-import numpy as np
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
-from functional.common import DimensionKind, GridType, GTTypeError
+from functional.common import DimensionKind, GridType, GTTypeError, Scalar
 from functional.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -58,8 +57,6 @@ from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 
-
-Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
 
@@ -166,6 +163,8 @@ def _field_constituents_shape_and_dims(
             yield (arg.shape, dims)
         else:
             yield (None, dims)
+    elif isinstance(arg_type, ts.ScalarType):
+        yield (None, [])
     else:
         raise ValueError("Expected `FieldType` or `TupleType` thereof.")
 
@@ -406,7 +405,7 @@ def program(
 
     Examples:
         >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
 
@@ -414,7 +413,7 @@ def program(
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
         >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[..., float64], out_field: Field[..., float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
         >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
@@ -625,14 +624,14 @@ def field_operator(
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
         >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[..., float64]) -> Field[..., float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
     """
 

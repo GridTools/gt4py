@@ -223,6 +223,11 @@ def tuple_get_(tuple_expr, index):
     return call_("tuple_get")(tuple_expr, index)
 
 
+def if_(cond, true_val, false_val):
+    """Create a not_ FunCall, shorthand for ``call("if_")(expr)``."""
+    return call_("if_")(cond, true_val, false_val)
+
+
 def lift_(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
     return call_(call_("lift")(expr))

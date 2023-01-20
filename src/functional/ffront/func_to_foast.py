@@ -35,6 +35,7 @@ from functional.ffront.ast_passes import (
     UnchainComparesPass,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from functional.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from functional.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
@@ -57,22 +58,23 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>> float64 = float
-    >>> def field_op(inp: Field[..., float64]):
+    >>> IDim = Dimension("IDim")
+    >>> def field_op(inp: Field[[IDim], float64]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
     FunctionDefinition(..., id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
     [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
-    >>> foast_tree.body  # doctest: +ELLIPSIS
+    >>> foast_tree.body.stmts  # doctest: +ELLIPSIS
     [Return(..., value=Name(..., id=SymbolRef('inp')))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
 
-    >>> def wrong_syntax(inp: Field[..., int]):
+    >>> def wrong_syntax(inp: Field[[IDim], int]):
     ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
@@ -169,10 +171,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 )
             )
 
+        new_body = self._visit_stmts(node.body, self._make_loc(node), **kwargs)
+
+        if deduce_stmt_return_kind(new_body) != StmtReturnKind.UNCONDITIONAL_RETURN:
+            raise FieldOperatorSyntaxError.from_AST(
+                node, msg="Function must return a value, but no return statement was found."
+            )
+
         return foast.FunctionDefinition(
             id=node.name,
             params=self.visit(node.args, **kwargs),
-            body=self.visit_stmt_list(node.body, **kwargs),
+            body=new_body,
             closure_vars=closure_var_symbols,
             location=self._make_loc(node),
         )
@@ -313,13 +322,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
         return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
 
-    def visit_stmt_list(self, nodes: list[ast.stmt], **kwargs) -> list[foast.Expr]:
-        if not isinstance(last_node := nodes[-1], ast.Return):
-            raise FieldOperatorSyntaxError.from_AST(
-                last_node, msg="Field operator must return a field expression on the last line!"
-            )
-        return [self.visit(node, **kwargs) for node in nodes]
-
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
@@ -391,6 +393,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
             type=ts.DeferredType(constraint=ts.DataType),
+        )
+
+    def _visit_stmts(
+        self, stmts: list[ast.stmt], location: eve.SourceLocation, **kwargs
+    ) -> foast.BlockStmt:
+        return foast.BlockStmt(
+            stmts=[self.visit(el, **kwargs) for el in stmts if not isinstance(el, ast.Pass)],
+            location=location,
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
