@@ -7,7 +7,6 @@ import copy
 import dataclasses
 import itertools
 import math
-import numbers
 from typing import (
     Any,
     Callable,
@@ -982,7 +981,7 @@ def _shift_range(range_or_index, offset):
         assert range_or_index.step == 1
         return slice(range_or_index.start + offset, range_or_index.stop + offset)
     else:
-        assert isinstance(range_or_index, numbers.Integral)
+        assert is_int_index(range_or_index)
         return range_or_index + offset
 
 
