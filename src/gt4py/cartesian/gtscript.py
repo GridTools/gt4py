@@ -307,6 +307,7 @@ def stencil(
             backend=backend,
             build_options=build_options,
             externals=externals or {},
+            dtypes=dtypes or {},
         )
         definition_func.__annotations__ = original_annotations
         return out

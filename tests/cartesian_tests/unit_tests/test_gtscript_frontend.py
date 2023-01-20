@@ -72,7 +72,7 @@ def parse_definition(
         definition_func, externals=externals or {}
     )
     definition_ir = gt_frontend.GTScriptParser(
-        definition_func, externals=externals or {}, options=build_options
+        definition_func, externals=externals or {}, options=build_options, dtypes=dtypes
     ).run()
 
     setattr(definition_func, "__annotations__", original_annotations)
@@ -1317,6 +1317,23 @@ class TestDTypes:
                 module=self.__class__.__name__,
                 dtypes={"dtype": test_dtype},
             )
+
+
+class TestBuiltinDTypes:
+    def test_wip(self):
+        def definition_func(
+            in_field: gtscript.Field[float],
+            out_field: gtscript.Field[float],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field + 1.0
+
+        parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            dtypes={float: np.float32},
+        )
 
 
 class TestAssignmentSyntax:
