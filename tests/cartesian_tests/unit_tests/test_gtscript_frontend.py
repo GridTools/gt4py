@@ -1320,19 +1320,21 @@ class TestDTypes:
 
 
 class TestBuiltinDTypes:
-    def test_wip(self):
-        def definition_func(
-            in_field: gtscript.Field[float],
-            out_field: gtscript.Field[float],
-        ):
-            with computation(PARALLEL), interval(...):
-                out_field = in_field + 1.0
+    @staticmethod
+    def literal_add_func(
+        in_field: gtscript.Field[float],
+        out_field: gtscript.Field[float],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field + 42.0
 
+    @pytest.mark.parametrize("the_float", [np.float32, np.float64])
+    def test_literal_floating_parametrization(self, the_float):
         parse_definition(
-            definition_func,
+            definition_func=self.literal_add_func,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
-            dtypes={float: np.float32},
+            dtypes={float: the_float},
         )
 
 
