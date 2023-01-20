@@ -25,6 +25,7 @@ from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_low
 def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
     transformed = program
     offset_provider = kwargs.get("offset_provider")
+    assert isinstance(offset_provider, dict)
     transformed = apply_common_transforms(
         program,
         lift_mode=kwargs.get("lift_mode"),

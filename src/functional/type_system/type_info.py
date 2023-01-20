@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
-from types import EllipsisType
 from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from eve.utils import XIterable, xiter
@@ -228,22 +227,24 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def is_field_type_or_tuple_of_field_type(type_: ts.TypeSpec) -> bool:
+def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:
     """
-     Return True if ``type_`` is FieldType or FieldType nested in TupleType.
+    Return True if ``type_`` matches any of the expected.
 
-     Examples:
-     ---------
+    Examples:
+    ---------
     >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
     >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
-     >>> is_field_type_or_tuple_of_field_type(field_type)
-     True
-     >>> is_field_type_or_tuple_of_field_type(ts.TupleType(types=[field_type, field_type]))
-     True
-     >>> is_field_type_or_tuple_of_field_type(ts.TupleType(types=[field_type, scalar_type]))
-     False
+    >>> is_type_or_tuple_of_type(field_type, ts.FieldType)
+    True
+    >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType))
+    True
+    >>> is_type_or_tuple_of_type(scalar_type, ts.FieldType)
+    False
+    >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+    False
     """
-    return all(isinstance(t, ts.FieldType) for t in primitive_constituents(type_))
+    return all(isinstance(t, expected_type) for t in primitive_constituents(type_))
 
 
 def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
@@ -265,8 +266,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
         case ts.ScalarType():
             return []
         case ts.FieldType(dims):
-            # TODO: This code does not handle ellipses for dimensions. Fix it.
-            return dims  # type: ignore
+            return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
 
 
@@ -362,9 +362,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
     raise TypeError("Expected a FieldType or ScalarType.")
 
 
-def promote_dims(
-    *dims_list: list[Dimension] | EllipsisType,
-) -> list[Dimension] | EllipsisType:
+def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.
 
@@ -395,9 +393,6 @@ def promote_dims(
     #  (contrary to successors) we also use this directionality here.
     graph: dict[Dimension, set[Dimension]] = {}
     for dims in dims_list:
-        if dims == Ellipsis:
-            return Ellipsis
-        dims = cast(list[Dimension], dims)
         if len(dims) == 0:
             continue
         # create a vertex for each dimension

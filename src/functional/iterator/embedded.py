@@ -7,11 +7,11 @@ import copy
 import dataclasses
 import itertools
 import math
-import numbers
 from typing import (
     Any,
     Callable,
     Iterable,
+    Literal,
     Mapping,
     Optional,
     Protocol,
@@ -22,6 +22,7 @@ from typing import (
     TypeGuard,
     Union,
     cast,
+    overload,
     runtime_checkable,
 )
 
@@ -46,7 +47,8 @@ ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 FieldIndex: TypeAlias = (
     range | slice | IntIndex
 )  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
-FieldIndexOrIndices: TypeAlias = FieldIndex | tuple[FieldIndex, ...]
+FieldIndices: TypeAlias = tuple[FieldIndex, ...]
+FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
 
 FieldAxis: TypeAlias = (
     common.Dimension | runtime.Offset
@@ -150,6 +152,7 @@ class LocatedField(Protocol):
     def axes(self) -> tuple[common.Dimension, ...]:
         ...
 
+    # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
@@ -158,9 +161,15 @@ class LocatedField(Protocol):
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
+    # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...
+
+
+_column_range: Optional[
+    range
+] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
@@ -170,13 +179,13 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     and simplify dispatching in iterator ir builtins.
     """
 
-    def __init__(self, kstart: int, data: np.ndarray) -> None:
+    def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        self.data = data
+        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)  # type: ignore[arg-type]
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
-        # if the element type is a tuple return a regular type instead of a
         #  numpy type
         if self.data.dtype.names:
             return tuple(result)
@@ -469,9 +478,7 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = (
-    Scalar | LocatedField | tuple
-)  # of ["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -707,19 +714,53 @@ def _get_axes(
     )
 
 
-def _single_vertical_idx(indices, column_axis_idx, column_index):
+def _single_vertical_idx(
+    indices: FieldIndices, column_axis_idx: int, column_index: IntIndex
+) -> tuple[FieldIndex, ...]:
     transformed = tuple(
         index if i != column_axis_idx else column_index for i, index in enumerate(indices)
     )
     return transformed
 
 
+@overload
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple,  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndexOrIndices,
+    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
+    indices: FieldIndices,
     *,
-    column_axis: Optional[Tag] = None,
-) -> npt.DTypeLike | Column | tuple:  # arbitrary nesting of tuples of field values or `Column`s
+    column_axis: Tag,
+) -> Column:
+    ...
+
+
+@overload
+def _make_tuple(
+    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
+    indices: FieldIndices,
+    *,
+    column_axis: Literal[None],
+) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    ...
+
+
+@overload
+def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+    ...
+
+
+@overload
+def _make_tuple(
+    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None]
+) -> npt.DTypeLike:
+    ...
+
+
+def _make_tuple(
+    field_or_tuple,
+    indices,
+    *,
+    column_axis=None,
+):
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert _column_range
@@ -762,7 +803,7 @@ def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> int:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
-    raise AssertionError()
+    raise AssertionError(f"{axis} not in {axes}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -887,6 +928,7 @@ class LocatedFieldImpl(MutableLocatedField):
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
+    # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         indices = utils.tupelize(indices)
         return self.getter(indices)
@@ -944,19 +986,37 @@ def get_ordered_indices(
     return tuple(res)
 
 
-def _shift_range(
-    range_or_index: range | numbers.Integral, offset: numbers.Integral
-) -> slice | numbers.Integral:
+@overload
+def _shift_range(range_or_index: range, offset: int) -> slice:
+    ...
+
+
+@overload
+def _shift_range(range_or_index: IntIndex, offset: int) -> IntIndex:
+    ...
+
+
+def _shift_range(range_or_index, offset):
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
         return slice(range_or_index.start + offset, range_or_index.stop + offset)
     else:
-        assert isinstance(range_or_index, numbers.Integral)
+        assert is_int_index(range_or_index)
         return range_or_index + offset
 
 
-def _range2slice(r: range | numbers.Integral):
+@overload
+def _range2slice(r: range) -> slice:
+    ...
+
+
+@overload
+def _range2slice(r: IntIndex) -> IntIndex:
+    ...
+
+
+def _range2slice(r):
     if isinstance(r, range):
         assert r.start >= 0 and r.stop >= r.start
         return slice(r.start, r.stop)
@@ -964,9 +1024,9 @@ def _range2slice(r: range | numbers.Integral):
 
 
 def _shift_ranges(
-    ranges_or_indices: tuple[range | numbers.Integral, ...],
-    offsets: tuple[numbers.Integral, ...],
-) -> tuple[slice | numbers.Integral, ...]:
+    ranges_or_indices: tuple[range | IntIndex, ...],
+    offsets: tuple[int, ...],
+) -> tuple[slice | IntIndex, ...]:
     return tuple(
         _range2slice(r) if o == 0 else _shift_range(r, o)
         for r, o in zip(ranges_or_indices, offsets)
@@ -1172,11 +1232,6 @@ def as_tuple_field(field):
 
     assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
     return field
-
-
-_column_range: Optional[
-    range
-] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
 
 
 def _column_dtype(elem: Any) -> np.dtype:
