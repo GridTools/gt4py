@@ -31,7 +31,7 @@ from .ffront_test_utils import *
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend == gtfn_cpu.run_gtfn or fieldview_backend == gtfn_cpu.run_gtfn_imperative:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -50,7 +50,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend == gtfn_cpu.run_gtfn or fieldview_backend == gtfn_cpu.run_gtfn_imperative:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
