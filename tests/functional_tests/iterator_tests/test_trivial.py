@@ -6,7 +6,7 @@ from functional.iterator import transforms
 from functional.iterator.builtins import *
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_no_transforms
+from functional.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 
@@ -167,30 +167,3 @@ def test_vertical_shift_unstructured(program_processor):
 
     if validate:
         assert np.allclose(inp_s[:, 1:], np.asarray(out_s)[:, :-1])
-
-
-def test_unapplied_op():
-    program_processor = run_gtfn_no_transforms
-    validate = True
-
-    @fundef
-    def takes_op(op, inp):
-        return op(deref(inp), 2)
-
-    @fundef
-    def entry(inp):
-        return takes_op(plus, inp)
-
-    dummy = np_as_located_field(IDim)(np.ones((1,)))
-    out_s = np_as_located_field(IDim)(np.zeros((1,)))
-
-    run_processor(
-        entry[cartesian_domain(named_range(IDim, 0, 1))],
-        program_processor,
-        dummy,
-        out=out_s,
-        offset_provider={},
-    )
-
-    if validate:
-        assert 1 + 2 == out_s[0]

@@ -77,8 +77,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "and_": "std::logical_and{}",
         "or_": "std::logical_or{}",
         "xor_": "std::bit_xor{}",
-        "mod": "std::modulos{}",
-        "not": "std::logical_not{}",
+        "mod": "std::modulus{}",
+        "not_": "std::logical_not{}",
     }
 
     Sym = as_fmt("{id}")
