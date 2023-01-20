@@ -31,7 +31,7 @@ from .ffront_test_utils import *
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -50,7 +50,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -73,7 +73,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_minover_execution(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -92,7 +92,7 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
 def test_minover_execution_float(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -113,7 +113,7 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
 
     rs = reduction_setup
@@ -136,7 +136,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
 def test_reduction_execution_nb(reduction_setup, fieldview_backend):
     """Testing a neighbor sum on a neighbor field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -155,7 +155,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
 
     rs = reduction_setup

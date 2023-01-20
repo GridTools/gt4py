@@ -5,6 +5,7 @@ import pytest
 from eve.utils import UIDs
 from functional.iterator import ir
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
+from functional.iterator.transforms.deduce_conn_of_reductions import DeduceConnOfReductions
 
 
 @pytest.fixture(params=[True, False])
@@ -141,6 +142,7 @@ def test_basic(basic_reduction, has_skip_values):
     expected = _expected(basic_reduction, "dim", 3, has_skip_values)
 
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=has_skip_values)}
+    basic_reduction = DeduceConnOfReductions.apply(basic_reduction, offset_provider=offset_provider)
     actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
     assert actual == expected
 
@@ -149,6 +151,9 @@ def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, 
     expected = _expected(reduction_with_shift_on_second_arg, "dim", 1, has_skip_values, 1)
 
     offset_provider = {"dim": SimpleNamespace(max_neighbors=1, has_skip_values=has_skip_values)}
+    reduction_with_shift_on_second_arg = DeduceConnOfReductions.apply(
+        reduction_with_shift_on_second_arg, offset_provider=offset_provider
+    )
     actual = UnrollReduce.apply(reduction_with_shift_on_second_arg, offset_provider=offset_provider)
     assert actual == expected
 
@@ -162,6 +167,9 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
             max_neighbors=1, has_skip_values=True
         ),  # different max_neighbors and skip value to trigger error
     }
+    reduction_with_irrelevant_full_shift = DeduceConnOfReductions.apply(
+        reduction_with_irrelevant_full_shift, offset_provider=offset_provider
+    )
     actual = UnrollReduce.apply(
         reduction_with_irrelevant_full_shift, offset_provider=offset_provider
     )
@@ -191,4 +199,7 @@ def test_reduction_with_incompatible_shifts(reduction_with_incompatible_shifts, 
         "dim2": SimpleNamespace(max_neighbors=2, has_skip_values=False),
     }
     with pytest.raises(RuntimeError, match="incompatible"):
+        reduction_with_incompatible_shifts = DeduceConnOfReductions.apply(
+            reduction_with_incompatible_shifts, offset_provider=offset_provider
+        )
         UnrollReduce.apply(reduction_with_incompatible_shifts, offset_provider=offset_provider)

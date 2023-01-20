@@ -70,6 +70,9 @@ class DummyConnectivity:
     def mapped_index(_, __) -> int:
         return 0
 
+    def __hash__(self):
+        return hash((self.max_neighbors, self.has_skip_values, self.origin_axis.value))
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

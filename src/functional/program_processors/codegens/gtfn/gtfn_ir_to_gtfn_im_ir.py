@@ -250,3 +250,13 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             params=node.params,
             fun=self.imp_list_ir + [ReturnStmt(ret=ret)],
         )
+
+    def visit_ScanPassDefinition(
+        self, node: gtfn_ir.ScanPassDefinition, **kwargs: Any
+    ) -> gtfn_ir.ScanPassDefinition:
+        return node
+
+    def visit_ScanExecution(
+        self, node: gtfn_ir.ScanExecution, **kwargs: Any
+    ) -> gtfn_ir.ScanExecution:
+        return node
