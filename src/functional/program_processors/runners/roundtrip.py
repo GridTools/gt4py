@@ -212,11 +212,15 @@ def execute_roundtrip(
 
 
 # TODO: issue #1132 put this in a more general solution in the processor_interface
-class executor_class:
+class RoundtripExecutor:
     kind = ppi.ProgramExecutor
 
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
 
+    @property
+    def __name__(self) -> str:
+        return "executor"
 
-executor = executor_class()
+
+executor = RoundtripExecutor()
