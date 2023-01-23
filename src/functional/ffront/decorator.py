@@ -26,14 +26,12 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-
-from typing import Generic, Iterator, SupportsFloat, SupportsInt, TypeVar
+from typing import Generic, Iterator, TypeVar
 
 from devtools import debug
 
 from eve.extended_typing import Any, Optional
 from eve.utils import UIDGenerator
-
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError, Scalar
 from functional.ffront import (
     dialect_ast_enums,
@@ -59,7 +57,9 @@ from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 
+
 DEFAULT_BACKEND: Callable = roundtrip.executor
+
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
     all_closure_vars = collections.ChainMap(closure_vars)
