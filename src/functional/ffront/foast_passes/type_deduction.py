@@ -184,7 +184,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         return typed_foast_node
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs
+    ) -> foast.FunctionDefinition:
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
