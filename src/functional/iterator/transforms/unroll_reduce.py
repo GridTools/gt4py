@@ -4,9 +4,11 @@ from typing import TypeGuard
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
-from functional import common
-from functional.iterator import ir
-from functional.iterator.transforms.deduce_conn_of_reductions import DeduceConnOfReductions
+from functional.iterator import ir as ir
+from functional.iterator.transforms import reduction_utils
+
+
+reduction_utils.register_ir(ir)
 
 
 def _is_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
@@ -62,20 +64,6 @@ def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
     )
 
 
-def _get_connectivity(partial_offsets: Iterable[str], offset_provider) -> common.Connectivity:
-    connectivities = []
-    for o in partial_offsets:
-        connectivities.append(offset_provider[o])
-
-    if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
-
-    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
-        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
-    return connectivities[0]
-
-
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
@@ -87,17 +75,17 @@ class UnrollReduce(NodeTranslator):
         return cls().visit(node, **kwargs)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        # we lose annex here: node = self.generic_visit(node, **kwargs)
+        node = self.generic_visit(node, **kwargs)
         if not _is_reduce(node):
-            return self.generic_visit(node, **kwargs)
+            return node
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = _get_connectivity(node.annex.reduction_offsets, offset_provider)
+        connectivity = reduction_utils.get_connectivity(
+            node, offset_provider  # type: ignore[arg-type]
+        )
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
-
-        node = self.generic_visit(node, **kwargs)  # here it's safe as annex is consumed
 
         acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
@@ -119,8 +107,3 @@ class UnrollReduce(NodeTranslator):
         expr = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=expr), args=[step_fun])
 
         return expr
-
-
-def apply_unroll_reduce(node: ir.Node, offset_provider):
-    deduced_conns = DeduceConnOfReductions.apply(node)
-    return UnrollReduce.apply(deduced_conns, offset_provider=offset_provider)
