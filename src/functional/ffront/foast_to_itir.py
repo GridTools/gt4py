@@ -547,7 +547,7 @@ class InsideReductionLowering(FieldOperatorLowering):
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"
-        self.lambda_params[uid] = FieldOperatorLowering().apply(node)
+        self.lambda_params[uid] = FieldOperatorLowering().visit(node, **kwargs)
         return im.ref(uid)
 
     def _sequential_id(self):
