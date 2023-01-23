@@ -122,7 +122,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                     source_definition=source_definition,
                     closure_vars=closure_vars,
                     annotations=annotations,
-                ).visit(cls._preprocess_definition_ast(definition_ast_formatted)),
+                ).visit(cls._preprocess_definition_ast(definition_ast)),
                 closure_vars,
                 annotations,
             )
