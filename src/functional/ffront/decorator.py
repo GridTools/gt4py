@@ -426,7 +426,7 @@ def program(
     return program_inner if definition is None else program_inner(definition)
 
 
-OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
+OperatorNodeT = TypeVar("OperatorNodeT", foast.ScanOperator, foast.FieldOperator)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -449,7 +449,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             was created from.
     """
 
-    foast_node: OperatorNodeT | foast.FunctionDefinition
+    foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
@@ -460,7 +460,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
         *,
-        operator_node_cls: type[foast.LocatedNode] = foast.FieldOperator,
+        operator_node_cls: type[OperatorNodeT],
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
@@ -494,7 +494,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         assert isinstance(type_, ts.CallableType)
         return type_
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
+    def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator[OperatorNodeT]:
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
@@ -641,7 +641,9 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend)
+        return FieldOperator.from_function(
+            definition, backend, operator_node_cls=foast.FieldOperator
+        )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
