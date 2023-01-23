@@ -164,7 +164,7 @@ class FieldOperatorLowering(NodeTranslator):
             return im.lift_(im.lambda__(*self.params)(expr))(*self.params)
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
+    def apply(cls, node: foast.LocatedNode) -> itir.FunctionDefinition:
         return cls().visit(node)
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
@@ -537,7 +537,7 @@ class InsideReductionLowering(FieldOperatorLowering):
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"
-        self.lambda_params[uid] = FieldOperatorLowering.apply(node)
+        self.lambda_params[uid] = FieldOperatorLowering().visit(node, **kwargs)
         return im.ref(uid)
 
     def _sequential_id(self):

@@ -508,7 +508,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             return getattr(self, "__cached_itir")  # noqa: B009
 
         itir_node = FieldOperatorLowering.apply(self.foast_node)
-        assert isinstance(itir_node, itir.FunctionDefinition)
 
         object.__setattr__(self, "__cached_itir", itir_node)
 
