@@ -57,10 +57,12 @@ class DialectSyntaxError(common.GTSyntaxError):
         return cls(
             msg,
             lineno=node.lineno,
-            offset=node.col_offset,
+            offset=node.col_offset + 1,  # offset is 1-based for syntax errors
             filename=filename,
             end_lineno=getattr(node, "end_lineno", None),
-            end_offset=getattr(node, "end_col_offset", None),
+            end_offset=(node.end_col_offset + 1)
+            if hasattr(node, "end_col_offset") and node.end_col_offset is not None
+            else None,
             text=text,
         )
 
@@ -75,6 +77,18 @@ class DialectSyntaxError(common.GTSyntaxError):
             end_offset=location.end_column,
             text=None,
         )
+
+
+def _ensure_syntax_error_invariants(err: SyntaxError):
+    """Ensure syntax error invariants required to print meaningful error messages."""
+    # If offsets are provided so must line numbers. For example `err.offset` determines
+    # if carets (`^^^^`) are printed below `err.text`. They would be misleading if we
+    # don't know on which line the error occurs.
+    assert err.lineno or not err.offset
+    assert err.end_lineno or not err.end_offset
+    # If the ends are provided so must starts.
+    assert err.lineno or not err.end_lineno
+    assert err.offset or not err.end_offset
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -94,10 +108,14 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
         source, filename, starting_line = source_definition
         try:
+            line_offset = starting_line - 1
+            definition_ast: ast.AST
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+            definition_ast = ast.increment_lineno(definition_ast, line_offset)
+            line_offset = 0  # line numbers are correct from now on
+
             definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = FixMissingLocations.apply(definition_ast)
-            definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
@@ -108,14 +126,31 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
                 annotations,
             )
         except SyntaxError as err:
+            _ensure_syntax_error_invariants(err)
+
             # The ast nodes do not contain information about the path of the
             #  source file or its contents. We add this information here so
             #  that raising an error using :func:`DialectSyntaxError.from_AST`
             #  does not require passing the information on every invocation.
             if not err.filename:
                 err.filename = filename
+
+            # ensure line numbers are relative to the file (respects `starting_line`)
+            if err.lineno:
+                err.lineno = err.lineno + line_offset
+            if err.end_lineno:
+                err.end_lineno = err.end_lineno + line_offset
+
             if not err.text:
-                err.text = source
+                if err.lineno:
+                    source_lineno = err.lineno - starting_line
+                    source_end_lineno = (
+                        (err.end_lineno - starting_line) if err.end_lineno else source_lineno
+                    )
+                    err.text = "\n".join(source.splitlines()[source_lineno : source_end_lineno + 1])
+                else:
+                    err.text = source
+
             raise err
 
         return output_ast

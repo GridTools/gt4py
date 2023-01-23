@@ -15,7 +15,7 @@ from typing import Optional, cast
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
-from functional.common import Dimension, DimensionKind, GTSyntaxError, GTTypeError
+from functional.common import DimensionKind, GTSyntaxError, GTTypeError
 from functional.ffront import dialect_ast_enums, fbuiltins, type_info, type_specifications as ts
 from functional.ffront.foast_passes.utils import compute_assign_indices
 from functional.ffront.type_translation import from_value
@@ -101,16 +101,27 @@ def promote_to_mask_type(
     >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
-    # TODO: This code does not handle ellipses for dimensions. Fix it.
-    assert not isinstance(input_type, ts.FieldType) or input_type.dims is not ...
-    assert mask_type.dims is not ...
     if isinstance(input_type, ts.ScalarType) or not all(
-        item in cast(list[Dimension], input_type.dims) for item in mask_type.dims
+        item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
         return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
     else:
         return input_type
+
+
+def deduce_stmt_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
+    """Deduce type of value returned inside a block statement."""
+    for stmt in node.stmts:
+        if isinstance(stmt, foast.Return):
+            return stmt.value.type
+
+    # If the node was constructed by the foast parsing we should never get here, but instead
+    # have gotten an error there.
+    raise AssertionError(
+        "Malformed block statement. Expected a return statement in this context, "
+        "but none was found. Please submit a bug report."
+    )
 
 
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
@@ -141,10 +152,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from functional.common import Field
+    >>> from functional.common import Field, Dimension
     >>> from functional.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from functional.ffront.func_to_foast import FieldOperatorParser
-    >>> def example(a: "Field[..., float]", b: "Field[..., float]"):
+    >>> IDim = Dimension("IDim")
+    >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
     >>> source_definition = SourceDefinition.from_function(example)
@@ -153,12 +165,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> untyped_fieldop = FieldOperatorParser(
     ...     source_definition=source_definition, closure_vars=closure_vars, annotations=annotations
     ... ).visit(ast.parse(source_definition.source).body[0])
-    >>> untyped_fieldop.body[0].value.type
+    >>> untyped_fieldop.body.stmts[0].value.type
     DeferredType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body[0].value.type == ts.FieldType(dtype=ts.ScalarType(
-    ...     kind=ts.ScalarKind.FLOAT64), dims=Ellipsis)
+    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(dtype=ts.ScalarType(
+    ...     kind=ts.ScalarKind.FLOAT64), dims=[IDim])
     """
 
     @classmethod
@@ -173,8 +185,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
-        assert isinstance(new_body[-1], foast.Return)
-        return_type = new_body[-1].value.type
+        return_type = deduce_stmt_return_type(new_body)
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -217,7 +228,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_forward = self.visit(node.forward, **kwargs)
         if not new_forward.type.kind == ts.ScalarKind.BOOL:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Argument `forward` to scan operator `{node.id}` must" f"be a boolean."
+                node, msg=f"Argument `forward` to scan operator `{node.id}` must be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
@@ -248,7 +259,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Undeclared symbol {node.id}"
+                node, msg=f"Undeclared symbol `{node.id}`."
             )
 
         symbol = symtable[node.id]

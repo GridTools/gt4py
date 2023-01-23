@@ -85,8 +85,8 @@ def test_invalid_scalar_kind():
             ),
         ),
         (
-            common.Field[..., float],
-            ts.FieldType(dims=..., dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            common.Field[[IDim], float],
+            ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
         (
             common.Field[[IDim, JDim], float],
@@ -152,9 +152,9 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(common.Field[[int, int], int])
 
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[..., str])
+        type_translation.from_type_hint(common.Field[[IDim], str])
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[..., None])
+        type_translation.from_type_hint(common.Field[[IDim], None])
 
     # Functions
     with pytest.raises(
