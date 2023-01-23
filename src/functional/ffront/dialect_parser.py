@@ -96,14 +96,16 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         try:
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
             definition_ast = RemoveDocstrings.apply(definition_ast)
-            definition_ast = FixMissingLocations.apply(definition_ast)
-            definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
+            definition_ast_formatted = FixMissingLocations.apply(definition_ast)
+            definition_ast_formatted = ast.increment_lineno(
+                definition_ast_formatted, starting_line - 1
+            )
             output_ast = cls._postprocess_dialect_ast(
                 cls(
                     source_definition=source_definition,
                     closure_vars=closure_vars,
                     annotations=annotations,
-                ).visit(cls._preprocess_definition_ast(definition_ast)),
+                ).visit(cls._preprocess_definition_ast(definition_ast_formatted)),
                 closure_vars,
                 annotations,
             )
