@@ -89,7 +89,7 @@ class UnrollReduce(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         # we lose annex here: node = self.generic_visit(node, **kwargs)
         if not _is_reduce(node):
-            return self.generic_visit(node)
+            return self.generic_visit(node, **kwargs)
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
@@ -97,7 +97,7 @@ class UnrollReduce(NodeTranslator):
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
-        node = self.generic_visit(node)  # here it's safe as annex is consumed
+        node = self.generic_visit(node, **kwargs)  # here it's safe as annex is consumed
 
         acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
         offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
