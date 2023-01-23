@@ -58,7 +58,7 @@ from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
 
 
-DEFAULT_BACKEND: Callable = roundtrip.executor
+DEFAULT_BACKEND: roundtrip.executor_class = roundtrip.executor
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
