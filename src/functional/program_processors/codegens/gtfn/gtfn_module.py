@@ -16,35 +16,23 @@
 import dataclasses
 from typing import Any, Final, TypeVar
 
-import numpy as np
-
 import functional.otf.binding.type_specifications as ts
 from functional.otf import languages, stages, step_types, workflow
 from functional.otf.binding import cpp_interface, interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
 from functional.type_system import type_translation
-
+from functional.iterator.embedded import IndexField
 
 T = TypeVar("T")
 
 
 def get_param_description(name: str, obj: Any) -> interface.Parameter:
-    from functional.iterator.embedded import (  # TODO: remove IndexField from iterator to avoid circular imports
-        IndexField,
-    )
-
-    view: np.ndarray = np.asarray(obj)
-    if view.ndim > 0:
-        assert hasattr(obj, "axes")
-        dtype = type_translation.from_value(view[tuple([0] * view.ndim)])
-        if not isinstance(dtype, ts.ScalarType):
-            raise ValueError("Field arguments must have scalars as dtype.")
-        dims = obj.axes
-        return interface.Parameter(name, ts.FieldType(dims=dims, dtype=dtype))
-    elif isinstance(obj, IndexField):
+    # TODO: make type_translation extendable and specialize it for the
+    #   bindings to distinguish between buffer-backed fields and index
+    #   fields.
+    if isinstance(obj, IndexField):
         dtype = type_translation.from_type_hint(obj.dtype.type)
-        if not isinstance(dtype, ts.ScalarType):
-            raise ValueError("Field arguments must have scalars as dtype.")
+        assert isinstance(dtype, ts.ScalarType)
         return interface.Parameter(name, ts.IndexFieldType(axis=obj.axis, dtype=dtype))
     else:
         type_ = type_translation.from_value(obj)
