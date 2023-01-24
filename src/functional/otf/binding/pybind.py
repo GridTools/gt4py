@@ -33,14 +33,14 @@ class DimensionType(Expr):
     name: str
 
 
-class BufferIterator(Expr):
+class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
     dim_config: int
 
 
-class PositionalIterator(Expr):
+class PositionalSID(Expr):
     dimension: DimensionType
 
 
@@ -137,12 +137,12 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_BufferIterator(self, sid: BufferIterator):
+    def visit_BufferSID(self, sid: BufferSID):
         return self.generic_visit(
             sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
         )
 
-    BufferIterator = as_jinja(
+    BufferSID = as_jinja(
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
@@ -151,7 +151,7 @@ class BindingCodeGenerator(TemplatedGenerator):
             )"""
     )
 
-    PositionalIterator = as_jinja("gridtools::stencil::positional<{{dimension}}>{0}")
+    PositionalSID = as_jinja("gridtools::stencil::positional<{{dimension}}>{0}")
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
@@ -162,16 +162,16 @@ def make_parameter(parameter: interface.Parameter) -> FunctionParameter:
 
 def make_argument(
     index: int, param: interface.Parameter
-) -> str | BufferIterator | PositionalIterator:
+) -> str | BufferSID | PositionalSID:
     if isinstance(param.type_, ts.FieldType):
-        return BufferIterator(
+        return BufferSID(
             source_buffer=param.name,
             dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
             scalar_type=param.type_.dtype,
             dim_config=index,
         )
     elif isinstance(param.type_, ts.IndexFieldType):
-        return PositionalIterator(dimension=DimensionType(name=param.type_.axis.value))
+        return PositionalSID(dimension=DimensionType(name=param.type_.axis.value))
     else:
         return param.name
 
