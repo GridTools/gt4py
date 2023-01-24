@@ -8,9 +8,6 @@ from functional.iterator import ir as ir
 from functional.iterator.transforms import reduction_utils
 
 
-reduction_utils.register_ir(ir)
-
-
 def _is_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
     return (
         isinstance(arg, ir.FunCall)
@@ -81,9 +78,7 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = reduction_utils.get_connectivity(
-            node, offset_provider  # type: ignore[arg-type]
-        )
+        connectivity = reduction_utils.get_connectivity(node, offset_provider)
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 

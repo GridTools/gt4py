@@ -5,12 +5,9 @@ import pytest
 from eve import NodeTranslator
 from eve.utils import UIDs
 from functional.iterator import ir
-from functional.iterator.transforms.reduction_utils import _get_partial_offsets, register_ir
+from functional.iterator.transforms.reduction_utils import _get_partial_offsets
 
 from .test_unroll_reduce import basic_reduction
-
-
-register_ir(ir)
 
 
 def test_get_partial_offsets(basic_reduction):

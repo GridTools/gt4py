@@ -1,82 +1,51 @@
-import abc
-import types
 from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
 from functional import common
+from functional.iterator import ir as itir
 
 
-class _Expr(abc.ABC):
-    ...
-
-
-class _SymRef(_Expr):
-    @property
-    @abc.abstractmethod
-    def id(self):  # noqa: A003
-        ...
-
-
-class _FunCall(_Expr):
-    @property
-    @abc.abstractmethod
-    def fun(self):
-        ...
-
-    @property
-    @abc.abstractmethod
-    def args(self):
-        ...
-
-
-class _OffsetLiteral(_Expr):
-    @property
-    @abc.abstractmethod
-    def value(self):
-        ...
-
-
-def _is_shifted(arg: _Expr) -> TypeGuard[_FunCall]:
+def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
-        isinstance(arg, _FunCall)
-        and isinstance(arg.fun, _FunCall)
-        and isinstance(arg.fun.fun, _SymRef)
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
         and arg.fun.fun.id == "shift"
     )
 
 
-def _is_applied_lift(arg: _Expr) -> TypeGuard[_FunCall]:
+def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
-        isinstance(arg, _FunCall)
-        and isinstance(arg.fun, _FunCall)
-        and isinstance(arg.fun.fun, _SymRef)
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and isinstance(arg.fun.fun, itir.SymRef)
         and arg.fun.fun.id == "lift"
     )
 
 
-def _is_shifted_or_lifted_and_shifted(arg: _Expr) -> TypeGuard[_FunCall]:
+def _is_shifted_or_lifted_and_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return _is_shifted(arg) or (
         _is_applied_lift(arg)
         and any(_is_shifted_or_lifted_and_shifted(nested_arg) for nested_arg in arg.args)
     )
 
 
-def _get_shifted_args(reduce_args: Iterable[_Expr]) -> Iterator[_FunCall]:
+def _get_shifted_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
     return filter(
         _is_shifted_or_lifted_and_shifted,
         reduce_args,
     )
 
 
-def _is_list_of_funcalls(lst: list) -> TypeGuard[list[_FunCall]]:
-    return all(isinstance(f, _FunCall) for f in lst)
+def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
+    return all(isinstance(f, itir.FunCall) for f in lst)
 
 
-def _get_partial_offset_tag(arg: _FunCall) -> str:
+def _get_partial_offset_tag(arg: itir.FunCall) -> str:
     if _is_shifted(arg):
-        assert isinstance(arg.fun, _FunCall)
+        assert isinstance(arg.fun, itir.FunCall)
         offset = arg.fun.args[-1]
-        assert isinstance(offset, _OffsetLiteral)
+        assert isinstance(offset, itir.OffsetLiteral)
         assert isinstance(offset.value, str)
         return offset.value
     else:
@@ -87,42 +56,31 @@ def _get_partial_offset_tag(arg: _FunCall) -> str:
         return partial_offsets[0]
 
 
-def _get_partial_offsets(reduce_args: Iterable[_Expr]) -> Iterable[str]:
+def _get_partial_offsets(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
 
 
-def _is_reduce(node: _FunCall):
+def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
     return (
-        isinstance(node.fun, _FunCall)
-        and isinstance(node.fun.fun, _SymRef)
+        isinstance(node.fun, itir.FunCall)
+        and isinstance(node.fun.fun, itir.SymRef)
         and node.fun.fun.id == "reduce"
     )
 
 
-def register_ir(ir: types.ModuleType) -> None:
-    """
-    Register an IR (a module containing eve nodes) to work with the functions of this module.
-
-    They work on IRs with the same Syntax (tree structure) and same semantics as Iterator IR.
-    """
-    _Expr.register(ir.Expr)
-    _FunCall.register(ir.FunCall)
-    _SymRef.register(ir.SymRef)
-    _OffsetLiteral.register(ir.OffsetLiteral)
-
-
-def get_connectivity(applied_reduce_node: _FunCall, offset_provider) -> common.Connectivity:
+def get_connectivity(
+    applied_reduce_node: itir.FunCall,
+    offset_provider: dict[str, common.Dimension | common.Connectivity],
+) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
-    if not isinstance(applied_reduce_node, _FunCall):
-        raise TypeError(
-            f"{applied_reduce_node=} is not a `FunCall` of a registered IR. Did you forget to call `.register_ir()`?"
-        )
     if not _is_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
 
-    connectivities = []
+    connectivities: list[common.Connectivity] = []
     for o in _get_partial_offsets(applied_reduce_node.args):
-        connectivities.append(offset_provider[o])
+        conn = offset_provider[o]
+        assert isinstance(conn, common.Connectivity)
+        connectivities.append(conn)
 
     if not connectivities:
         raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
