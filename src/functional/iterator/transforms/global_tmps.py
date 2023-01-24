@@ -455,7 +455,7 @@ def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
     domains: dict[str, ir.FunCall] = {
         closure.output.id: closure.domain
         for closure in node.fencil.closures
-        if isinstance(closure.output, ir.SymRef) and closure.output.id in tmps
+        if hasattr(closure.output, "id") and closure.output.id in tmps
     }
 
     def convert_type(dtype):
