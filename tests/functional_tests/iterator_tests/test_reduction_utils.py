@@ -15,7 +15,7 @@ register_ir(ir)
 
 def test_get_partial_offsets(basic_reduction):
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
-    partial_offsets = _get_partial_offsets(basic_reduction)
+    partial_offsets = _get_partial_offsets(basic_reduction.args)
 
     assert partial_offsets == ["dim"]
 
