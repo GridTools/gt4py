@@ -4,7 +4,11 @@ from typing import TypeGuard
 
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
-from functional.iterator import ir
+from functional.iterator import ir as ir
+from functional.iterator.transforms import reduction_utils
+
+
+reduction_utils.register_ir(ir)
 
 
 def _is_shifted(arg: ir.Expr) -> TypeGuard[ir.FunCall]:
@@ -77,9 +81,9 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = node.conn
-        if connectivity is None:
-            raise RuntimeError("trying to unroll reduction without deduced connectivity")
+        connectivity = reduction_utils.get_connectivity(
+            node, offset_provider  # type: ignore[arg-type]
+        )
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
