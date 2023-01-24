@@ -58,6 +58,7 @@ from gt4py.cartesian.frontend.nodes import (
 )
 from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.common import ExprKind
+import numpy as np
 
 
 def _convert_dtype(data_type) -> common.DataType:
@@ -82,9 +83,12 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             dtype = common.DataType.INT64
         elif isinstance(v, float):
             dtype = common.DataType.FLOAT64
+        elif isinstance(v, np.float32):
+            dtype = common.DataType.FLOAT32
         else:
             print(
-                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+                "Warning: Only INT64, FLOAT64 and FLOAT32 (via np.float32) literals are "
+                f"supported currently. Implicitly upcasting `{v}` of type {type(v)} to FLOAT64"
             )
             dtype = common.DataType.FLOAT64
         value = str(v)
