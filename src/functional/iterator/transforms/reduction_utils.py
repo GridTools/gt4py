@@ -10,14 +10,14 @@ class _Expr(abc.ABC):
     ...
 
 
-class _SymRef(_Expr, abc.ABC):
+class _SymRef(_Expr):
     @property
     @abc.abstractmethod
     def id(self):  # noqa: A003
         ...
 
 
-class _FunCall(_Expr, abc.ABC):
+class _FunCall(_Expr):
     @property
     @abc.abstractmethod
     def fun(self):
@@ -29,7 +29,7 @@ class _FunCall(_Expr, abc.ABC):
         ...
 
 
-class _OffsetLiteral(_Expr, abc.ABC):
+class _OffsetLiteral(_Expr):
     @property
     @abc.abstractmethod
     def value(self):
