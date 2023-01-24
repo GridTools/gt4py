@@ -30,7 +30,7 @@ def _is_shifted_or_lifted_and_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]
     )
 
 
-def _get_shifted_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
+def get_shifted_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
     return filter(
         _is_shifted_or_lifted_and_shifted,
         reduce_args,
@@ -57,10 +57,10 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
 
 
 def _get_partial_offsets(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
+    return [_get_partial_offset_tag(arg) for arg in get_shifted_args(reduce_args)]
 
 
-def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
+def is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(node.fun, itir.FunCall)
         and isinstance(node.fun.fun, itir.SymRef)
@@ -73,7 +73,7 @@ def get_connectivity(
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
-    if not _is_reduce(applied_reduce_node):
+    if not is_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
 
     connectivities: list[common.Connectivity] = []
