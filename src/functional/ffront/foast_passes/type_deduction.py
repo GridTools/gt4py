@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Optional, cast
+from typing import Optional, TypeVar, cast, overload
 
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
@@ -124,6 +124,9 @@ def deduce_stmt_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
     )
 
 
+FoastNodeT = TypeVar("FoastNodeT", bound=foast.LocatedNode)
+
+
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
     """Validate an FOAST expression is fully typed."""
 
@@ -174,14 +177,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     """
 
     @classmethod
-    def apply(cls, node: foast.FunctionDefinition | foast.LocatedNode) -> foast.FunctionDefinition:
+    def apply(cls, node: FoastNodeT) -> FoastNodeT:
         typed_foast_node = cls().visit(node)
 
         FieldOperatorTypeDeductionCompletnessValidator.apply(typed_foast_node)
 
         return typed_foast_node
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(
+        self, node: foast.FunctionDefinition, **kwargs
+    ) -> foast.FunctionDefinition:
         new_params = self.visit(node.params, **kwargs)
         new_body = self.visit(node.body, **kwargs)
         new_closure_vars = self.visit(node.closure_vars, **kwargs)
