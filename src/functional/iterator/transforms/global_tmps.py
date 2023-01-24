@@ -396,7 +396,9 @@ def _domain_ranges(closures: Sequence[ir.StencilClosure]):
     return ranges
 
 
-def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
+def update_unstructured_domains(
+    node: FencilWithTemporaries, offset_provider: Mapping[str, Any]
+) -> FencilWithTemporaries:
     """Replace appearances of `AUTO_DOMAIN` by concrete domain sizes.
 
     Note: the domain sizes are extracted from the `offset_provider` and are thus compile time!
