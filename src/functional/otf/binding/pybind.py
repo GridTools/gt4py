@@ -160,9 +160,7 @@ def make_parameter(parameter: interface.Parameter) -> FunctionParameter:
     return FunctionParameter(name=parameter.name, type_=parameter.type_)
 
 
-def make_argument(
-    index: int, param: interface.Parameter
-) -> str | BufferSID | PositionalSID:
+def make_argument(index: int, param: interface.Parameter) -> str | BufferSID | PositionalSID:
     if isinstance(param.type_, ts.FieldType):
         return BufferSID(
             source_buffer=param.name,

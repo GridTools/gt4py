@@ -17,11 +17,12 @@ import dataclasses
 from typing import Any, Final, TypeVar
 
 import functional.otf.binding.type_specifications as ts
+from functional.iterator.embedded import IndexField
 from functional.otf import languages, stages, step_types, workflow
 from functional.otf.binding import cpp_interface, interface
 from functional.program_processors.codegens.gtfn import gtfn_backend
 from functional.type_system import type_translation
-from functional.iterator.embedded import IndexField
+
 
 T = TypeVar("T")
 
