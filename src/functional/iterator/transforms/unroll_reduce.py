@@ -5,15 +5,14 @@ from typing import TypeGuard
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
 from functional import common
-from functional.iterator import ir as ir, ir as itir
+from functional.iterator import ir as itir
 
 
 def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
         and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "shift"
+        and arg.fun.fun == itir.SymRef(id="shift")
     )
 
 
@@ -21,8 +20,7 @@ def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
         and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "lift"
+        and arg.fun.fun == itir.SymRef(id="lift")
     )
 
 
@@ -59,16 +57,12 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
         return partial_offsets[0]
 
 
-def _get_partial_offsets(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
+def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
 
 
 def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(node.fun, itir.FunCall)
-        and isinstance(node.fun.fun, itir.SymRef)
-        and node.fun.fun.id == "reduce"
-    )
+    return isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="reduce")
 
 
 def get_connectivity(
@@ -80,7 +74,7 @@ def get_connectivity(
         raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
 
     connectivities: list[common.Connectivity] = []
-    for o in _get_partial_offsets(applied_reduce_node.args):
+    for o in _get_partial_offset_tags(applied_reduce_node.args):
         conn = offset_provider[o]
         assert isinstance(conn, common.Connectivity)
         connectivities.append(conn)
@@ -94,21 +88,23 @@ def get_connectivity(
     return connectivities[0]
 
 
-def _make_shift(offsets: list[ir.Expr], iterator: ir.Expr):
-    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=offsets), args=[iterator])
+def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr):
+    return itir.FunCall(
+        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets), args=[iterator]
+    )
 
 
-def _make_deref(iterator: ir.Expr):
-    return ir.FunCall(fun=ir.SymRef(id="deref"), args=[iterator])
+def _make_deref(iterator: itir.Expr):
+    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator])
 
 
-def _make_can_deref(iterator: ir.Expr):
-    return ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[iterator])
+def _make_can_deref(iterator: itir.Expr):
+    return itir.FunCall(fun=itir.SymRef(id="can_deref"), args=[iterator])
 
 
-def _make_if(cond: ir.Expr, true_expr: ir.Expr, false_expr: ir.Expr):
-    return ir.FunCall(
-        fun=ir.SymRef(id="if_"),
+def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
+    return itir.FunCall(
+        fun=itir.SymRef(id="if_"),
         args=[cond, true_expr, false_expr],
     )
 
@@ -120,10 +116,10 @@ class UnrollReduce(NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
-    def apply(cls, node: ir.Node, **kwargs):
+    def apply(cls, node: itir.Node, **kwargs):
         return cls().visit(node, **kwargs)
 
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
         if not _is_reduce(node):
             return node
@@ -134,23 +130,25 @@ class UnrollReduce(NodeTranslator):
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
-        acc = ir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
-        offset = ir.SymRef(id=self.uids.sequential_id(prefix="_i"))
-        step = ir.SymRef(id=self.uids.sequential_id(prefix="_step"))
+        acc = itir.SymRef(id=self.uids.sequential_id(prefix="_acc"))
+        offset = itir.SymRef(id=self.uids.sequential_id(prefix="_i"))
+        step = itir.SymRef(id=self.uids.sequential_id(prefix="_step"))
 
-        assert isinstance(node.fun, ir.FunCall)
+        assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
         derefed_shifted_args = [_make_deref(_make_shift([offset], arg)) for arg in node.args]
-        step_fun: ir.Expr = ir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
+        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
             check_arg = next(_get_shifted_args(node.args))
             can_deref = _make_can_deref(_make_shift([offset], check_arg))
             step_fun = _make_if(can_deref, step_fun, acc)
-        step_fun = ir.Lambda(params=[ir.Sym(id=acc.id), ir.Sym(id=offset.id)], expr=step_fun)
+        step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
         expr = init
         for i in range(max_neighbors):
-            expr = ir.FunCall(fun=step, args=[expr, ir.OffsetLiteral(value=i)])
-        expr = ir.FunCall(fun=ir.Lambda(params=[ir.Sym(id=step.id)], expr=expr), args=[step_fun])
+            expr = itir.FunCall(fun=step, args=[expr, itir.OffsetLiteral(value=i)])
+        expr = itir.FunCall(
+            fun=itir.Lambda(params=[itir.Sym(id=step.id)], expr=expr), args=[step_fun]
+        )
 
         return expr

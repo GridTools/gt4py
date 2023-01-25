@@ -4,7 +4,7 @@ import pytest
 
 from eve.utils import UIDs
 from functional.iterator import ir
-from functional.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offsets
+from functional.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
 
 from .conftest import DummyConnectivity
 
@@ -108,7 +108,7 @@ def reduction_with_irrelevant_full_shift():
 )
 def test_get_partial_offsets(reduction, request):
     offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
-    partial_offsets = _get_partial_offsets(request.getfixturevalue(reduction).args)
+    partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
 
     assert set(partial_offsets) == {"dim"}
 
