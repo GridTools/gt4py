@@ -59,7 +59,7 @@ class SparseTag(Tag):
 class NeighborTableOffsetProvider:
     def __init__(
         self,
-        table: npt.NDArray,  # TODO(havogt): define neighbor table concept
+        table: npt.NDArray,
         origin_axis: common.Dimension,
         neighbor_axis: common.Dimension,
         max_neighbors: int,
