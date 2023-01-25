@@ -24,31 +24,43 @@ from functional.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GT
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 
 
-def _lower(program: itir.FencilDefinition, do_unroll: bool, **kwargs: Any):
+def _lower(
+    program: itir.FencilDefinition, enable_itir_transforms: bool, do_unroll: bool, **kwargs: Any
+):
     offset_provider = kwargs.get("offset_provider")
     assert isinstance(offset_provider, dict)
-    transformed = apply_common_transforms(
-        program,
-        lift_mode=kwargs.get("lift_mode"),
-        offset_provider=offset_provider,
-        unroll_reduce=do_unroll,
-    )
+    if enable_itir_transforms:
+        program = apply_common_transforms(
+            program,
+            lift_mode=kwargs.get("lift_mode"),
+            offset_provider=offset_provider,
+            unroll_reduce=do_unroll,
+        )
     gtfn_ir = GTFN_lowering.apply(
-        transformed,
+        program,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
     )
     return gtfn_ir
 
 
-def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
+def generate(
+    program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
+) -> str:
     do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
     try:
-        gtfn_ir = _lower(program=program, do_unroll=do_unroll, **kwargs)
+        gtfn_ir = _lower(
+            program=program,
+            enable_itir_transforms=enable_itir_transforms,
+            do_unroll=do_unroll,
+            **kwargs,
+        )
     except EveValueError:
         # if we don't unroll, there may be lifts left in the itir which can't be lowered to gtfn. in this case
         # case, just retry with unrolled reductions
-        gtfn_ir = _lower(program=program, do_unroll=True, **kwargs)
+        gtfn_ir = _lower(
+            program=program, enable_itir_transforms=enable_itir_transforms, do_unroll=True, **kwargs
+        )
     if "imperative" in kwargs and kwargs["imperative"]:
         gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir, **kwargs)
         generated_code = GTFNIMCodegen.apply(gtfn_im_ir, **kwargs)

@@ -86,7 +86,7 @@ class StencilClosure(Node):
             raise ValueError("Only FunCall to `make_tuple` allowed.")
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_MATH_NUMBER_BUILTINS = {"abs", "not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
     "cos",
@@ -110,7 +110,28 @@ UNARY_MATH_FP_BUILTINS = {
     "trunc",
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
-BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
+BINARY_MATH_NUMBER_BUILTINS = {
+    "minimum",
+    "maximum",
+    "fmod",
+    "power",
+    "plus",
+    "minus",
+    "multiplies",
+    "divides",
+    "mod",
+    "eq",
+    "less",
+    "greater",
+    "greater_equal",
+    "less_equal",
+    "not_eq",
+    "floordiv",  # TODO not treated in gtfn?
+    "and_",
+    "or_",
+    "xor_",
+}
+
 
 TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 
@@ -126,24 +147,8 @@ BUILTINS = {
     "can_deref",
     "shift",
     "scan",
-    "plus",
-    "minus",
-    "multiplies",
-    "divides",
-    "mod",
-    "floordiv",
-    "eq",
-    "less",
-    "greater",
-    "greater_equal",
-    "less_equal",
-    "not_eq",
     "if_",
     "cast_",
-    "not_",
-    "and_",
-    "or_",
-    "xor_",
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,

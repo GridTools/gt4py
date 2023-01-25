@@ -146,23 +146,6 @@ GTFN_BUILTINS = [
     "named_range",
     "reduce",
 ]
-CPP_FUN_OBJ_BUILTINS = [
-    "std::plus<void>{}",
-    "std::minus<void>{}",
-    "std::multiplies<void>{}",
-    "std::divides<void>{}",
-    "std::equal_to<void>{}",
-    "std::not_equal_to<void>{}",
-    "std::less<void>{}",
-    "std::less_equal<void>{}",
-    "std::greater<void>{}",
-    "std::greater_equal<void>{}",
-    "std::logical_and<void>{}",
-    "std::logical_or<void>{}",
-    "std::bit_xor<void>{}",
-    "std::modulos<void>{}",
-    "std::logical_not<void>{}",
-]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
 UNARY_MATH_FP_PREDICATE_BUILTINS = itir.UNARY_MATH_FP_PREDICATE_BUILTINS
@@ -171,7 +154,6 @@ TYPEBUILTINS = itir.TYPEBUILTINS
 
 BUILTINS = {
     *GTFN_BUILTINS,
-    *CPP_FUN_OBJ_BUILTINS,
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
