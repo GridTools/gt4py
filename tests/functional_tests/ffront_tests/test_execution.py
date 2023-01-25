@@ -239,6 +239,29 @@ def test_scalar_arg_with_field(fieldview_backend):
     assert np.allclose(ref, out.array())
 
 
+def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
+    if fieldview_backend == gtfn_cpu.run_gtfn:
+        pytest.skip(
+            "Scalar arguments not supported to be used in both domain specification "
+            "and as an argument to a field operator."
+        )
+
+    size = 10
+    out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
+
+    @field_operator
+    def foo(size: int) -> Field[[Vertex], int]:
+        return broadcast(size, (Vertex,))
+
+    @program(backend=fieldview_backend)
+    def bar(size: int, out: Field[[Vertex], int]):
+        foo(size, out=out, domain={Vertex: (0, size)})
+
+    bar(size, out, offset_provider={})
+
+    assert (out.array() == size).all()
+
+
 def test_astype_int(fieldview_backend):
     size = 10
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
