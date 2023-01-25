@@ -69,6 +69,8 @@ def apply_common_transforms(
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = TupleMerger().visit(ir)
         ir = InlineIntoScan().visit(ir)
+        ir = InlineLambdas.apply(ir, True, True)
+        ir = InlineIntoScan().visit(ir)
 
     ir = NormalizeShifts().visit(ir)
 
