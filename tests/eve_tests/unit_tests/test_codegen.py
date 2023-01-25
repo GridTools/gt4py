@@ -18,8 +18,8 @@ from typing import Callable, Optional, Set, Type
 
 import pytest
 
-import eve
-import eve.codegen
+import gt4py.eve as eve
+import gt4py.eve.codegen
 
 from .test_utils import name_with_cases  # noqa: F401
 

@@ -19,14 +19,14 @@ import re
 
 import pytest
 
-import eve
-import eve.utils
+import gt4py.eve as eve
+import gt4py.eve.utils
 
 from .. import definitions
 
 
 def test_symbol_types():
-    from eve.concepts import SymbolName
+    from gt4py.eve.concepts import SymbolName
 
     assert SymbolName("valid_name_01A") == "valid_name_01A"
     assert SymbolName("valid_name_01A") == "valid_name_01A"

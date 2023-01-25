@@ -44,10 +44,10 @@ The following snippet imports the most commonly used features that are needed to
 ```{code-cell} ipython3
 import numpy as np
 
-from functional.common import DimensionKind
-from functional.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum, where
-from functional.ffront.decorator import field_operator, program
-from functional.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
+from gt4py.next.common import DimensionKind
+from gt4py.next.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum, where
+from gt4py.next.ffront.decorator import field_operator, program
+from gt4py.next.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
 
 #### Fields
