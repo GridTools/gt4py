@@ -23,7 +23,7 @@ class EtaReduction(NodeTranslator):
             )
         ):
             return self.visit(node.expr.fun)
-        # TODO move to some other place
+        # TODO move to some other place?
         if _is_scan(node.expr):
             assert isinstance(node.expr, ir.FunCall)
             if len(node.params) == len(node.expr.args) and all(
