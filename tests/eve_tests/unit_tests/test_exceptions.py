@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from eve import exceptions
+from gt4py.eve import exceptions
 
 
 def test_exception_types():

@@ -46,7 +46,7 @@ import factory
 import pytest
 import pytest_factoryboy as pytfboy
 
-from eve import datamodels, utils
+from gt4py.eve import datamodels, utils
 
 
 T = TypeVar("T")

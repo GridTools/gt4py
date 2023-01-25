@@ -25,8 +25,8 @@ import typing
 
 import pytest
 
-from eve import extended_typing as xtyping
-from eve.extended_typing import (
+from gt4py.eve import extended_typing as xtyping
+from gt4py.eve.extended_typing import (
     Annotated,
     Any,
     Callable,

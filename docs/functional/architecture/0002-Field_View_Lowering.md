@@ -38,7 +38,7 @@ This solution is proposed also because the special rules for `reduce`, which are
 
 ## Background
 
-The lowering must convert from a function body in field view, which allows temporary assignment statements to a single expression iterator IR, which is functional.
+The lowering must convert from a function body in field view, which allows temporary assignment statements to a single expression iterator IR, which is gt4py.next.
 
 Example (type annotations omitted):
 
@@ -157,7 +157,7 @@ While implementing the lowering and specifically the tests for it, it quickly be
 
 On the other hand **iterator** view code can represent the same tree or tree snippet much more readably with the drawback that there is no way of obtaining the `iterator.ir` nodes tree of such code, without executing it through a backend, which stores the tree as a side effect. Converting iterator IR to iterator view code was also considered but requires executing through a backend with code generation. Executing is not desirable because (a) it requires some boilerplate and (b) it does not allow comparing invalid snippets.
 
-Therefore `functional.ffront.itir_makers` was written to allow direct building of iterator IR tree snippets with syntax that matches iterator view closely and makes the patterns visible. It allows implicit usage of string literals as variable names to increase readability wherever it is unambiguously possible. It does not check the validity of the built snippets by design.
+Therefore `gt4py.next.ffront.itir_makers` was written to allow direct building of iterator IR tree snippets with syntax that matches iterator view closely and makes the patterns visible. It allows implicit usage of string literals as variable names to increase readability wherever it is unambiguously possible. It does not check the validity of the built snippets by design.
 
 Finally, the improvement in clarity is so striking that these makers are also used in the lowering itself.
 

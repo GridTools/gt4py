@@ -21,7 +21,7 @@ src_dir = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir
 abs_src_dir = os.path.abspath(src_dir)
 sys.path.insert(0, abs_src_dir)
 
-import eve
+import gt4py.eve as eve
 
 
 # -- Project information -----------------------------------------------------
