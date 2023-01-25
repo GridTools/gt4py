@@ -18,6 +18,8 @@ from typing import Any, Final, TypeVar
 
 import numpy as np
 
+import eve.trees
+import eve.utils
 from functional.common import Connectivity, Dimension, DimensionKind
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, step_types, workflow
@@ -99,10 +101,15 @@ class GTFNTranslationStep(
                 )
         rendered_connectivity_args = ", ".join(connectivity_args)
 
-        import eve.trees
-        import eve.utils
-
-        scalar_parameters = (
+        # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
+        #  so transform all scalar arguments that are used in a closure into one before we pass
+        #  them to the generated source. This is not a very clean solution and will fail when
+        #  the respective parameter is used elsewhere, e.g. in a domain construction, as it is
+        #  expected to be scalar there (instead of a SID). We could solve this by:
+        #   1.) Extending the backend to support scalar arguments in a closure (as in embedded
+        #       backend).
+        #   2.) Use SIDs for all arguments and deref when a scalar is required.
+        closure_scalar_parameters = (
             eve.trees.pre_walk_values(
                 eve.utils.XIterable(program.closures).getattr("inputs").to_list()
             )
@@ -115,7 +122,7 @@ class GTFNTranslationStep(
         parameter_args = ["gridtools::fn::backend::naive{}"]
         for p in parameters:
             if isinstance(p, (interface.ScalarParameter, interface.BufferParameter)):
-                if isinstance(p, interface.ScalarParameter) and p.name in scalar_parameters:
+                if isinstance(p, interface.ScalarParameter) and p.name in closure_scalar_parameters:
                     parameter_args.append(f"gridtools::stencil::global_parameter({p.name})")
                 else:
                     parameter_args.append(p.name)

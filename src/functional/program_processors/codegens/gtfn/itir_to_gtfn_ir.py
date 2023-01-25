@@ -134,52 +134,6 @@ def _collect_dimensions_from_domain(
     return offset_definitions
 
 
-def _collect_dimensions_from_offsets(
-    node: itir.Node,
-    grid_type: common.GridType,
-    offset_provider: dict[str, common.Dimension | common.Connectivity],
-) -> dict[str, TagDefinition]:
-    used_offset_tags: set[itir.OffsetLiteral] = (
-        node.walk_values()
-        .if_isinstance(itir.OffsetLiteral)
-        .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-        .getattr("value")
-    ).to_set()
-    if not used_offset_tags.issubset(set(offset_provider.keys())):
-        raise ValueError()
-    offset_definitions: dict[str, TagDefinition] = {}
-    for dim_or_connectivity in offset_provider.values():
-        if isinstance(dim_or_connectivity, common.Dimension):
-            dim = dim_or_connectivity
-            if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-            else:
-                assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
-                    raise ValueError(
-                        "Mapping an offset to a horizontal dimension in unstructured is not allowed."
-                    )
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value), alias=_vertical_dimension)
-        elif isinstance(dim_or_connectivity, common.Connectivity):
-            connectivity = dim_or_connectivity
-            for dim in [
-                connectivity.origin_axis,
-                connectivity.neighbor_axis,
-            ]:
-                if grid_type == common.GridType.CARTESIAN:
-                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                else:
-                    assert grid_type == common.GridType.UNSTRUCTURED
-                    if not dim.kind == common.DimensionKind.HORIZONTAL:
-                        raise NotImplementedError()
-                    offset_definitions[dim.value] = TagDefinition(
-                        name=Sym(id=dim.value), alias=_horizontal_dimension
-                    )
-        else:
-            raise AssertionError()
-    return offset_definitions
-
-
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
@@ -216,8 +170,25 @@ def _collect_offset_definitions(
                 )
         elif isinstance(dim_or_connectivity, common.Connectivity):
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+
+            connectivity: common.Connectivity = dim_or_connectivity
+            for dim in [
+                connectivity.origin_axis,
+                connectivity.neighbor_axis,
+            ]:
+                if grid_type == common.GridType.CARTESIAN:
+                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                else:
+                    assert grid_type == common.GridType.UNSTRUCTURED
+                    if not dim.kind == common.DimensionKind.HORIZONTAL:
+                        raise NotImplementedError()
+                    offset_definitions[dim.value] = TagDefinition(
+                        name=Sym(id=dim.value), alias=_horizontal_dimension
+                    )
         else:
-            raise AssertionError()
+            raise AssertionError(
+                "Elements of offset provider need to be either `Dimension` or `Connectivity`."
+            )
     return offset_definitions
 
 
@@ -580,7 +551,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
             **_collect_dimensions_from_domain(node.closures),
-            **_collect_dimensions_from_offsets(node, self.grid_type, self.offset_provider),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
         }
         return FencilDefinition(
