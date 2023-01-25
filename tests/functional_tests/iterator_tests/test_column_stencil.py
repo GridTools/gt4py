@@ -316,7 +316,7 @@ def sum_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
+    if program_processor in [run_gtfn, run_gtfn_imperative]:
         pytest.xfail("origin not supported in gtfn")
 
     k_size = 10
