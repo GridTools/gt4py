@@ -165,7 +165,6 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
-            object.__setattr__(new_node, "__node_annex__", copy.deepcopy(node.annex))
             return new_node
 
         if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
