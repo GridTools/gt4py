@@ -757,10 +757,9 @@ def _make_tuple(
         if column_axis is not None:
             assert _column_range
             # construct a Column of tuples
-            column_axis_idx = (
-                _axis_idx(_get_axes(field_or_tuple), column_axis)
-                or -1  # field doesn't have the column index, e.g. ContantField
-            )
+            column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
+            if column_axis_idx is None:
+                column_axis_idx = -1  # field doesn't have the column index, e.g. ContantField
             first = tuple(
                 _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
                 for f in field_or_tuple
