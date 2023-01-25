@@ -51,8 +51,6 @@ def apply_common_transforms(
     if lift_mode != LiftMode.FORCE_TEMPORARIES:
         for _ in range(10):
             inlined = _inline_lifts(ir, lift_mode)
-            inlined = TupleMerger().visit(inlined)
-            inlined = InlineIntoScan().visit(inlined)
             inlined = InlineLambdas.apply(
                 inlined,
                 opcount_preserving=True,
@@ -67,6 +65,10 @@ def apply_common_transforms(
         ir = InlineLambdas.apply(
             ir, opcount_preserving=True, force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE)
         )
+
+    if lift_mode == LiftMode.FORCE_INLINE:
+        ir = TupleMerger().visit(ir)
+        ir = InlineIntoScan().visit(ir)
 
     ir = NormalizeShifts().visit(ir)
 

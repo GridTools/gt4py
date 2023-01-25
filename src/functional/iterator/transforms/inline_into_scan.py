@@ -1,9 +1,14 @@
+from collections.abc import KeysView
+from typing import TypeGuard
+
 import eve
 from eve import NodeTranslator, traits
 from functional.iterator import ir
+from functional.iterator.transforms.inline_lambdas import InlineLambdas
+from functional.iterator.transforms.inline_lifts import InlineLifts
 
 
-def _is_scan(node: ir.Node):
+def _is_scan(node: ir.Node) -> TypeGuard[ir.FunCall]:
     return (
         isinstance(node, ir.FunCall)
         and isinstance(node.fun, ir.FunCall)
@@ -11,7 +16,7 @@ def _is_scan(node: ir.Node):
     )
 
 
-def _is_userdefined_symbolref(node: ir.Expr, symtable: dict[eve.SymbolName, ir.Sym]):
+def _is_userdefined_symbolref(node: ir.Expr, symtable: dict[eve.SymbolName, ir.Sym]) -> bool:
     return (
         isinstance(node, ir.SymRef)
         and node.id in symtable
@@ -22,9 +27,10 @@ def _is_userdefined_symbolref(node: ir.Expr, symtable: dict[eve.SymbolName, ir.S
     )
 
 
+# TODO this doesn't work as it doesn't respect the scope, i.e. should not find SymRefs in a different scope
 def _extract_symrefs(
     nodes: list[ir.Expr], symtable: dict[eve.SymbolName, ir.Sym]
-) -> set[ir.SymRef]:
+) -> KeysView[ir.SymRef]:
     symrefs = []
     for n in nodes:
         if isinstance(n, ir.SymRef):
@@ -38,6 +44,32 @@ def _extract_symrefs(
                 .to_list()
             )
     return dict.fromkeys(symrefs).keys()  # sorted set
+
+
+def _contains_scan(node: ir.Expr) -> bool:
+    return bool(
+        node.pre_walk_values().if_isinstance(ir.SymRef).filter(lambda x: x.id == "scan").to_list()
+    )
+
+
+def _should_inline(node: ir.FunCall) -> bool:
+    return not any(_contains_scan(arg) for arg in node.args)
+
+
+def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
+    for _ in range(10):
+        inlined = InlineLifts().visit(node)
+        inlined = InlineLambdas.apply(
+            inlined,
+            opcount_preserving=True,
+            force_inline_lift=True,
+        )
+        if inlined == node:
+            break
+        node = inlined
+    else:
+        raise RuntimeError("Inlining lift and lambdas did not converge.")
+    return node
 
 
 class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -61,7 +93,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        if _is_scan(node):
+        if _is_scan(node) and _should_inline(node):
             original_scan_args = node.args
             original_scan_call = node.fun
             assert isinstance(original_scan_call, ir.FunCall)
@@ -81,6 +113,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     args=original_scan_args,
                 ),
             )
+            new_scanpass = _lambda_and_lift_inliner(new_scanpass)
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
