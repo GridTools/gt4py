@@ -6,10 +6,11 @@ from functional.iterator.transforms.cse import CommonSubexpressionElimination
 from functional.iterator.transforms.eta_reduction import EtaReduction
 from functional.iterator.transforms.global_tmps import CreateGlobalTmps
 from functional.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
-from functional.iterator.transforms.inline_into_scan import InlineIntoScan, TupleMerger
+from functional.iterator.transforms.inline_into_scan import InlineIntoScan
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 from functional.iterator.transforms.merge_let import MergeLet
+from functional.iterator.transforms.merge_tuple import MergeTuple
 from functional.iterator.transforms.normalize_shifts import NormalizeShifts
 from functional.iterator.transforms.propagate_deref import PropagateDeref
 from functional.iterator.transforms.unroll_reduce import UnrollReduce
@@ -67,7 +68,7 @@ def apply_common_transforms(
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:
-        ir = TupleMerger().visit(ir)
+        ir = MergeTuple().visit(ir)
         # TODO needs to re-run multiple times as there might be multiple levels of lambdas around the scan
         ir = InlineIntoScan().visit(ir)
         ir = InlineLambdas.apply(ir, True, True)
