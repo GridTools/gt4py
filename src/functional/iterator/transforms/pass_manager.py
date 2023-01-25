@@ -68,6 +68,7 @@ def apply_common_transforms(
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = TupleMerger().visit(ir)
+        # TODO needs to re-run multiple times as there might be multiple levels of lambdas around the scan
         ir = InlineIntoScan().visit(ir)
         ir = InlineLambdas.apply(ir, True, True)
         ir = InlineIntoScan().visit(ir)
