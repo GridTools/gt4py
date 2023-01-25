@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional, Union
+from typing import ClassVar, Optional, Union
 
 from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -63,12 +63,6 @@ class Lambda(Expr, SymbolTableTrait):
 class FunCall(Expr):
     fun: Expr  # VType[Callable]
     args: list[Expr]
-    conn: Any
-
-    def __init__(self, fun: Expr, args: list[Expr], conn: Any = None):
-        self.fun = fun
-        self.args = args
-        self.conn = conn
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
@@ -173,7 +167,6 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: list[
         Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
     ]
-    # function_definitions: list[Any]  # TODO
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType

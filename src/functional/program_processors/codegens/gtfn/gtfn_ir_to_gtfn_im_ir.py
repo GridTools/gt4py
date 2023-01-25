@@ -182,7 +182,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             expr = self.visit(arg, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tmp_id}_{i}"), rhs=expr))
         tup_args = [gtfn_ir_common.SymRef(id=f"{tmp_id}_{i}") for i in range(len(node.args))]
-        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)  # type: ignore
+        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)
 
     def _expand_lambda(
         self,
@@ -222,7 +222,6 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         max_neighbors: int,
         **kwargs,
     ):
-        max_neighbors = node.conn.max_neighbors
         fun, init = node.fun.args  # type: ignore
 
         red_lit = gtfn_ir_common.Sym(id=f"{red_idx}")

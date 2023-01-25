@@ -240,7 +240,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)  # type: ignore
+        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
 
     def _construct_itir_initialized_domain_arg(
         self,

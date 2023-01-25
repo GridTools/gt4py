@@ -406,9 +406,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
             elif node.fun == itir.SymRef(id="shift"):
                 raise ValueError("unapplied shift call not supported: {node}")
-        return FunCall(
-            fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs), conn=node.conn
-        )
+        return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(
         self, node: itir.FunctionDefinition, **kwargs: Any
