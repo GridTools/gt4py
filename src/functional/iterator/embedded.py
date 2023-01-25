@@ -757,7 +757,10 @@ def _make_tuple(
         if column_axis is not None:
             assert _column_range
             # construct a Column of tuples
-            column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
+            column_axis_idx = (
+                _axis_idx(_get_axes(field_or_tuple), column_axis)
+                or -1  # field doesn't have the column index, e.g. ContantField
+            )
             first = tuple(
                 _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
                 for f in field_or_tuple
@@ -784,11 +787,11 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> int:
+def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
-    raise AssertionError(f"{axis} not in {axes}")
+    return None
 
 
 @dataclasses.dataclass(frozen=True)
