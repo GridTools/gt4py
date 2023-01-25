@@ -212,7 +212,7 @@ V2V = offset("V2V")
 
 def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    non_sparse = np_as_located_field(Edge)(np.zeros(9))
+    non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
