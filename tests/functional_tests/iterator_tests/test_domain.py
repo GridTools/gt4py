@@ -8,23 +8,13 @@ from functional.iterator.builtins import deref
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
 
+from .conftest import DummyConnectivity
+
 
 @fundef
 def foo(inp):
     return deref(inp)
 
-
-@dataclass
-class DummyConnectivity:
-    max_neighbors: int
-    has_skip_values: int
-    origin_axis: Dimension = Dimension("dummy")
-
-    def mapped_index(_, __) -> int:
-        return 0
-
-    def __hash__(self):
-        return hash((self.max_neighbors, self.has_skip_values, self.origin_axis.value))
 
 connectivity = DummyConnectivity(max_neighbors=0, has_skip_values=True)
 
