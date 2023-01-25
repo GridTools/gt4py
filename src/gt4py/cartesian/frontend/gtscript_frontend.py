@@ -2036,7 +2036,7 @@ class GTScriptParser(ast.NodeVisitor):
             local_symbols={},  # Not used
             domain=domain,
             temp_decls=temp_decls,
-            dtypes=self.dtypes
+            dtypes=self.dtypes,
         )(self.ast_root)
 
         self.definition_ir = nodes.StencilDefinition(

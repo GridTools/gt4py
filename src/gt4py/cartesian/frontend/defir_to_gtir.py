@@ -18,6 +18,8 @@ import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
+import numpy as np
+
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
@@ -58,7 +60,6 @@ from gt4py.cartesian.frontend.nodes import (
 )
 from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.common import ExprKind
-import numpy as np
 
 
 def _convert_dtype(data_type) -> common.DataType:
