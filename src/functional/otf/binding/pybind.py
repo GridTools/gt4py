@@ -154,9 +154,7 @@ def make_parameter(
     | interface.ConnectivityParameter,
 ) -> FunctionParameter:
     if isinstance(parameter, interface.ConnectivityParameter):
-        return FunctionParameter(
-            name=parameter.name, ndim=2, dtype=np.dtype("int32")
-        )  # TODO check if we use ndim and dtype
+        return FunctionParameter(name=parameter.name, ndim=2, dtype=np.dtype("int32"))
     name = parameter.name
     ndim = 0 if isinstance(parameter, interface.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type

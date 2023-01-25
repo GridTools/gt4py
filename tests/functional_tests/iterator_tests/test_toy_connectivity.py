@@ -11,6 +11,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import fundef, offset
 from functional.program_processors.formatters import gtfn
+from functional.program_processors.runners import gtfn_cpu
 
 from .conftest import run_processor
 
@@ -40,7 +41,8 @@ c2e_arr = np.array(
         [6, 16, 0, 15],  # 6
         [7, 17, 1, 16],
         [8, 15, 2, 17],
-    ]
+    ],
+    dtype=np.int32,
 )
 
 v2v_arr = np.array(
@@ -54,7 +56,8 @@ v2v_arr = np.array(
         [7, 0, 8, 3],
         [8, 1, 6, 4],
         [6, 2, 7, 5],
-    ]
+    ],
+    dtype=np.int32,
 )
 
 e2v_arr = np.array(
@@ -77,7 +80,8 @@ e2v_arr = np.array(
         [6, 0],
         [7, 1],
         [8, 2],
-    ]
+    ],
+    dtype=np.int32,
 )
 
 
@@ -93,7 +97,8 @@ v2e_arr = np.array(
         [6, 12, 8, 15],  # 6
         [7, 13, 6, 16],
         [8, 14, 7, 17],
-    ]
+    ],
+    dtype=np.int32,
 )
 
 V2E = offset("V2E")
@@ -352,9 +357,13 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = index_field(Vertex)
+    if program_processor == gtfn_cpu.run_gtfn:
+        # TODO(tehrengruber): only a temporary solution until index fields are supported in the
+        #  gtfn backend.
+        inp = np_as_located_field(Vertex)(np.array([inp[i] for i in range(0, 9)]))
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
