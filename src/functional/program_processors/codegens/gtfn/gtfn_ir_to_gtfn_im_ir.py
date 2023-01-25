@@ -1,9 +1,10 @@
 import dataclasses
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Iterable, Iterator, List, TypeGuard, Union
 
 import eve
 from eve import NodeTranslator
 from eve.utils import UIDGenerator
+from functional import common
 from functional.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
@@ -13,9 +14,94 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     ReturnStmt,
     Stmt,
 )
-from functional.iterator.transforms import reduction_utils
 
-reduction_utils.register_ir(gtfn_ir)
+
+# TODO: start of code clone from unroll_reduce.py. This is necessary since whilet the IR nodes are compatible between itir and gtfn_ir,
+#       the structure of the ir is slightly different, hence functions like _is_shifted and _get_partial_offset_tag are slightly changed
+#       in this version of the code clone. To be removed asap
+def _is_shifted(arg: gtfn_ir_common.Expr) -> TypeGuard[gtfn_ir.FunCall]:
+    return (
+        isinstance(arg, gtfn_ir.FunCall)
+        and isinstance(arg.fun, gtfn_ir_common.SymRef)
+        and arg.fun.id == "shift"
+    )
+
+
+def _is_applied_lift(arg: gtfn_ir_common.Expr) -> TypeGuard[gtfn_ir.FunCall]:
+    return (
+        isinstance(arg, gtfn_ir.FunCall)
+        and isinstance(arg.fun, gtfn_ir.FunCall)
+        and arg.fun.fun == gtfn_ir_common.SymRef(id="lift")
+    )
+
+
+def _is_shifted_or_lifted_and_shifted(arg: gtfn_ir_common.Expr) -> TypeGuard[gtfn_ir.FunCall]:
+    return _is_shifted(arg) or (
+        _is_applied_lift(arg)
+        and any(_is_shifted_or_lifted_and_shifted(nested_arg) for nested_arg in arg.args)
+    )
+
+
+def _get_shifted_args(reduce_args: Iterable[gtfn_ir_common.Expr]) -> Iterator[gtfn_ir.FunCall]:
+    return filter(
+        _is_shifted_or_lifted_and_shifted,
+        reduce_args,
+    )
+
+
+def _is_list_of_funcalls(lst: list) -> TypeGuard[list[gtfn_ir.FunCall]]:
+    return all(isinstance(f, gtfn_ir.FunCall) for f in lst)
+
+
+def _get_partial_offset_tag(arg: gtfn_ir.FunCall) -> str:
+    if _is_shifted(arg):
+        assert isinstance(arg.fun, gtfn_ir_common.SymRef)
+        offset = arg.args[-1]
+        assert isinstance(offset, gtfn_ir.OffsetLiteral)
+        assert isinstance(offset.value, str)
+        return offset.value
+    else:
+        assert _is_applied_lift(arg)
+        assert _is_list_of_funcalls(arg.args)
+        partial_offsets = [_get_partial_offset_tag(arg) for arg in arg.args]
+        assert all(o == partial_offsets[0] for o in partial_offsets)
+        return partial_offsets[0]
+
+
+def _get_partial_offset_tags(reduce_args: Iterable[gtfn_ir_common.Expr]) -> Iterable[str]:
+    return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
+
+
+def _is_reduce(node: gtfn_ir.FunCall) -> TypeGuard[gtfn_ir.FunCall]:
+    return isinstance(node.fun, gtfn_ir.FunCall) and node.fun.fun == gtfn_ir_common.SymRef(
+        id="reduce"
+    )
+
+
+def _get_connectivity(
+    applied_reduce_node: gtfn_ir.FunCall,
+    offset_provider: dict[str, common.Dimension | common.Connectivity],
+) -> common.Connectivity:
+    """Return single connectivity that is compatible with the arguments of the reduce."""
+    if not _is_reduce(applied_reduce_node):
+        raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
+
+    connectivities: list[common.Connectivity] = []
+    for o in _get_partial_offset_tags(applied_reduce_node.args):
+        conn = offset_provider[o]
+        assert isinstance(conn, common.Connectivity)
+        connectivities.append(conn)
+
+    if not connectivities:
+        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+
+    if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
+        # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
+        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+    return connectivities[0]
+
+
+# TODO: end of code clone
 
 
 class PlugInCurrentIdx(NodeTranslator):
@@ -99,8 +185,13 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)  # type: ignore
 
     def _expand_lambda(
-        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, max_neighbors: int, **kwargs
-    ):        
+        self,
+        node: gtfn_ir.FunCall,
+        new_args: List[gtfn_ir.FunCall],
+        red_idx: str,
+        max_neighbors: int,
+        **kwargs,
+    ):
         fun, init = node.fun.args  # type: ignore
         param_to_args = dict(zip([param.id for param in fun.params[1:]], new_args))
         acc = fun.params[0]
@@ -124,7 +215,12 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
     def _expand_symref(
-        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, max_neighbors: int, **kwargs
+        self,
+        node: gtfn_ir.FunCall,
+        new_args: List[gtfn_ir.FunCall],
+        red_idx: str,
+        max_neighbors: int,
+        **kwargs,
     ):
         max_neighbors = node.conn.max_neighbors
         fun, init = node.fun.args  # type: ignore
@@ -149,14 +245,12 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
 
-        connectivity = reduction_utils.get_connectivity(
-            node, offset_provider  # type: ignore[arg-type]
-        )
+        connectivity = _get_connectivity(node, offset_provider)
 
         args = node.args
         # do the following transformations to the node arguments
         # dense fields: shift(dense_f, X2Y) -> deref(shift(dense_f, X2Y, nbh_iterator)
-        # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))        
+        # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))
         new_args = []
         nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
