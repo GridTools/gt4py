@@ -24,7 +24,7 @@ def basic_reduction():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
                 args=[ir.SymRef(id="x")],
             )
         ],
@@ -42,7 +42,7 @@ def reduction_with_shift_on_second_arg():
         args=[
             ir.SymRef(id="x"),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
                 args=[ir.SymRef(id="y")],
             ),
         ],
@@ -59,11 +59,11 @@ def reduction_with_incompatible_shifts():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
                 args=[ir.SymRef(id="x")],
             ),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim2")]),
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim2")]),
                 args=[ir.SymRef(id="y")],
             ),
         ],
@@ -83,15 +83,15 @@ def reduction_with_irrelevant_full_shift():
                 fun=ir.FunCall(
                     fun=ir.SymRef(id="shift"),
                     args=[
-                        ir.OffsetLiteral(value="irrelevant_dim"),
+                        ir.OffsetLiteral(value="IrrelevantDim"),
                         ir.OffsetLiteral(value="0"),
-                        ir.OffsetLiteral(value="dim"),
+                        ir.OffsetLiteral(value="Dim"),
                     ],
                 ),
                 args=[ir.SymRef(id="x")],
             ),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="dim")]),
+                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
                 args=[ir.SymRef(id="y")],
             ),
         ],
@@ -107,10 +107,10 @@ def reduction_with_irrelevant_full_shift():
     ],
 )
 def test_get_partial_offsets(reduction, request):
-    offset_provider = {"dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
+    offset_provider = {"Dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
     partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
 
-    assert set(partial_offsets) == {"dim"}
+    assert set(partial_offsets) == {"Dim"}
 
 
 def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
@@ -155,27 +155,27 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
 
 
 def test_basic(basic_reduction, has_skip_values):
-    expected = _expected(basic_reduction, "dim", 3, has_skip_values)
+    expected = _expected(basic_reduction, "Dim", 3, has_skip_values)
 
-    offset_provider = {"dim": DummyConnectivity(max_neighbors=3, has_skip_values=has_skip_values)}
+    offset_provider = {"Dim": DummyConnectivity(max_neighbors=3, has_skip_values=has_skip_values)}
     actual = UnrollReduce.apply(basic_reduction, offset_provider=offset_provider)
     assert actual == expected
 
 
 def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, has_skip_values):
-    expected = _expected(reduction_with_shift_on_second_arg, "dim", 1, has_skip_values, 1)
+    expected = _expected(reduction_with_shift_on_second_arg, "Dim", 1, has_skip_values, 1)
 
-    offset_provider = {"dim": DummyConnectivity(max_neighbors=1, has_skip_values=has_skip_values)}
+    offset_provider = {"Dim": DummyConnectivity(max_neighbors=1, has_skip_values=has_skip_values)}
     actual = UnrollReduce.apply(reduction_with_shift_on_second_arg, offset_provider=offset_provider)
     assert actual == expected
 
 
 def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shift):
-    expected = _expected(reduction_with_irrelevant_full_shift, "dim", 3, False)
+    expected = _expected(reduction_with_irrelevant_full_shift, "Dim", 3, False)
 
     offset_provider = {
-        "dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
-        "irrelevant_dim": DummyConnectivity(
+        "Dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
+        "IrrelevantDim": DummyConnectivity(
             max_neighbors=1, has_skip_values=True
         ),  # different max_neighbors and skip value to trigger error
     }
@@ -189,23 +189,23 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
     "offset_provider",
     [
         {
-            "dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
-            "dim2": DummyConnectivity(max_neighbors=2, has_skip_values=False),
+            "Dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
+            "Dim2": DummyConnectivity(max_neighbors=2, has_skip_values=False),
         },
         {
-            "dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
-            "dim2": DummyConnectivity(max_neighbors=3, has_skip_values=True),
+            "Dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
+            "Dim2": DummyConnectivity(max_neighbors=3, has_skip_values=True),
         },
         {
-            "dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
-            "dim2": DummyConnectivity(max_neighbors=2, has_skip_values=True),
+            "Dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
+            "Dim2": DummyConnectivity(max_neighbors=2, has_skip_values=True),
         },
     ],
 )
 def test_reduction_with_incompatible_shifts(reduction_with_incompatible_shifts, offset_provider):
     offset_provider = {
-        "dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
-        "dim2": DummyConnectivity(max_neighbors=2, has_skip_values=False),
+        "Dim": DummyConnectivity(max_neighbors=3, has_skip_values=False),
+        "Dim2": DummyConnectivity(max_neighbors=2, has_skip_values=False),
     }
     with pytest.raises(RuntimeError, match="incompatible"):
         UnrollReduce.apply(reduction_with_incompatible_shifts, offset_provider=offset_provider)
