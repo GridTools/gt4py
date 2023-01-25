@@ -170,8 +170,8 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             #  lift(λ(a) → inner_ex(shift(...)(a)))(lift(λ(b) → outer_ex(b))(arg))
             # Note: This branch is only needed when there is no outer `deref` by which the previous
             # branches eliminate the lift calls. This occurs for example for the `reduce` builtin
-            # or when a better readible expression of a lift statement is needed during debugging.
-            # Due to it's complexity we might want to remove this branch at some point again,
+            # or when a better readable expression of a lift statement is needed during debugging.
+            # Due to its complexity we might want to remove this branch at some point again,
             # when we see that it is not required.
             stencil = node.fun.args[0]
             eligible_lifted_args = [

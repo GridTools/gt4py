@@ -28,11 +28,11 @@ from functional.type_system.type_info import (  # noqa: F401
     is_arithmetic as is_arithmetic,
     is_concrete as is_concrete,
     is_concretizable as is_concretizable,
-    is_field_type_or_tuple_of_field_type as is_field_type_or_tuple_of_field_type,
     is_floating_point as is_floating_point,
     is_integral as is_integral,
     is_logical as is_logical,
     is_number as is_number,
+    is_type_or_tuple_of_type as is_type_or_tuple_of_type,
     primitive_constituents as primitive_constituents,
     promote as promote,
     promote_dims as promote_dims,
@@ -52,17 +52,29 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
 
 
 def promote_zero_dims(
-    args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType
+    args: list[ts.TypeSpec], function_type: ts.FieldOperatorType | ts.ProgramType | ts.FunctionType
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    new_args = args.copy()
+    new_args = []
     for arg_i, arg in enumerate(args):
-        def_type = function_type.definition.args[arg_i]
-        if _is_zero_dim_field(def_type) and is_number(arg):
-            if extract_dtype(def_type) == extract_dtype(arg):
-                new_args[arg_i] = def_type
-            else:
-                raise GTTypeError(f"{arg} is not compatible with {def_type}.")
+        def_type = (
+            function_type.args[arg_i]
+            if isinstance(function_type, ts.FunctionType)
+            else function_type.definition.args[arg_i]
+        )
+
+        def _as_field(arg: ts.TypeSpec, path: tuple):
+            el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
+
+            if _is_zero_dim_field(el_def_type) and is_number(arg):
+                if extract_dtype(el_def_type) == extract_dtype(arg):
+                    return el_def_type
+                else:
+                    raise GTTypeError(f"{arg} is not compatible with {el_def_type}.")
+            return arg
+
+        new_args.append(apply_to_primitive_constituents(arg, _as_field, with_path_arg=True))
+
     return new_args
 
 
@@ -89,8 +101,8 @@ def function_signature_incompatibilities_fieldop(
 def function_signature_incompatibilities_scanop(
     scanop_type: ts.ScanOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    if not all(is_field_type_or_tuple_of_field_type(arg) for arg in args):
-        yield "Arguments to scan operator must be fields or tuples thereof."
+    if not all(is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args):
+        yield "Arguments to scan operator must be fields, scalars or tuples thereof."
         return
 
     arg_dims = [extract_dims(el) for arg in args for el in primitive_constituents(arg)]
@@ -132,7 +144,9 @@ def function_signature_incompatibilities_scanop(
         returns=ts.DeferredType(constraint=None),
     )
 
-    yield from function_signature_incompatibilities(function_type, args, kwargs)
+    yield from function_signature_incompatibilities(
+        function_type, promote_zero_dims(args, function_type), kwargs
+    )
 
 
 @function_signature_incompatibilities.register

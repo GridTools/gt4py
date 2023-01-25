@@ -95,7 +95,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
-            if type_info.is_field_type_or_tuple_of_field_type(param.type):
+            if type_info.is_type_or_tuple_of_type(param.type, ts.FieldType):
                 fields_dims: list[list[Dimension]] = (
                     type_info.primitive_constituents(param.type).getattr("dims").to_list()
                 )
@@ -131,7 +131,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
-        assert type_info.is_field_type_or_tuple_of_field_type(node.kwargs["out"].type)
+        assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
         domain = node.kwargs.get("domain", None)
         output, lowered_domain = self._visit_stencil_call_out_arg(

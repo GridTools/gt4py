@@ -48,7 +48,7 @@ class RemoveDocstrings(ast.NodeTransformer):
     """
 
     @classmethod
-    def apply(cls, node):
+    def apply(cls, node: ast.AST) -> ast.AST:
         return cls().visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
