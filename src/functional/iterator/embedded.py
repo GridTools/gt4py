@@ -717,21 +717,21 @@ def _single_vertical_idx(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndices,
     *,
     column_axis: Tag,
-) -> Column:
+) -> tuple[tuple | Column, ...]:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple,  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndices,
     *,
-    column_axis: Literal[None],
-) -> tuple:  # arbitrary nesting of tuples of LocatedField
+    column_axis: Literal[None] = None,
+) -> tuple[tuple | npt.DTypeLike, ...]:  # arbitrary nesting
     ...
 
 
@@ -742,17 +742,17 @@ def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_a
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None]
+    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None] = None
 ) -> npt.DTypeLike:
     ...
 
 
 def _make_tuple(
-    field_or_tuple,
-    indices,
+    field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
+    indices: FieldIndices,
     *,
-    column_axis=None,
-):
+    column_axis: Optional[Tag] = None,
+) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert _column_range
@@ -981,7 +981,7 @@ def _shift_range(range_or_index: IntIndex, offset: int) -> IntIndex:
     ...
 
 
-def _shift_range(range_or_index, offset):
+def _shift_range(range_or_index: range | IntIndex, offset: int) -> ArrayIndex:
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
@@ -1001,17 +1001,17 @@ def _range2slice(r: IntIndex) -> IntIndex:
     ...
 
 
-def _range2slice(r):
+def _range2slice(r: range | IntIndex) -> slice | IntIndex:
     if isinstance(r, range):
         assert r.start >= 0 and r.stop >= r.start
         return slice(r.start, r.stop)
     return r
 
 
-def _shift_ranges(
+def _shift_field_indices(
     ranges_or_indices: tuple[range | IntIndex, ...],
     offsets: tuple[int, ...],
-) -> tuple[slice | IntIndex, ...]:
+) -> tuple[ArrayIndex, ...]:
     return tuple(
         _range2slice(r) if o == 0 else _shift_range(r, o)
         for r, o in zip(ranges_or_indices, offsets)
@@ -1032,10 +1032,10 @@ def np_as_located_field(
 
         def setter(indices, value):
             indices = utils.tupelize(indices)
-            a[_shift_ranges(indices, offsets) if offsets else indices] = value
+            a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            return a[_shift_ranges(indices, offsets) if offsets else indices]
+            return a[_shift_field_indices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
             getter,
