@@ -167,7 +167,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 
 
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
-def test_unapplied_arithmetic_and_logical_builtins_gtfn(builtin, inputs, expected):
+def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     if builtin == if_:
         pytest.skip("If cannot be used unapplied")
     inps = asfield(*asarray(*inputs))
