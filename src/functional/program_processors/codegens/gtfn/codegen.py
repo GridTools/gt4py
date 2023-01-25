@@ -64,6 +64,21 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "int32": "std::int32_t",
         "int64": "std::int64_t",
         "bool": "bool",
+        "plus": "std::plus{}",
+        "minus": "std::minus{}",
+        "multiplies": "std::multiplies{}",
+        "divides": "std::divides{}",
+        "eq": "std::equal_to{}",
+        "not_eq": "std::not_equal_to{}",
+        "less": "std::less{}",
+        "less_equal": "std::less_equal{}",
+        "greater": "std::greater{}",
+        "greater_equal": "std::greater_equal{}",
+        "and_": "std::logical_and{}",
+        "or_": "std::logical_or{}",
+        "xor_": "std::bit_xor{}",
+        "mod": "std::modulus{}",
+        "not_": "std::logical_not{}",
     }
 
     Sym = as_fmt("{id}")
@@ -124,7 +139,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        return self.generic_visit(node, fun_name=self.visit(node.fun))
+        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self.user_defined_function_ids:
+            fun_name = f"{self.visit(node.fun)}{{}}()"
+        else:
+            fun_name = self.visit(node.fun)
+
+        return self.generic_visit(node, fun_name=fun_name)
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -188,6 +208,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
     ) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
+        self.user_defined_function_ids = list(
+            str(fundef.id) for fundef in node.function_definitions
+        )
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
@@ -202,6 +225,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     #include <cmath>
     #include <cstdint>
+    #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
 
     namespace generated{
