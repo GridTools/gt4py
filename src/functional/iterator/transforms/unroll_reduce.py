@@ -65,7 +65,7 @@ def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
     return isinstance(node.fun, itir.FunCall) and node.fun.fun == itir.SymRef(id="reduce")
 
 
-def get_connectivity(
+def _get_connectivity(
     applied_reduce_node: itir.FunCall,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ) -> common.Connectivity:
@@ -126,7 +126,7 @@ class UnrollReduce(NodeTranslator):
 
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
-        connectivity = get_connectivity(node, offset_provider)
+        connectivity = _get_connectivity(node, offset_provider)
         max_neighbors = connectivity.max_neighbors
         has_skip_values = connectivity.has_skip_values
 
