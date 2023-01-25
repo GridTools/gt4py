@@ -50,8 +50,8 @@ def test_tuple_of_field():
     tuple_of_fields = embedded.TupleOfFields((make_located_field(), make_located_field()))
     assert isinstance(tuple_of_fields, embedded.TupleField)
 
-    tuple_of_fields[0, 0] = (42, 43)
-    assert tuple_of_fields[0, 0] == (42, 43)
+    tuple_of_fields.field_setitem((0, 0), (42, 43))
+    assert tuple_of_fields.field_getitem((0, 0)) == (42, 43)
 
 
 def test_tuple_of_tuple_of_field():
@@ -63,5 +63,5 @@ def test_tuple_of_tuple_of_field():
     testee = embedded.TupleOfFields(tup)
     assert isinstance(testee, embedded.TupleField)
 
-    testee[0, 0] = ((42, 43), (44, 45))
-    assert testee[0, 0] == ((42, 43), (44, 45))
+    testee.field_setitem((0, 0), ((42, 43), (44, 45)))
+    assert testee.field_getitem((0, 0)) == ((42, 43), (44, 45))

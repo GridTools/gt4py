@@ -34,20 +34,6 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         node = cls().visit(node)
         return node
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
-        new_body = self.visit(node.body, **kwargs)
-        unrolled_body = self._unroll_tuple_target_assign(new_body)
-        assert isinstance(unrolled_body[-1], foast.Return)
-
-        return foast.FunctionDefinition(
-            id=node.id,
-            params=self.visit(node.params, **kwargs),
-            body=unrolled_body,
-            closure_vars=self.visit(node.closure_vars, **kwargs),
-            type=node.type,
-            location=node.location,
-        )
-
     def _unique_tuple_symbol(self, node: foast.TupleTargetAssign) -> foast.Symbol[Any]:
         sym: foast.Symbol = foast.Symbol(
             id=f"__tuple_tmp_{self.unique_tuple_symbol_id}",
@@ -57,18 +43,16 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         self.unique_tuple_symbol_id += 1
         return sym
 
-    def _unroll_tuple_target_assign(
-        self, body: list[foast.LocatedNode]
-    ) -> list[foast.Assign | foast.LocatedNode]:
-        unrolled: list[foast.Assign | foast.LocatedNode] = []
+    def visit_BlockStmt(self, node: foast.BlockStmt, **kwargs) -> foast.BlockStmt:
+        unrolled_stmts: list[foast.Assign | foast.BlockStmt | foast.Return] = []
 
-        for node in body:
-            if isinstance(node, foast.TupleTargetAssign):
-                num_elts, targets = len(node.value.type.types), node.targets  # type: ignore
+        for stmt in node.stmts:
+            if isinstance(stmt, foast.TupleTargetAssign):
+                num_elts, targets = len(stmt.value.type.types), stmt.targets  # type: ignore
                 indices = compute_assign_indices(targets, num_elts)
-                tuple_symbol = self._unique_tuple_symbol(node)
-                unrolled.append(
-                    foast.Assign(target=tuple_symbol, value=node.value, location=node.location)
+                tuple_symbol = self._unique_tuple_symbol(stmt)
+                unrolled_stmts.append(
+                    foast.Assign(target=tuple_symbol, value=stmt.value, location=stmt.location)
                 )
 
                 for (index, subtarget) in zip(indices, targets):
@@ -81,7 +65,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         slice_indices = list(range(lower, upper))
                         tuple_slice = [
                             foast.Subscript(
-                                value=tuple_name, index=i, type=el_type, location=node.location
+                                value=tuple_name, index=i, type=el_type, location=stmt.location
                             )
                             for i in slice_indices
                         ]
@@ -89,23 +73,23 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         new_tuple = foast.TupleExpr(
                             elts=tuple_slice,
                             type=el_type,
-                            location=node.location,
+                            location=stmt.location,
                         )
                         new_assign = foast.Assign(
                             target=subtarget.id,
                             value=new_tuple,
-                            location=node.location,
+                            location=stmt.location,
                         )
                     else:
                         new_assign = foast.Assign(
                             target=subtarget,
                             value=foast.Subscript(
-                                value=tuple_name, index=index, type=el_type, location=node.location
+                                value=tuple_name, index=index, type=el_type, location=stmt.location
                             ),
-                            location=node.location,
+                            location=stmt.location,
                         )
-                    unrolled.append(new_assign)
+                    unrolled_stmts.append(new_assign)
             else:
-                unrolled.append(node)
+                unrolled_stmts.append(self.generic_visit(stmt, **kwargs))
 
-        return unrolled
+        return foast.BlockStmt(stmts=unrolled_stmts, location=node.location)
