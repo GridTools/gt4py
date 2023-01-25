@@ -42,6 +42,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
     name: Optional[str] = None
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    use_imperative_backend: bool = False
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -61,11 +62,9 @@ class GTFNExecutor(ppi.ProgramExecutor):
             return decorated_program
 
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-<<<<<<< HEAD
-            gtfn_module.GTFNTranslationStep(self.language_settings, self.use_imperative_backend)
-=======
-            gtfn_module.GTFNTranslationStep(self.language_settings, self.enable_itir_transforms)
->>>>>>> hannes/unapplied_op_to_lambda
+            gtfn_module.GTFNTranslationStep(
+                self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
+            )
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
