@@ -42,6 +42,7 @@ class GTFNTranslationStep(
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    use_imperative_backend: bool = False
 
     def __call__(
         self,

@@ -179,9 +179,6 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
             max_neighbors=1, has_skip_values=True
         ),  # different max_neighbors and skip value to trigger error
     }
-    reduction_with_irrelevant_full_shift = DeduceConnOfReductions.apply(
-        reduction_with_irrelevant_full_shift, offset_provider=offset_provider
-    )
     actual = UnrollReduce.apply(
         reduction_with_irrelevant_full_shift, offset_provider=offset_provider
     )
@@ -211,7 +208,4 @@ def test_reduction_with_incompatible_shifts(reduction_with_incompatible_shifts, 
         "Dim2": DummyConnectivity(max_neighbors=2, has_skip_values=False),
     }
     with pytest.raises(RuntimeError, match="incompatible"):
-        reduction_with_incompatible_shifts = DeduceConnOfReductions.apply(
-            reduction_with_incompatible_shifts, offset_provider=offset_provider
-        )
         UnrollReduce.apply(reduction_with_incompatible_shifts, offset_provider=offset_provider)
