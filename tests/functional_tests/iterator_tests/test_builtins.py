@@ -174,13 +174,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
     gtfn_without_transforms = GTFNExecutor(
-        name="run_gtfn", apply_transforms=False
+        name="run_gtfn", enable_itir_transforms=False
     )  # avoid inlining the function
     fencil(
         builtin,
         out,
         *inps,
-        processor=GTFNExecutor(name="run_gtfn", apply_transforms=False),
+        processor=GTFNExecutor(name="run_gtfn", enable_itir_transforms=False),
     )
 
     assert np.allclose(np.asarray(out), expected)

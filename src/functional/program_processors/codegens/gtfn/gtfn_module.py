@@ -41,7 +41,7 @@ class GTFNTranslationStep(
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
-    apply_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
 
     def __call__(
         self,
@@ -61,7 +61,7 @@ class GTFNTranslationStep(
         decl_body = f"return generated::{function.name}()({rendered_params});"
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(
-            program, apply_transforms=self.apply_transforms, **inp.kwargs
+            program, enable_itir_transforms=self.enable_itir_transforms, **inp.kwargs
         )
         source_code = interface.format_source(
             self.language_settings,
