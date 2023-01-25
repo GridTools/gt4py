@@ -36,6 +36,26 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
+def extract_connectivity_args(offset_provider: dict[str, common.Connectivity | common.Dimension]):
+    # note: the order here needs to agree with the order of the generated bindings
+    args = []
+    for name, conn in offset_provider.items():
+        if isinstance(conn, common.Connectivity):
+            if not isinstance(conn, common.NeighborTable):
+                raise NotImplementedError(
+                    "Only `NeighborTable` connectivities implemented at this point."
+                )
+            args.append(conn.table)
+        elif isinstance(conn, common.Dimension):
+            pass
+        else:
+            raise ValueError(
+                f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
+                f"but got {type(conn).__name__}."
+            )
+    return args
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(ppi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
@@ -58,11 +78,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
             def decorated_program(*args):
                 return inp(
                     *[convert_arg(arg) for arg in args],
-                    *[
-                        op._tbl  # TODO(tehrengruber): fix interface
-                        for op in kwargs["offset_provider"].values()
-                        if isinstance(op, common.Connectivity)
-                    ],
+                    *extract_connectivity_args(kwargs["offset_provider"]),
                 )
 
             return decorated_program

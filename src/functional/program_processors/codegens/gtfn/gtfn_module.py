@@ -20,7 +20,7 @@ import numpy as np
 
 import eve.trees
 import eve.utils
-from functional.common import Connectivity, Dimension, DimensionKind
+from functional.common import Connectivity, Dimension
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, step_types, workflow
 from functional.otf.binding import cpp_interface, interface
@@ -35,14 +35,7 @@ def get_param_description(
 ) -> interface.ScalarParameter | interface.BufferParameter:
     view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
-        return interface.BufferParameter(
-            name,
-            tuple(
-                dim.value if dim.kind != DimensionKind.LOCAL else dim.value + "Dim"
-                for dim in obj.axes
-            ),
-            view.dtype,
-        )
+        return interface.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
     else:
         return interface.ScalarParameter(name, view.dtype)
 

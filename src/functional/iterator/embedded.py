@@ -59,21 +59,21 @@ class SparseTag(Tag):
 class NeighborTableOffsetProvider:
     def __init__(
         self,
-        tbl: npt.NDArray,  # TODO(havogt): define neighbor table concept
+        table: npt.NDArray,  # TODO(havogt): define neighbor table concept
         origin_axis: common.Dimension,
         neighbor_axis: common.Dimension,
         max_neighbors: int,
         has_skip_values=True,
     ) -> None:
-        self._tbl = tbl
+        self.table = table
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
-        assert not hasattr(tbl, "shape") or tbl.shape[1] == max_neighbors
+        assert not hasattr(table, "shape") or table.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
 
     def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
-        return self._tbl[(primary, neighbor_idx)]
+        return self.table[(primary, neighbor_idx)]
 
 
 class StridedNeighborOffsetProvider:
