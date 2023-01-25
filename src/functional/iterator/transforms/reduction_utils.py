@@ -37,12 +37,16 @@ class _OffsetLiteral(_Expr):
 
 
 def _is_shifted(arg: _Expr) -> TypeGuard[_FunCall]:
+<<<<<<< Updated upstream
     return (
         isinstance(arg, _FunCall)
         and isinstance(arg.fun, _FunCall)
         and isinstance(arg.fun.fun, _SymRef)
         and arg.fun.fun.id == "shift"
     )
+=======
+    return isinstance(arg, _FunCall) and isinstance(arg.fun, _SymRef) and arg.fun.id == "shift"
+>>>>>>> Stashed changes
 
 
 def _is_applied_lift(arg: _Expr) -> TypeGuard[_FunCall]:
@@ -74,8 +78,13 @@ def _is_list_of_funcalls(lst: list) -> TypeGuard[list[_FunCall]]:
 
 def _get_partial_offset_tag(arg: _FunCall) -> str:
     if _is_shifted(arg):
+<<<<<<< Updated upstream
         assert isinstance(arg.fun, _FunCall)
         offset = arg.fun.args[-1]
+=======
+        assert isinstance(arg.fun, _SymRef)
+        offset = arg.args[-1]
+>>>>>>> Stashed changes
         assert isinstance(offset, _OffsetLiteral)
         assert isinstance(offset.value, str)
         return offset.value

@@ -13,6 +13,9 @@ from functional.program_processors.codegens.gtfn.gtfn_im_ir import (
     ReturnStmt,
     Stmt,
 )
+from functional.iterator.transforms import reduction_utils
+
+reduction_utils.register_ir(gtfn_ir)
 
 
 class PlugInCurrentIdx(NodeTranslator):
@@ -96,9 +99,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id=fun_id), args=tup_args)  # type: ignore
 
     def _expand_lambda(
-        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, **kwargs
-    ):
-        max_neighbors = node.conn.max_neighbors
+        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, max_neighbors: int, **kwargs
+    ):        
         fun, init = node.fun.args  # type: ignore
         param_to_args = dict(zip([param.id for param in fun.params[1:]], new_args))
         acc = fun.params[0]
@@ -122,7 +124,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
     def _expand_symref(
-        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, **kwargs
+        self, node: gtfn_ir.FunCall, new_args: List[gtfn_ir.FunCall], red_idx: str, max_neighbors: int, **kwargs
     ):
         max_neighbors = node.conn.max_neighbors
         fun, init = node.fun.args  # type: ignore
@@ -147,10 +149,14 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
 
+        connectivity = reduction_utils.get_connectivity(
+            node, offset_provider  # type: ignore[arg-type]
+        )
+
         args = node.args
         # do the following transformations to the node arguments
         # dense fields: shift(dense_f, X2Y) -> deref(shift(dense_f, X2Y, nbh_iterator)
-        # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))
+        # sparse_fields: sparse_f -> tuple_get(nbh_iterator, deref(sparse_f)))        
         new_args = []
         nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
@@ -161,9 +167,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         red_idx = self.uids.sequential_id(prefix="red")
         if isinstance(node.fun.args[0], gtfn_ir.Lambda):  # type: ignore
-            self._expand_lambda(node, new_args, red_idx, **kwargs)
+            self._expand_lambda(node, new_args, red_idx, connectivity.max_neighbors, **kwargs)
         elif isinstance(node.fun.args[0], gtfn_ir_common.SymRef):  # type: ignore
-            self._expand_symref(node, new_args, red_idx)
+            self._expand_symref(node, new_args, red_idx, connectivity.max_neighbors, **kwargs)
 
         return gtfn_ir_common.SymRef(id=red_idx)
 

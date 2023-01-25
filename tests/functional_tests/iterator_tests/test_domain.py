@@ -23,6 +23,8 @@ class DummyConnectivity:
     def mapped_index(_, __) -> int:
         return 0
 
+    def __hash__(self):
+        return hash((self.max_neighbors, self.has_skip_values, self.origin_axis.value))
 
 connectivity = DummyConnectivity(max_neighbors=0, has_skip_values=True)
 

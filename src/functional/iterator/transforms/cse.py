@@ -63,7 +63,7 @@ class CollectSubexpressions(NodeVisitor):
         parent: Optional[ir.Node],
         collector_stack: list[bool],
     ) -> None:
-        allow_collection = node.fun != ir.SymRef(id="shift")
+        allow_collection = node.fun != ir.SymRef(id="shift") and node.fun != ir.SymRef(id="reduce")
         child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(
