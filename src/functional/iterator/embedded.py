@@ -764,28 +764,21 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert _column_range
-            assert isinstance(indices, list)
-            indices_cpy = list(indices)
-            assert isinstance(indices[column_axis_idx], range)
-            indices_cpy[column_axis_idx] = indices[column_axis_idx][0]
-            # construct a Column of tuples
+            assert isinstance(indices, Iterable)
             column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
             if column_axis_idx is None:
                 column_axis_idx = -1  # field doesn't have the column index, e.g. ContantField
             first = tuple(
-                _make_tuple(
-                    f, _single_vertical_idx(indices_cpy, column_axis_idx, _column_range.start)
-                )
+                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
                 for f in field_or_tuple
             )
             col = Column(
                 _column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(first))
             )
             col[0] = first
-            for i, idx in enumerate(indices[column_axis_idx]):
-                indices_cpy[column_axis_idx] = idx
+            for i in _column_range[1:]:
                 col[i] = tuple(
-                    _make_tuple(f, _single_vertical_idx(indices_cpy, column_axis_idx, i))
+                    _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, i))
                     for f in field_or_tuple
                 )
             return col
