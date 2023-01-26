@@ -12,8 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import re
-
 import eve
 from eve import Coerced, SymbolName, SymbolRef
 
@@ -23,19 +21,8 @@ class Node(eve.Node):
     pass
 
 
-_SYMNAME_CPP_REGEX = re.compile(r"^[a-zA-Z_][\w<>:{}]*$")
-
-
-class SymbolNameWithCppTemplate(SymbolName, regex=_SYMNAME_CPP_REGEX):
-    __slots__ = ()
-
-
-class SymbolRefWithCppTemplate(SymbolRef, regex=_SYMNAME_CPP_REGEX):
-    __slots__ = ()
-
-
 class Sym(Node):  # helper
-    id: Coerced[SymbolNameWithCppTemplate]  # noqa: A003
+    id: Coerced[SymbolName]  # noqa: A003
 
 
 class Expr(Node):
@@ -43,4 +30,4 @@ class Expr(Node):
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRefWithCppTemplate]  # noqa: A003
+    id: Coerced[SymbolRef]  # noqa: A003

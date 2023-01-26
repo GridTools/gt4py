@@ -104,6 +104,31 @@ def _get_connectivity(
 # TODO: end of code clone
 
 
+def _make_dense_acess(
+    shift_call: gtfn_ir.FunCall, nbh_iter: gtfn_ir_common.SymRef
+) -> gtfn_ir.FunCall:
+    return gtfn_ir.FunCall(
+        fun=gtfn_ir_common.SymRef(id="deref"),
+        args=[
+            gtfn_ir.FunCall(
+                fun=gtfn_ir_common.SymRef(id="shift"), args=shift_call.args + [nbh_iter]
+            )
+        ],
+    )
+
+
+def _make_sparse_acess(
+    field_ref: gtfn_ir_common.SymRef, nbh_iter: gtfn_ir_common.SymRef
+) -> gtfn_ir.FunCall:
+    return gtfn_ir.FunCall(
+        fun=gtfn_ir_common.SymRef(id="tuple_get"),
+        args=[
+            nbh_iter,
+            gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[field_ref]),
+        ],
+    )
+
+
 class PlugInCurrentIdx(NodeTranslator):
     def visit_SymRef(self, node):
         if node.id == "nbh_iter":
@@ -124,58 +149,10 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
-    @staticmethod
-    def asfloat(value: str) -> str:
-        if "." not in value and "e" not in value and "E" not in value:
-            return f"{value}."
-        return value
-
     def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs):
         if "localized_symbols" in kwargs and node.id in kwargs["localized_symbols"]:
             return gtfn_ir_common.SymRef(id=kwargs["localized_symbols"][node.id])
         return node
-
-    @staticmethod
-    def _is_reduce(node: gtfn_ir.FunCall):
-        return isinstance(node.fun, gtfn_ir.FunCall) and node.fun.fun == gtfn_ir_common.SymRef(
-            id="reduce"
-        )
-
-    @staticmethod
-    def _make_shift(offsets: list[gtfn_ir_common.Expr], iterator: gtfn_ir_common.Expr):
-        return gtfn_ir.FunCall(
-            fun=gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="shift"), args=offsets),
-            args=[iterator],
-        )
-
-    @staticmethod
-    def _make_deref(iterator: gtfn_ir_common.Expr):
-        return gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[iterator])
-
-    @staticmethod
-    def _make_dense_acess(
-        shift_call: gtfn_ir.FunCall, nbh_iter: gtfn_ir_common.SymRef
-    ) -> gtfn_ir.FunCall:
-        return gtfn_ir.FunCall(
-            fun=gtfn_ir_common.SymRef(id="deref"),
-            args=[
-                gtfn_ir.FunCall(
-                    fun=gtfn_ir_common.SymRef(id="shift"), args=shift_call.args + [nbh_iter]
-                )
-            ],
-        )
-
-    @staticmethod
-    def _make_sparse_acess(
-        field_ref: gtfn_ir_common.SymRef, nbh_iter: gtfn_ir_common.SymRef
-    ) -> gtfn_ir.FunCall:
-        return gtfn_ir.FunCall(
-            fun=gtfn_ir_common.SymRef(id="tuple_get"),
-            args=[
-                nbh_iter,
-                gtfn_ir.FunCall(fun=gtfn_ir_common.SymRef(id="deref"), args=[field_ref]),
-            ],
-        )
 
     def commit_args(self, node: gtfn_ir.FunCall, tmp_id: str, fun_id: str, **kwargs):
         for i, arg in enumerate(node.args):
@@ -254,9 +231,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         nbh_iter = gtfn_ir_common.SymRef(id="nbh_iter")
         for arg in args:
             if isinstance(arg, gtfn_ir.FunCall) and arg.fun.id == "shift":  # type: ignore
-                new_args.append(self._make_dense_acess(arg, nbh_iter))
+                new_args.append(_make_dense_acess(arg, nbh_iter))
             if isinstance(arg, gtfn_ir_common.SymRef):
-                new_args.append(self._make_sparse_acess(arg, nbh_iter))
+                new_args.append(_make_sparse_acess(arg, nbh_iter))
 
         red_idx = self.uids.sequential_id(prefix="red")
         if isinstance(node.fun.args[0], gtfn_ir.Lambda):  # type: ignore
@@ -303,7 +280,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             expr = self.visit(node.fun.expr, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=expr))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
-        if self._is_reduce(node):
+        if _is_reduce(node):
             return self.handle_Reduction(node, **kwargs)
         if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple":
             tupl_id = self.uids.sequential_id(prefix="tupl")

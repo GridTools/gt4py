@@ -48,22 +48,31 @@ def generate(
     program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
 ) -> str:
     do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
-    try:
-        gtfn_ir = _lower(
-            program=program,
-            enable_itir_transforms=enable_itir_transforms,
-            do_unroll=do_unroll,
-            **kwargs,
-        )
-    except EveValueError:
-        # if we don't unroll, there may be lifts left in the itir which can't be lowered to gtfn. in this case
-        # case, just retry with unrolled reductions
-        gtfn_ir = _lower(
-            program=program, enable_itir_transforms=enable_itir_transforms, do_unroll=True, **kwargs
-        )
     if "imperative" in kwargs and kwargs["imperative"]:
+        try:
+            gtfn_ir = _lower(
+                program=program,
+                enable_itir_transforms=enable_itir_transforms,
+                do_unroll=do_unroll,
+                **kwargs,
+            )
+        except EveValueError:
+            # if we don't unroll, there may be lifts left in the itir which can't be lowered to gtfn. in this case
+            # case, just retry with unrolled reductions
+            gtfn_ir = _lower(
+                program=program,
+                enable_itir_transforms=enable_itir_transforms,
+                do_unroll=True,
+                **kwargs,
+            )
         gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir, **kwargs)
         generated_code = GTFNIMCodegen.apply(gtfn_im_ir, **kwargs)
     else:
+        gtfn_ir = _lower(
+            program=program,
+            enable_itir_transforms=enable_itir_transforms,
+            do_unroll=True,
+            **kwargs,
+        )
         generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")

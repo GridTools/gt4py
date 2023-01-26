@@ -44,7 +44,7 @@ class Conditional(Stmt):
 
 
 class ReturnStmt(Stmt):
-    ret: Union[Expr, SymRef]
+    ret: Expr
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):

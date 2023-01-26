@@ -83,7 +83,7 @@ if __name__ == "__main__":
         "V2E": DummyConnectivity(max_neighbors=6, has_skip_values=True),
         "E2V": DummyConnectivity(max_neighbors=2, has_skip_values=False),
     }
-    generated_code = generate(prog, offset_provider=offset_provider, imperative=True)
+    generated_code = generate(prog, offset_provider=offset_provider, imperative=imperative)
 
     with open(output_file, "w+") as output:
         output.write(generated_code)
