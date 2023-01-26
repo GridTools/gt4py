@@ -17,6 +17,7 @@ import dataclasses
 from typing import Any, Callable, Final, Optional
 
 import numpy as np
+import numpy.typing as npt
 
 from functional import common
 from functional.iterator import ir as itir
@@ -36,9 +37,11 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-def extract_connectivity_args(offset_provider: dict[str, common.Connectivity | common.Dimension]):
+def extract_connectivity_args(
+    offset_provider: dict[str, common.Connectivity | common.Dimension]
+) -> list[npt.NDArray]:
     # note: the order here needs to agree with the order of the generated bindings
-    args = []
+    args: list[npt.NDArray] = []
     for name, conn in offset_provider.items():
         if isinstance(conn, common.Connectivity):
             if not isinstance(conn, common.NeighborTable):
