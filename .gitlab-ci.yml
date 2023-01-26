@@ -21,13 +21,8 @@ stages:
 build py38 baseimage:
   extends: .container-builder
   stage: baseimage
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-      changes:
-        - Dockerfile
-    - if: $CI_PIPELINE_SOURCE == "push"
-      when: manual
-      allow_failure: true
+  when: manual
+  allow_failure: true
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/gt4py-ci:$PYVERSION
     DOCKERFILE: Dockerfile
