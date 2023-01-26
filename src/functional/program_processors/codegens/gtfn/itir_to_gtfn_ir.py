@@ -146,7 +146,7 @@ def _collect_offset_definitions(
         .getattr("value")
     ).to_set()
     if not used_offset_tags.issubset(set(offset_provider.keys())):
-        raise ValueError()  # TODO(tehrengruber): give meaningful error message
+        raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
 
     for offset_name, dim_or_connectivity in offset_provider.items():

@@ -85,8 +85,10 @@ class GTFNTranslationStep(
         for name, connectivity in inp.kwargs["offset_provider"].items():
             if isinstance(connectivity, Connectivity):
                 nbtbl = (
-                    f"as_neighbor_table<generated::{connectivity.origin_axis.value}_t, "
-                    f"generated::{name}_t, {connectivity.max_neighbors}>(__conn_{name.lower()})"
+                    f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
+                    f"generated::{connectivity.origin_axis.value}_t, "
+                    f"generated::{name}_t, {connectivity.max_neighbors}"
+                    f">(__conn_{name.lower()})"
                 )
                 connectivity_args.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
@@ -137,7 +139,6 @@ class GTFNTranslationStep(
                     #include <gridtools/fn/backend/naive.hpp>
                     #include <gridtools/stencil/global_parameter.hpp>
                     {stencil_src}
-                    using gridtools::fn::sid_neighbor_table::as_neighbor_table;
                     {decl_src}
                     """.strip(),
         )
