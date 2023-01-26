@@ -64,7 +64,7 @@ build py310 baseimage:
 
 test py38:
   extends: .container-runner-daint-gpu
-  needs: ["build py38"]
+  needs: ["build py38 image"]
   stage: test
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
   script:
