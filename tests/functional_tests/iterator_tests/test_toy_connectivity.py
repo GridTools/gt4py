@@ -42,7 +42,6 @@ c2e_arr = np.array(
         [7, 17, 1, 16],
         [8, 15, 2, 17],
     ],
-    dtype=np.int32,
 )
 
 v2v_arr = np.array(
@@ -57,7 +56,6 @@ v2v_arr = np.array(
         [8, 1, 6, 4],
         [6, 2, 7, 5],
     ],
-    dtype=np.int32,
 )
 
 e2v_arr = np.array(
@@ -81,7 +79,6 @@ e2v_arr = np.array(
         [7, 1],
         [8, 2],
     ],
-    dtype=np.int32,
 )
 
 
@@ -98,7 +95,6 @@ v2e_arr = np.array(
         [7, 13, 6, 16],
         [8, 14, 7, 17],
     ],
-    dtype=np.int32,
 )
 
 V2E = offset("V2E")

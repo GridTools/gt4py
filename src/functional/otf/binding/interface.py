@@ -43,6 +43,7 @@ class ConnectivityParameter:
     name: str
     origin_axis: str
     offset_tag: str
+    index_type: type[np.int32] | type[np.int64]
 
 
 @dataclasses.dataclass(frozen=True)

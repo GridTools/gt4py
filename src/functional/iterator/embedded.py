@@ -71,6 +71,7 @@ class NeighborTableOffsetProvider:
         assert not hasattr(table, "shape") or table.shape[1] == max_neighbors
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+        self.index_type = table.dtype
 
     def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
         return self.table[(primary, neighbor_idx)]
@@ -88,6 +89,7 @@ class StridedNeighborOffsetProvider:
         self.neighbor_axis = neighbor_axis
         self.max_neighbors = max_neighbors
         self.has_skip_values = has_skip_values
+        self.index_type = int
 
     def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
         return primary * self.max_neighbors + neighbor_idx

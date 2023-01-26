@@ -91,6 +91,7 @@ class Connectivity(Protocol):
     has_skip_values: bool
     origin_axis: Dimension
     neighbor_axis: Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
         self, cur_index: int | np.integer, neigh_index: int | np.integer

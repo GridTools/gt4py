@@ -60,9 +60,16 @@ class GTFNTranslationStep(
         ]
         for name, connectivity in inp.kwargs["offset_provider"].items():
             if isinstance(connectivity, Connectivity):
+                if connectivity.index_type not in [np.int32, np.int64]:
+                    raise ValueError(
+                        "Neighbor table indices must be of type `np.int32` or `np.int64`."
+                    )
                 parameters.append(
                     interface.ConnectivityParameter(
-                        "__conn_" + name.lower(), connectivity.origin_axis.value, name
+                        "__conn_" + name.lower(),
+                        connectivity.origin_axis.value,
+                        name,
+                        connectivity.index_type,  # type: ignore[arg-type]
                     )
                 )
             elif isinstance(connectivity, Dimension):

@@ -154,7 +154,7 @@ def make_parameter(
     | interface.ConnectivityParameter,
 ) -> FunctionParameter:
     if isinstance(parameter, interface.ConnectivityParameter):
-        return FunctionParameter(name=parameter.name, ndim=2, dtype=np.dtype("int32"))
+        return FunctionParameter(name=parameter.name, ndim=2, dtype=parameter.index_type)
     name = parameter.name
     ndim = 0 if isinstance(parameter, interface.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
@@ -174,7 +174,7 @@ def make_argument(
                 DimensionType(name=param.origin_axis),
                 DimensionType(name=param.offset_tag),
             ],
-            scalar_type=np.dtype("int32"),
+            scalar_type=param.index_type,
             dim_config=index,
         )
     else:

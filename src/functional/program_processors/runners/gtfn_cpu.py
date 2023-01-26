@@ -45,8 +45,6 @@ def extract_connectivity_args(offset_provider: dict[str, common.Connectivity | c
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            if not conn.table.dtype == np.int32:
-                raise ValueError("Neighbor table must be of dtype `int32`.")
             args.append(conn.table)
         elif isinstance(conn, common.Dimension):
             pass
