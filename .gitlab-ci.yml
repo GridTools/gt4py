@@ -40,7 +40,7 @@ build py310:
     <<: *py310
 
 test py38:
-  extends: .daint
+  extends: .container-runner-daint-gpu
   needs: ["build py38"]
   stage: test
   image: $CSCS_REGISTRY_PATH/$IMAGE_NAME/gt4py-ci:$PYVERSION
@@ -50,8 +50,6 @@ test py38:
   - tox --sitepackages -r -e $PYVERSION_PREFIX-all-cuda112
   variables:
     CRAY_CUDA_MPS: 1
-    PULL_IMAGE: "YES"
-    SLURM_CONSTRAINT: gpu
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
     NUM_PROCESSES: 12
