@@ -22,19 +22,21 @@ from functional.program_processors.codegens.gtfn.codegen import GTFNCodegen
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 
 
-def generate(program: itir.FencilDefinition, **kwargs: Any) -> str:
-    transformed = program
+def generate(
+    program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
+) -> str:
     offset_provider = kwargs.get("offset_provider")
     assert isinstance(offset_provider, dict)
-    transformed = apply_common_transforms(
-        program,
-        lift_mode=kwargs.get("lift_mode"),
-        offset_provider=offset_provider,
-        # required since backend has no `reduce` builtin
-        unroll_reduce=True,
-    )
+    if enable_itir_transforms:
+        program = apply_common_transforms(
+            program,
+            lift_mode=kwargs.get("lift_mode"),
+            offset_provider=offset_provider,
+            # required since backend has no `reduce` builtin
+            unroll_reduce=True,
+        )
     gtfn_ir = GTFN_lowering.apply(
-        transformed,
+        program,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
     )

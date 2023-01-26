@@ -17,15 +17,19 @@ from functional.iterator.builtins import (
     float32,
     float64,
     greater,
+    greater_equal,
     if_,
     int32,
     int64,
     less,
+    less_equal,
     lift,
     minus,
+    mod,
     multiplies,
     named_range,
     not_,
+    not_eq,
     or_,
     plus,
     shift,
@@ -34,7 +38,7 @@ from functional.iterator.builtins import (
 from functional.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from functional.program_processors.formatters import type_check
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import GTFNExecutor, run_gtfn
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
@@ -64,32 +68,47 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     if len(inps) == 1:
 
         @fundef
-        def sten(arg0):
-            return builtin(deref(arg0))
+        def sten(fun, arg0):
+            return fun(deref(arg0))
+
+        # keep this indirection to test unapplied builtins (by default transformations will inline)
+        @fundef
+        def dispatch(arg0):
+            return sten(builtin, arg0)
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0])
+            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0])
 
     elif len(inps) == 2:
 
         @fundef
-        def sten(arg0, arg1):
-            return builtin(deref(arg0), deref(arg1))
+        def sten(fun, arg0, arg1):
+            return fun(deref(arg0), deref(arg1))
+
+        # keep this indirection to test unapplied builtins (by default transformations will inline)
+        @fundef
+        def dispatch(arg0, arg1):
+            return sten(builtin, arg0, arg1)
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0, arg1])
+            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1])
 
     elif len(inps) == 3:
 
         @fundef
-        def sten(arg0, arg1, arg2):
-            return builtin(deref(arg0), deref(arg1), deref(arg2))
+        def sten(fun, arg0, arg1, arg2):
+            return fun(deref(arg0), deref(arg1), deref(arg2))
+
+        # keep this indirection to test unapplied builtins (by default transformations will inline)
+        @fundef
+        def dispatch(arg0, arg1, arg2):
+            return sten(builtin, arg0, arg1, arg2)
 
         @fendef(offset_provider={}, column_axis=column_axis)
         def fenimpl(size, arg0, arg1, arg2, out):
-            closure(cartesian_domain(named_range(IDim, 0, size)), sten, out, [arg0, arg1, arg2])
+            closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1, arg2])
 
     else:
         raise AssertionError("Add overload")
@@ -97,10 +116,9 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
-@pytest.mark.parametrize("as_column", [False, True])
-@pytest.mark.parametrize(
-    "builtin, inputs, expected",
-    [
+def arithmetic_and_logical_test_data():
+    return [
+        # (builtin, inputs, expected)
         (plus, [2.0, 3.0], 5.0),
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
@@ -110,11 +128,15 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [[True, False], [1.0, 1.0], [2.0, 2.0]],
             [1.0, 2.0],
         ),
+        (mod, [5, 2], 1),
         (greater, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, False]),
+        (greater_equal, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, True]),
         (less, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [False, True, False]),
+        (less_equal, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [False, True, True]),
         (eq, [[1, 2], [1, 1]], [True, False]),
         (eq, [[True, False, True], [True, False, False]], [True, True, False]),
         (eq, [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], [True, True, True]),
+        (not_eq, [[1, 2], [2, 2]], [True, False]),
         (not_, [[True, False]], [False, True]),
         (
             and_,
@@ -127,8 +149,11 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             [[True, True, False, False], [True, False, True, False]],
             [False, True, True, False],
         ),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("as_column", [False, True])
+@pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
     program_processor, validate = program_processor
 
@@ -139,6 +164,26 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 
     if validate:
         assert np.allclose(np.asarray(out), expected)
+
+
+@pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
+def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
+    if builtin == if_:
+        pytest.skip("If cannot be used unapplied")
+    inps = asfield(*asarray(*inputs))
+    out = asfield((np.zeros_like(*asarray(expected))))[0]
+
+    gtfn_without_transforms = GTFNExecutor(
+        name="run_gtfn", enable_itir_transforms=False
+    )  # avoid inlining the function
+    fencil(
+        builtin,
+        out,
+        *inps,
+        processor=GTFNExecutor(name="run_gtfn", enable_itir_transforms=False),
+    )
+
+    assert np.allclose(np.asarray(out), expected)
 
 
 @pytest.mark.parametrize("as_column", [False, True])

@@ -125,8 +125,7 @@ def test_unstructured_shift(reduction_setup, fieldview_backend):
 
     shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
 
-    # TODO(tehrengruber): respect mapped_index sig
-    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].mapped_index(slice(0, None), 0)]
+    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
 
     assert np.allclose(b, ref)
 

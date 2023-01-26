@@ -254,4 +254,82 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
             assert np.allclose(reference[n], np.asarray(out)[n])
 
 
+@fundef
+def sum_shifted(inp0, inp1):
+    return deref(inp0) + deref(shift(K, 1)(inp1))
+
+
+@fendef(column_axis=KDim)
+def sum_shifted_fencil(out, inp0, inp1, k_size):
+    closure(
+        cartesian_domain(named_range(KDim, 1, k_size)),
+        sum_shifted,
+        out,
+        [inp0, inp1],
+    )
+
+
+def test_different_vertical_sizes(program_processor):
+    program_processor, validate = program_processor
+
+    k_size = 10
+    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
+    inp1 = np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
+    out = np_as_located_field(KDim)(np.zeros(k_size))
+    ref = inp0 + inp1[1:]
+
+    run_processor(
+        sum_shifted_fencil,
+        program_processor,
+        out,
+        inp0,
+        inp1,
+        k_size,
+        offset_provider={"K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(ref[1:], out[1:])
+
+
+@fundef
+def sum(inp0, inp1):
+    return deref(inp0) + deref(shift(K, -1)(inp1))
+
+
+@fendef(column_axis=KDim)
+def sum_fencil(out, inp0, inp1, k_size):
+    closure(
+        cartesian_domain(named_range(KDim, 0, k_size)),
+        sum,
+        out,
+        [inp0, inp1],
+    )
+
+
+def test_different_vertical_sizes_with_origin(program_processor):
+    program_processor, validate = program_processor
+    if program_processor == run_gtfn:
+        pytest.xfail("origin not supported in gtfn")
+
+    k_size = 10
+    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
+    inp1 = np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
+    out = np_as_located_field(KDim)(np.zeros(k_size))
+    ref = inp0 + np.asarray(inp1)[:-1]
+
+    run_processor(
+        sum_fencil,
+        program_processor,
+        out,
+        inp0,
+        inp1,
+        k_size,
+        offset_provider={"K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(ref, out)
+
+
 # TODO(havogt) test tuple_get builtin on a Column

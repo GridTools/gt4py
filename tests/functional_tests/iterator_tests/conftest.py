@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
+from functional import common
 from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.formatters import gtfn, lisp, type_check
@@ -73,3 +76,15 @@ def run_processor(
         print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"program processor kind not recognized: {processor}!")
+
+
+@dataclass
+class DummyConnectivity:
+    max_neighbors: int
+    has_skip_values: int
+    origin_axis: common.Dimension = common.Dimension("dummy_origin")
+    neighbor_axis: common.Dimension = common.Dimension("dummy_neighbor")
+    index_type: Type[int] = int
+
+    def mapped_index(_, __) -> int:
+        return 0
