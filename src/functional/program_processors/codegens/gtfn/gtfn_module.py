@@ -46,63 +46,20 @@ class GTFNTranslationStep(
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
 
-    def __call__(
+    def _process_arguments(
         self,
-        inp: stages.ProgramCall,
-    ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
-        """Generate GTFN C++ code from the ITIR definition."""
-        program = inp.program
+        program: itir.FencilDefinition,
+        args: tuple[Any, ...],
+        offset_provider: dict[str, Connectivity],
+    ):
+        """Given an ITIR program and arguments generate the interface parameters and arguments."""
         parameters: list[
             interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter
-        ] = [
-            get_param_description(program_param.id, obj)
-            for obj, program_param in zip(inp.args, program.params)
-        ]
-        for name, connectivity in inp.kwargs["offset_provider"].items():
-            if isinstance(connectivity, Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
-                    raise ValueError(
-                        "Neighbor table indices must be of type `np.int32` or `np.int64`."
-                    )
-                parameters.append(
-                    interface.ConnectivityParameter(
-                        "__conn_" + name.lower(),
-                        connectivity.origin_axis.value,
-                        name,
-                        connectivity.index_type,  # type: ignore[arg-type]
-                    )
-                )
-            elif isinstance(connectivity, Dimension):
-                pass
-            else:
-                raise ValueError(
-                    f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
-                    f"but got {type(connectivity).__name__}."
-                )
-        function = interface.Function(program.id, tuple(parameters))
+        ] = []
+        parameter_args: list[str] = ["gridtools::fn::backend::naive{}"]
+        connectivity_args: list[str] = []
 
-        connectivity_args = []
-        for name, connectivity in inp.kwargs["offset_provider"].items():
-            if isinstance(connectivity, Connectivity):
-                nbtbl = (
-                    f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity.origin_axis.value}_t, "
-                    f"generated::{name}_t, {connectivity.max_neighbors}"
-                    f">(__conn_{name.lower()})"
-                )
-                connectivity_args.append(
-                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
-                )  # TODO std::forward, type and max_neighbors)
-            elif isinstance(connectivity, Dimension):
-                pass
-            else:
-                raise ValueError(
-                    f"Expected offset provider `{name}` to be a "
-                    f"`Connectivity` or `Dimension`, but got "
-                    f"{type(connectivity).__name__}"
-                )
-        rendered_connectivity_args = ", ".join(connectivity_args)
-
+        # handle parameters and arguments of the program
         # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
         #  so transform all scalar arguments that are used in a closure into one before we pass
         #  them to the generated source. This is not a very clean solution and will fail when
@@ -120,17 +77,75 @@ class GTFNTranslationStep(
             .map(str)
             .to_list()
         )
+        for obj, program_param in zip(args, program.params):
+            # parameter
+            parameter = get_param_description(program_param.id, obj)
+            parameters.append(parameter)
 
-        parameter_args = ["gridtools::fn::backend::naive{}"]
-        for p in parameters:
-            if isinstance(p, (interface.ScalarParameter, interface.BufferParameter)):
-                if isinstance(p, interface.ScalarParameter) and p.name in closure_scalar_parameters:
-                    parameter_args.append(f"gridtools::stencil::global_parameter({p.name})")
-                else:
-                    parameter_args.append(p.name)
+            # argument expression
+            if (
+                isinstance(parameter, interface.ScalarParameter)
+                and parameter.name in closure_scalar_parameters
+            ):
+                # convert into sid
+                parameter_args.append(f"gridtools::stencil::global_parameter({parameter.name})")
+            else:
+                # pass as is
+                parameter_args.append(parameter.name)
 
-        rendered_parameter_args = ", ".join(parameter_args)
-        decl_body = f"return generated::{function.name}({rendered_connectivity_args})({rendered_parameter_args});"
+        # handle connectivity parameters and arguments
+        for name, connectivity in offset_provider.items():
+            if isinstance(connectivity, Connectivity):
+                if connectivity.index_type not in [np.int32, np.int64]:
+                    raise ValueError(
+                        "Neighbor table indices must be of type `np.int32` or `np.int64`."
+                    )
+
+                # parameter
+                parameters.append(
+                    interface.ConnectivityParameter(
+                        "__conn_" + name.lower(),
+                        connectivity.origin_axis.value,
+                        name,
+                        connectivity.index_type,  # type: ignore[arg-type]
+                    )
+                )
+
+                # connectivity argument expression
+                nbtbl = (
+                    f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
+                    f"generated::{connectivity.origin_axis.value}_t, "
+                    f"generated::{name}_t, {connectivity.max_neighbors}"
+                    f">(__conn_{name.lower()})"
+                )
+                connectivity_args.append(
+                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
+                )  # TODO(havogt): std::forward, type and max_neighbors
+            elif isinstance(connectivity, Dimension):
+                pass
+            else:
+                raise ValueError(
+                    f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
+                    f"but got {type(connectivity).__name__}."
+                )
+
+        return parameters, parameter_args, connectivity_args
+
+    def __call__(
+        self,
+        inp: stages.ProgramCall,
+    ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
+        """Generate GTFN C++ code from the ITIR definition."""
+        program = inp.program
+        parameters, parameter_args, connectivity_args = self._process_arguments(
+            program, inp.args, inp.kwargs["offset_provider"]
+        )
+
+        function = interface.Function(program.id, tuple(parameters))
+        decl_body = (
+            f"return generated::{function.name}("
+            f"{', '.join(connectivity_args)})({', '.join(parameter_args)});"
+        )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(program, **inp.kwargs)
         source_code = interface.format_source(

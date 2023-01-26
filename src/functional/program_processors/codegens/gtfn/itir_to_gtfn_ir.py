@@ -169,6 +169,7 @@ def _collect_offset_definitions(
                     name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
         elif isinstance(dim_or_connectivity, common.Connectivity):
+            assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
 
             connectivity: common.Connectivity = dim_or_connectivity
@@ -176,15 +177,11 @@ def _collect_offset_definitions(
                 connectivity.origin_axis,
                 connectivity.neighbor_axis,
             ]:
-                if grid_type == common.GridType.CARTESIAN:
-                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
-                else:
-                    assert grid_type == common.GridType.UNSTRUCTURED
-                    if not dim.kind == common.DimensionKind.HORIZONTAL:
-                        raise NotImplementedError()
-                    offset_definitions[dim.value] = TagDefinition(
-                        name=Sym(id=dim.value), alias=_horizontal_dimension
-                    )
+                if not dim.kind == common.DimensionKind.HORIZONTAL:
+                    raise NotImplementedError()
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_horizontal_dimension
+                )
         else:
             raise AssertionError(
                 "Elements of offset provider need to be either `Dimension` or `Connectivity`."
