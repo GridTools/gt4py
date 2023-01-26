@@ -56,7 +56,7 @@ build py39 image:
   variables:
     <<: *py39
 
-build py310 baseimage:
+build py310 image:
   extends: build py38 image
   needs: ["build py310 baseimage"]
   variables:
