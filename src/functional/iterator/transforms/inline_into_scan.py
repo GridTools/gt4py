@@ -1,9 +1,9 @@
-from collections.abc import KeysView
-from typing import TypeGuard
+from typing import Sequence, TypeGuard
 
 import eve
 from eve import NodeTranslator, traits
 from functional.iterator import ir
+from functional.iterator.transforms import symbol_ref_utils
 from functional.iterator.transforms.inline_lambdas import InlineLambdas
 from functional.iterator.transforms.inline_lifts import InlineLifts
 
@@ -16,34 +16,10 @@ def _is_scan(node: ir.Node) -> TypeGuard[ir.FunCall]:
     )
 
 
-def _is_userdefined_symbolref(node: ir.Expr, symtable: dict[eve.SymbolName, ir.Sym]) -> bool:
-    return (
-        isinstance(node, ir.SymRef)
-        and node.id in symtable
-        and node.id
-        not in [
-            n.id for n in ir.FencilDefinition._NODE_SYMBOLS_
-        ]  # TODO this might be relatively expensive, should we provide a way to exclude non-userdefined builtins from eve?
+def _extract_symrefs(nodes: Sequence[ir.Expr], symtable: dict[eve.SymbolName, ir.Sym]) -> list[str]:
+    return symbol_ref_utils.collect_symbol_refs(
+        nodes, symbol_ref_utils.get_user_defined_symbols(symtable)
     )
-
-
-# TODO this doesn't work as it doesn't respect the scope, i.e. should not find SymRefs in a different scope
-def _extract_symrefs(
-    nodes: list[ir.Expr], symtable: dict[eve.SymbolName, ir.Sym]
-) -> KeysView[ir.SymRef]:
-    symrefs = []
-    for n in nodes:
-        if isinstance(n, ir.SymRef):
-            if _is_userdefined_symbolref(n, symtable):
-                symrefs.append(n)
-        else:
-            symrefs.extend(
-                n.pre_walk_values()  # type: ignore [arg-type]
-                .if_isinstance(ir.SymRef)
-                .filter(lambda x: _is_userdefined_symbolref(x, symtable))
-                .to_list()
-            )
-    return dict.fromkeys(symrefs).keys()  # sorted set
 
 
 def _contains_scan(node: ir.Expr) -> bool:
@@ -57,6 +33,7 @@ def _should_inline(node: ir.FunCall) -> bool:
 
 
 def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
+    # TODO consider extracting this similar function from passmanager
     for _ in range(10):
         inlined = InlineLifts().visit(node)
         inlined = InlineLambdas.apply(
@@ -104,7 +81,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             new_scanpass = ir.Lambda(
                 params=[
                     original_scanpass.params[0],
-                    *(ir.Sym(id=ref.id) for ref in refs_in_args),
+                    *(ir.Sym(id=ref) for ref in refs_in_args),
                 ],
                 expr=ir.FunCall(
                     fun=ir.Lambda(
@@ -117,6 +94,6 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
-            result = ir.FunCall(fun=new_scan, args=[*refs_in_args])
+            result = ir.FunCall(fun=new_scan, args=[ir.SymRef(id=ref) for ref in refs_in_args])
             return result
         return self.generic_visit(node, **kwargs)

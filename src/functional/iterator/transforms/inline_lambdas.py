@@ -3,8 +3,8 @@ from typing import Optional
 
 from eve import NodeTranslator
 from functional.iterator import ir
-from functional.iterator.transforms.count_symbol_refs import CountSymbolRefs
 from functional.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
+from functional.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 def inline_lambda(

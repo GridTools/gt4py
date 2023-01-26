@@ -1,6 +1,6 @@
 import eve
 from functional.iterator import ir as itir
-from functional.iterator.transforms.count_symbol_refs import CountSymbolRefs
+from functional.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 class MergeLet(eve.NodeTranslator):
