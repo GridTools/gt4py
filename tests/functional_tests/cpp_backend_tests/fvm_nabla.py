@@ -67,6 +67,7 @@ class DummyConnectivity:
     has_skip_values: int
     origin_axis: Dimension = Dimension("dummy_origin")
     neighbor_axis: Dimension = Dimension("dummy_neighbor")
+    index_type: type[int] = int
 
     def mapped_index(_, __) -> int:
         return 0

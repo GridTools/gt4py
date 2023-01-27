@@ -84,7 +84,7 @@ class DummyConnectivity:
     has_skip_values: int
     origin_axis: common.Dimension = common.Dimension("dummy_origin")
     neighbor_axis: common.Dimension = common.Dimension("dummy_neighbor")
-    index_type: Type[int] = int
+    index_type: type[int] = int
 
     def mapped_index(_, __) -> int:
         return 0

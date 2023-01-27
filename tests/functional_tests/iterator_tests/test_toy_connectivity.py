@@ -359,7 +359,7 @@ def test_lift(program_processor, lift_mode):
     if program_processor == gtfn_cpu.run_gtfn:
         # TODO(tehrengruber): only a temporary solution until index fields are supported in the
         #  gtfn backend.
-        inp = np_as_located_field(Vertex)(np.array([inp[i] for i in range(0, 9)]))
+        inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
