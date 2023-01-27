@@ -15,7 +15,7 @@
 """Stencil Object that allows for deferred building."""
 from typing import TYPE_CHECKING, Any, Dict
 
-from cached_property import cached_property
+from functools import cached_property
 
 
 if TYPE_CHECKING:

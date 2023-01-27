@@ -22,7 +22,7 @@ import sys
 import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from cached_property import cached_property
+from functools import cached_property
 
 from gt4py.cartesian import config as gt_config
 from gt4py.cartesian import utils as gt_utils
