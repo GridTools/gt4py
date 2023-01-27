@@ -1,6 +1,7 @@
-from functional.ffront import program_ast as past
-import eve
 import dace
+
+import eve
+from functional.ffront import program_ast as past
 from functional.type_system import type_specifications as ts
 
 
@@ -55,7 +56,8 @@ class PastToSDFG(eve.NodeVisitor):
         }
         output_memlets = {
             f"{node.params[-1].id}_element": dace.Memlet(
-                data=str(node.params[-1].id), subset=",".join(f"i{dim}" for dim in range(len(out_size)))
+                data=str(node.params[-1].id),
+                subset=",".join(f"i{dim}" for dim in range(len(out_size))),
             )
         }
 
