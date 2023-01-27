@@ -731,13 +731,10 @@ class MDIterator:
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
-        offsets = tuple(
-            [
-                offset.field.array() if isinstance(offset, MDIterator) else offset
-                for offset in offsets
-            ]
-        )
-        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
+        offsets = [
+            offset.field.array() if isinstance(offset, MDIterator) else offset for offset in offsets
+        ]
+        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *tuple(offsets))
         return MDIterator(
             self.field,
             shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
