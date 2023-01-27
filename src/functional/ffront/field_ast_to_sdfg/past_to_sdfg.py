@@ -44,7 +44,6 @@ class PastToSDFG(eve.NodeVisitor):
             else:
                 raise ValueError(f"parameter of type {param.type} is not supported")
 
-        input_arrays = [self.sdfg.arrays[param.id] for param in node.params[0:-1]]
         out_array = self.sdfg.arrays[node.params[-1].id]
         out_size = out_array.shape
         domain = {f"i{dim}": f"0:{size}" for dim, size in enumerate(out_size)}

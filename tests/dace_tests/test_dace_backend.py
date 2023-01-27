@@ -1,7 +1,7 @@
 import numpy as np
 
 from functional.common import Dimension, Field
-from functional.ffront.decorator import field_operator, program, scan_operator
+from functional.ffront.decorator import field_operator
 from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners.dace_fieldview import run_dace_fieldview
 
