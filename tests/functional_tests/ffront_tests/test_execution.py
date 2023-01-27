@@ -273,18 +273,40 @@ def test_astype_float(fieldview_backend):
 def test_dusk_indexfield():
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
-    b_I_float = np_as_located_field(KDim)(np.asarray(range(9, -1, -1)))
+    offset_field = np_as_located_field(KDim)(np.asarray(range(9, -1, -1)))
     out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
     @field_operator
     def dusk_index_fo(
-        a: Field[[IDim, KDim], float64], b: Field[[KDim], int64]
+        a: Field[[IDim, KDim], float64], offset_field: Field[[KDim], int64]
     ) -> Field[[IDim, KDim], float64]:
-        c = a(as_offset(KDim, b))
+        c = a(as_offset(KDim, offset_field))
         return c
 
-    dusk_index_fo(a_I_float, b_I_float, out=out_I_float, offset_provider={})
+    dusk_index_fo(a_I_float, offset_field, out=out_I_float, offset_provider={})
     assert np.allclose(np.fliplr(a_I_arr), out_I_float)
+
+
+def test_dusk_indexfield_offset_provider(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+    offset_field = np_as_located_field(Vertex)(np.asarray(range(8, -1, -1)))
+
+    @field_operator
+    def reduction_tuple(
+        a: Field[[Edge], int64], offset_field: Field[[Vertex], int64]
+    ) -> Field[[Vertex], int64]:
+        a_shifted = a(V2E)
+        return neighbor_sum(a_shifted(as_offset(Vertex, offset_field)), axis=V2EDim)
+
+    reduction_tuple(rs.inp, offset_field, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref_inverted = np.flip(rs.v2e_table)
+    ref = np.sum(ref_inverted, axis=1)
+    assert np.allclose(ref, rs.out)
 
 
 def test_nested_tuple_return():

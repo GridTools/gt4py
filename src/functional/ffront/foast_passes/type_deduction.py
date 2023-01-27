@@ -714,9 +714,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         )
 
     def _visit_as_offset(self, node: foast.Call, **kwargs) -> foast.Call:
-        # check that field contains specified dimension
-        assert node.args[0].type.dim in node.args[1].type.dims
-        return_type = ts.OffsetType(source=node.args[0].type.dim, target=[node.args[0].type.dim])
+        arg_0 = node.args[0].type
+        arg_1 = node.args[1].type
+        assert isinstance(arg_0, ts.DimensionType)
+        assert isinstance(arg_1, ts.FieldType)
+        assert arg_0.dim in arg_1.dims
+        return_type = ts.OffsetType(source=arg_0.dim, target=[arg_0.dim])  # type: ignore[arg-type] # review later on
 
         return foast.Call(
             func=node.func,
