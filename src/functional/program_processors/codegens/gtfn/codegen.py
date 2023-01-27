@@ -247,7 +247,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
-            auto tmp_alloc__ = tmp_allocator(backend);
+            auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
             ${'\\n'.join(temporaries)}
             ${'\\n'.join(executions)}
         };
