@@ -15,6 +15,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functools import reduce
 
+import numpy as np
 import pytest as pytest
 
 from functional.ffront.decorator import field_operator, program, scan_operator
@@ -270,9 +271,9 @@ def test_astype_float(fieldview_backend):
 
 
 def test_dusk_indexfield():
-    # from functional.experimental.as_offset_builtin import as_offset
-    a_I_float = np_as_located_field(IDim, KDim)(np.random.randn(size, size).astype("float64"))
-    b_I_float = np_as_located_field(KDim)(np.asarray([9, 8, 7, 6, 5, 4, 3, 2, 1, 0]))
+    a_I_arr = np.random.randn(size, size).astype("float64")
+    a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
+    b_I_float = np_as_located_field(KDim)(np.asarray(range(9, -1, -1)))
     out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
     @field_operator
@@ -282,11 +283,8 @@ def test_dusk_indexfield():
         c = a(as_offset(KDim, b))
         return c
 
-    # create new module "experimental"
-    # create new builtin within module "as_offset"
-    # lowering done with shift() and deref()
     dusk_index_fo(a_I_float, b_I_float, out=out_I_float, offset_provider={})
-    a = 1
+    assert np.allclose(np.fliplr(a_I_arr), out_I_float)
 
 
 def test_nested_tuple_return():
