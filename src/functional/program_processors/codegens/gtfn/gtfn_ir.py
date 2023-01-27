@@ -87,11 +87,24 @@ class FunctionDefinition(Node, SymbolTableTrait):
     expr: Expr
 
 
+class ProjectorGet(Node):
+    index: Literal
+
+
+class ProjectorTuple(Node):
+    elems: list[ProjectorGet]
+
+
+class Identity(Node):
+    ...
+
+
 class ScanPassDefinition(Node, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
     params: list[Sym]
     expr: Expr
     forward: bool
+    projector: Union[Identity, ProjectorTuple, ProjectorGet]
 
 
 class TaggedValues(Node):

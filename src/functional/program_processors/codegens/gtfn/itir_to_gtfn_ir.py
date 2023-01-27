@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
-from typing import Any, ClassVar, Iterable, Optional, Type, Union
+from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import eve
 from eve.concepts import SymbolName
@@ -29,10 +29,12 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     FencilDefinition,
     FunCall,
     FunctionDefinition,
+    Identity,
     Lambda,
     Literal,
     Node,
     OffsetLiteral,
+    ProjectorGet,
     Scan,
     ScanExecution,
     ScanPassDefinition,
@@ -424,6 +426,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _is_scan(node: itir.Node):
         return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
+    @staticmethod
+    def _is_tuple_get_scan(node: itir.Node) -> TypeGuard[itir.FunCall]:
+        return (
+            isinstance(node, itir.FunCall)
+            and node.fun == itir.SymRef(id="tuple_get")
+            and isinstance(node.args[1], itir.FunCall)
+            and node.args[1].fun == itir.SymRef(id="scan")
+        )
+
     def _visit_output_argument(self, node: itir.Expr):
         if isinstance(node, itir.SymRef):
             return self.visit(node)
@@ -441,20 +452,32 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
     ) -> Union[ScanExecution, StencilExecution]:
         backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
-        if self._is_scan(node.stencil):
+        if self._is_scan(node.stencil) or self._is_tuple_get_scan(node.stencil):
+            # TODO generalize to also make_tuple(tuple_get(..,scan))
+            projector: ProjectorGet | Identity
+            if self._is_tuple_get_scan(node.stencil):
+                stencil = node.stencil.args[1]
+                projector = ProjectorGet(index=self.visit(node.stencil.args[0]))
+            else:
+                stencil = node.stencil
+                projector = Identity()
             scan_id = self.uids.sequential_id(prefix="_scan")
-            assert isinstance(node.stencil, itir.FunCall)
-            scan_lambda = self.visit(node.stencil.args[0], **kwargs)
-            forward = self._bool_from_literal(node.stencil.args[1])
+            assert isinstance(stencil, itir.FunCall)
+            scan_lambda = self.visit(stencil.args[0], **kwargs)
+            forward = self._bool_from_literal(stencil.args[1])
             scan_def = ScanPassDefinition(
-                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
+                id=scan_id,
+                params=scan_lambda.params,
+                expr=scan_lambda.expr,
+                forward=forward,
+                projector=projector,
             )
             extracted_functions.append(scan_def)
             scan = Scan(
                 function=SymRef(id=scan_id),
                 output=Literal(value="0", type="int"),
                 inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
-                init=self.visit(node.stencil.args[2], **kwargs),
+                init=self.visit(stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
             assert isinstance(column_axis, common.Dimension)

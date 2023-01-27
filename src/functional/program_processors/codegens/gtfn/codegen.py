@@ -165,13 +165,16 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
 
+    Identity = "::gridtools::host_device::identity()"
+    ProjectorGet = as_mako("[](auto acc) { return gridtools::tuple_util::get<${index}>(acc);}")
+
     ScanPassDefinition = as_mako(
         """
         struct ${id} : ${'gtfn::fwd' if _this_node.forward else 'gtfn::bwd'} {
             static constexpr GT_FUNCTION auto body() {
                 return gtfn::scan_pass([](${','.join('auto const& ' + p for p in params)}) {
                     return ${expr};
-                }, ::gridtools::host_device::identity());
+                }, ${projector});
             }
         };
         """
