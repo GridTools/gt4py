@@ -22,6 +22,7 @@ from functional.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
+    as_offset,
     astype,
     broadcast,
     float64,
@@ -266,6 +267,26 @@ def test_astype_float(fieldview_backend):
 
     astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
     assert np.allclose(c_int32.array(), out_int_32)
+
+
+def test_dusk_indexfield():
+    # from functional.experimental.as_offset_builtin import as_offset
+    a_I_float = np_as_located_field(IDim, KDim)(np.random.randn(size, size).astype("float64"))
+    b_I_float = np_as_located_field(KDim)(np.asarray([9, 8, 7, 6, 5, 4, 3, 2, 1, 0]))
+    out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+
+    @field_operator
+    def dusk_index_fo(
+        a: Field[[IDim, KDim], float64], b: Field[[KDim], int64]
+    ) -> Field[[IDim, KDim], float64]:
+        c = a(as_offset(KDim, b))
+        return c
+
+    # create new module "experimental"
+    # create new builtin within module "as_offset"
+    # lowering done with shift() and deref()
+    dusk_index_fo(a_I_float, b_I_float, out=out_I_float, offset_provider={})
+    a = 1
 
 
 def test_nested_tuple_return():

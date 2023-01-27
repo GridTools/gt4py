@@ -86,6 +86,17 @@ astype = BuiltInFunction(
     )
 )
 
+as_offset = BuiltInFunction(
+    ts.FunctionType(
+        args=[
+            ts.DeferredType(constraint=ts.DimensionType),
+            ts.DeferredType(constraint=ts.FieldType),
+        ],
+        kwargs={},
+        returns=ts.DeferredType(constraint=ts.FieldType),
+    )
+)
+
 _unary_math_builtin = BuiltInFunction(
     ts.FunctionType(
         args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
@@ -192,6 +203,7 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
+    "as_offset",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES

@@ -601,7 +601,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, (int, np.integer)):
+        if not isinstance(offset, (int, np.integer, np.ndarray)):
             tag_stack.append(offset)
         else:
             assert tag_stack
@@ -617,7 +617,9 @@ def shift_position(
         return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
-        if (
+        if isinstance(index, np.ndarray):
+            new_pos[tag.value] = index[new_pos[tag.value]]
+        elif (
             shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         ) is not None:
             new_pos = shifted_pos
@@ -729,6 +731,12 @@ class MDIterator:
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
+        offsets = tuple(
+            [
+                offset.field.array() if isinstance(offset, MDIterator) else offset
+                for offset in offsets
+            ]
+        )
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,

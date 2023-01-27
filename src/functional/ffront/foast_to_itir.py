@@ -360,7 +360,14 @@ class FieldOperatorLowering(NodeTranslator):
                 return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
             case foast.Name(id=offset_name):
                 return im.shift_(offset_name)(self.visit(node.func, **kwargs))
+            case foast.Call(func=foast.Name(id="as_offset"), args=args, kwargs=kwargs):
+                return self._visit_as_offset(node, **kwargs)
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
+
+    def _visit_as_offset(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return im.shift_(node.args[0].args[0].id, self.visit(node.args[0].args[1], **kwargs))(
+            self.visit(node.func, **kwargs)
+        )
 
     def _make_reduction_expr(
         self,
