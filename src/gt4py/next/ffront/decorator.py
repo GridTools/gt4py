@@ -276,6 +276,14 @@ class Program:
         if "debug" in kwargs:
             debug(self.itir)
 
+        from functional.program_processors.runners.dace_fieldview import run_dace_fieldview
+
+        if backend == run_dace_fieldview:
+            from functional.ffront.field_ast_to_sdfg.run_dace import run_dace
+
+            run_dace(self.past_node, self.closure_vars, args, kwargs)
+            return
+
         backend(
             self.itir,
             *rewritten_args,
