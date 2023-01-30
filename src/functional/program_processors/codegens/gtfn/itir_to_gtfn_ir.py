@@ -25,21 +25,17 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     BinaryExpr,
     CartesianDomain,
     CastExpr,
-    Expr,
     FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
     Literal,
-    Node,
     OffsetLiteral,
     Scan,
     ScanExecution,
     ScanPassDefinition,
     SidComposite,
     StencilExecution,
-    Sym,
-    SymRef,
     TagDefinition,
     TaggedValues,
     TemporaryAllocation,
@@ -47,6 +43,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     UnaryExpr,
     UnstructuredDomain,
 )
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
 def pytype_to_cpptype(t: str):
@@ -382,7 +379,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
-                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
             elif node.fun.id == "unstructured_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 connectivities = []
@@ -399,7 +396,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     tagged_sizes=sizes,
                     tagged_offsets=domain_offsets,
                     connectivities=connectivities,
-                )
+                )  # type: ignore
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1

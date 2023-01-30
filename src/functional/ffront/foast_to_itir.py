@@ -380,7 +380,12 @@ class FieldOperatorLowering(NodeTranslator):
         )(*(param[1] for param in params))
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
+        ftype = node.type
+        assert isinstance(ftype, ts.FieldType)
+        init_expr = itir.Literal(value="0", type=str(ftype.dtype))
+        return self._make_reduction_expr(
+            node, lambda expr: im.plus_("acc", expr), init_expr, **kwargs
+        )
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it

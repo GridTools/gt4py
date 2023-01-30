@@ -30,7 +30,7 @@ from functional.iterator.embedded import (
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
 def fieldview_backend(request):
     yield request.param
 

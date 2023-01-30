@@ -164,7 +164,7 @@ def test_tuples(fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("ConstantFields are not supported yet.")
 
     inp = 5.0
@@ -181,7 +181,7 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("ConstantFields are not supported yet.")
 
     inp = 5.0
@@ -202,7 +202,7 @@ def test_nested_scalar_arg(fieldview_backend):
 
 
 def test_scalar_arg_with_field(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
 
     inp = index_field(Edge, dtype=float64)
@@ -403,7 +403,7 @@ def test_tuple_arg(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
 
     @field_operator(backend=fieldview_backend)
@@ -419,7 +419,7 @@ def test_tuple_arg(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
@@ -441,7 +441,7 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 
 
 def test_solve_triag(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
 
     shape = (3, 7, 5)
@@ -589,7 +589,7 @@ def test_ternary_scan():
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
 
     init = (1.0, (2.0, 3.0))
@@ -613,7 +613,7 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_input(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
 
     init = 1.0
@@ -674,7 +674,7 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("FloorDiv not fully supported in gtfn.")
     a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
 
@@ -767,7 +767,7 @@ def test_domain_tuple(fieldview_backend):
 
 
 def test_where_k_offset(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -796,7 +796,7 @@ def test_undefined_symbols():
 
 
 def test_zero_dims_fields(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Implicit broadcast are not supported yet.")
 
     inp = np_as_located_field()(np.array(1.0))
