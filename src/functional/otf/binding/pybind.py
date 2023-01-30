@@ -118,7 +118,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         elif isinstance(param.type_, ts.ScalarType):
             type_str = cpp_interface.render_scalar_type(param.type_)
         else:
-            raise ValueError("Invalid type.")
+            raise ValueError(f"Type '{param.type_}' is not supported in pybind11 interfaces.")
         return f"{type_str} {param.name}"
 
     ReturnStmt = as_jinja("""return {{expr}};""")

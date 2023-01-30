@@ -92,8 +92,12 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
         return "float"
     elif scalar_type.kind == ts.ScalarKind.FLOAT64:
         return "double"
+    elif scalar_type.kind == ts.ScalarKind.STRING:
+        return "std::string"
+    elif scalar_type.kind == ts.ScalarKind.DIMENSION:
+        raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
     else:
-        raise ValueError("unsupported scalar type")
+        raise AssertionError(f"Scalar kind '{scalar_type}' is not implemented when it should be.")
 
 
 def _render_function_param(param: interface.Parameter, index: int) -> str:
@@ -102,7 +106,7 @@ def _render_function_param(param: interface.Parameter, index: int) -> str:
     elif isinstance(param.type_, (ts.FieldType, ts_binding.IndexFieldType)):
         return f"BufferT{index}&& {param.name}"
     else:
-        raise ValueError("unsupported type for parameters")
+        raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
 
 
 def render_function_declaration(function: interface.Function, body: str) -> str:
