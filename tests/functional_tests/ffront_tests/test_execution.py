@@ -15,7 +15,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from functools import reduce
 
-import numpy as np
 import pytest as pytest
 
 from functional.ffront.decorator import field_operator, program, scan_operator
@@ -29,8 +28,6 @@ from functional.ffront.fbuiltins import (
     float64,
     int32,
     int64,
-    max_over,
-    min_over,
     neighbor_sum,
     where,
 )
@@ -913,15 +910,15 @@ def test_constant_closure_vars():
     from eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(
-        PI=np.float32(3.142),
-        E=np.float32(2.718),
+        PI=float32(3.142),
+        E=float32(2.718),
     )
 
     @field_operator
-    def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
+    def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], float32]:
         return constants.PI * constants.E * input
 
-    input = np_as_located_field(IDim)(np.ones((1,), dtype=np.float32))
-    output = np_as_located_field(IDim)(np.zeros((1,), dtype=np.float32))
+    input = np_as_located_field(IDim)(np.ones((1,), dtype=float32))
+    output = np_as_located_field(IDim)(np.zeros((1,), dtype=float32))
     consume_constants(input, out=output, offset_provider={})
     assert np.allclose(np.asarray(output), constants.PI * constants.E)
