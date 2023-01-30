@@ -17,12 +17,10 @@ from functional.iterator.embedded import np_as_located_field
 from functional.program_processors.runners import roundtrip
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data
+from .ffront_test_utils import *
 
 
-# TODO(tehrengruber): extend to gtfn backend when the builtins are supported
-fieldview_backend = roundtrip.executor
-
-IDim = Dimension("IDim")
+# TODO: reduce duplication with `test_math_unary_builtins`
 
 # TODO(tehrengruber): add tests for scalar arguments to builtin. To avoid code
 #  bloat this is postponed until programatically creating field operators
@@ -99,13 +97,13 @@ def make_builtin_field_operator(builtin_name: str):
     return FieldOperator(
         foast_node=typed_foast_node,
         closure_vars=closure_vars,
-        backend=fieldview_backend,
+        backend=None,
         definition=None,
     )
 
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins_execution(builtin_name: str, inputs):
+def test_math_function_builtins_execution(fieldview_backend, builtin_name: str, inputs):
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)
@@ -116,7 +114,7 @@ def test_math_function_builtins_execution(builtin_name: str, inputs):
     expected = ref_impl(*inputs)
     out = np_as_located_field(IDim)(np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name)
+    builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(fieldview_backend)
 
     builtin_field_op(*inps, out=out, offset_provider={})
 
