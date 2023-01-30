@@ -1,8 +1,8 @@
-from functional.type_system import type_translation
-from functional.type_system import type_specifications as ts
-from functional.otf.binding import type_specifications as ts_binding
 from typing import Any, Optional
+
 from functional.iterator.embedded import IndexField
+from functional.otf.binding import type_specifications as ts_binding
+from functional.type_system import type_specifications as ts, type_translation
 
 
 def from_type_hint(
