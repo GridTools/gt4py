@@ -17,6 +17,7 @@ try:
 except ImportError:
     IrregularConnectivity = None
 
+
 # TODO(tehrengruber): make this a proper Connectivity instead of faking a numpy array
 class AtlasTable:
     def __init__(self, atlas_connectivity) -> None:
