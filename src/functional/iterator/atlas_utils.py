@@ -39,7 +39,7 @@ class AtlasTable:
     @property
     def dtype(self):
         assert self.atlas_connectivity.rows > 0
-        return type(self[0])
+        return type(self[0, 0])
 
     @property
     def shape(self):
