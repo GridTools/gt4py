@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 
 from __future__ import annotations
 
@@ -458,13 +455,19 @@ def test_eval_forward_ref():
     )
 
     assert (
-        xtyping.eval_forward_ref(
+        ref := xtyping.eval_forward_ref(
             "Callable[[Annotated[int, 'Foo']], MissingRef]",
             globalns={"Annotated": Annotated, "Callable": Callable},
             localns={"MissingRef": MissingRef},
         )
-        == Callable[[int], MissingRef]
+    ) == Callable[
+        [int], MissingRef
+    ] or (  # some patch versions of cpython3.9 show weird behaviors
+        sys.version_info >= (3, 9)
+        and sys.version_info < (3, 10)
+        and (ref == Callable[[Annotated[int, "Foo"]], MissingRef])
     )
+
     assert (
         xtyping.eval_forward_ref(
             "Callable[[Annotated[int, 'Foo']], MissingRef]",

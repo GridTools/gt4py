@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 
 import enum
 import random
@@ -310,7 +307,7 @@ def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
     return SourceLocationGroup(loc1, loc2, context=make_str_value(fixed=fixed))
 
 
-def make_empty_node(*, fixed: bool = False) -> LocationNode:
+def make_empty_node(*, fixed: bool = False) -> EmptyNode:
     return EmptyNode()
 
 

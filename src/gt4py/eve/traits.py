@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +29,7 @@ from .extended_typing import Any, Dict, Set, Type, no_type_check
 class SymbolTableTrait:
     """Node trait adding an automatically created symbol table to the parent node.
 
-    The actual symbol table dict will be stored in the `symtable_` attribute.
+    The actual symbol table dict will be stored in the `annex.symtable` attribute.
     To inject extra symbol definitions, add the nodes to a class attribute
     called ``_NODE_SYMBOLS_``.
     """
@@ -88,7 +86,7 @@ class SymbolRefsValidatorTrait:
     """Node trait adding automatic validation of symbol references appearing the node tree.
 
     It assumes that the symbol table with the actual definitions is stored as
-    a dict in the `symtable_` attribute (like :class:`SymbolTableTrait` does).
+    a dict in the `annex.symtable` attribute (like :class:`SymbolTableTrait` does).
     """
 
     __slots__ = ()
