@@ -719,7 +719,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(arg_0, ts.DimensionType)
         assert isinstance(arg_1, ts.FieldType)
         assert arg_0.dim in arg_1.dims
-        return_type = ts.OffsetType(source=arg_0.dim, target=[arg_0.dim])  # type: ignore[arg-type] # review later on
+        return_type = ts.OffsetType(source=arg_0.dim, target=(arg_0.dim,))
 
         return foast.Call(
             func=node.func,

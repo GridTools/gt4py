@@ -618,8 +618,7 @@ def shift_position(
     new_pos = pos.copy()
     for tag, index in complete_offsets:
         if isinstance(index, np.ndarray):
-            tag_value = tag if isinstance(tag, str) else tag.value
-            new_pos[tag_value] = index[new_pos[tag_value]]
+            new_pos[tag.value] = new_pos[tag.value] + index[new_pos[tag.value]]
         elif (
             shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         ) is not None:
