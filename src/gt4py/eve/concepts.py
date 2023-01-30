@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -20,6 +18,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import re
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
@@ -227,6 +226,12 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
 
     walk_items = trees.walk_items
     walk_values = trees.walk_values
+
+    def copy(self: _T, update: Dict[str, Any]) -> _T:
+        new_node = copy.deepcopy(self)
+        for k, v in update.items():
+            setattr(new_node, k, v)
+        return new_node
 
     # TODO(egparedes): add useful hashes to base node
     # # @property

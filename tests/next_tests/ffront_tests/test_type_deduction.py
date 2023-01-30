@@ -108,7 +108,7 @@ def callable_type_info_cases():
             args=[float_type, int_type, int_type], kwargs={}, returns=float_type
         ),
     )
-    tuple_scanop_type =gt4py.next.ffront.type_specifications.ScanOperatorType(
+    tuple_scanop_type = gt4py.next.ffront.type_specifications.ScanOperatorType(
         axis=KDim,
         definition=ts.FunctionType(
             args=[float_type, ts.TupleType(types=[int_type, int_type])],

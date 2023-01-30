@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -900,21 +898,25 @@ class ModelWithRootValidators(datamodels.DataModel):
     class_counter: ClassVar[int] = 0
 
     @datamodels.root_validator
-    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
         assert isinstance(instance, ModelWithRootValidators)
         cls.class_counter = 0
 
     @datamodels.root_validator
-    def _another_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _another_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 0
         cls.class_counter += 1
 
     @datamodels.root_validator
-    def _final_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    def _final_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 1

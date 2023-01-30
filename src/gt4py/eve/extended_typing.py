@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,7 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Typing definitions working across different Python versions (via `typing_extensions`)."""
+"""Typing definitions working across different Python versions (via `typing_extensions`).
+
+Definitions in 'typing_extensions' take priority over those in 'typing'.
+"""
 
 from __future__ import annotations
 
@@ -30,8 +31,6 @@ import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
-
-# Definitions in 'typing_extensions' take priority over those in 'typing'
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
@@ -136,7 +135,7 @@ if _sys.version_info >= (3, 9):
     SolvedTypeAnnotation = Union[
         Type,
         _typing._SpecialForm,
-        _types.GenericAlias,
+        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
         _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
     ]
 else:
@@ -153,7 +152,7 @@ StdGenericAliasType: Final[Type] = type(List[int])
 
 if _sys.version_info >= (3, 9):
     if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias
+        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
 _TypingGenericAliasType: Final[Type] = (
@@ -388,7 +387,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
 _ArtefactTypes: tuple[type, ...] = tuple()
 if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)
+    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
 
     # `Any` is a class since Python 3.11
     if isinstance(_typing.Any, type):  # Python >= 3.11
@@ -412,12 +411,12 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     return isinstance(obj, type) and type(obj) not in _ArtefactTypes
 
 
-if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:
+if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
     # When using Python < 3.11 and typing_extensions >= 4.4 there are
     # two different implementations of `Any`
 
     def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any or obj is _typing_extensions.Any
+        return obj is _typing.Any or obj is _typing_extensions.Any  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
 
 else:
 
@@ -527,7 +526,7 @@ def get_partial_type_hints(
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(
+        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -536,7 +535,7 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(
+            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
             hints.update(resolved_hints)
@@ -589,7 +588,7 @@ def eval_forward_ref(
     else:
         safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]
+    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
@@ -644,9 +643,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         >>> print("Result:", infer_type(lambda a, b: a + b))
         Result: ...Callable[[...Any, ...Any], ...Any]
 
+        # Note that some patch versions of cpython3.9 show weird behaviors
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
-        Result: ...Callable[[int, ...Any], int]
+        Result: ...Callable[[...int..., ...Any], int]
 
         >>> def f(a: int, b) -> int: ...
         >>> print("Result:", infer_type(f))
