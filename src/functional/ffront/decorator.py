@@ -37,9 +37,7 @@ from functional.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
-    type_info,
-    type_specifications as ts,
-    type_translation,
+    type_specifications as ts_ffront,
 )
 from functional.ffront.fbuiltins import Dimension, FieldOffset
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -56,6 +54,7 @@ from functional.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 from functional.iterator import ir as itir
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.runners import roundtrip
+from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
@@ -363,7 +362,7 @@ class Program:
         ).items():
             if isinstance(
                 (type_ := gt_callable.__gt_type__()),
-                ts.ScanOperatorType,
+                ts_ffront.ScanOperatorType,
             ):
                 scanops_per_axis.setdefault(type_.axis, []).append(name)
 
@@ -556,7 +555,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ts.DeferredType(constraint=ts.ProgramType),
+            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(

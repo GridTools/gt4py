@@ -18,7 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from functional.common import DimensionKind, Field
-from functional.ffront import itir_makers as im, type_specifications as ts, type_translation
+from functional.ffront import itir_makers as im, type_specifications as ts_ffront
 from functional.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -30,6 +30,7 @@ from functional.ffront.fbuiltins import (
 )
 from functional.ffront.foast_to_itir import FieldOperatorLowering
 from functional.ffront.func_to_foast import FieldOperatorParser
+from functional.type_system import type_specifications as ts, type_translation
 
 
 IDim = Dimension("IDim")
@@ -223,7 +224,7 @@ def test_call():
     #  using such heavy constructs for testing the lowering.
     field_type = type_translation.from_type_hint(Field[[TDim], float64])
     identity = SimpleNamespace(
-        __gt_type__=lambda: ts.FieldOperatorType(
+        __gt_type__=lambda: ts_ffront.FieldOperatorType(
             definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
         )
     )

@@ -15,8 +15,8 @@ import abc
 import typing
 from typing import Any, Optional
 
-from functional.ffront import type_specifications as ts
 from functional.iterator import ir as itir
+from functional.type_system import type_specifications as ts
 
 
 @typing.runtime_checkable
