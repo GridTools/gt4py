@@ -16,28 +16,17 @@
 import dataclasses
 from typing import Any, Final, TypeVar
 
-import functional.otf.binding.type_specifications as ts
-from functional.iterator.embedded import IndexField
 from functional.otf import languages, stages, step_types, workflow
-from functional.otf.binding import cpp_interface, interface
+from functional.otf.binding import cpp_interface, interface, type_translation as tt_binding
 from functional.program_processors.codegens.gtfn import gtfn_backend
-from functional.type_system import type_translation
 
 
 T = TypeVar("T")
 
 
 def get_param_description(name: str, obj: Any) -> interface.Parameter:
-    # TODO: make type_translation extendable and specialize it for the
-    #   bindings to distinguish between buffer-backed fields and index
-    #   fields.
-    if isinstance(obj, IndexField):
-        dtype = type_translation.from_type_hint(obj.dtype.type)
-        assert isinstance(dtype, ts.ScalarType)
-        return interface.Parameter(name, ts.IndexFieldType(axis=obj.axis, dtype=dtype))
-    else:
-        type_ = type_translation.from_value(obj)
-        return interface.Parameter(name, type_)
+    type_ = tt_binding.from_value(obj)
+    return interface.Parameter(name, type_)
 
 
 @dataclasses.dataclass(frozen=True)

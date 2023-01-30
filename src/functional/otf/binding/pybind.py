@@ -19,7 +19,8 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import eve
-import functional.otf.binding.type_specifications as ts
+import functional.otf.binding.type_specifications as ts_binding
+import functional.type_system.type_specifications as ts
 from eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, interface
@@ -112,7 +113,7 @@ class BindingCodeGenerator(TemplatedGenerator):
     def visit_FunctionParameter(self, param: FunctionParameter):
         if isinstance(param.type_, ts.FieldType):
             type_str = "pybind11::buffer"
-        elif isinstance(param.type_, ts.IndexFieldType):
+        elif isinstance(param.type_, ts_binding.IndexFieldType):
             type_str = "pybind11::none"
         elif isinstance(param.type_, ts.ScalarType):
             type_str = cpp_interface.render_scalar_type(param.type_)
@@ -168,7 +169,7 @@ def make_argument(index: int, param: interface.Parameter) -> str | BufferSID | P
             scalar_type=param.type_.dtype,
             dim_config=index,
         )
-    elif isinstance(param.type_, ts.IndexFieldType):
+    elif isinstance(param.type_, ts_binding.IndexFieldType):
         return PositionalSID(dimension=DimensionType(name=param.type_.axis.value))
     else:
         return param.name
