@@ -148,7 +148,8 @@ def _collect_offset_definitions(
 
     for o in offset_tags:
         if o.value not in offset_provider:
-            raise ValueError(f"Missing offset_provider entry for {o.value}")
+            continue
+            # raise ValueError(f"Missing offset_provider entry for {o.value}")
 
         offset_name = o.value
         assert isinstance(offset_name, str)

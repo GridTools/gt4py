@@ -267,20 +267,15 @@ def test_astype_float(fieldview_backend):
     assert np.allclose(c_int32.array(), out_int_32)
 
 
-def test_dusk_indexfield():
+def test_dusk_indexfield(fieldview_backend):
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
-    offset_field_arr = np.asarray(
-        np.ones(
-            (size),
-        ),
-        dtype=int64,
-    )
+    offset_field_arr = np.asarray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
     offset_field = np_as_located_field(KDim)(offset_field_arr)
     out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
     out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def dusk_index_fo(
         a: Field[[IDim, KDim], float64], offset_field: Field[[KDim], int64]
     ) -> Field[[IDim, KDim], float64]:
@@ -288,7 +283,7 @@ def test_dusk_indexfield():
 
     dusk_index_fo(a_I_float, offset_field, out=out_I_float, offset_provider={})
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def koff_index_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
         return a(Koff[1])
 
