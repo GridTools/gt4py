@@ -66,7 +66,7 @@ jobs:
     - run: unzip 'coverage*.zip'
     - run: |
         unzip info.zip
-        python .github/scripts/coverage_info_to_env.py
+        python ci/coverage_info_to_env.py
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v3
