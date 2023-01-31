@@ -3,7 +3,7 @@ import pytest
 
 from functional.common import Dimension
 from functional.iterator import transforms
-from functional.iterator.builtins import deref, lift, reduce, shift
+from functional.iterator.builtins import deref, lift, plus, reduce, shift
 from functional.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -11,6 +11,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import fundef, offset
 from functional.program_processors.formatters import gtfn
+from functional.program_processors.runners import gtfn_cpu
 
 from .conftest import run_processor
 
@@ -131,7 +132,7 @@ def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode):
 
 @fundef
 def sum_edges_to_vertices_reduce(in_edges):
-    return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
+    return reduce(plus, 0)(shift(V2E)(in_edges))
 
 
 def test_sum_edges_to_vertices_reduce(program_processor_no_gtfn_exec, lift_mode):
@@ -212,7 +213,7 @@ V2V = offset("V2V")
 
 def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    non_sparse = np_as_located_field(Edge)(np.zeros(9))
+    non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -352,9 +353,13 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = index_field(Vertex)
+    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        # TODO(tehrengruber): only a temporary solution until index fields are supported in the
+        #  gtfn backend.
+        inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 

@@ -18,9 +18,9 @@ from functional.common import GTTypeError
 from functional.ffront import (
     dialect_ast_enums,
     program_ast as past,
-    type_info,
-    type_specifications as ts,
+    type_specifications as ts_ffront,
 )
+from functional.type_system import type_info, type_specifications as ts
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -54,8 +54,8 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     if not isinstance(
         new_func.type,
         (
-            ts.FieldOperatorType,
-            ts.ScanOperatorType,
+            ts_ffront.FieldOperatorType,
+            ts_ffront.ScanOperatorType,
         ),
     ):
         raise GTTypeError(
@@ -108,7 +108,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
         return past.Program(
             id=self.visit(node.id, **kwargs),
-            type=ts.ProgramType(definition=definition_type),
+            type=ts_ffront.ProgramType(definition=definition_type),
             params=params,
             body=self.visit(node.body, **kwargs),
             closure_vars=self.visit(node.closure_vars, **kwargs),

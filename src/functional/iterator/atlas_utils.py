@@ -18,6 +18,7 @@ except ImportError:
     IrregularConnectivity = None
 
 
+# TODO(tehrengruber): make this a proper Connectivity instead of faking a numpy array
 class AtlasTable:
     def __init__(self, atlas_connectivity) -> None:
         self.atlas_connectivity = atlas_connectivity
@@ -34,6 +35,11 @@ class AtlasTable:
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
                 raise AssertionError()
+
+    @property
+    def dtype(self):
+        assert self.atlas_connectivity.rows > 0
+        return type(self[0, 0])
 
     @property
     def shape(self):

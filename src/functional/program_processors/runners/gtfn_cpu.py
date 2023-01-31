@@ -17,7 +17,9 @@ import dataclasses
 from typing import Any, Callable, Final, Optional
 
 import numpy as np
+import numpy.typing as npt
 
+from functional import common
 from functional.iterator import ir as itir
 from functional.otf import languages, stages, workflow
 from functional.otf.binding import cpp_interface, pybind
@@ -35,12 +37,36 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
+def extract_connectivity_args(
+    offset_provider: dict[str, common.Connectivity | common.Dimension]
+) -> list[npt.NDArray]:
+    # note: the order here needs to agree with the order of the generated bindings
+    args: list[npt.NDArray] = []
+    for name, conn in offset_provider.items():
+        if isinstance(conn, common.Connectivity):
+            if not isinstance(conn, common.NeighborTable):
+                raise NotImplementedError(
+                    "Only `NeighborTable` connectivities implemented at this point."
+                )
+            args.append(conn.table)
+        elif isinstance(conn, common.Dimension):
+            pass
+        else:
+            raise AssertionError(
+                f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
+                f"but got {type(conn).__name__}."
+            )
+    return args
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(ppi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
 
     name: Optional[str] = None
+    enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    use_imperative_backend: bool = False
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -55,12 +81,17 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
         def convert_args(inp: Callable) -> Callable:
             def decorated_program(*args):
-                return inp(*[convert_arg(arg) for arg in args])
+                return inp(
+                    *[convert_arg(arg) for arg in args],
+                    *extract_connectivity_args(kwargs["offset_provider"]),
+                )
 
             return decorated_program
 
         otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-            gtfn_module.GTFNTranslationStep(self.language_settings)
+            gtfn_module.GTFNTranslationStep(
+                self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
+            )
             .chain(pybind.bind_source)
             .chain(
                 compiler.Compiler(
@@ -81,4 +112,9 @@ class GTFNExecutor(ppi.ProgramExecutor):
         return self.name or repr(self)
 
 
-run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(name="run_gtfn")
+run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
+    name="run_gtfn", use_imperative_backend=False
+)
+run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
+    name="run_gtfn_imperative", use_imperative_backend=True
+)

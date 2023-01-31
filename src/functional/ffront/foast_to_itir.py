@@ -26,11 +26,11 @@ from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     itir_makers as im,
-    type_info,
-    type_specifications as ts,
+    type_specifications as ts_ffront,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
+from functional.type_system import type_info, type_specifications as ts
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
@@ -175,10 +175,10 @@ class FieldOperatorLowering(NodeTranslator):
         #  rest of the lowering inside the body. See ADR-0002 for more details.
         new_body = func_definition.expr
         for i, param in enumerate(func_definition.params):
-            if isinstance(node.definition.params[i].type, ts.ScalarType):
+            if iterator_type_kind(node.definition.params[i].type) == ITIRTypeKind.VALUE:
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
-        assert isinstance(node.type, ts.FieldOperatorType)
+        assert isinstance(node.type, ts_ffront.FieldOperatorType)
         if iterator_type_kind(node.type.definition.returns) == ITIRTypeKind.ITERATOR:
             new_body = im.deref_(new_body)
 
@@ -398,7 +398,12 @@ class FieldOperatorLowering(NodeTranslator):
         )(*(param[1] for param in params))
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self._make_reduction_expr(node, lambda expr: im.plus_("acc", expr), 0, **kwargs)
+        ftype = node.type
+        assert isinstance(ftype, ts.FieldType)
+        init_expr = itir.Literal(value="0", type=str(ftype.dtype))
+        return self._make_reduction_expr(
+            node, lambda expr: im.plus_("acc", expr), init_expr, **kwargs
+        )
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
@@ -432,8 +437,8 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(
             node.func.type,
             (
-                ts.FieldOperatorType,
-                ts.ScanOperatorType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
             ),
         ):
             # operators are lowered into stencils and only accept iterator

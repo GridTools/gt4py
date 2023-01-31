@@ -17,9 +17,20 @@ from __future__ import annotations
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Optional, Protocol, TypeVar, runtime_checkable
+from typing import (
+    Any,
+    Generic,
+    Optional,
+    Protocol,
+    SupportsFloat,
+    SupportsInt,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
 import numpy as np
+import numpy.typing as npt
 
 from eve.type_definitions import StrEnum
 
@@ -27,6 +38,8 @@ from eve.type_definitions import StrEnum
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 DT = TypeVar("DT", bound="DType")
+
+Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
 @enum.unique
@@ -77,11 +90,18 @@ class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: Dimension
+    neighbor_axis: Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
         self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
+
+
+@runtime_checkable
+class NeighborTable(Connectivity, Protocol):
+    table: npt.NDArray
 
 
 @enum.unique

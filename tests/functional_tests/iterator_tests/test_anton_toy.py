@@ -4,7 +4,7 @@ import pytest
 from functional.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from functional.iterator.embedded import np_as_located_field
 from functional.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 
@@ -51,10 +51,10 @@ def fencil(x, y, z, out, inp):
 def naive_lap(inp):
     shape = [inp.shape[0] - 2, inp.shape[1] - 2, inp.shape[2]]
     out = np.zeros(shape)
-    for i in range(shape[0]):
-        for j in range(shape[1]):
+    for i in range(1, shape[0] + 1):
+        for j in range(1, shape[1] + 1):
             for k in range(0, shape[2]):
-                out[i, j, k] = -4 * inp[i, j, k] + (
+                out[i - 1, j - 1, k] = -4 * inp[i, j, k] + (
                     inp[i + 1, j, k] + inp[i - 1, j, k] + inp[i, j + 1, k] + inp[i, j - 1, k]
                 )
     return out
@@ -63,7 +63,7 @@ def naive_lap(inp):
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: this test does not validate")
 
     shape = [5, 7, 9]

@@ -20,14 +20,7 @@ from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import eve
 from functional import common
-from functional.ffront import (
-    dialect_ast_enums,
-    fbuiltins,
-    field_operator_ast as foast,
-    type_info,
-    type_specifications as ts,
-    type_translation,
-)
+from functional.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from functional.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -41,6 +34,7 @@ from functional.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from functional.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from functional.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from functional.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 class FieldOperatorSyntaxError(DialectSyntaxError):
@@ -83,7 +77,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except FieldOperatorSyntaxError as err:
     ...     print(f"Error at [{err.lineno}, {err.offset}] in {err.filename})")
-    Error at [2, 4] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
+    Error at [2, 5] in ...functional.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
 
     syntax_error_cls = FieldOperatorSyntaxError

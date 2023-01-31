@@ -2,7 +2,10 @@ import typing
 from collections import abc
 
 import eve
+from functional.common import DimensionKind
 from functional.iterator import ir
+from functional.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
+from functional.iterator.runtime import CartesianAxis
 from functional.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -48,6 +51,15 @@ class FunctionType(Type):
     ret: Type = eve.field(default_factory=TypeVar.fresh)
 
 
+class Location(Type):
+    """Location type."""
+
+    name: str
+
+
+ANYWHERE = Location(name="ANYWHERE")
+
+
 class Val(Type):
     """The main type for representing values and iterators.
 
@@ -60,6 +72,8 @@ class Val(Type):
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     dtype: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
+    current_loc: Type = ANYWHERE
+    defined_loc: Type = ANYWHERE
 
 
 class ValTuple(Type):
@@ -68,25 +82,43 @@ class ValTuple(Type):
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     dtypes: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
+    current_loc: Type = eve.field(default_factory=TypeVar.fresh)
+    defined_locs: Type = eve.field(default_factory=TypeVar.fresh)
 
     def __eq__(self, other: typing.Any) -> bool:
-        if isinstance(self.dtypes, Tuple) and isinstance(other, Tuple):
+        if (
+            isinstance(self.dtypes, Tuple)
+            and isinstance(self.defined_locs, Tuple)
+            and isinstance(other, Tuple)
+        ):
             dtypes: Type = self.dtypes
+            defined_locs: Type = self.defined_locs
             elems: Type = other
             while (
                 isinstance(dtypes, Tuple)
+                and isinstance(defined_locs, Tuple)
                 and isinstance(elems, Tuple)
-                and Val(kind=self.kind, dtype=dtypes.front, size=self.size) == elems.front
+                and Val(
+                    kind=self.kind,
+                    dtype=dtypes.front,
+                    size=self.size,
+                    current_loc=self.current_loc,
+                    defined_loc=defined_locs.front,
+                )
+                == elems.front
             ):
                 dtypes = dtypes.others
+                defined_locs = defined_locs.others
                 elems = elems.others
-            return dtypes == elems == EmptyTuple()
+            return dtypes == defined_locs == elems == EmptyTuple()
 
         return (
             isinstance(other, ValTuple)
             and self.kind == other.kind
             and self.dtypes == other.dtypes
             and self.size == other.size
+            and self.current_loc == other.current_loc
+            and self.defined_locs == other.defined_locs
         )
 
     def handle_constraint(
@@ -94,12 +126,24 @@ class ValTuple(Type):
     ) -> bool:
         if isinstance(other, Tuple):
             dtypes = [TypeVar.fresh() for _ in other]
-            expanded = [Val(kind=self.kind, dtype=dtype, size=self.size) for dtype in dtypes]
+            defined_locs = [TypeVar.fresh() for _ in other]
+            expanded = [
+                Val(
+                    kind=self.kind,
+                    dtype=dtype,
+                    size=self.size,
+                    current_loc=self.current_loc,
+                    defined_loc=defined_loc,
+                )
+                for dtype, defined_loc in zip(dtypes, defined_locs)
+            ]
             add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
+            add_constraint(self.defined_locs, Tuple.from_elems(*defined_locs))
             add_constraint(Tuple.from_elems(*expanded), other)
             return True
         if isinstance(other, EmptyTuple):
             add_constraint(self.dtypes, EmptyTuple())
+            add_constraint(self.defined_locs, EmptyTuple())
             return True
         return False
 
@@ -188,7 +232,9 @@ DOMAIN_DTYPE = Primitive(name="domain")
 T0 = TypeVar.fresh()
 T1 = TypeVar.fresh()
 T2 = TypeVar.fresh()
-It_T0_T1 = Val(kind=Iterator(), dtype=T0, size=T1)
+T3 = TypeVar.fresh()
+T4 = TypeVar.fresh()
+T5 = TypeVar.fresh()
 Val_T0_T1 = Val(kind=Value(), dtype=T0, size=T1)
 Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
 Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
@@ -196,13 +242,13 @@ Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
 BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "deref": FunctionType(
         args=Tuple.from_elems(
-            It_T0_T1,
+            Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T2, defined_loc=T2)
         ),
         ret=Val_T0_T1,
     ),
     "can_deref": FunctionType(
         args=Tuple.from_elems(
-            It_T0_T1,
+            Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T2, defined_loc=T3)
         ),
         ret=Val_BOOL_T1,
     ),
@@ -210,9 +256,13 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "minus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "mod": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "not_eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "less_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "greater": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    "greater_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "and_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
     "or_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
     "xor_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
@@ -226,9 +276,15 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "cast_": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
-            FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1)
+            FunctionType(
+                args=ValTuple(kind=Iterator(), dtypes=T2, size=T1, current_loc=T3, defined_locs=T4),
+                ret=Val_T0_T1,
+            )
         ),
-        ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=It_T0_T1),
+        ret=FunctionType(
+            args=ValTuple(kind=Iterator(), dtypes=T2, size=T1, current_loc=T5, defined_locs=T4),
+            ret=Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T5, defined_loc=T3),
+        ),
     ),
     "reduce": FunctionType(
         args=Tuple.from_elems(
@@ -245,7 +301,9 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             FunctionType(
                 args=Tuple(
                     front=Val_T0_Scalar,
-                    others=ValTuple(kind=Iterator(), dtypes=T2, size=Scalar()),
+                    others=ValTuple(
+                        kind=Iterator(), dtypes=T2, size=Scalar(), current_loc=T3, defined_locs=T4
+                    ),
                 ),
                 ret=Val_T0_Scalar,
             ),
@@ -253,7 +311,9 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             Val_T0_Scalar,
         ),
         ret=FunctionType(
-            args=ValTuple(kind=Iterator(), dtypes=T2, size=Column()),
+            args=ValTuple(
+                kind=Iterator(), dtypes=T2, size=Column(), current_loc=T3, defined_locs=T4
+            ),
             ret=Val(kind=Value(), dtype=T0, size=Column()),
         ),
     ),
@@ -267,11 +327,44 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     ),
 }
 
-del T0, T1, T2, It_T0_T1, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
+del T0, T1, T2, T3, T4, T5, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
+
+
+def _infer_shift_location_types(shift_args, offset_provider, constraints):
+    current_loc_in = TypeVar.fresh()
+    if offset_provider:
+        current_loc_out = current_loc_in
+        for arg in shift_args:
+            if not isinstance(arg, ir.OffsetLiteral):
+                continue  # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+            offset = arg.value
+            if isinstance(offset, int):
+                continue  # ignore ‘application’ of (partial) shifts
+            else:
+                assert isinstance(offset, str)
+                axis = offset_provider[offset]
+                if isinstance(axis, CartesianAxis):
+                    continue  # Cartesian shifts don’t change the location type
+                elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
+                    assert (
+                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                    )
+                    constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
+                    current_loc_out = Location(name=axis.neighbor_axis.value)
+                else:
+                    raise NotImplementedError()
+    elif not shift_args:
+        current_loc_out = current_loc_in
+    else:
+        current_loc_out = TypeVar.fresh()
+    return current_loc_in, current_loc_out
 
 
 class _TypeInferrer(eve.NodeTranslator):
     """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
+
+    def __init__(self, offset_provider):
+        self.offset_provider = offset_provider
 
     def visit_SymRef(
         self, node: ir.SymRef, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
@@ -366,14 +459,30 @@ class _TypeInferrer(eve.NodeTranslator):
                 return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
-                # as function calls; that is, the offsets are completely
-                # ignored by the type inference algorithm
-                it = Val(kind=Iterator())
+                # as function calls, as the type depends on the offset provider
+                current_loc_in, current_loc_out = _infer_shift_location_types(
+                    node.args, self.offset_provider, constraints
+                )
+                defined_loc = TypeVar.fresh()
+                dtype_ = TypeVar.fresh()
+                size = TypeVar.fresh()
                 return FunctionType(
                     args=Tuple.from_elems(
-                        it,
+                        Val(
+                            kind=Iterator(),
+                            dtype=dtype_,
+                            size=size,
+                            current_loc=current_loc_in,
+                            defined_loc=defined_loc,
+                        ),
                     ),
-                    ret=it,
+                    ret=Val(
+                        kind=Iterator(),
+                        dtype=dtype_,
+                        size=size,
+                        current_loc=current_loc_out,
+                        defined_loc=defined_loc,
+                    ),
                 )
             if node.fun.id.endswith("domain"):
                 for arg in node.args:
@@ -421,8 +530,20 @@ class _TypeInferrer(eve.NodeTranslator):
             *self.visit(node.inputs, constraints=constraints, symtypes=symtypes)
         )
         output_dtype = TypeVar.fresh()
+        output_loc = TypeVar.fresh()
         constraints.add((domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar())))
-        constraints.add((output, Val(kind=Iterator(), dtype=output_dtype, size=Column())))
+        constraints.add(
+            (
+                output,
+                Val(
+                    kind=Iterator(),
+                    dtype=output_dtype,
+                    size=Column(),
+                    current_loc=output_loc,
+                    defined_loc=output_loc,
+                ),
+            )
+        )
         constraints.add(
             (
                 stencil,
@@ -458,14 +579,20 @@ class _TypeInferrer(eve.NodeTranslator):
         )
 
 
-def infer(expr: ir.Node, symtypes: typing.Optional[dict[str, Type]] = None) -> Type:
+def infer(
+    expr: ir.Node,
+    symtypes: typing.Optional[dict[str, Type]] = None,
+    offset_provider: typing.Optional[dict[str, typing.Any]] = None,
+) -> Type:
     """Infer the type of the given iterator IR expression."""
     if symtypes is None:
         symtypes = dict()
 
     # Collect constraints
     constraints = set[tuple[Type, Type]]()
-    dtype = _TypeInferrer().visit(expr, constraints=constraints, symtypes=symtypes)
+    dtype = _TypeInferrer(offset_provider=offset_provider).visit(
+        expr, constraints=constraints, symtypes=symtypes
+    )
     # Compute the most general type that satisfies all constraints
     unified = unify(dtype, constraints)
     return reindex_vars(unified)
@@ -490,11 +617,22 @@ class PrettyPrinter(eve.NodeTranslator):
         assert isinstance(size, TypeVar)
         return self._superscript(size.idx)
 
-    def _fmt_dtype(self, kind: Type, dtype_str: str) -> str:
+    def _fmt_dtype(
+        self,
+        kind: Type,
+        dtype_str: str,
+        current_loc: typing.Optional[str] = None,
+        defined_loc: typing.Optional[str] = None,
+    ) -> str:
         if kind == Value():
             return dtype_str
         if kind == Iterator():
-            return "It[" + dtype_str + "]"
+            if current_loc == defined_loc == "ANYWHERE" or current_loc is defined_loc is None:
+                locs = ""
+            else:
+                assert isinstance(current_loc, str) and isinstance(defined_loc, str)
+                locs = current_loc + ", " + defined_loc + ", "
+            return "It[" + locs + dtype_str + "]"
         assert isinstance(kind, TypeVar)
         return "ItOrVal" + self._subscript(kind.idx) + "[" + dtype_str + "]"
 
@@ -511,11 +649,19 @@ class PrettyPrinter(eve.NodeTranslator):
             s += ":" + self.visit(node.others)
         return s
 
+    def visit_Location(self, node: Location):
+        return node.name
+
     def visit_FunctionType(self, node: FunctionType) -> str:
         return self.visit(node.args) + " → " + self.visit(node.ret)
 
     def visit_Val(self, node: Val) -> str:
-        return self._fmt_dtype(node.kind, self.visit(node.dtype) + self._fmt_size(node.size))
+        return self._fmt_dtype(
+            node.kind,
+            self.visit(node.dtype) + self._fmt_size(node.size),
+            self.visit(node.current_loc),
+            self.visit(node.defined_loc),
+        )
 
     def visit_Primitive(self, node: Primitive) -> str:
         return node.name
@@ -540,18 +686,36 @@ class PrettyPrinter(eve.NodeTranslator):
 
     def visit_ValTuple(self, node: ValTuple) -> str:
         if isinstance(node.dtypes, TypeVar):
+            assert isinstance(node.defined_locs, TypeVar)
             return (
                 "("
-                + self._fmt_dtype(node.kind, "T" + self._fmt_size(node.size))
+                + self._fmt_dtype(
+                    node.kind,
+                    "T" + self._fmt_size(node.size),
+                    self.visit(node.current_loc),
+                    "…" + self._subscript(node.defined_locs.idx),
+                )
                 + ", …)"
                 + self._subscript(node.dtypes.idx)
             )
         assert isinstance(node.dtypes, (Tuple, EmptyTuple))
+        if isinstance(node.defined_locs, (Tuple, EmptyTuple)):
+            defined_locs = node.defined_locs
+        else:
+            defined_locs = Tuple.from_elems(*(Location(name="_") for _ in node.dtypes))
         return (
             "("
             + ", ".join(
-                self.visit(Val(kind=node.kind, dtype=dtype, size=node.size))
-                for dtype in node.dtypes
+                self.visit(
+                    Val(
+                        kind=node.kind,
+                        dtype=dtype,
+                        size=node.size,
+                        current_loc=node.current_loc,
+                        defined_loc=defined_loc,
+                    )
+                )
+                for dtype, defined_loc in zip(node.dtypes, defined_locs)
             )
             + ")"
         )

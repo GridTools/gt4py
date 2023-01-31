@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
+from functional import common
 from functional.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from functional.program_processors import processor_interface as ppi
 from functional.program_processors.formatters import gtfn, lisp, type_check
@@ -46,6 +49,7 @@ def get_processor_id(processor):
         (type_check.check, False),
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
+        (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn.format_sourcecode, False),
     ],
     ids=lambda p: get_processor_id(p[0]),
@@ -56,7 +60,10 @@ def program_processor(request):
 
 @pytest.fixture
 def program_processor_no_gtfn_exec(program_processor):
-    if program_processor[0] == gtfn_cpu.run_gtfn:
+    if (
+        program_processor[0] == gtfn_cpu.run_gtfn
+        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+    ):
         pytest.xfail("gtfn backend not yet supported.")
     return program_processor
 
@@ -73,3 +80,15 @@ def run_processor(
         print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
         raise TypeError(f"program processor kind not recognized: {processor}!")
+
+
+@dataclass
+class DummyConnectivity:
+    max_neighbors: int
+    has_skip_values: int
+    origin_axis: common.Dimension = common.Dimension("dummy_origin")
+    neighbor_axis: common.Dimension = common.Dimension("dummy_neighbor")
+    index_type: type[int] = int
+
+    def mapped_index(_, __) -> int:
+        return 0

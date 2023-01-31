@@ -25,21 +25,17 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     BinaryExpr,
     CartesianDomain,
     CastExpr,
-    Expr,
     FencilDefinition,
     FunCall,
     FunctionDefinition,
     Lambda,
     Literal,
-    Node,
     OffsetLiteral,
     Scan,
     ScanExecution,
     ScanPassDefinition,
     SidComposite,
     StencilExecution,
-    Sym,
-    SymRef,
     TagDefinition,
     TaggedValues,
     TemporaryAllocation,
@@ -47,6 +43,7 @@ from functional.program_processors.codegens.gtfn.gtfn_ir import (
     UnaryExpr,
     UnstructuredDomain,
 )
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
 def pytype_to_cpptype(t: str):
@@ -139,42 +136,54 @@ def _collect_offset_definitions(
     grid_type: common.GridType,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
 ):
-    offset_tags: Iterable[itir.OffsetLiteral] = (
+    used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
         .filter(lambda offset_literal: isinstance(offset_literal.value, str))
-    )
+        .getattr("value")
+    ).to_set()
+    if not used_offset_tags.issubset(set(offset_provider.keys())):
+        raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
 
-    for o in offset_tags:
-        if o.value not in offset_provider:
-            continue
+    for offset_name, dim_or_connectivity in offset_provider.items():
+        if isinstance(dim_or_connectivity, common.Dimension):
+            dim: common.Dimension = dim_or_connectivity
 
-        offset_name = o.value
-        assert isinstance(offset_name, str)
-        dim_or_conn = offset_provider[offset_name]
-        if isinstance(dim_or_conn, common.Dimension):
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
-                offset_definitions[dim_or_conn.value] = TagDefinition(
-                    name=Sym(id=dim_or_conn.value)
-                )
+                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
                 offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=SymRef(id=dim_or_conn.value)
+                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim_or_conn.kind == common.DimensionKind.VERTICAL:
+                if not dim.kind == common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
                 # create alias from vertical offset to vertical dimension
                 offset_definitions[offset_name] = TagDefinition(
-                    name=Sym(id=offset_name), alias=_vertical_dimension
+                    name=Sym(id=offset_name), alias=SymRef(id=dim.value)
+                )
+        elif isinstance(dim_or_connectivity, common.Connectivity):
+            assert grid_type == common.GridType.UNSTRUCTURED
+            offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+
+            connectivity: common.Connectivity = dim_or_connectivity
+            for dim in [
+                connectivity.origin_axis,
+                connectivity.neighbor_axis,
+            ]:
+                if not dim.kind == common.DimensionKind.HORIZONTAL:
+                    raise NotImplementedError()
+                offset_definitions[dim.value] = TagDefinition(
+                    name=Sym(id=dim.value), alias=_horizontal_dimension
                 )
         else:
-            assert isinstance(dim_or_conn, common.Connectivity)
-            offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
+            raise AssertionError(
+                "Elements of offset provider need to be either `Dimension` or `Connectivity`."
+            )
     return offset_definitions
 
 
@@ -238,9 +247,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         extracted_functions: Optional[list] = None,
         **kwargs: Any,
     ) -> SymRef:
-        if force_function_extraction:
+        if force_function_extraction and node.id == "deref":
             assert extracted_functions is not None
-            assert node.id == "deref"
             fun_id = self.uids.sequential_id(prefix="_fun")
             fun_def = FunctionDefinition(
                 id=fun_id,
@@ -383,7 +391,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
-                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
             elif node.fun.id == "unstructured_domain":
                 sizes, domain_offsets = self._make_domain(node)
                 connectivities = []
@@ -400,7 +408,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     tagged_sizes=sizes,
                     tagged_offsets=domain_offsets,
                     connectivities=connectivities,
-                )
+                )  # type: ignore
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1

@@ -21,7 +21,7 @@ from functional.program_processors.formatters import type_check
 from functional.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
 
@@ -47,7 +47,11 @@ def test_simple_indirection(program_processor):
 
     if program_processor == type_check.check:
         pytest.xfail("bug in type inference")
-    if program_processor == run_gtfn or program_processor == gtfn_format_sourcecode:
+    if (
+        program_processor == run_gtfn
+        or program_processor == run_gtfn_imperative
+        or program_processor == gtfn_format_sourcecode
+    ):
         pytest.xfail("fails in lowering to gtfn_ir")
 
     shape = [8]
@@ -58,7 +62,7 @@ def test_simple_indirection(program_processor):
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
-        ref[i] = inp[i - 1] if cond[i] < 0 else inp[i + 1]
+        ref[i] = inp[i + 1 - 1] if cond[i] < 0 else inp[i + 1 + 1]
 
     run_processor(
         conditional_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
