@@ -185,7 +185,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
                 #  actually want is to inline whenever the argument is not shifted. This is
                 #  currently beyond the capabilities of the inliner and the shift tracer.
-                new_args_dict: dict = {}
+                new_arg_exprs: dict[<todo>] = {}
                 inlined_args = []
                 for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
                     if eligible:
