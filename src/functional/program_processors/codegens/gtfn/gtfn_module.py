@@ -29,6 +29,8 @@ from functional.program_processors.codegens.gtfn import gtfn_backend
 
 T = TypeVar("T")
 
+GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
+
 
 def get_param_description(
     name: str, obj: Any
@@ -47,20 +49,14 @@ class GTFNTranslationStep(
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
 
-    def _process_arguments(
+    def _process_regular_arguments(
         self,
         program: itir.FencilDefinition,
         args: tuple[Any, ...],
-        offset_provider: dict[str, Connectivity],
     ):
-        """Given an ITIR program and arguments generate the interface parameters and arguments."""
-        parameters: list[
-            interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter
-        ] = []
-        parameter_args: list[str] = ["gridtools::fn::backend::naive{}"]
-        connectivity_args: list[str] = []
+        parameters: list[interface.ScalarParameter | interface.BufferParameter] = []
+        arg_exprs: list[str] = []
 
-        # handle parameters and arguments of the program
         # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
         #  so transform all scalar arguments that are used in a closure into one before we pass
         #  them to the generated source. This is not a very clean solution and will fail when
@@ -83,18 +79,25 @@ class GTFNTranslationStep(
             parameter = get_param_description(program_param.id, obj)
             parameters.append(parameter)
 
-            # argument expression
+            # argument conversion expression
             if (
                 isinstance(parameter, interface.ScalarParameter)
                 and parameter.name in closure_scalar_parameters
             ):
                 # convert into sid
-                parameter_args.append(f"gridtools::stencil::global_parameter({parameter.name})")
+                arg_exprs.append(f"gridtools::stencil::global_parameter({parameter.name})")
             else:
                 # pass as is
-                parameter_args.append(parameter.name)
+                arg_exprs.append(parameter.name)
+        return parameters, arg_exprs
 
-        # handle connectivity parameters and arguments
+    def _process_connectivity_args(
+        self,
+        offset_provider: dict[str, Connectivity | Dimension],
+    ):
+        parameters: list[interface.ConnectivityParameter] = []
+        arg_exprs: list[str] = []
+
         for name, connectivity in offset_provider.items():
             if isinstance(connectivity, Connectivity):
                 if connectivity.index_type not in [np.int32, np.int64]:
@@ -105,7 +108,7 @@ class GTFNTranslationStep(
                 # parameter
                 parameters.append(
                     interface.ConnectivityParameter(
-                        "__conn_" + name.lower(),
+                        GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
                         connectivity.origin_axis.value,
                         name,
                         connectivity.index_type,  # type: ignore[arg-type]
@@ -117,35 +120,48 @@ class GTFNTranslationStep(
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
                     f"generated::{connectivity.origin_axis.value}_t, "
                     f"generated::{name}_t, {connectivity.max_neighbors}"
-                    f">(__conn_{name.lower()})"
+                    f">({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})"
                 )
-                connectivity_args.append(
+                arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
-                )  # TODO(havogt): std::forward, type and max_neighbors
+                )
             elif isinstance(connectivity, Dimension):
                 pass
             else:
-                raise ValueError(
+                raise AssertionError(
                     f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
                     f"but got {type(connectivity).__name__}."
                 )
 
-        return parameters, parameter_args, connectivity_args
+        return parameters, arg_exprs
 
     def __call__(
         self,
         inp: stages.ProgramCall,
     ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
-        program = inp.program
-        parameters, parameter_args, connectivity_args = self._process_arguments(
-            program, inp.args, inp.kwargs["offset_provider"]
+        program: itir.FencilDefinition = inp.program
+
+        # handle regular parameters and arguments of the program (i.e. what the user defined in
+        #  the program)
+        regular_parameters, regular_args_expr = self._process_regular_arguments(program, inp.args)
+
+        # handle connectivity parameters and arguments (i.e. what the user provided in the offset
+        #  provider)
+        connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
+            inp.kwargs["offset_provider"]
         )
+
+        # combine into a format that is aligned with what the backend expects
+        parameters: list[
+            interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter
+        ] = [*regular_parameters, *connectivity_parameters]
+        args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
         decl_body = (
             f"return generated::{function.name}("
-            f"{', '.join(connectivity_args)})({', '.join(parameter_args)});"
+            f"{', '.join(connectivity_args_expr)})({', '.join(args_expr)});"
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(

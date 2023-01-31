@@ -52,7 +52,7 @@ def extract_connectivity_args(
         elif isinstance(conn, common.Dimension):
             pass
         else:
-            raise ValueError(
+            raise AssertionError(
                 f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
                 f"but got {type(conn).__name__}."
             )
