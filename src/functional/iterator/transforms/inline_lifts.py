@@ -185,13 +185,13 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
                 #  actually want is to inline whenever the argument is not shifted. This is
                 #  currently beyond the capabilities of the inliner and the shift tracer.
-                new_arg_exprs: dict[<todo>] = {}
+                new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
                 inlined_args = []
                 for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
                     if eligible:
                         assert isinstance(arg, ir.FunCall)
                         inlined_arg, _ = _transform_and_extract_lift_args(
-                            arg, symtable, new_args_dict
+                            arg, symtable, new_arg_exprs
                         )
                         inlined_args.append(inlined_arg)
                     else:
@@ -201,10 +201,10 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                             new_arg_sym = _generate_unique_symbol(
                                 desired_name=(stencil, i),
                                 occupied_names=symtable.keys(),
-                                occupied_symbols=new_args_dict.keys(),
+                                occupied_symbols=new_arg_exprs.keys(),
                             )
 
-                        new_args_dict[new_arg_sym] = arg
+                        new_arg_exprs[new_arg_sym] = arg
                         inlined_args.append(ir.SymRef(id=new_arg_sym.id))
 
                 inlined_call = self.visit(
@@ -214,7 +214,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     **kwargs,
                 )
 
-                new_stencil = im.lambda__(*new_args_dict.keys())(inlined_call)
-                return im.lift_(new_stencil)(*new_args_dict.values())
+                new_stencil = im.lambda__(*new_arg_exprs.keys())(inlined_call)
+                return im.lift_(new_stencil)(*new_arg_exprs.values())
 
         return node
