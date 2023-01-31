@@ -12,9 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
 import pytest
 
-from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR
+from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, _make_literal
 from gt4py.cartesian.frontend.nodes import (
     AxisBound,
     AxisInterval,
@@ -170,3 +171,22 @@ def test_field_decl_dims(defir_to_gtir, axes, expected_mask):
     field_decl = FieldDecl(name="a", data_type=DataType.INT64, axes=axes, is_api=True)
     gtir_decl = defir_to_gtir.visit_FieldDecl(field_decl)
     assert gtir_decl.dimensions == expected_mask
+
+
+def test_make_literal(defir_to_gtir):
+    # All of those are o.k.
+    gtir_lit = _make_literal(10.10)
+    assert gtir_lit.dtype == common.DataType.FLOAT64
+    gtir_lit = _make_literal(np.float32(10.10))
+    assert gtir_lit.dtype == common.DataType.FLOAT32
+    gtir_lit = _make_literal(10)
+    assert gtir_lit.dtype == common.DataType.INT64
+    gtir_lit = _make_literal(np.int32(10))
+    assert gtir_lit.dtype == common.DataType.INT32
+    gtir_lit = _make_literal(np.int16(10))
+    assert gtir_lit.dtype == common.DataType.INT16
+    gtir_lit = _make_literal(np.int8(10))
+    assert gtir_lit.dtype == common.DataType.INT8
+    # Octal not so much
+    with pytest.raises(TypeError):
+        gtir_lit = _make_literal("a")

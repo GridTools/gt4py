@@ -86,12 +86,17 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             dtype = common.DataType.FLOAT64
         elif isinstance(v, np.float32):
             dtype = common.DataType.FLOAT32
+        elif isinstance(v, np.int32):
+            dtype = common.DataType.INT32
+        elif isinstance(v, np.int16):
+            dtype = common.DataType.INT16
+        elif isinstance(v, np.int8):
+            dtype = common.DataType.INT8
         else:
-            print(
-                "Warning: Only INT64, FLOAT64 and FLOAT32 (via np.float32) literals are "
-                f"supported currently. Implicitly upcasting `{v}` of type {type(v)} to FLOAT64"
+            raise TypeError(
+                "Warning: Only INTs, FLOAT64 and FLOAT32 (via np.X types) literals are "
+                f"supported currently. Type {type(v)} unsupported."
             )
-            dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
 
