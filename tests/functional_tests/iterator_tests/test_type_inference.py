@@ -1,3 +1,5 @@
+import numpy as np
+
 from functional.common import Dimension
 from functional.iterator import ir, type_inference as ti
 from functional.iterator.embedded import NeighborTableOffsetProvider
@@ -484,7 +486,9 @@ def test_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(None, Dimension("Vertex"), Dimension("Edge"), 1)
+        "V2E": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        )
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
@@ -519,8 +523,12 @@ def test_partial_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(None, Dimension("Vertex"), Dimension("Edge"), 1),
-        "E2C": NeighborTableOffsetProvider(None, Dimension("Edge"), Dimension("Cell"), 1),
+        "V2E": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        ),
+        "E2C": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        ),
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
