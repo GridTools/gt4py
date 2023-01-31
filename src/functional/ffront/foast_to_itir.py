@@ -26,11 +26,11 @@ from functional.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     itir_makers as im,
-    type_info,
-    type_specifications as ts,
+    type_specifications as ts_ffront,
 )
 from functional.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from functional.iterator import ir as itir
+from functional.type_system import type_info, type_specifications as ts
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
@@ -178,7 +178,7 @@ class FieldOperatorLowering(NodeTranslator):
             if iterator_type_kind(node.definition.params[i].type) == ITIRTypeKind.VALUE:
                 new_body = im.let(param.id, im.deref_(param.id))(new_body)
 
-        assert isinstance(node.type, ts.FieldOperatorType)
+        assert isinstance(node.type, ts_ffront.FieldOperatorType)
         if iterator_type_kind(node.type.definition.returns) == ITIRTypeKind.ITERATOR:
             new_body = im.deref_(new_body)
 
@@ -419,8 +419,8 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(
             node.func.type,
             (
-                ts.FieldOperatorType,
-                ts.ScanOperatorType,
+                ts_ffront.FieldOperatorType,
+                ts_ffront.ScanOperatorType,
             ),
         ):
             # operators are lowered into stencils and only accept iterator
