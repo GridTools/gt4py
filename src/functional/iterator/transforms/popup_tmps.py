@@ -80,7 +80,7 @@ class PopupTmps(NodeTranslator):
                 elif is_reduce:
                     assert isinstance(node.fun, ir.FunCall) and isinstance(
                         node.fun.args[0], ir.FunCall
-                    )  # TODO thaler: first part of the assertion already checked above, however mypy doe snot catch it
+                    )  # TODO(fthaler): first part of the assertion already checked above, however mypy does not catch it
                     assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
                     f = node.fun.args[0]
                 else:
