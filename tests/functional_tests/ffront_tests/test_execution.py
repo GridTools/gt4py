@@ -240,7 +240,7 @@ def test_scalar_arg_with_field(fieldview_backend):
 
 
 def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip(
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
