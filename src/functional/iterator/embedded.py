@@ -617,8 +617,8 @@ def shift_position(
         return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
-        if isinstance(index, np.ndarray):
-            new_pos[tag.value] = new_pos[tag.value] + index[new_pos[tag.value]]
+        if tag in new_pos:
+            new_pos[tag] = new_pos[tag] + index  # type: ignore[operator]
         elif (
             shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         ) is not None:
@@ -731,10 +731,7 @@ class MDIterator:
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
-        offsets_ls = [
-            offset.field.array() if isinstance(offset, MDIterator) else offset for offset in offsets  # type: ignore[union-attr] # to re-visit later
-        ]
-        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *tuple(offsets_ls))
+        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,
             shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
@@ -984,7 +981,11 @@ def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> Located
 @builtins.shift.register(EMBEDDED)
 def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
+        return it.shift(
+            *list(
+                o.value if isinstance(o, (common.Dimension, runtime.Offset)) else o for o in offsets
+            )
+        )
 
     return impl
 

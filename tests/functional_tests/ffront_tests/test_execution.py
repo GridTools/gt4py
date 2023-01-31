@@ -270,24 +270,34 @@ def test_astype_float(fieldview_backend):
 def test_dusk_indexfield(fieldview_backend):
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
-    offset_field_arr = np.asarray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-    offset_field = np_as_located_field(KDim)(offset_field_arr)
+    offset_field_arr = np.asarray(np.ones((size, size)), dtype=int64)
+    offset_i_arr = np.asarray(np.ones((size,)), dtype=int64)
+    offset_field = np_as_located_field(IDim, KDim)(offset_field_arr)
+    offset_i = np_as_located_field(IDim)(offset_i_arr)
     out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
     out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
     @field_operator(backend=fieldview_backend)
     def dusk_index_fo(
-        a: Field[[IDim, KDim], float64], offset_field: Field[[KDim], int64]
+        a: Field[[IDim, KDim], float64],
+        offset_field: Field[[IDim, KDim], int64],
+        offset_i: Field[[IDim], int64],
     ) -> Field[[IDim, KDim], float64]:
-        return a(as_offset(KDim, offset_field))
+        a_0 = a(as_offset(IDim, offset_i))
+        a_i = a_0(as_offset(IDim, offset_field))
+        a_i_k = a_i(as_offset(KDim, offset_field))
+        return a_i_k
 
-    dusk_index_fo(a_I_float, offset_field, out=out_I_float, offset_provider={})
+    dusk_index_fo(a_I_float, offset_field, offset_i, out=out_I_float, offset_provider={})
 
     @field_operator(backend=fieldview_backend)
     def koff_index_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
-        return a(Koff[1])
+        a_0 = a(Ioff[1])
+        a_i = a_0(Ioff[1])
+        a_i_k = a_i(Koff[1])
+        return a_i_k
 
-    koff_index_fo(a_I_float, out=out_I_float_1, offset_provider={"Koff": KDim})
+    koff_index_fo(a_I_float, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim})
     assert np.allclose(out_I_float.array(), out_I_float_1.array(), equal_nan=True)
 
 
