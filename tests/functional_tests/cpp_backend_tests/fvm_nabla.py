@@ -65,7 +65,9 @@ def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int
-    origin_axis: Dimension = Dimension("dummy")
+    origin_axis: Dimension = Dimension("dummy_origin")
+    neighbor_axis: Dimension = Dimension("dummy_neighbor")
+    index_type: type[int] = int
 
     def mapped_index(_, __) -> int:
         return 0

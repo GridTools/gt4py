@@ -78,7 +78,7 @@ def test_multicopy(fieldview_backend):
     assert np.allclose(b_I_float, out_I_float_1)
 
 
-def test_shift(fieldview_backend):
+def test_cartesian_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
@@ -93,6 +93,25 @@ def test_shift(fieldview_backend):
     fencil(a, out_I_float, offset_provider={"Ioff": IDim})
 
     assert np.allclose(out_I_float.array(), np.arange(1, 11))
+
+
+def test_unstructured_shift(reduction_setup, fieldview_backend):
+    Vertex = reduction_setup.Vertex
+    Edge = reduction_setup.Edge
+    E2V = reduction_setup.E2V
+
+    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
+
+    @field_operator(backend=fieldview_backend)
+    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+
+    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
+
+    assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
@@ -148,9 +167,6 @@ def test_tuples(fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -165,9 +181,6 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -208,6 +221,29 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
+
+
+def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip(
+            "Scalar arguments not supported to be used in both domain specification "
+            "and as an argument to a field operator."
+        )
+
+    size = 10
+    out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
+
+    @field_operator
+    def foo(size: int) -> Field[[Vertex], int]:
+        return broadcast(size, (Vertex,))
+
+    @program(backend=fieldview_backend)
+    def bar(size: int, out: Field[[Vertex], int]):
+        foo(size, out=out, domain={Vertex: (0, size)})
+
+    bar(size, out, offset_provider={})
+
+    assert (out.array() == size).all()
 
 
 def test_scalar_scan():

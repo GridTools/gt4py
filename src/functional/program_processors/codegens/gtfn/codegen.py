@@ -234,6 +234,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     #include <cstdint>
     #include <functional>
     #include <gridtools/fn/${grid_type_str}.hpp>
+    #include <gridtools/fn/sid_neighbor_table.hpp>
 
     namespace generated{
 

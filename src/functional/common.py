@@ -30,6 +30,7 @@ from typing import (
 )
 
 import numpy as np
+import numpy.typing as npt
 
 from eve.type_definitions import StrEnum
 
@@ -89,11 +90,18 @@ class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
     origin_axis: Dimension
+    neighbor_axis: Dimension
+    index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
         self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
+
+
+@runtime_checkable
+class NeighborTable(Connectivity, Protocol):
+    table: npt.NDArray
 
 
 @enum.unique
