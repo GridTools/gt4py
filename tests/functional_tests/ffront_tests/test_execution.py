@@ -42,22 +42,6 @@ from functional.iterator.embedded import (
 )
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
-
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
-    yield request.param
-
-
-def debug_itir(tree):
-    """Compare tree snippets while debugging."""
-    from devtools import debug
-
-    from eve.codegen import format_python_source
-    from functional.program_processors import EmbeddedDSL
-
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
-
-
 from .ffront_test_utils import *
 
 
