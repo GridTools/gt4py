@@ -356,7 +356,7 @@ def lift_stencil(inp):
 def test_lift(program_processor, lift_mode):
     program_processor, validate = program_processor
     inp = index_field(Vertex)
-    if program_processor == gtfn_cpu.run_gtfn:
+    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         # TODO(tehrengruber): only a temporary solution until index fields are supported in the
         #  gtfn backend.
         inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
