@@ -601,7 +601,7 @@ def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]
     tag_stack = []
     complete_offsets = []
     for offset in offsets:
-        if not isinstance(offset, (int, np.integer, np.ndarray)):
+        if not isinstance(offset, (int, np.integer)):
             tag_stack.append(offset)
         else:
             assert tag_stack
