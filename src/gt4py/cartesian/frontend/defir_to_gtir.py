@@ -86,6 +86,8 @@ def _make_literal(v: numbers.Number) -> gtir.Literal:
             dtype = common.DataType.FLOAT64
         elif isinstance(v, np.float32):
             dtype = common.DataType.FLOAT32
+        elif isinstance(v, np.int64):
+            dtype = common.DataType.INT32
         elif isinstance(v, np.int32):
             dtype = common.DataType.INT32
         elif isinstance(v, np.int16):
