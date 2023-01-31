@@ -72,7 +72,7 @@ class PopupTmps(NodeTranslator):
                 if is_scan:
                     assert isinstance(node.fun, ir.FunCall) and isinstance(
                         node.fun.args[0], ir.FunCall
-                    )  # TODO thaler: first part of the assertion already checked above, however mypy doe snot catch it
+                    )  # TODO(fthaler): first part of the assertion already checked above, however mypy does not catch it
                     scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
