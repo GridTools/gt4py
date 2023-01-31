@@ -1,6 +1,6 @@
-# GT4Py Project - GridTools Framework
+# GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 
 # TODO(tehrengruber): This file contains to many different components. Split
 #  into components for each dialect.

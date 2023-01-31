@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2014-2021, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,6 +13,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+#
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.fbuiltins import (
     Field,

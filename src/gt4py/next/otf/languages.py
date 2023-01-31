@@ -1,4 +1,4 @@
-# GT4Py Project - GridTools Framework
+# GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 
 from __future__ import annotations
 
