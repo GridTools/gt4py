@@ -48,6 +48,7 @@ class GTFNTranslationStep(
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    use_imperative_backend: bool = False
 
     def _process_regular_arguments(
         self,
@@ -165,7 +166,10 @@ class GTFNTranslationStep(
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
         stencil_src = gtfn_backend.generate(
-            program, enable_itir_transforms=self.enable_itir_transforms, **inp.kwargs
+            program,
+            enable_itir_transforms=self.enable_itir_transforms,
+            imperative=self.use_imperative_backend,
+            **inp.kwargs,
         )
         source_code = interface.format_source(
             self.language_settings,

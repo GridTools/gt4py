@@ -481,7 +481,7 @@ def test_reduction_lowering_simple():
     reference = im.lift_(
         im.call_("reduce")(
             im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
-            0,
+            im.literal_(value="0", typename="float64"),
         )
     )(im.shift_("V2E")("edge_f"))
 
@@ -507,7 +507,7 @@ def test_reduction_lowering_expr():
                         ),
                     )
                 ),
-                0,
+                im.literal_(value="0", typename="float64"),
             )
         )("e1_nbh__0", "e2")
     )

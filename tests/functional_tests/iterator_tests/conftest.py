@@ -49,6 +49,7 @@ def get_processor_id(processor):
         (type_check.check, False),
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
+        (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn.format_sourcecode, False),
     ],
     ids=lambda p: get_processor_id(p[0]),
@@ -59,7 +60,10 @@ def program_processor(request):
 
 @pytest.fixture
 def program_processor_no_gtfn_exec(program_processor):
-    if program_processor[0] == gtfn_cpu.run_gtfn:
+    if (
+        program_processor[0] == gtfn_cpu.run_gtfn
+        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+    ):
         pytest.xfail("gtfn backend not yet supported.")
     return program_processor
 

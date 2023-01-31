@@ -18,7 +18,7 @@ from typing import Any, Collection, Union
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from functional import common
-from functional.program_processors.codegens.gtfn import gtfn_ir
+from functional.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
 from functional.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_to_cpptype
 
 
@@ -83,7 +83,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
+    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
         if node.id in self._builtins_mapping:
@@ -139,7 +139,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
-        if isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self.user_defined_function_ids:
+        if (
+            isinstance(node.fun, gtfn_ir_common.SymRef)
+            and node.fun.id in self.user_defined_function_ids
+        ):
             fun_name = f"{self.visit(node.fun)}{{}}()"
         else:
             fun_name = self.visit(node.fun)
@@ -152,7 +155,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
     )  # TODO capture
 
-    Backend = as_fmt("make_backend(backend, {domain})")  # TODO: gtfn::make_backend
+    Backend = as_fmt("make_backend(backend, {domain})")
 
     StencilExecution = as_mako(
         """
@@ -182,7 +185,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         struct ${id} {
             constexpr auto operator()() const {
                 return [](${','.join('auto const& ' + p for p in params)}){
-                    return ${expr};
+                    ${expr_};
                 };
             }
         };
@@ -203,6 +206,10 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         constexpr inline ${name}_t ${name}{};
         """
     )
+
+    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
+        expr_ = "return " + self.visit(node.expr)
+        return self.generic_visit(node, expr_=expr_)
 
     def visit_FencilDefinition(
         self, node: gtfn_ir.FencilDefinition, **kwargs: Any
@@ -250,6 +257,55 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     }
     """
     )
+
+    @classmethod
+    def apply(cls, root: Any, **kwargs: Any) -> str:
+        generated_code = super().apply(root, **kwargs)
+        return generated_code
+
+
+class GTFNIMCodegen(GTFNCodegen):
+
+    Stmt = as_fmt("{lhs} {op} {rhs};")
+
+    InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
+
+    Conditional = as_mako(
+        """
+          using ${cond_type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
+          ${init_stmt}
+          if (${cond}) {
+            ${if_stmt}
+          } else {
+            ${else_stmt}
+          }
+    """
+    )
+
+    ImperativeFunctionDefinition = as_mako(
+        """
+        struct ${id} {
+            constexpr auto operator()() const {
+                return [](${','.join('auto const& ' + p for p in params)}){
+                    ${expr_};
+                };
+            }
+        };
+    """
+    )
+
+    ReturnStmt = as_fmt("return {ret};")
+
+    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs):
+        if_rhs_ = self.visit(node.if_stmt.rhs)
+        else_rhs_ = self.visit(node.else_stmt.rhs)
+        return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
+
+    def visit_ImperativeFunctionDefinition(
+        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs
+    ):
+        expr_ = "".join(self.visit(stmt) for stmt in node.fun)
+        return self.generic_visit(node, expr_=expr_)
 
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:

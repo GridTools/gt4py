@@ -75,7 +75,7 @@ def test_floordiv(fieldview_backend):
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("FloorDiv not yet supported.")
 
     @field_operator(backend=fieldview_backend)
@@ -90,7 +90,7 @@ def test_mod(fieldview_backend):
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Modulo not yet supported.")
 
     @field_operator(backend=fieldview_backend)
