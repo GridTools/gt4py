@@ -348,12 +348,18 @@ def test_dusk_indexfield(fieldview_backend):
         offset_field: Field[[IDim, KDim], int64],
         offset_i: Field[[IDim], int64],
     ) -> Field[[IDim, KDim], float64]:
-        a_0 = a(as_offset(IDim, offset_i))
-        a_i = a_0(as_offset(IDim, offset_field))
-        a_i_k = a_i(as_offset(KDim, offset_field))
+        a_0 = a(as_offset(Ioff, offset_i))
+        a_i = a_0(as_offset(Ioff, offset_field))
+        a_i_k = a_i(as_offset(Koff, offset_field))
         return a_i_k
 
-    dusk_index_fo(a_I_float, offset_field, offset_i, out=out_I_float, offset_provider={})
+    dusk_index_fo(
+        a_I_float,
+        offset_field,
+        offset_i,
+        out=out_I_float,
+        offset_provider={"Ioff": IDim, "Koff": KDim},
+    )
 
     @field_operator(backend=fieldview_backend)
     def koff_index_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:

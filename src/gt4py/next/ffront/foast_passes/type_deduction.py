@@ -722,21 +722,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_as_offset(self, node: foast.Call, **kwargs) -> foast.Call:
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
-        assert isinstance(arg_0, ts.DimensionType)
+        assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
-        if arg_0.dim not in arg_1.dims:
+        if arg_0.source not in arg_1.dims:
             raise GTTypeError(
                 f"Incompatible argument in call to `{node.func.id}`. "
-                f"{arg_0.dim} not in list of offset field dimensions {arg_1.dims}."
+                f"{arg_0.source} not in list of offset field dimensions {arg_1.dims}."
             )
-
-        return_type = ts.OffsetType(source=arg_0.dim, target=(arg_0.dim,))
 
         return foast.Call(
             func=node.func,
             args=node.args,
             kwargs=node.kwargs,
-            type=return_type,
+            type=arg_0,
             location=node.location,
         )
 

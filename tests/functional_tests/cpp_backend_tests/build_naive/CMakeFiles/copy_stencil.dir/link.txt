@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++  -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/copy_stencil.dir/copy_stencil_driver.cpp.o -o copy_stencil  libregression_main.a lib/libgmock.a lib/libgtest.a 

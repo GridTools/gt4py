@@ -577,10 +577,6 @@ def execute_shift(
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
     assert tag in (offset_provider or pos.keys())
-    if tag in pos.keys():
-        new_pos = copy.copy(pos)
-        new_pos[tag] = new_pos[tag] + int(index)
-        return new_pos
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
@@ -1057,8 +1053,10 @@ def np_as_located_field(
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            if len(indices) == 2 and not offsets and (indices[0] >= a.shape[0] or indices[1] >= a.shape[1]):
-                return np.nan
+            if len(indices) > 1 and not offsets:
+                for i, j in zip(a.shape, indices):
+                    if j >= i:
+                        return np.nan
             return a[_shift_field_indices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
@@ -1115,11 +1113,7 @@ def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> Located
 @builtins.shift.register(EMBEDDED)
 def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(
-            *list(
-                o.value if isinstance(o, (common.Dimension, runtime.Offset)) else o for o in offsets
-            )
-        )
+        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 
     return impl
 

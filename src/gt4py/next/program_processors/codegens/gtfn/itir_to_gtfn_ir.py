@@ -144,14 +144,12 @@ def _collect_offset_definitions(
         .getattr("value")
     ).to_set()
     if not used_offset_tags.issubset(set(offset_provider.keys())):
-        pass
-        # raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
+        raise AssertionError("ITIR contains an offset tag without a corresponding offset provider.")
     offset_definitions = {}
 
     for offset_name, dim_or_connectivity in offset_provider.items():
         if isinstance(dim_or_connectivity, common.Dimension):
             dim: common.Dimension = dim_or_connectivity
-
             if grid_type == common.GridType.CARTESIAN:
                 # create alias from offset to dimension
                 offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))

@@ -89,11 +89,11 @@ astype = BuiltInFunction(
 as_offset = BuiltInFunction(
     ts.FunctionType(
         args=[
-            ts.DeferredType(constraint=ts.DimensionType),
+            ts.DeferredType(constraint=ts.OffsetType),
             ts.DeferredType(constraint=ts.FieldType),
         ],
         kwargs={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
+        returns=ts.DeferredType(constraint=ts.OffsetType),
     )
 )
 
