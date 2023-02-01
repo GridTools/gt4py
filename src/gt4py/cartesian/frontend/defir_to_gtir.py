@@ -75,14 +75,13 @@ def _convert_dtype(data_type) -> common.DataType:
 
 def _make_literal(v: numbers.Number) -> gtir.Literal:
     value: Union[BuiltinLiteral, str]
-    if isinstance(v, bool):
+    if isinstance(v, (bool, np.bool_)):
         dtype = common.DataType.BOOL
         value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
     else:
-        if isinstance(v, int):
-            # note: could be extended to support 32 bit integers by checking the values magnitude
+        if isinstance(v, (int, np.int64)):
             dtype = common.DataType.INT64
-        elif isinstance(v, float):
+        elif isinstance(v, (float, np.float64)):
             dtype = common.DataType.FLOAT64
         elif isinstance(v, np.float32):
             dtype = common.DataType.FLOAT32
