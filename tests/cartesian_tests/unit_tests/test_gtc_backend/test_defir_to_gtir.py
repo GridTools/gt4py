@@ -173,7 +173,7 @@ def test_field_decl_dims(defir_to_gtir, axes, expected_mask):
     assert gtir_decl.dimensions == expected_mask
 
 
-def test_make_literal(defir_to_gtir):
+def test_make_literal():
     # All of those are o.k.
     gtir_lit = _make_literal(10.10)
     assert gtir_lit.dtype == common.DataType.FLOAT64
@@ -195,6 +195,6 @@ def test_make_literal(defir_to_gtir):
     assert gtir_lit.dtype == common.DataType.BOOL
     gtir_lit = _make_literal(np.bool_(True))
     assert gtir_lit.dtype == common.DataType.BOOL
-    # Octal not so much
+    # Not allowed
     with pytest.raises(TypeError):
         gtir_lit = _make_literal("a")
