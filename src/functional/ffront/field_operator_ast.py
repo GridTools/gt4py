@@ -19,7 +19,8 @@ from typing import Any, Generic, TypeVar, Union
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum
-from functional.ffront import dialect_ast_enums, type_specifications as ts
+from functional.ffront import dialect_ast_enums, type_specifications as ts_ffront
+from functional.type_system import type_specifications as ts
 from functional.utils import RecursionGuard
 
 
@@ -191,8 +192,8 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
 class FieldOperator(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Union[ts.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
-        constraint=ts.FieldOperatorType
+    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts_ffront.FieldOperatorType
     )
 
 
@@ -202,6 +203,6 @@ class ScanOperator(LocatedNode, SymbolTableTrait):
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ts.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
-        constraint=ts.ScanOperatorType
+    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+        constraint=ts_ffront.ScanOperatorType
     )

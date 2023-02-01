@@ -80,7 +80,8 @@ def render_python_type(python_type: Type) -> str:
 
 
 def _render_function_param(
-    param: interface.ScalarParameter | interface.BufferParameter, index: int
+    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
+    index: int,
 ) -> str:
     if isinstance(param, interface.ScalarParameter):
         return f"{render_python_type(param.scalar_type.type)} {param.name}"
@@ -98,7 +99,7 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param, interface.BufferParameter)
+        if isinstance(param, (interface.BufferParameter, interface.ConnectivityParameter))
     ]
     if template_params:
         return f"""

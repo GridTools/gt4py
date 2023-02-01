@@ -11,6 +11,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import fundef, offset
 from functional.program_processors.formatters import gtfn
+from functional.program_processors.runners import gtfn_cpu
 
 from .conftest import run_processor
 
@@ -352,9 +353,13 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = index_field(Vertex)
+    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        # TODO(tehrengruber): only a temporary solution until index fields are supported in the
+        #  gtfn backend.
+        inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 

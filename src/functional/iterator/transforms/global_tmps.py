@@ -365,11 +365,11 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             assert provider.neighbor_axis.kind == DimensionKind.HORIZONTAL
             sizes[provider.origin_axis.value] = max(
                 sizes.get(provider.origin_axis.value, 0),
-                provider._tbl.shape[0],  # TODO properly expose the size
+                provider.table.shape[0],  # TODO properly expose the size
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider._tbl.max(),
+                provider.table.max(),
             )
     return sizes
 

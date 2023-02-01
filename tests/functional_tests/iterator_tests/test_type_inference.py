@@ -1,4 +1,9 @@
+import numpy as np
+
+from functional.common import Dimension
 from functional.iterator import ir, type_inference as ti
+from functional.iterator.embedded import NeighborTableOffsetProvider
+from functional.iterator.runtime import CartesianAxis
 
 
 def test_sym_ref():
@@ -37,13 +42,19 @@ def test_deref():
     testee = ir.SymRef(id="deref")
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
         ),
         ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀¹]) → T₀¹"
+    assert ti.pformat(inferred) == "(It[T₂, T₂, T₀¹]) → T₀¹"
 
 
 def test_deref_call():
@@ -127,19 +138,38 @@ def test_lift():
         args=ti.Tuple.from_elems(
             ti.FunctionType(
                 args=ti.ValTuple(
-                    kind=ti.Iterator(), dtypes=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)
+                    kind=ti.Iterator(),
+                    dtypes=ti.TypeVar(idx=0),
+                    size=ti.TypeVar(idx=1),
+                    current_loc=ti.TypeVar(idx=2),
+                    defined_locs=ti.TypeVar(idx=3),
                 ),
-                ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=1)),
+                ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=4), size=ti.TypeVar(idx=1)),
             ),
         ),
         ret=ti.FunctionType(
-            args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
-            ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=1)),
+            args=ti.ValTuple(
+                kind=ti.Iterator(),
+                dtypes=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=5),
+                defined_locs=ti.TypeVar(idx=3),
+            ),
+            ret=ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=4),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=5),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "((It[T¹], …)₀ → T₂¹) → (It[T¹], …)₀ → It[T₂¹]"
+    assert (
+        ti.pformat(inferred)
+        == "((It[T₂, …₃, T¹], …)₀ → T₄¹) → (It[T₅, …₃, T¹], …)₀ → It[T₅, T₂, T₄¹]"
+    )
 
 
 def test_lift_lambda_without_args():
@@ -147,25 +177,49 @@ def test_lift_lambda_without_args():
         fun=ir.SymRef(id="lift"), args=[ir.Lambda(params=[], expr=ir.SymRef(id="x"))]
     )
     expected = ti.FunctionType(
-        args=ti.ValTuple(kind=ti.Iterator(), dtypes=ti.EmptyTuple(), size=ti.TypeVar(idx=0)),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=0)),
+        args=ti.ValTuple(
+            kind=ti.Iterator(),
+            dtypes=ti.EmptyTuple(),
+            size=ti.TypeVar(idx=0),
+            current_loc=ti.TypeVar(idx=1),
+            defined_locs=ti.EmptyTuple(),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=2),
+            size=ti.TypeVar(idx=0),
+            current_loc=ti.TypeVar(idx=1),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "() → It[T₁⁰]"
+    assert ti.pformat(inferred) == "() → It[T₁, T₃, T₂⁰]"
 
 
 def test_lift_application():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")])
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
         ),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=2),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀¹]) → It[T₀¹]"
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
 
 
 def test_lifted_call():
@@ -173,10 +227,16 @@ def test_lifted_call():
         fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
         args=[ir.SymRef(id="x")],
     )
-    expected = ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
+    expected = ti.Val(
+        kind=ti.Iterator(),
+        dtype=ti.TypeVar(idx=0),
+        size=ti.TypeVar(idx=1),
+        current_loc=ti.TypeVar(idx=2),
+        defined_loc=ti.TypeVar(idx=3),
+    )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "It[T₀¹]"
+    assert ti.pformat(inferred) == "It[T₂, T₃, T₀¹]"
 
 
 def test_make_tuple():
@@ -263,15 +323,18 @@ def test_reduce():
         fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
     )
     expected = ti.FunctionType(
-        args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
+        args=ti.ValTuple(
+            kind=ti.Iterator(),
+            dtypes=ti.Tuple.from_elems(ti.Primitive(name="int"), ti.Primitive(name="int")),
+            size=ti.TypeVar(idx=0),
+            current_loc=ti.TypeVar(idx=1),
+            defined_locs=ti.TypeVar(idx=2),
         ),
         ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[int⁰], It[int⁰]) → int⁰"
+    assert ti.pformat(inferred) == "(It[T₁, _, int⁰], It[T₁, _, int⁰]) → int⁰"
 
 
 def test_scan():
@@ -297,29 +360,179 @@ def test_scan():
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.Primitive(name="int"), size=ti.Column()),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.Primitive(name="int"),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=0),
+                defined_loc=ti.TypeVar(idx=0),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.Primitive(name="int"),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=0),
+                defined_loc=ti.TypeVar(idx=0),
+            ),
         ),
         ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Column()),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[intᶜ], It[intᶜ]) → intᶜ"
+    assert ti.pformat(inferred) == "(It[T₀, T₀, intᶜ], It[T₀, T₀, intᶜ]) → intᶜ"
 
 
 def test_shift():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="shift"), args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")]
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i"), ir.OffsetLiteral(value=1)]
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
         ),
-        ret=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=4),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀¹]) → It[T₀¹]"
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₄, T₃, T₀¹]"
+
+
+def test_shift_with_cartesian_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i"), ir.OffsetLiteral(value=1)]
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=2),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
+    )
+    offset_provider = {"i": CartesianAxis("IDim")}
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
+
+
+def test_partial_shift_with_cartesian_offset_provider():
+    testee = ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="i")])
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=3),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.TypeVar(idx=2),
+            defined_loc=ti.TypeVar(idx=3),
+        ),
+    )
+    offset_provider = {"i": CartesianAxis("IDim")}
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
+
+
+def test_shift_with_unstructured_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="V2E"), ir.OffsetLiteral(value=0)]
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.Location(name="Vertex"),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.Location(name="Edge"),
+            defined_loc=ti.TypeVar(idx=2),
+        ),
+    )
+    offset_provider = {
+        "V2E": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        )
+    }
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[Vertex, T₂, T₀¹]) → It[Edge, T₂, T₀¹]"
+
+
+def test_partial_shift_with_unstructured_offset_provider():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"),
+        args=[
+            ir.OffsetLiteral(value="V2E"),
+            ir.OffsetLiteral(value=0),
+            ir.OffsetLiteral(value="E2C"),
+        ],
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.TypeVar(idx=1),
+                current_loc=ti.Location(name="Vertex"),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
+        ),
+        ret=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.TypeVar(idx=1),
+            current_loc=ti.Location(name="Cell"),
+            defined_loc=ti.TypeVar(idx=2),
+        ),
+    )
+    offset_provider = {
+        "V2E": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        ),
+        "E2C": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        ),
+    }
+    inferred = ti.infer(testee, offset_provider=offset_provider)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[Vertex, T₂, T₀¹]) → It[Cell, T₂, T₀¹]"
 
 
 def test_function_definition():
@@ -377,14 +590,26 @@ def test_stencil_closure():
         inputs=[ir.SymRef(id="inp")],
     )
     expected = ti.Closure(
-        output=ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
+        output=ti.Val(
+            kind=ti.Iterator(),
+            dtype=ti.TypeVar(idx=0),
+            size=ti.Column(),
+            current_loc=ti.TypeVar(idx=1),
+            defined_loc=ti.TypeVar(idx=1),
+        ),
         inputs=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀ᶜ]) ⇒ It[T₀ᶜ]"
+    assert ti.pformat(inferred) == "(It[T₂, T₂, T₀ᶜ]) ⇒ It[T₁, T₁, T₀ᶜ]"
 
 
 def test_fencil_definition():
@@ -422,15 +647,42 @@ def test_fencil_definition():
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=0), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.Column()),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=1),
+                defined_loc=ti.TypeVar(idx=1),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=0),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=2),
+                defined_loc=ti.TypeVar(idx=2),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=3),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=4),
+                defined_loc=ti.TypeVar(idx=4),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=3),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=5),
+                defined_loc=ti.TypeVar(idx=5),
+            ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "{f(intˢ, intˢ, intˢ, It[T₀ᶜ], It[T₀ᶜ], It[T₁ᶜ], It[T₁ᶜ])}"
+    assert (
+        ti.pformat(inferred)
+        == "{f(intˢ, intˢ, intˢ, It[T₁, T₁, T₀ᶜ], It[T₂, T₂, T₀ᶜ], It[T₄, T₄, T₃ᶜ], It[T₅, T₅, T₃ᶜ])}"
+    )
 
 
 def test_fencil_definition_with_function_definitions():
@@ -499,7 +751,13 @@ def test_fencil_definition_with_function_definitions():
                 name="g",
                 fun=ti.FunctionType(
                     args=ti.Tuple.from_elems(
-                        ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=2)),
+                        ti.Val(
+                            kind=ti.Iterator(),
+                            dtype=ti.TypeVar(idx=1),
+                            size=ti.TypeVar(idx=2),
+                            current_loc=ti.TypeVar(idx=3),
+                            defined_loc=ti.TypeVar(idx=3),
+                        ),
                     ),
                     ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=2)),
                 ),
@@ -509,19 +767,55 @@ def test_fencil_definition_with_function_definitions():
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
             ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=3), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=3), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=4), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=4), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=5), size=ti.Column()),
-            ti.Val(kind=ti.Iterator(), dtype=ti.TypeVar(idx=5), size=ti.Column()),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=4),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=5),
+                defined_loc=ti.TypeVar(idx=5),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=4),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=6),
+                defined_loc=ti.TypeVar(idx=6),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=7),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=8),
+                defined_loc=ti.TypeVar(idx=8),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=7),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=9),
+                defined_loc=ti.TypeVar(idx=9),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=10),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=11),
+                defined_loc=ti.TypeVar(idx=11),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=10),
+                size=ti.Column(),
+                current_loc=ti.TypeVar(idx=12),
+                defined_loc=ti.TypeVar(idx=12),
+            ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f :: (T₀) → T₀, g :: (It[T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₃ᶜ], It[T₃ᶜ], It[T₄ᶜ], It[T₄ᶜ], It[T₅ᶜ], It[T₅ᶜ])}"
+        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₅, T₅, T₄ᶜ], It[T₆, T₆, T₄ᶜ], It[T₈, T₈, T₇ᶜ], It[T₉, T₉, T₇ᶜ], It[T₁₁, T₁₁, T₁₀ᶜ], It[T₁₂, T₁₂, T₁₀ᶜ])}"
     )
 
 
@@ -537,6 +831,14 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=vs[0], dtype=vs[1], size=vs[2])) == "ItOrVal₀[T₁²]"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=vs[1])) == "T₀¹"
     assert ti.pformat(ti.Val(kind=ti.Iterator(), dtype=vs[0], size=vs[1])) == "It[T₀¹]"
+    assert (
+        ti.pformat(
+            ti.Val(
+                kind=ti.Iterator(), dtype=vs[0], size=vs[1], current_loc=vs[2], defined_loc=vs[3]
+            )
+        )
+        == "It[T₂, T₃, T₀¹]"
+    )
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
     assert ti.pformat(ti.ValTuple(kind=vs[0], dtypes=vs[1], size=vs[2])) == "(ItOrVal₀[T²], …)₁"

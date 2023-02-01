@@ -6,7 +6,7 @@ from functional.iterator import ir
 
 class RemapSymbolRefs(NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
-        return symbol_map.get(node.id, node)
+        return symbol_map.get(str(node.id), node)
 
     def visit_Lambda(self, node: ir.Lambda, *, symbol_map: Dict[str, ir.Node]):
         params = {str(p.id) for p in node.params}
