@@ -576,7 +576,7 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    assert tag in (offset_provider or pos.keys())
+    assert tag in offset_provider
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
