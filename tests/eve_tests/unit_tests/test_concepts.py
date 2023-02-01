@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,14 +17,13 @@ import re
 
 import pytest
 
-import eve
-import eve.utils
+from gt4py import eve
 
 from .. import definitions
 
 
 def test_symbol_types():
-    from eve.concepts import SymbolName
+    from gt4py.eve.concepts import SymbolName
 
     assert SymbolName("valid_name_01A") == "valid_name_01A"
     assert SymbolName("valid_name_01A") == "valid_name_01A"

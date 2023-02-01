@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 from __future__ import annotations
 
 import pytest
@@ -22,7 +19,7 @@ import pytest
 
 class TestFrozenList:
     def test_immutability(self):
-        from eve.type_definitions import FrozenList
+        from gt4py.eve.type_definitions import FrozenList
 
         fl = FrozenList([0, 1, 2, 3, 4, 5])
 
@@ -30,7 +27,7 @@ class TestFrozenList:
             fl[2] = -2
 
     def test_instance_check(self):
-        from eve.type_definitions import FrozenList
+        from gt4py.eve.type_definitions import FrozenList
 
         assert isinstance(FrozenList([0, 1, 2, 3, 4, 5]), FrozenList)
         assert isinstance((), FrozenList)
@@ -38,7 +35,7 @@ class TestFrozenList:
 
 
 def test_sentinel():
-    from eve.type_definitions import NOTHING
+    from gt4py.eve.type_definitions import NOTHING
 
     values = [0, 1, 2, NOTHING, 4, 6]
 
