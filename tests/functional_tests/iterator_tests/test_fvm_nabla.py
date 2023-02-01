@@ -30,7 +30,7 @@ from functional.iterator.embedded import (
 )
 from functional.iterator.runtime import closure, fendef, fundef, offset
 from functional.iterator.transforms.pass_manager import LiftMode
-from functional.program_processors.runners.gtfn_cpu import run_gtfn
+from functional.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .fvm_nabla_setup import assert_close, nabla_setup
 
@@ -126,7 +126,7 @@ def nabla(
 
 def test_compute_zavgS(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -184,7 +184,7 @@ def compute_zavgS2_fencil(
 
 def test_compute_zavgS2(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
@@ -222,7 +222,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
@@ -278,7 +278,7 @@ def nabla2(
 
 
 def test_nabla2(program_processor, lift_mode):
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     program_processor, validate = program_processor
     setup = nabla_setup()
@@ -356,7 +356,7 @@ def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("test is broken due to bad lift semantics in iterator IR")
-    if program_processor == run_gtfn:
+    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 

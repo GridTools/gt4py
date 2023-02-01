@@ -39,9 +39,17 @@ class BufferParameter:
 
 
 @dataclasses.dataclass(frozen=True)
+class ConnectivityParameter:
+    name: str
+    origin_axis: str
+    offset_tag: str
+    index_type: type[np.int32] | type[np.int64]
+
+
+@dataclasses.dataclass(frozen=True)
 class Function:
     name: str
-    parameters: tuple[ScalarParameter | BufferParameter, ...]
+    parameters: tuple[ScalarParameter | BufferParameter | ConnectivityParameter, ...]
 
 
 @dataclasses.dataclass(frozen=True)

@@ -14,34 +14,21 @@
 
 from dataclasses import dataclass
 
+import functional.type_system.type_specifications as ts
 from functional import common as func_common
-from functional.type_system.type_specifications import (  # noqa: F401
-    CallableType as CallableType,
-    DataType as DataType,
-    DeferredType as DeferredType,
-    DimensionType as DimensionType,
-    FieldType as FieldType,
-    FunctionType as FunctionType,
-    OffsetType as OffsetType,
-    ScalarKind as ScalarKind,
-    ScalarType as ScalarType,
-    TupleType as TupleType,
-    TypeSpec as TypeSpec,
-    VoidType as VoidType,
-)
 
 
 @dataclass(frozen=True)
-class ProgramType(TypeSpec, CallableType):
-    definition: FunctionType
+class ProgramType(ts.TypeSpec, ts.CallableType):
+    definition: ts.FunctionType
 
 
 @dataclass(frozen=True)
-class FieldOperatorType(TypeSpec, CallableType):
-    definition: FunctionType
+class FieldOperatorType(ts.TypeSpec, ts.CallableType):
+    definition: ts.FunctionType
 
 
 @dataclass(frozen=True)
-class ScanOperatorType(TypeSpec, CallableType):
+class ScanOperatorType(ts.TypeSpec, ts.CallableType):
     axis: func_common.Dimension
-    definition: FunctionType
+    definition: ts.FunctionType

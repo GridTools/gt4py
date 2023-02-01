@@ -20,12 +20,12 @@ from typing import Any, cast
 from functional.ffront import (
     dialect_ast_enums,
     program_ast as past,
-    type_specifications as ts,
-    type_translation,
+    type_specifications as ts_ffront,
 )
 from functional.ffront.dialect_parser import DialectParser, DialectSyntaxError
 from functional.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from functional.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from functional.type_system import type_specifications as ts, type_translation
 
 
 class ProgramSyntaxError(DialectSyntaxError):
@@ -60,7 +60,7 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
-            type=ts.DeferredType(constraint=ts.ProgramType),
+            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             closure_vars=closure_symbols,

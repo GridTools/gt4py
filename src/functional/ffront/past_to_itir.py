@@ -17,8 +17,9 @@ from typing import Any, Generator, Optional, cast
 
 from eve import NodeTranslator, concepts, traits
 from functional.common import Dimension, DimensionKind, GridType, GTTypeError
-from functional.ffront import program_ast as past, type_info, type_specifications as ts
+from functional.ffront import program_ast as past
 from functional.iterator import ir as itir
+from functional.type_system import type_info, type_specifications as ts
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:

@@ -149,8 +149,12 @@ class BindingCodeGenerator(TemplatedGenerator):
 
 
 def make_parameter(
-    parameter: interface.ScalarParameter | interface.BufferParameter,
+    parameter: interface.ScalarParameter
+    | interface.BufferParameter
+    | interface.ConnectivityParameter,
 ) -> FunctionParameter:
+    if isinstance(parameter, interface.ConnectivityParameter):
+        return FunctionParameter(name=parameter.name, ndim=2, dtype=parameter.index_type)
     name = parameter.name
     ndim = 0 if isinstance(parameter, interface.ScalarParameter) else len(parameter.dimensions)
     scalar_type = parameter.scalar_type
@@ -158,10 +162,21 @@ def make_parameter(
 
 
 def make_argument(
-    index: int, param: interface.ScalarParameter | interface.BufferParameter
+    index: int,
+    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
 ) -> str | SidConversion:
     if isinstance(param, interface.ScalarParameter):
         return param.name
+    elif isinstance(param, interface.ConnectivityParameter):
+        return SidConversion(
+            buffer_name=param.name,
+            dimensions=[
+                DimensionType(name=param.origin_axis),
+                DimensionType(name=param.offset_tag),
+            ],
+            scalar_type=param.index_type,
+            dim_config=index,
+        )
     else:
         return SidConversion(
             buffer_name=param.name,

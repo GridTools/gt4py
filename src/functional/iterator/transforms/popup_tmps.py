@@ -57,11 +57,12 @@ class PopupTmps(NodeTranslator):
             is_scan = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="scan")
             is_reduce = isinstance(fun, ir.FunCall) and fun.fun == ir.SymRef(id="reduce")
             if is_scan:
-                assert isinstance(fun, ir.FunCall)  # just for mypy
-                fun = fun.args[0]
+                fun = fun.args[0]  # type: ignore[attr-defined] # fun already asserted to be of type ir.FunCall
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             elif is_reduce:
-                fun = fun.args[0]
+                fun = fun.args[0]  # type: ignore[attr-defined] # fun already asserted to be of type ir.FunCall
+                assert isinstance(fun, ir.Lambda)
                 params = fun.params[1:]
             else:
                 assert isinstance(fun, ir.Lambda)
@@ -71,12 +72,15 @@ class PopupTmps(NodeTranslator):
                 if is_scan:
                     assert isinstance(node.fun, ir.FunCall) and isinstance(
                         node.fun.args[0], ir.FunCall
-                    )
+                    )  # TODO(fthaler): first part of the assertion already checked above, however mypy does not catch it
                     scan_args = [cast(ir.Expr, fun)] + node.fun.args[0].args[1:]
                     f: Union[ir.Lambda, ir.FunCall] = ir.FunCall(
                         fun=ir.SymRef(id="scan"), args=scan_args
                     )
                 elif is_reduce:
+                    assert isinstance(node.fun, ir.FunCall) and isinstance(
+                        node.fun.args[0], ir.FunCall
+                    )  # TODO(fthaler): first part of the assertion already checked above, however mypy does not catch it
                     assert fun == node.fun.args[0].args[0], "Unexpected lift in reduction function."
                     f = node.fun.args[0]
                 else:
@@ -125,7 +129,7 @@ class PopupTmps(NodeTranslator):
 
             # remap referenced function parameters in lift expression to passed argument values
             assert len(params) == len(args)
-            symbol_map = {param.id: arg for param, arg in zip(params, args)}
+            symbol_map = {str(param.id): arg for param, arg in zip(params, args)}
             remap = partial(RemapSymbolRefs().visit, symbol_map=symbol_map)
 
             nested_lifts = {remap(expr): ref for expr, ref in nested_lifts.items()}
@@ -140,7 +144,7 @@ class PopupTmps(NodeTranslator):
             new_params = [ir.Sym(id=p.id) for p in nested_lifts.values()]
             fun = ir.Lambda(params=fun.params + new_params, expr=fun.expr)
             # for the arguments, we have to resolve possible cross-references of lifts
-            symbol_map = {v.id: k for k, v in nested_lifts.items()}
+            symbol_map = {str(v.id): k for k, v in nested_lifts.items()}
             new_args = [
                 RemapSymbolRefs().visit(a, symbol_map=symbol_map) for a in nested_lifts.keys()
             ]

@@ -16,24 +16,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional, Union
 
-import eve
-from eve import Coerced, SymbolName, SymbolRef
+from eve import Coerced, Node, SymbolName
 from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from functional import common
 from functional.iterator import ir as itir
-
-
-@eve.utils.noninstantiable
-class Node(eve.Node):
-    pass
-
-
-class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
-
-
-class Expr(Node):
-    ...
+from functional.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
+from functional.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
 
 
 class UnaryExpr(Expr):
@@ -65,10 +53,6 @@ class Literal(Expr):
 
 class OffsetLiteral(Expr):
     value: Union[int, str]
-
-
-class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -167,6 +151,7 @@ GTFN_BUILTINS = [
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "reduce",
 ]
 UNARY_MATH_NUMBER_BUILTINS = itir.UNARY_MATH_NUMBER_BUILTINS
 UNARY_MATH_FP_BUILTINS = itir.UNARY_MATH_FP_BUILTINS
@@ -192,7 +177,9 @@ class TagDefinition(Node):
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: SymbolName  # noqa: A003
     params: list[Sym]
-    function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
+    function_definitions: list[
+        Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
+    ]
     executions: list[Union[StencilExecution, ScanExecution]]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType

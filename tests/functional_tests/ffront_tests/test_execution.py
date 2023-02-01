@@ -42,22 +42,6 @@ from functional.iterator.embedded import (
 )
 from functional.program_processors.runners import gtfn_cpu, roundtrip
 
-
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
-    yield request.param
-
-
-def debug_itir(tree):
-    """Compare tree snippets while debugging."""
-    from devtools import debug
-
-    from eve.codegen import format_python_source
-    from functional.program_processors import EmbeddedDSL
-
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
-
-
 from .ffront_test_utils import *
 
 
@@ -94,7 +78,7 @@ def test_multicopy(fieldview_backend):
     assert np.allclose(b_I_float, out_I_float_1)
 
 
-def test_shift(fieldview_backend):
+def test_cartesian_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
@@ -109,6 +93,25 @@ def test_shift(fieldview_backend):
     fencil(a, out_I_float, offset_provider={"Ioff": IDim})
 
     assert np.allclose(out_I_float.array(), np.arange(1, 11))
+
+
+def test_unstructured_shift(reduction_setup, fieldview_backend):
+    Vertex = reduction_setup.Vertex
+    Edge = reduction_setup.Edge
+    E2V = reduction_setup.E2V
+
+    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
+
+    @field_operator(backend=fieldview_backend)
+    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+
+    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
+
+    assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
@@ -164,9 +167,6 @@ def test_tuples(fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -181,9 +181,6 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("ConstantFields are not supported yet.")
-
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -202,7 +199,7 @@ def test_nested_scalar_arg(fieldview_backend):
 
 
 def test_scalar_arg_with_field(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
 
     inp = index_field(Edge, dtype=float64)
@@ -224,6 +221,29 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     ref = np.arange(1, size + 1) * factor
     assert np.allclose(ref, out.array())
+
+
+def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip(
+            "Scalar arguments not supported to be used in both domain specification "
+            "and as an argument to a field operator."
+        )
+
+    size = 10
+    out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
+
+    @field_operator
+    def foo(size: int) -> Field[[Vertex], int]:
+        return broadcast(size, (Vertex,))
+
+    @program(backend=fieldview_backend)
+    def bar(size: int, out: Field[[Vertex], int]):
+        foo(size, out=out, domain={Vertex: (0, size)})
+
+    bar(size, out, offset_provider={})
+
+    assert (out.array() == size).all()
 
 
 def test_scalar_scan():
@@ -403,7 +423,7 @@ def test_tuple_arg(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
 
     @field_operator(backend=fieldview_backend)
@@ -419,7 +439,7 @@ def test_tuple_arg(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
@@ -441,7 +461,7 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 
 
 def test_solve_triag(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
 
     shape = (3, 7, 5)
@@ -589,7 +609,7 @@ def test_ternary_scan():
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
 
     init = (1.0, (2.0, 3.0))
@@ -613,7 +633,7 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_input(fieldview_backend, forward):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
 
     init = 1.0
@@ -674,7 +694,7 @@ def test_domain(fieldview_backend):
 
 
 def test_domain_input_bounds(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("FloorDiv not fully supported in gtfn.")
     a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
 
@@ -767,7 +787,7 @@ def test_domain_tuple(fieldview_backend):
 
 
 def test_where_k_offset(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -796,7 +816,7 @@ def test_undefined_symbols():
 
 
 def test_zero_dims_fields(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Implicit broadcast are not supported yet.")
 
     inp = np_as_located_field()(np.array(1.0))
