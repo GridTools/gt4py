@@ -1055,7 +1055,7 @@ def np_as_located_field(
         def getter(indices):
             if len(indices) > 1 and not offsets:
                 for i, j in zip(a.shape, indices):
-                    if type(i) == type(j) and j >= i:
+                    if isinstance(i, int) and isinstance(j, (np.int64, np.int32)) and j >= i:
                         return np.nan
             return a[_shift_field_indices(indices, offsets) if offsets else indices]
 
