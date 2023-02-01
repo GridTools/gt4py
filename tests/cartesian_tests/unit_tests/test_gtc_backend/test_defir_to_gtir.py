@@ -177,9 +177,13 @@ def test_make_literal(defir_to_gtir):
     # All of those are o.k.
     gtir_lit = _make_literal(10.10)
     assert gtir_lit.dtype == common.DataType.FLOAT64
+    gtir_lit = _make_literal(np.float64(10.10))
+    assert gtir_lit.dtype == common.DataType.FLOAT64
     gtir_lit = _make_literal(np.float32(10.10))
     assert gtir_lit.dtype == common.DataType.FLOAT32
     gtir_lit = _make_literal(10)
+    assert gtir_lit.dtype == common.DataType.INT64
+    gtir_lit = _make_literal(np.int64(10))
     assert gtir_lit.dtype == common.DataType.INT64
     gtir_lit = _make_literal(np.int32(10))
     assert gtir_lit.dtype == common.DataType.INT32
@@ -187,6 +191,10 @@ def test_make_literal(defir_to_gtir):
     assert gtir_lit.dtype == common.DataType.INT16
     gtir_lit = _make_literal(np.int8(10))
     assert gtir_lit.dtype == common.DataType.INT8
+    gtir_lit = _make_literal(True)
+    assert gtir_lit.dtype == common.DataType.BOOL
+    gtir_lit = _make_literal(np.bool_(True))
+    assert gtir_lit.dtype == common.DataType.BOOL
     # Octal not so much
     with pytest.raises(TypeError):
         gtir_lit = _make_literal("a")
