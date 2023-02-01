@@ -181,5 +181,5 @@ def test_variable_k_offset_in_access():
 
 
 def test_visit_ScalarIf_HorizontalMask_fail():
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         ScalarIfStmtFactory(cond=HorizontalMaskFactory())
