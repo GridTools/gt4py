@@ -17,7 +17,8 @@ from typing import Any, Generic, Literal, Optional, TypeVar, Union
 import eve
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from eve.traits import SymbolTableTrait
-from functional.ffront import dialect_ast_enums, type_specifications as ts
+from functional.ffront import dialect_ast_enums, type_specifications as ts_ffront
+from functional.type_system import type_specifications as ts
 
 
 class LocatedNode(Node):
@@ -98,7 +99,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ts.ProgramType, ts.DeferredType]  # noqa A003
+    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

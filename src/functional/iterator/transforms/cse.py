@@ -65,7 +65,11 @@ class CollectSubexpressions(NodeVisitor):
     ) -> None:
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
-        allow_collection = node.fun != ir.SymRef(id="shift")
+        # do also not collect reduce nodes if they are left in the it at this point, this may lead to
+        #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
+        #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
+        #  backend (single pass eager depth first visit approach)
+        allow_collection = node.fun != ir.SymRef(id="shift") and node.fun != ir.SymRef(id="reduce")
         child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(

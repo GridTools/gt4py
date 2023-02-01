@@ -16,9 +16,14 @@ from typing import Optional, cast
 import functional.ffront.field_operator_ast as foast
 from eve import NodeTranslator, NodeVisitor, traits
 from functional.common import DimensionKind, GTSyntaxError, GTTypeError
-from functional.ffront import dialect_ast_enums, fbuiltins, type_info, type_specifications as ts
+from functional.ffront import (  # noqa
+    dialect_ast_enums,
+    fbuiltins,
+    type_info as ti_ffront,
+    type_specifications as ts_ffront,
+)
 from functional.ffront.foast_passes.utils import compute_assign_indices
-from functional.ffront.type_translation import from_value
+from functional.type_system import type_info, type_specifications as ts, type_translation
 
 
 def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
@@ -210,7 +215,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             id=node.id,
             definition=new_definition,
             location=node.location,
-            type=ts.FieldOperatorType(definition=new_definition.type),
+            type=ts_ffront.FieldOperatorType(definition=new_definition.type),
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
@@ -241,7 +246,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
-        new_type = ts.ScanOperatorType(
+        new_type = ts_ffront.ScanOperatorType(
             axis=new_axis.type.dim,
             definition=new_definition.type,
         )
@@ -797,7 +802,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
         try:
-            type_ = from_value(node.value)
+            type_ = type_translation.from_value(node.value)
         except GTTypeError as e:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node, msg="Could not deduce type of constant."
