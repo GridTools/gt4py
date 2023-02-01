@@ -339,26 +339,51 @@ def test_different_vertical_sizes_with_origin(program_processor):
         assert np.allclose(ref, out)
 
 
-@fundef
-def sum_start_with_42(state, inp):
-    prev = tuple_get(0, state)
-    is_first = tuple_get(1, state)
-    return if_(is_first, make_tuple(42.0, False), make_tuple(prev + deref(inp), False))
+# @fundef
+# def sum_start_with_42(state, inp):
+#     prev = tuple_get(0, state)
+#     is_first = tuple_get(1, state)
+#     return if_(is_first, make_tuple(42.0, False), make_tuple(prev + deref(inp), False))
+
+
+# @fundef
+# def ksum_with_projector(inp):
+#     irrelevant = 1234.0
+#     # return scan(sum_start_with_42, True, make_tuple(irrelevant, True))(inp)
+#     return tuple_get(
+#         0, scan(sum_start_with_42, True, make_tuple(irrelevant, True))(inp)
+#     )  # TODO we also need to bubble up tuple_gets
+
+
+# @fendef(column_axis=KDim)
+# def ksum_with_projector_fencil(i_size, k_start, k_end, inp, out):
+#     closure(
+#         cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
+#         ksum_with_projector,
+#         # tuple_get(0, ksum_with_projector),
+#         out,
+#         [inp],
+#     )
 
 
 @fundef
-def ksum_with_projector(inp):
-    irrelevant = 1234.0
-    return scan(sum_start_with_42, True, make_tuple(irrelevant, True))(inp)
-    # return tuple_get(0, scan(sum_start_with_42, True, make_tuple(irrelevant, True))(inp)) #TODO we also need to bubble up tuple_gets
+def ksum_with_2_args(state, inp):
+    first = tuple_get(0, state)
+    second = tuple_get(1, state)
+    return make_tuple(first + deref(inp), second + deref(inp) * 2.0)
+
+
+@fundef
+def projector(inp):
+    res = scan(ksum_with_2_args, True, make_tuple(0.0, 0.0))(inp)
+    return tuple_get(0, res) + tuple_get(1, res)
 
 
 @fendef(column_axis=KDim)
-def ksum_with_projector_fencil(i_size, k_start, k_end, inp, out):
+def ksum2_with_projector_fencil(i_size, k_start, k_end, inp, out):
     closure(
         cartesian_domain(named_range(IDim, 0, i_size), named_range(KDim, k_start, k_end)),
-        # ksum_with_projector,
-        tuple_get(0, ksum_with_projector),
+        projector,
         out,
         [inp],
     )
@@ -369,10 +394,10 @@ def test_ksum_scan_with_projector(program_processor, lift_mode):
     shape = [1, 7]
     inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
-    reference = np.asarray([[0, 1, 3, 6, 10, 15, 21]]) + 42.0
+    reference = np.asarray([[0, 3, 9, 18, 30, 45, 63]])
 
     run_processor(
-        ksum_with_projector_fencil,
+        ksum2_with_projector_fencil,
         program_processor,
         shape[0],
         0,

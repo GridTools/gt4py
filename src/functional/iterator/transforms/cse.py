@@ -7,6 +7,24 @@ from eve.utils import UIDGenerator
 from functional.iterator import ir
 
 
+def _is_literal(node: ir.Expr):
+    if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="make_tuple"):
+        return all(_is_literal(elem) for elem in node.args)
+    if isinstance(node, ir.Literal):
+        return True
+    return False
+
+
+def _allow_collection(node: ir.FunCall):
+    if node.fun == ir.SymRef(id="shift"):
+        return False
+    if node.fun == ir.SymRef(id="reduce"):
+        return False
+    if _is_literal(node):
+        return False
+    return True
+
+
 class CollectSubexpressions(NodeVisitor):
     @classmethod
     def apply(cls, node: ir.Node):
@@ -69,7 +87,7 @@ class CollectSubexpressions(NodeVisitor):
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
         #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
         #  backend (single pass eager depth first visit approach)
-        allow_collection = node.fun != ir.SymRef(id="shift") and node.fun != ir.SymRef(id="reduce")
+        allow_collection = _allow_collection(node)
         child_collector_stack = [*collector_stack, allow_collection]
 
         self.generic_visit(
