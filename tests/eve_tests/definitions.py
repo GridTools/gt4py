@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 import enum
 import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-from eve.concepts import (
+from gt4py.eve.concepts import (
     AnySourceLocation,
     FrozenNode,
     Node,
@@ -29,10 +26,10 @@ from eve.concepts import (
     SymbolName,
     VType,
 )
-from eve.datamodels import Coerced
-from eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from eve.type_definitions import IntEnum, StrEnum
-from eve.utils import CaseStyleConverter
+from gt4py.eve.datamodels import Coerced
+from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
+from gt4py.eve.type_definitions import IntEnum, StrEnum
+from gt4py.eve.utils import CaseStyleConverter
 
 
 T = TypeVar("T")
@@ -310,7 +307,7 @@ def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
     return SourceLocationGroup(loc1, loc2, context=make_str_value(fixed=fixed))
 
 
-def make_empty_node(*, fixed: bool = False) -> LocationNode:
+def make_empty_node(*, fixed: bool = False) -> EmptyNode:
     return EmptyNode()
 
 
