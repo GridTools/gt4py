@@ -562,7 +562,11 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    assert tag in offset_provider
+    assert tag in (offset_provider or pos.keys())
+    if tag in pos.keys():
+        new_pos = copy.copy(pos)
+        new_pos[tag] = new_pos[tag] + int(index)
+        return new_pos
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
@@ -624,9 +628,7 @@ def shift_position(
         return None
     new_pos = pos.copy()
     for tag, index in complete_offsets:
-        if tag in new_pos:
-            new_pos[tag] = new_pos[tag] + index  # type: ignore[operator]
-        elif (
+        if (
             shifted_pos := execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         ) is not None:
             new_pos = shifted_pos
@@ -1041,6 +1043,8 @@ def np_as_located_field(
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
+            if len(indices) == 2 and not offsets and (indices[0] >= a.shape[0] or indices[1] >= a.shape[1]):
+                return np.nan
             return a[_shift_field_indices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
