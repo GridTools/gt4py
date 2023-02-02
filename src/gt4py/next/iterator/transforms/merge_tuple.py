@@ -26,7 +26,6 @@ def _count_tuple(count: int, dtype: type_inference.Tuple | type_inference.EmptyT
 def _get_tuple_size(node: ir.Node) -> int:
     infered_type = type_inference.infer(node)
     assert isinstance(infered_type, type_inference.Val)
-    assert isinstance(infered_type.kind, type_inference.Value)
     dtype = infered_type.dtype
     assert isinstance(dtype, (type_inference.Tuple, type_inference.EmptyTuple))
     return _count_tuple(0, dtype)
