@@ -332,7 +332,7 @@ def test_astype_float(fieldview_backend):
     assert np.allclose(c_int32.array(), out_int_32)
 
 
-def test_dusk_indexfield(fieldview_backend):
+def test_offset_field(fieldview_backend):
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
     a_I_float_1 = np_as_located_field(IDim, KDim)(
@@ -347,7 +347,7 @@ def test_dusk_indexfield(fieldview_backend):
     out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
     @field_operator(backend=fieldview_backend)
-    def dusk_index_fo(
+    def offset_index_field_fo(
         a: Field[[IDim, KDim], float64],
         offset_field: Field[[IDim, KDim], int64],
     ) -> Field[[IDim, KDim], float64]:
@@ -355,7 +355,7 @@ def test_dusk_indexfield(fieldview_backend):
         a_i_k = a_i(as_offset(Koff, offset_field))
         return a_i_k
 
-    dusk_index_fo(
+    offset_index_field_fo(
         a_I_float,
         offset_field,
         out=out_I_float,
@@ -363,12 +363,14 @@ def test_dusk_indexfield(fieldview_backend):
     )
 
     @field_operator(backend=fieldview_backend)
-    def koff_index_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
+    def offset_index_int_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
         a_i = a(Ioff[1])
         a_i_k = a_i(Koff[1])
         return a_i_k
 
-    koff_index_fo(a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim})
+    offset_index_int_fo(
+        a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
+    )
     assert np.allclose(
         out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
     )
