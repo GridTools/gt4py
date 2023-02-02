@@ -1,8 +1,0 @@
-{
-    "cpp.clangTidy": true,
-    "cmake.useCMakeServer": false,
-    "cmake.configureOnOpen": true,
-    "cmake.ignoreKitEnv": true,
-    "editor.formatOnSave": true,
-    "C_Cpp.intelliSenseEngine": "Disabled",
-}

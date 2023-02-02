@@ -1,1 +1,0 @@
-gridtools_check_compilation(test_from_to_mapping test_from_to_mapping.cpp)
