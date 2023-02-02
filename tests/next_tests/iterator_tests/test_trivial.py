@@ -18,7 +18,7 @@ import pytest
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import constant_field, index_field, np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
@@ -74,6 +74,40 @@ def test_trivial(program_processor, lift_mode):
 
     if validate:
         assert np.allclose(out[:, :, 0], out_s)
+
+
+@fundef
+def shift_with_boundary(inp, k_index, k_max):
+    return if_(deref(k_index) < deref(k_max), deref(shift(K, 1)(inp)), 0.0)
+
+
+def test_protected_out_of_bounds(program_processor, lift_mode):
+    program_processor, validate = program_processor
+
+    size = 5
+    rng = np.random.default_rng()
+    inp = rng.uniform(size=(size,))
+    ref = np.zeros_like(inp)
+    ref[:-1] = inp[1:]
+
+    inp_s = np_as_located_field(KDim)(inp)
+    out_s = np_as_located_field(KDim)(np.zeros_like(ref))
+    k_index = index_field(KDim)
+    k_max = constant_field(size - 1)
+
+    run_processor(
+        shift_with_boundary[cartesian_domain(named_range(KDim, 0, size))],
+        program_processor,
+        inp_s,
+        k_index,
+        k_max,
+        out=out_s,
+        lift_mode=lift_mode,
+        offset_provider={"K": KDim},
+    )
+
+    if validate:
+        assert np.allclose(ref, out_s)
 
 
 @fundef
