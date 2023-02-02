@@ -23,30 +23,32 @@ def _tuple_get(i: int, t: ir.Expr):
 
 
 @pytest.fixture
-def tup():
+def tup_of_size_2():
     return ir.FunCall(
         fun=ir.SymRef(id="make_tuple"), args=[ir.SymRef(id="foo"), ir.SymRef(id="foo")]
     )
 
 
-def test_simple(tup):
+def test_simple(tup_of_size_2):
     testee = ir.FunCall(
-        fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, tup), _tuple_get(1, tup)]
+        fun=ir.SymRef(id="make_tuple"),
+        args=[_tuple_get(0, tup_of_size_2), _tuple_get(1, tup_of_size_2)],
     )
-    expected = tup
+    expected = tup_of_size_2
     actual = MergeTuple().visit(testee)
     assert actual == expected
 
 
-def test_incompatible_order(tup):
+def test_incompatible_order(tup_of_size_2):
     testee = ir.FunCall(
-        fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(1, tup), _tuple_get(0, tup)]
+        fun=ir.SymRef(id="make_tuple"),
+        args=[_tuple_get(1, tup_of_size_2), _tuple_get(0, tup_of_size_2)],
     )
     actual = MergeTuple().visit(testee)
     assert actual == testee  # did nothing
 
 
-def test_incompatible_size(tup):
-    testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, tup)])
+def test_incompatible_size(tup_of_size_2):
+    testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, tup_of_size_2)])
     actual = MergeTuple().visit(testee)
     assert actual == testee  # did nothing
