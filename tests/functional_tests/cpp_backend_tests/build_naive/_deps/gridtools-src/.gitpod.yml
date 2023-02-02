@@ -1,0 +1,37 @@
+image:
+  file: .gitpod.Dockerfile
+
+vscode:
+  extensions:
+    - ms-vscode.cmake-tools
+    - twxs.cmake
+
+tasks:
+  - init: |
+      mkdir .vscode
+      ln $(pwd)/.gitpod/.vscode/settings.json .vscode
+      ln $(pwd)/.gitpod/.vscode/launch.json .vscode
+      mkdir build
+      cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -H/workspace/gridtools -B/workspace/gridtools/build \
+      -DCMAKE_INSTALL_PREFIX:STRING=/workspace/gridtools/install -DCMAKE_BUILD_TYPE:STRING=Debug -G "Unix Makefiles"
+      ln -s /workspace/gridtools/build/compile_commands.json .
+      cmake --build /workspace/gridtools/build/ --parallel 8
+
+github:
+  prebuilds:
+    # enable for the master/default branch (defaults to true)
+    master: true
+    # enable for all branches in this repo (defaults to false)
+    branches: true
+    # enable for pull requests coming from this repo (defaults to true)
+    pullRequests: true
+    # enable for pull requests coming from forks (defaults to false)
+    pullRequestsFromForks: true
+    # add a check to pull requests (defaults to true)
+    addCheck: true
+    # add a "Review in Gitpod" button as a comment to pull requests (defaults to false)
+    addComment: false
+    # add a "Review in Gitpod" button to the pull request's description (defaults to false)
+    addBadge: false
+    # add a label once the prebuild is ready to pull requests (defaults to false)
+    addLabel: false

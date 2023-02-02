@@ -1,0 +1,176 @@
+Data Dependence Analysis in GridTools
+=====================================
+
+(copied from the wiki)
+
+A multistage stencil is a sequence of stages.
+Each stage is (basically) made of a stencil operator and a list of placeholders.
+Each placeholders is associated to the arguments in the param_list of the stencil operator positionally,
+that is, as it would happen if the placeholders were passed to the stencil operator according to the param_list.
+The param_list lists accessors, and each accessor have an extent. Each accessor has also an intent,
+which represents the use the stencil operator is going to make of the data, either read-only or read-write.
+
+So, given a stage we can associate to each placeholder an extent and an intent, simply by scanning the accessors in the param_list of the stage.
+
+Consider the last stage in a multistage computation. This will have one (or more) output accessors in the param_list of the stencil operator,
+so one (or more) placeholders in the list. This output will be computed by accessing the inputs within the extents that are specified in the corresponding accessors.
+Now, let's move to the stage just before that.
+Some of its inputs may be used by the last stage as inputs.
+This means that those outputs must be computed in a set of points that will be consumed by the next stage.
+
+---------------------
+A very simple example
+---------------------
+
+Let us consider an example (in 1D for simplicity). Suppose we have the following concatenation of stages,
+where we write at the left the outputs and on the right, with an associated extent, are the inputs:
+
+::
+
+   a <- f0(b<-1,1>, c<0,1>)
+   d <- f1(b<-2,0>, c<-1,2>)
+   e <- f2(a<-1,2>, d<-2,2>, c<-1,1>)
+
+We call the arguments placeholders, to be closer to the |GT| algorithm. We have 5 placeholders and we start with an initial map such as:
+
+::
+
+   a -> <0,0>
+   b -> <0,0>
+   c -> <0,0>
+   d -> <0,0>
+   e -> <0,0>
+
+Now we visit our sequence of stages from the last to the first.
+The last computes ``e`` and then needs ``a``, ``d``, and ``c`` in different extents. We update the map as follow:
+
+::
+
+   a -> <-1,2>
+   b -> <0,0>
+   c -> <-1,1>
+   d -> <-2,2>
+   e -> <0,0>
+
+Next we examine ``f1``. It writes ``d``, and since ``d`` is needed in an interval ``<-2,2>`` by ``f2``,
+we need to update it's inputs that need now to be read at an extent that is ``<-2,2> + <x,y>``, where ``<x,y>`` is the extent of an input and the ``+`` operation corresponds to the following operation: ``<x,y> + <u,v> = <x+u, y+v>``. If the extent needed for the inputs are smaller than the one contained in the map already, we do not update the map, since the needed values are already there. We do it by using the ``mee`` function that returns the minimum enclosing extent of two extents. So now we update the map as follow:
+
+::
+
+   a -> <-1,2>
+   b -> mee(<0,0>, <-2,2>+<-2,0>) = <-4,2>
+   c -> mee(<-1,1>, <-2,2>+<-1,2>) = <-3,4>
+   d -> <-2,2>
+   e -> <0,0>
+
+Now to the last stage to examine: ``f0``. It writes ``a`` and needs ``b<-1,2>`` and ``c<0,1>``. According the the map, ``a`` is needed in ``<-1,2>`` so
+
+::
+
+   a -> <-1,2>
+   b -> mee(<-4,2>, <-1,2>+<-1,1>) = mee(<-4,2>, <-2,3>) = <-4,3>
+   c -> mee(<-3,4>, <-1,2>+<0,1>) = mee(<-3,4>, <-1,3>) = <-3,4>
+   d -> <-2,2>
+   e -> <0,0>
+
+The fields ``a`` and ``d`` are written and the read. They are eligible to be temporary fields. ``b`` and ``c`` are inputs,
+and they are needed in ``<-4,3>`` and ``<-3,4>`` respectively. So the number of "halos" around them should be appropriate to avoid access violations.
+The field ``e`` is the output and it's written in a single point.
+
+If we compute ``f2`` in a point, we need to compute ``f1`` in ``<-2,2>``, since this will produce the values needed by ``f2``.
+We then need to compute ``f0`` in ``<-1,2>`` to produce the values needed for ``a``.
+
+----------------------
+A more complex example
+----------------------
+
+The next example is very similar to the previous one, but now the second stage uses ``a`` instead of ``c``.
+
+::
+
+   a <- f0(b<-1,1>, c<0,1>)
+   d <- f1(b<-2,0>, a<-1,2>)
+   e <- f2(a<-1,2>, d<-2,2>, c<-1,1>)
+
+The map, then, after examining ``f2`` is as before
+
+::
+
+   a -> <-1,2>
+   b -> <0,0>
+   c -> <-1,1>
+   d -> <-2,2>
+   e -> <0,0>
+
+When we examine ``f1``, however, the extents become:
+
+::
+
+   a -> mee(<-1,2>, <-2,2>+<-1,2>) = <-3,4>
+   b -> mee(<0,0>, <-2,2>+<-2,0>) = <-4,2>
+   c -> <-1,1>
+   d -> <-2,2>
+   e -> <0,0>
+
+When we move to ``f0``:
+
+::
+
+   a -> <-3,4>
+   b -> mee(<-4,2>, <-3,4>+<-1,1>) = <-4,5>
+   c -> mee(<-1,1>, <-3,4>+<0,1>) = <-3,5>
+   d -> <-2,2>
+   e -> <0,0>
+
+So, now, to compute ``f2`` in a point we need to compute ``f1`` in ``<-2,2>`` and ``f0`` in ``<-3,4>``. Note that, when ``f2`` access ``a`` in ``<-1, 2>``,
+those values have been computed in abundance to allow the computation of ``f1``.
+
+-------------------------
+Catching bad dependencies
+-------------------------
+
+Let's consider another variation on the same example. Now ``f1`` writes into ``c``, and ``d`` becomes an input.
+
+
+::
+
+   a <- f0(b<-1,1>, c<0,1>)
+   c <- f1(b<-2,0>, a<-1,2>)
+   e <- f2(a<-1,2>, d<-2,2>, c<-1,1>)
+
+As before the map after examining ``f2`` is
+
+::
+
+   a -> <-1,2>
+   b -> <0,0>
+   c -> <-1,1>
+   d -> <-2,2>
+   e -> <0,0>
+
+When we analyze ``f1`` we have
+
+::
+
+   a -> mee(<-1,2>, <-1,1>+<-1,2>) = <-2,3>
+   b -> mee(<0,0>, <-1,1>+<-2,0>) = <-3,1>
+   c -> <-1,1>
+   d -> <-2,2>
+   e -> <0,0>
+
+
+And then ``f0``
+
+::
+
+   a -> <-2,3>
+   b -> mee(<-3,1>, <-2,3>+<-1,1>) = <-3,4>
+   c -> mee(<-1,1>, <-2,3>+<0,1>) = <-2,4>
+   d -> <-2,2>
+   e -> <0,0>
+
+But now we have a problem, if we apply the previous strateg. ``f1`` is computed to compute ``c`` in ``<-2,4>``,
+the extent associated by the map. A next element of the output would then read the modified values of ``c`` and
+this is probably wrong. We need to catch this as a problem.
+We cannot write into a field that is accessed in an extent different than ``<0,0>`` in a previous stage.
+We need a check for this, but it is not yet implemented.

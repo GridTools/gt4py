@@ -1,0 +1,117 @@
+.. _caches:
+
+------------------------
+Software-Managed Caches
+------------------------
+
+:term:`Software-Managed Caches<Software-Managed Cache>` are syntax elements that are used
+to describe data reuse patterns of the stencil computations.
+They are an essential functionality of |GT| in order
+to deliver an efficient implementation of memory bound codes.
+The library uses
+the cache annotations to allocate cached fields in a fast on-chip
+scratch-pad memory.
+
+While the library is capable of exploiting several on-chip memory layers
+(like texture cache, const cache, shared memory, and registers of NVIDIA GPUs)
+the |GT| language is abstracting these underlying memory layers and
+exposes syntax elements that are architecture agnostic.
+
+Therefore the :term:`Software-Managed Cache` syntax should be used by the
+user to describe *only* data reuse patterns, and not the type of
+on-chip memory that should be exploited (which is a decision delegated to
+the backend of the library).
+
+An example of the syntax for caching certain fields of a
+computation is shown below
+
+.. code-block:: gridtools
+
+ auto const spec = [](auto in, auto out) {
+     GT_DECLARE_TMP(double, f1, f2);
+     return execute_parallel()
+         .ij_cached(f1, f2)
+         .stage(lap_function(), f1, f2, in)
+         .stage(lap_function(), out, f1, f2);
+ };
+ run(spec, backend_t(), grid, in, out);
+
+The :term:`Cache` DSL elements are enclosed into a ``ij_cached`` construct,
+that accept any number of ``cache`` constructs. At the same time, each
+``cache`` construct can specify multiple fields that shared the same
+access pattern.
+
+.. note::
+
+ It is important to note that the ``cache`` specifications
+ are prescribing the behavior of the library: if a :term:`Cache`
+ is specified (and the backend supports caching), a :term:`Cache` will be used. In the (rare) case of
+ using too many :term:`Caches<Cache>` a decrease in performance might be
+ observed due to saturation of available resources, or, in the worst case, the computation might error at
+ run-time.
+
+
+The ``cache`` construct adheres to the following syntax:
+
+.. code-block:: gridtools
+
+  ... .ij_cached(placeholders...) ...
+  ... .k_cached(placeholders...) ...
+  ... .k_cached(cache_io_policy::fill, placeholders...) ...
+  ... .k_cached(cache_io_policy::flush, placeholders...) ...
+  ... .k_cached(cache_io_policy::fill, cache_io_policy::flush, placeholders...) ...
+
+
+where ``p_args...`` is a list of placeholders for which the specified caching
+should be used.
+Full examples on :term:`Cache` usages can be found in the
+`horizontal diffusion <https://github.com/GridTools/gridtools/blob/master/examples/stencil/horizontal_diffusion_limited.cpp>`_
+and
+`vertical advection <https://github.com/GridTools/gridtools/blob/master/tests/regression/vertical_advection_dycore.cpp>`_ examples.
+
+We now describe the details of each construct.
+
+.. _cache-type:
+
+^^^^^^^^^^^^^^^^^^^^^^
+Cache Type
+^^^^^^^^^^^^^^^^^^^^^^
+
+The ``cache_type`` describes the type of access pattern present in our stencil for the field being cached. It's
+value can be one of the following (where we indicate the basic mean of implementation on the GPUs, so that the user can understand the amount of resources involved):
+
+#.  ``ij_cached``: cache data fields whose access pattern lies in the ij-plane, i.e. only offsets of the type `i ±
+    X` or `j ± Y` are allowed (the GPU backend will cache these fields in shared memory). It is undefined behaviour to
+    access data with k-offsets.
+
+#.  ``k_cached``: cache data fields whose access pattern is restricted to the k-direction, i.e. only offsets of the
+    type `k ± Z` (the GPU backend will cache these fields in registers). It is undefined behaviour to access data with
+    offsets in i or j direction.
+
+
+.. _cache-policy:
+
+^^^^^^^^^^^^
+Cache Policy
+^^^^^^^^^^^^
+
+The ``cache_policy`` specifies a synchronization policy between the data in the :term:`Cache` and the data in main memory. A scratch-pad can be used
+in order to allocate temporary computations that do not require data persistency across multiple stencils. However often the data that is
+being cached is already present in main memory fields. In this case, the :term:`Software-Managed Caches<Software-Managed Cache>` of |GT| gives the possibility
+to specify a cache policy that allows to synchronize the main memory with the cached field.
+The possible values are:
+
+#. ``cache_io_policy::fill``: fill the scratch-pad buffer with data from main memory field before use.
+
+#. ``cache_io_policy::flush``: After the execution of the stencil operators the data in the :term:`Cache` is written back into the main memory fields.
+
+ :numref:`fig_kcache_ex` graphically depicts an example of all the ordered operations that are executed when a ``fill_and_flush``
+ :term:`Cache` is used in a forward vertical loop.
+
+.. _fig_kcache_ex:
+.. figure:: figures/kcache_ex.png
+   :scale: 50 %
+
+   Representation of an implementation for a ``cache<cache_type::k, cache_io_policy::fill_and_flush>`` that is used within a
+   stencil with :term:`Extent` ``<-2, 1>`` in the vertical dimension and implemented as a ring-buffer with 4 levels (in order to allocate all possible offsetted accesses). The three operations
+   are triggered automatically by the library for a `fill_and_flush` :term:`Cache` when the vertical loop transition from level 9 to level 10.

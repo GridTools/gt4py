@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  perftests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:${{ matrix.compiler }}
+    strategy:
+        matrix:
+            compiler: [gcc-8, gcc-9, gcc-10, clang-11, clang-12, clang-13, clang-14, clang-14-cuda-11, gcc-10-cuda-11, base-hip, gcc-10-hpx]
+            build_type: [debug, release]
+            exclude:
+              - compiler: gcc-8
+                build_type: debug
+              - compiler: clang-9
+                build_type: debug
+              - compiler: gcc-10-hpx
+                build_type: debug
+    steps:
+    - uses: actions/checkout@v2
+    - name: setup environment
+      run: |
+        echo "GTRUN_BUILD_COMMAND=make -j $(nproc)" >> $GITHUB_ENV
+        echo "CTEST_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+        echo "OMP_NUM_THREADS=$(nproc)" >> $GITHUB_ENV
+    - name: build
+      run: |
+        python3 pyutils/driver.py -vv build -b ${{ matrix.build_type }} -o $(pwd)/build -i $(pwd)/install -t perftests
+    - name: run tests
+      if: (!contains(matrix.compiler, 'cuda') && !contains(matrix.compiler, 'hip')) # no GPUs available -> no tests
+      run: |
+        $(pwd)/build/pyutils/driver.py -vv test --perftests-only

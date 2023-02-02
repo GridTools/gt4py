@@ -1,0 +1,17 @@
+/**
+\defgroup GridTools GridTools
+*/
+
+/** \addtogroup GridTools
+ * @{
+ */
+
+/**\mainpage GridTools Reference Manual
+
+Here you can find all the information about the classes, modules and specific
+APIs supplied by the GridTools Library Set.
+
+*/
+
+
+/** @} */

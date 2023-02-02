@@ -1,0 +1,4 @@
+gridtools_check_compilation(test_interval test_interval.cpp)
+gridtools_check_compilation(test_level test_level.cpp)
+gridtools_check_compilation(test_esf_metafunctions test_esf_metafunctions.cpp)
+gridtools_check_compilation(test_functor_metafunctions test_functor_metafunctions.cpp)

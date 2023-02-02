@@ -1,0 +1,43 @@
+cmake_minimum_required(VERSION @CMAKE_MINIMUM_REQUIRED_VERSION@)
+project(stencil_type_erasure LANGUAGES CXX)
+
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CUDA_EXTENSIONS OFF)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+# detect CUDA variant (Clang with CUDA support or NVCC)
+include(detect_features)
+detect_cuda_type(GT_CUDA_TYPE AUTO)
+
+if(GT_CUDA_TYPE STREQUAL "NVCC-CUDA")
+    # 2) Enable the CUDA language if you want to run your code on a CUDA-capable GPU.
+    #    This needs to be done before find_package(GridTools) to properly setup the GridTools targets for CUDA.
+    enable_language(CUDA)
+endif()
+
+find_package(GridTools @GridTools_VERSION@ REQUIRED
+    HINTS @CMAKE_INSTALL_PREFIX@/lib/cmake/GridTools)
+
+enable_testing()
+
+if(TARGET GridTools::stencil_cpu_ifirst)
+    add_executable(driver_cpu driver.cpp interpolate_stencil.cpp)
+    target_link_libraries(driver_cpu GridTools::stencil_cpu_ifirst)
+    add_test(NAME driver_cpu COMMAND $<TARGET_FILE:driver_cpu> 33 44 55)
+endif()
+
+if(TARGET GridTools::stencil_gpu)
+    set(EXAMPLE_CUDA_ARCH "@GT_CUDA_ARCH@" CACHE STRING "CUDA compute capability to be used for this example.")
+
+    add_library(stencil_lib_gpu interpolate_stencil.cpp)
+    target_link_libraries(stencil_lib_gpu PRIVATE GridTools::stencil_gpu)
+    target_compile_definitions(stencil_lib_gpu PUBLIC USE_GPU)
+    gridtools_setup_target(stencil_lib_gpu CUDA_ARCH ${EXAMPLE_CUDA_ARCH})
+
+    add_executable(driver_gpu driver.cpp) # Can be build with the host compiler
+    target_link_libraries(driver_gpu PRIVATE stencil_lib_gpu)
+    target_link_libraries(driver_gpu PRIVATE GridTools::storage_gpu)
+
+    add_test(NAME driver_gpu COMMAND $<TARGET_FILE:driver_gpu> 33 44 55)
+endif()

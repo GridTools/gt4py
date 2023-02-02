@@ -1,0 +1,238 @@
+
+Splitters
+=========
+
+------------
+Introduction
+------------
+ 
+This document introduces a prototype code used for the development of a new
+stencil library. The prototype is based on an interval concept, which allows
+the library user to split an axis of the stencil application domain into
+arbitrary intervals. Using these intervals it shall be possible to define
+interval specific stencil update functions. The prototype uses splitters in
+order to sub-divide an axis. Splitters are ordered positions defined at
+compile-time. Note that splitters only define an order but not yet an absolute
+position. At runtime the splitters are placed at an absolute position, in
+between two axis positions. Due to this staggered placement it is easier to
+define loop direction independent intervals. Given the splitters we define
+levels, which specify a position at an offset relative to a splitter. The
+offset is a small positive or negative integral value limited by a predefined
+maximum, e.g. 3. The zero offset is undefined as the splitters are not placed
+in between two axis positions. Given two levels we define closed intervals,
+which specify a loop direction independent range on the axis. See Figure 1 for
+an example interval definition. Note that intervals are always defined in axis
+direction, meaning the “from level” is placed before the “to level” in axis
+direction.
+ 
+.. figure:: figures/splitters_001.png
+
+   Splitters, levels and intervals
+
+Figure 1 shows an axis divided by three splitters and an interval spanning the
+range [5, 15]. Note that there are ``N * (N-1) / 2`` intervals with N being the
+total number of levels. In order to simplify the implementation the prototype
+internally represents all levels using a unique integer index. Given a level
+(splitter and offset) we can compute an index as splitter times number of offsets
+per splitter plus offset index. The offset index is defined by a mapping of the offset
+values in a positive and continuous range, i.e. the offsets [-2, -1, 1, 2] are
+mapped to the offset indexes [0, 1, 2, 3]. Given an index we can compute a level
+by dividing the index by the number of offsets per splitter. The result corresponds
+to the level splitter while the remainder corresponds to the offset 
+index which can be mapped back to a level offset.
+
+Note that the FunctorDoMethods.cpp for test purposes converts an integer range
+into levels and back into indexes resulting in the following output::
+
+   Index: 0        Level(0, -3)
+   Index: 1        Level(0, -2)
+   Index: 2        Level(0, -1)
+   Index: 3        Level(0, 1)
+   Index: 4        Level(0, 2)
+   Index: 5        Level(0, 3)
+   Index: 6        Level(1, -3)
+   Index: 7        Level(1, -2)
+   Index: 8        Level(1, -1)
+   Index: 9        Level(1, 1)
+   Index: 10       Level(1, 2)
+   Index: 11       Level(1, 3)
+   Index: 12       Level(2, -3)
+   Index: 13       Level(2, -2)
+   Index: 14       Level(2, -1)
+   Index: 15       Level(2, 1)
+   Index: 16       Level(2, 2)
+   Index: 17       Level(2, 3)
+   Index: 18       Level(3, -3)
+   Index: 19       Level(3, -2)
+
+----------------------------
+Interval Specific Do Methods
+----------------------------
+
+The stencil library user will define its update functions using functor objects
+with interval specific Do methods. The Do method overloads allow defining an
+interval specific update function for certain sub domains:
+
+.. figure:: figures/splitters_002.png
+
+   Functors with interval specific Do method overloads
+
+
+Note that the functors in the listing define Do method overloads for boundary
+levels as well as for larger axis sub domains. In order to avoid
+inconsistencies we define the following rules: - The Do method intervals shall
+not overlap - The Do method intervals shall be continuous, i.e. gaps are not
+allowed As the Do method overloads are continuous we can use them in order to
+compute the loop bounds. Essentially we want to loop from the first Do method
+interval “from level” to the last Do method interval “to level”.
+
+-------------------------
+Loop Interval Computation
+-------------------------
+
+Given one or more functors the loop interval computation prepares the stencil
+library loop execution. Figure 2 illustrates the loop interval computation
+algorithm, which computes a list of maximal size loop intervals such that there
+is a unique set of Do method overloads per loop interval. Using these loop
+intervals the actual loop execution is a simple iteration over all intervals,
+executing a nested loop over all functors for each interval. Thanks to the loop
+interval definition we can work with the same set of Do method overloads on the
+full loop interval.
+
+.. figure:: figures/splitters_003.png
+
+   Loop interval computation algorithm (Do method overloads in black; computed loop intervals in red)
+
+Note that the algorithm assumes that it is possible to query all Do method
+overloads of a functor. The loop interval computation performs the following
+steps: 1. Compute a Do method overload list for each functor 2. Compute a loop
+interval list using the functor Do method lists 3. Compute a vector of functor
+Do method overload pairs for every loop interval
+
+-------------------
+Do Method Overloads
+-------------------
+
+In order to compute a list of all functor Do method overloads, we iterate over
+all intervals and store the ones which have a corresponding functor Do method
+overload. Additionally we can check if the functor follows our rules, i.e. the
+intervals do not overlap. The Do method overload algorithm works on the
+following inputs: - Functor – Functor object - Axis – Maximal interval used for
+the Do method overload search The following pseudo code  implements the Do
+method overload algorithm:
+
+
+.. figure:: figures/splitters_004.png
+
+   Functor Do method overload algorithm
+
+Searching all possible Do method intervals has complexity O(N2). Unfortunately
+we had to abandon this idea due to long compilation times. Therefore we
+introduced a hack which allows speeding up the search. It is based on the fact
+that the has_do implementation finds all Do methods of a functor which are
+callable taking overload resolution into account. Therefore we added a
+conversion constructor on the interval class which converts a from level into
+an interval. Due to this implicit conversion we can search for any interval
+starting at a given from level, using the existing has_do implementation. The
+only drawback is a nasty error message in case a functor defines multiple Do
+methods which start at the same from level. Currently we are not aware of a way
+to catch the error inside the library. In addition to the algorithm presented
+above the prototype introduces a number of checks. For instance Do methods are
+not allowed to start or end at the maximum or minimum offset values around a
+splitter. This boundary of unoccupied levels is used for the loop interval
+computation, i.e. the loop interval computation has to introduce new levels
+right before and after the Do methods. The other checks make sure the code
+complies with our rules that the Do method overloads shall be continuous. The
+following input-output pairs illustrate the algorithm:
+
+   - Functor1, ``Axis([0,-3],[4,+3]) -> Interval([0,1],[2,-1])``
+   - Functor2, ``Axis([0,-3],[4,-2]) -> Interval([0,1],[1,-1]), Interval([1,1],[4,-2])``
+   - Functor2, ``Axis([4,-1],[ 4,-1]) -> Interval([4,-1],[ 4,-1])``
+
+## Loop Intervals The loop interval computation overlays all functor Do method
+intervals and splits them up into loop intervals. Every loop interval is a sub
+interval of exactly one functor Do method interval. For an illustration have a
+look at the red loop intervals in Figure 2. The loop interval computation works
+on the following inputs: - DoMethods – Vector containing a Do method vector for
+every functor - Axis – Maximal interval used for the Do method overload search
+The following pseudo code implements the loop interval computation algorithm:
+
+.. figure:: figures/splitters_005.png
+
+   Loop interval algorithm
+
+The above algorithm uses a set instead of a sorted collection in order to store
+the relevant levels. Once the set is complete we convert it to a sorted
+collection via ordered iteration over all levels of the axis. Note that we work
+with the index level representation which allows us to easily go to the next or
+previous level using addition respectively subtraction. These operations are ok
+as we are sure our Do method from and to levels are not splitter boundary
+levels. It is important to introduce a sentinel level after the last Do method
+interval in order to properly compute the loop interval for the last Do method
+interval of a functor. Apart from that the loop interval computation is very
+smooth and there are no special cases to consider.
+
+.. figure:: figures/splitters_006.png
+
+   Loop interval computation  (note the read sentinel levels after the last functor do method)
+
+--------------------
+Do Method Lookup Map
+--------------------
+
+The Do method lookup map computation creates a map which
+associates to every loop interval the matching Do method interval of a functor.
+We compute such a map for every functor, which later on helps us to compute
+on-the-fly the matching Do method overloads given a loop interval. The Do
+method lookup map computation works on the following inputs: - DoMethods – Do
+method vector containing all Do methods of a functor - LoopIntervals – List
+containing all loop intervals The following pseudo code implements the Do
+method lookup map computation:
+ 
+.. figure:: figures/splitters_007.png
+
+   Do method lookup map algorithm
+
+The algorithm iterates over loop intervals and Do method intervals at the same
+time, creating a mapping between loop intervals and Do method intervals.
+Usually the Do method intervals span a larger domain than the loop intervals.
+Therefore the mapping is not 1:1. 
+
+---------
+Prototype
+---------
+
+The interval prototype code implements the algorithms discussed in
+chapter 3. The main logic is implemented by the following three files:
+
+   - FunctorDoMethods.h
+   - LoopIntervals.h
+   - FunctorDoMethodLookupMaps.h
+
+For every file there is a separate
+test program, while the ``main.cpp`` runs the full algorithm. Using boost
+for_each the test code iterates over all loop intervals and calls the matching
+functor do method overloads::
+                                                                                                                                                                                                                                                                
+   Run Functor0, Functor1 and Functor2:
+           -> Loop (0,1) - (1,-1)
+                   -> Functor1:Do(Interval<Level<0,1>, Level<2,-1> >) called
+                   -> Functor2:Do(Interval<Level<0,1>, Level<1,-1> >) called
+           -> Loop (1,1) - (2,-1)
+                   -> Functor1:Do(Interval<Level<0,1>, Level<2,-1> >) called
+                   -> Functor2:Do(Interval<Level<1,1>, Level<3,-1> >) called
+           -> Loop (2,1) - (3,-2)
+                   -> Functor2:Do(Interval<Level<1,1>, Level<3,-1> >) called
+           -> Loop (3,-1) - (3,-1)
+                   -> Functor0:Do(Interval<Level<3,-1>, Level<3,-1> >) called
+                   -> Functor2:Do(Interval<Level<1,1>, Level<3,-1> >) called
+   Done!
+
+Note that the prototype works with vectors storing the main information: -
+``Functors`` – Vector storing all functors - ``FunctorDoMethods`` – Vector storing
+a vector of Do methods for every functor - ``FunctorDoMethodLookupMaps`` – Vector
+storing a do method lookup map for every functor - LoopIntervals – Vector
+storing all loop intervals Note that the ``Functors``, ``FunctorDoMethods`` and
+``FunctorDoMethodLookupMaps`` vectors are ordered identically, i.e. if we want to
+combine all information for a specific functor we can do this by accessing the
+same vector indexes.

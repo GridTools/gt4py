@@ -1,0 +1,771 @@
+Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/c++ 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lc++
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+Looking for a CUDA compiler failed with the following output:
+CMake Error at /Users/nicolettafarabullini/PycharmProjects/gt4py/.venv/lib/python3.10/site-packages/cmake/data/CMake.app/Contents/share/cmake-3.22/Modules/CMakeDetermineCUDACompiler.cmake:179 (message):
+  Failed to find nvcc.
+
+  Compiler requires the CUDA toolkit.  Please set the CUDAToolkit_ROOT
+  variable.
+Call Stack (most recent call first):
+  CMakeLists.txt:2 (project)
+
+
+-- Configuring incomplete, errors occurred!
+See also "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/_deps/gridtools-build/CMakeFiles/CheckCUDA/CMakeFiles/CMakeOutput.log".
+See also "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/_deps/gridtools-build/CMakeFiles/CheckCUDA/CMakeFiles/CMakeError.log".
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_152a4/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_152a4.dir/build.make CMakeFiles/cmTC_152a4.dir/build
+Building CXX object CMakeFiles/cmTC_152a4.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_152a4.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_152a4.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_152a4.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_152a4.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_152a4/fast] Error 2
+
+
+
+Compiling the C compiler identification source file "CMakeCCompilerId.c" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/cc 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lSystem
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/c++ 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lc++
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b2e60/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_b2e60.dir/build.make CMakeFiles/cmTC_b2e60.dir/build
+Building CXX object CMakeFiles/cmTC_b2e60.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_b2e60.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_b2e60.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_b2e60.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_b2e60.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_b2e60/fast] Error 2
+
+
+
+Compiling the C compiler identification source file "CMakeCCompilerId.c" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/cc 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lSystem
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_14c82/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_14c82.dir/build.make CMakeFiles/cmTC_14c82.dir/build
+Building CXX object CMakeFiles/cmTC_14c82.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_14c82.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_14c82.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_14c82.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_14c82.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_14c82/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_2a4d9/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_2a4d9.dir/build.make CMakeFiles/cmTC_2a4d9.dir/build
+Building CXX object CMakeFiles/cmTC_2a4d9.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_2a4d9.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_2a4d9.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_2a4d9.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_2a4d9.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_2a4d9/fast] Error 2
+
+
+
+Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/c++ 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lc++
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_5c309/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_5c309.dir/build.make CMakeFiles/cmTC_5c309.dir/build
+Building CXX object CMakeFiles/cmTC_5c309.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_5c309.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_5c309.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_5c309.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_5c309.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_5c309/fast] Error 2
+
+
+
+Compiling the C compiler identification source file "CMakeCCompilerId.c" failed.
+Compiler: /Library/Developer/CommandLineTools/usr/bin/cc 
+Build flags: 
+Id flags:  
+
+The output was:
+1
+ld: library not found for -lSystem
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_69ed7/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_69ed7.dir/build.make CMakeFiles/cmTC_69ed7.dir/build
+Building CXX object CMakeFiles/cmTC_69ed7.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_69ed7.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_69ed7.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_69ed7.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_69ed7.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_69ed7/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_684bb/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_684bb.dir/build.make CMakeFiles/cmTC_684bb.dir/build
+Building CXX object CMakeFiles/cmTC_684bb.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_684bb.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_684bb.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_684bb.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_684bb.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_684bb/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_592d6/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_592d6.dir/build.make CMakeFiles/cmTC_592d6.dir/build
+Building CXX object CMakeFiles/cmTC_592d6.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_592d6.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_592d6.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_592d6.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_592d6.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_592d6/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_432ae/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_432ae.dir/build.make CMakeFiles/cmTC_432ae.dir/build
+Building CXX object CMakeFiles/cmTC_432ae.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_432ae.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_432ae.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_432ae.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_432ae.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_432ae/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_0ec6c/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_0ec6c.dir/build.make CMakeFiles/cmTC_0ec6c.dir/build
+Building CXX object CMakeFiles/cmTC_0ec6c.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_0ec6c.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_0ec6c.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_0ec6c.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_0ec6c.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_0ec6c/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b0a38/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_b0a38.dir/build.make CMakeFiles/cmTC_b0a38.dir/build
+Building CXX object CMakeFiles/cmTC_b0a38.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_b0a38.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_b0a38.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_b0a38.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_b0a38.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_b0a38/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_59745/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_59745.dir/build.make CMakeFiles/cmTC_59745.dir/build
+Building CXX object CMakeFiles/cmTC_59745.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_59745.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_59745.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_59745.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_59745.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_59745/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_2750a/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_2750a.dir/build.make CMakeFiles/cmTC_2750a.dir/build
+Building CXX object CMakeFiles/cmTC_2750a.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -std=c++98 -MD -MT CMakeFiles/cmTC_2750a.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_2750a.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_2750a.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/FindMPI/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_2750a.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_2750a/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qWPcq4
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_25cee/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_25cee.dir/build.make CMakeFiles/cmTC_25cee.dir/build
+Building CXX object CMakeFiles/cmTC_25cee.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_25cee.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_25cee.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_25cee.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qWPcq4/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qWPcq4/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_25cee.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_25cee/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qJraud
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_9964b/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_9964b.dir/build.make CMakeFiles/cmTC_9964b.dir/build
+Building CXX object CMakeFiles/cmTC_9964b.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_9964b.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_9964b.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_9964b.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qJraud/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-qJraud/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_9964b.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_9964b/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-LslEmy
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_3b655/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_3b655.dir/build.make CMakeFiles/cmTC_3b655.dir/build
+Building CXX object CMakeFiles/cmTC_3b655.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_3b655.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_3b655.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_3b655.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-LslEmy/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-LslEmy/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_3b655.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_3b655/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-agycm1
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b320b/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_b320b.dir/build.make CMakeFiles/cmTC_b320b.dir/build
+Building CXX object CMakeFiles/cmTC_b320b.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_b320b.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_b320b.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_b320b.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-agycm1/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-agycm1/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_b320b.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_b320b/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-BzEm9i
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_d71f7/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_d71f7.dir/build.make CMakeFiles/cmTC_d71f7.dir/build
+Building CXX object CMakeFiles/cmTC_d71f7.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_d71f7.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_d71f7.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_d71f7.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-BzEm9i/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-BzEm9i/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_d71f7.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_d71f7/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-8Blquc
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_39b9b/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_39b9b.dir/build.make CMakeFiles/cmTC_39b9b.dir/build
+Building CXX object CMakeFiles/cmTC_39b9b.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_39b9b.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_39b9b.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_39b9b.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-8Blquc/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-8Blquc/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_39b9b.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_39b9b/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-6WlPEe
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_65994/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_65994.dir/build.make CMakeFiles/cmTC_65994.dir/build
+Building CXX object CMakeFiles/cmTC_65994.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_65994.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_65994.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_65994.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-6WlPEe/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-6WlPEe/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_65994.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_65994/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-x6iCnt
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_d77a8/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_d77a8.dir/build.make CMakeFiles/cmTC_d77a8.dir/build
+Building CXX object CMakeFiles/cmTC_d77a8.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_d77a8.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_d77a8.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_d77a8.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-x6iCnt/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-x6iCnt/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_d77a8.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_d77a8/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-z9yrTi
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_bb671/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_bb671.dir/build.make CMakeFiles/cmTC_bb671.dir/build
+Building CXX object CMakeFiles/cmTC_bb671.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_bb671.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_bb671.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_bb671.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-z9yrTi/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-z9yrTi/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_bb671.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_bb671/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-Wvyx4s
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_9a523/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_9a523.dir/build.make CMakeFiles/cmTC_9a523.dir/build
+Building CXX object CMakeFiles/cmTC_9a523.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_9a523.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_9a523.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_9a523.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-Wvyx4s/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-Wvyx4s/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_9a523.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_9a523/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-P6Kqes
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_4cd50/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_4cd50.dir/build.make CMakeFiles/cmTC_4cd50.dir/build
+Building CXX object CMakeFiles/cmTC_4cd50.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_4cd50.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_4cd50.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_4cd50.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-P6Kqes/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-P6Kqes/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_4cd50.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_4cd50/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-KuBfrc
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_8d4a6/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_8d4a6.dir/build.make CMakeFiles/cmTC_8d4a6.dir/build
+Building CXX object CMakeFiles/cmTC_8d4a6.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_8d4a6.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_8d4a6.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_8d4a6.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-KuBfrc/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-KuBfrc/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_8d4a6.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_8d4a6/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-MRN4yz
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_8580a/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_8580a.dir/build.make CMakeFiles/cmTC_8580a.dir/build
+Building CXX object CMakeFiles/cmTC_8580a.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_8580a.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_8580a.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_8580a.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-MRN4yz/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-MRN4yz/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_8580a.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_8580a/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-t3IyqX
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_bd848/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_bd848.dir/build.make CMakeFiles/cmTC_bd848.dir/build
+Building CXX object CMakeFiles/cmTC_bd848.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_bd848.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_bd848.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_bd848.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-t3IyqX/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-t3IyqX/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_bd848.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_bd848/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-F1PZZ2
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_8aa13/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_8aa13.dir/build.make CMakeFiles/cmTC_8aa13.dir/build
+Building CXX object CMakeFiles/cmTC_8aa13.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_8aa13.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_8aa13.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_8aa13.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-F1PZZ2/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-F1PZZ2/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_8aa13.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_8aa13/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-yS5VzQ
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_a4c3b/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_a4c3b.dir/build.make CMakeFiles/cmTC_a4c3b.dir/build
+Building CXX object CMakeFiles/cmTC_a4c3b.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_a4c3b.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_a4c3b.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_a4c3b.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-yS5VzQ/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-yS5VzQ/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_a4c3b.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_a4c3b/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZDRKvZ
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_e5783/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_e5783.dir/build.make CMakeFiles/cmTC_e5783.dir/build
+Building CXX object CMakeFiles/cmTC_e5783.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_e5783.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_e5783.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_e5783.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZDRKvZ/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZDRKvZ/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_e5783.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_e5783/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-lFHmyA
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_ba2be/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_ba2be.dir/build.make CMakeFiles/cmTC_ba2be.dir/build
+Building CXX object CMakeFiles/cmTC_ba2be.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_ba2be.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_ba2be.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_ba2be.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-lFHmyA/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-lFHmyA/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_ba2be.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_ba2be/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-mrceiC
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_68056/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_68056.dir/build.make CMakeFiles/cmTC_68056.dir/build
+Building CXX object CMakeFiles/cmTC_68056.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_68056.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_68056.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_68056.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-mrceiC/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-mrceiC/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_68056.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_68056/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-52Iq9q
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_30522/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_30522.dir/build.make CMakeFiles/cmTC_30522.dir/build
+Building CXX object CMakeFiles/cmTC_30522.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_30522.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_30522.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_30522.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-52Iq9q/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-52Iq9q/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_30522.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_30522/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-NZs8yV
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_77019/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_77019.dir/build.make CMakeFiles/cmTC_77019.dir/build
+Building CXX object CMakeFiles/cmTC_77019.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_77019.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_77019.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_77019.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-NZs8yV/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-NZs8yV/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_77019.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_77019/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-X9WNEU
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b12db/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_b12db.dir/build.make CMakeFiles/cmTC_b12db.dir/build
+Building CXX object CMakeFiles/cmTC_b12db.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_b12db.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_b12db.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_b12db.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-X9WNEU/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-X9WNEU/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_b12db.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_b12db/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-DVv2YQ
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_2d014/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_2d014.dir/build.make CMakeFiles/cmTC_2d014.dir/build
+Building CXX object CMakeFiles/cmTC_2d014.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_2d014.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_2d014.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_2d014.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-DVv2YQ/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-DVv2YQ/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_2d014.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_2d014/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-YciyXi
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_b4091/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_b4091.dir/build.make CMakeFiles/cmTC_b4091.dir/build
+Building CXX object CMakeFiles/cmTC_b4091.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_b4091.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_b4091.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_b4091.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-YciyXi/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-YciyXi/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_b4091.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_b4091/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-uPVlq4
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_33d8f/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_33d8f.dir/build.make CMakeFiles/cmTC_33d8f.dir/build
+Building CXX object CMakeFiles/cmTC_33d8f.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_33d8f.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_33d8f.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_33d8f.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-uPVlq4/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-uPVlq4/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_33d8f.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_33d8f/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-FO6IBP
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_726ea/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_726ea.dir/build.make CMakeFiles/cmTC_726ea.dir/build
+Building CXX object CMakeFiles/cmTC_726ea.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_726ea.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_726ea.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_726ea.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-FO6IBP/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-FO6IBP/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_726ea.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_726ea/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-m3GyvC
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_2712b/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_2712b.dir/build.make CMakeFiles/cmTC_2712b.dir/build
+Building CXX object CMakeFiles/cmTC_2712b.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_2712b.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_2712b.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_2712b.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-m3GyvC/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-m3GyvC/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_2712b.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_2712b/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-M5nr3j
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_4b923/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_4b923.dir/build.make CMakeFiles/cmTC_4b923.dir/build
+Building CXX object CMakeFiles/cmTC_4b923.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_4b923.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_4b923.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_4b923.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-M5nr3j/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-M5nr3j/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_4b923.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_4b923/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZAbL46
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_1fa9f/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_1fa9f.dir/build.make CMakeFiles/cmTC_1fa9f.dir/build
+Building CXX object CMakeFiles/cmTC_1fa9f.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_1fa9f.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_1fa9f.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_1fa9f.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZAbL46/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ZAbL46/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_1fa9f.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_1fa9f/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-r5o5Kw
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_3ca67/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_3ca67.dir/build.make CMakeFiles/cmTC_3ca67.dir/build
+Building CXX object CMakeFiles/cmTC_3ca67.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_3ca67.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_3ca67.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_3ca67.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-r5o5Kw/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-r5o5Kw/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_3ca67.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_3ca67/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ixJXcN
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_d1fc3/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_d1fc3.dir/build.make CMakeFiles/cmTC_d1fc3.dir/build
+Building CXX object CMakeFiles/cmTC_d1fc3.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_d1fc3.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_d1fc3.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_d1fc3.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ixJXcN/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-ixJXcN/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_d1fc3.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_d1fc3/fast] Error 2
+
+
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-OwHMTd
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_8e392/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_8e392.dir/build.make CMakeFiles/cmTC_8e392.dir/build
+Building CXX object CMakeFiles/cmTC_8e392.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -mmacosx-version-min=12.2 -MD -MT CMakeFiles/cmTC_8e392.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_8e392.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_8e392.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-OwHMTd/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-OwHMTd/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_8e392.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_8e392/fast] Error 2
+
+
+
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":
+Checking whether the CXX compiler is IAR using "" did not match "IAR .+ Compiler":

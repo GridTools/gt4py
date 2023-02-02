@@ -1,0 +1,49 @@
+.. _expandable_parameters:
+
+---------------------
+Expandable Parameters
+---------------------
+
+Expandable parameters implement a "single stencil multiple storages" pattern.
+They are useful when we have a vector of storages which have the same
+shape, and we want to perform the same operation with all of them
+(a typical situation when implementing e.g. time differentiation schemes).
+Normally this could be achieved by creating a loop and running multiple computations,
+but this solution would be inefficient. A more efficient solution is provided
+through the expandable parameters API.
+
+The user must collect the storages in a ``std::vector``
+
+.. code-block:: gridtools
+
+        std::vector<storage_t> list = {
+            storage1, storage2, storage3, storage4, storage5, storage6, storage7, storage8};
+
+This ``std::vector`` is then used as a storage type with no differences with respect to
+the regular storages.
+
+The implementation requires the user to specify an integer ``expand_factor`` when defining the computation.
+The optimal value for ``expand_factor`` might be backend-dependent.
+
+.. code-block:: gridtools
+
+ auto const spec = [](auto s) {
+   return execute_parallel().stage(functor(), s);
+ };
+ expandable_run<4>(spec, backend_t(), grid, s);
+
+The vector of
+storages is then partitioned into chunks of ``expand_factor`` size (with a remainder). Each
+chunk is unrolled within a computation, and for each chunk a different computation is
+instantiated. The remainder elements are then processed one by one.
+
+Summing up, the only differences with respect to the case without expandable parameters are:
+
+* ``expandable_run`` has to be used instead of ``run``
+* an ``expand_factor`` has to be passed to the ``expandable_run``, defining the size of the chunks of
+* expandable parameters should be unrolled in each computation.
+* a ``std::vector`` of storage pointers has to be used instead of a single storage.
+
+All the rest is managed by |GT|, so that the user is not exposed to the complexity of the
+unrolling, he can reuse the code when the expand factor changes, and he can resize dynamically the expandable
+parameters vector, for instance by adding or removing elements.

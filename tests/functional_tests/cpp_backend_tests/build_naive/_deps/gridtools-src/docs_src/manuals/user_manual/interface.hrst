@@ -1,0 +1,247 @@
+Interfacing to other programming languages
+============================================
+
+|GT| provides an easy macro interface to generate bindings to C and Fortran. This library is available separately
+at `GridTools/cpp_bindgen <https://github.com/GridTools/cpp_bindgen>`_.
+
+To make the cpp_bindgen library available the recommended way is to use CMake's FetchContent as follows
+
+.. code-block:: CMake
+
+  include(FetchContent)
+  FetchContent_Declare(
+    cpp_bindgen
+    GIT_REPOSITORY https://github.com/GridTools/cpp_bindgen.git
+    GIT_TAG        master # consider replacing master by a tagged version
+  )
+  FetchContent_MakeAvailable(cpp_bindgen)
+
+Suppose, the user wants to export the function ``add_impl``.
+
+.. code-block:: gridtools
+
+  int add_impl(int l, int r) {
+      return l + r;
+  }
+
+The macros ``BINDGEN_EXPORT_*`` provide ways to generate bindings to functions. The different
+flavours of this macro are explained below. The macro generates a wrapper around the function
+``add_impl`` which is called ``add`` and registers the function to be exported.
+
+.. code-block:: gridtools
+
+  #include <cpp_bindgen/export.hpp>
+  BINDGEN_EXPORT_BINDING_2(add, add_impl);
+
+The user can generate a C header and a Fortran module that matches this header by
+adding a call to ``bindgen_add_library`` in his CMake project:
+
+.. code-block:: CMake
+
+  bindgen_add_library(add_lib SOURCES add.cpp)
+
+This will generate a library ``add_lib`` which contains the exported symbol ``add``,
+and it will generate a target ``add_lib_declarations`` that generates the files
+``add_lib.h`` and ``add_lib.f90`` containing the bindings that can be used from C
+and Fortran.
+
+The C header contains the exported function (boilerplate code removed):
+
+.. code-block:: gridtools
+
+  int add(int, int);
+
+The generated Fortran module contains the corresponding declaration:
+
+.. code-block:: fortran
+
+  module add_lib
+  implicit none
+    interface
+      integer(c_int) function add(arg0, arg1) bind(c)
+        use iso_c_binding
+        integer(c_int), value :: arg0
+        integer(c_int), value :: arg1
+      end function
+    end interface
+  end
+
+------------------------------------------------
+Exporting functions with no array-type arguments
+------------------------------------------------
+
+There exist various flavours of these macros. Functions which are non-templated or fully-specialized
+can be exported with ``BINDGEN_EXPORT_BINDING``, for example:
+
+.. code-block:: gridtools
+
+  int add_impl(int, int) { return 0; }
+  BINDGEN_EXPORT_BINDING_2(add, add_impl);
+
+  template <typename T>
+  T add_impl(T, T) { return {}; }
+  BINDGEN_EXPORT_BINDING(2, add_impl<int, int>);
+
+All functions exist in two flavours: Either you can pass the number of arguments as part of the name
+of the macro (``BINDGEN_EXPORT_BINDING_2`` stands for two arguments), or you can pass it as a first argument
+to the generic ``BINDGEN_EXPORT_BINDING``. The first flavours exist for up to 9 arguments.
+
+Note that ``BINDGEN_EXPORT_BINDING_X`` requires a name and a function pointer as its arguments.
+A lambda cannot be passed as function pointer; thus, the type of the arguments cannot be
+deduced. In such cases, the functions can be exported with ``BINDGEN_EXPORT_BINDING_WITH_SIGNATURE_X``,
+which additionally takes the function type as an argument:
+
+.. code-block:: gridtools
+
+  BINDGEN_EXPORT_BINDING_WITH_SIGNATURE_2(add, int(int, int), [](int l, int r) { return l + r; });
+
+Templated functions can be exported for a given set of specializations using
+``BINDGEN_EXPORT_GENERIC_BINDING_X``. In addition to the function name and the function pointer, it takes a list of
+overloads for which the bindings are generated:
+
+.. code-block:: gridtools
+
+  BINDGEN_EXPORT_GENERIC_BINDING(2, add, add_impl, (int, int)(double, int));
+
+In the generated Fortran module, generic bindings will produce an interface combining the different
+overloads:
+
+.. code-block:: fortran
+
+  interface
+    integer(c_int) function add_f0(arg0, arg1) bind(c)
+      use iso_c_binding
+      integer(c_int), value :: arg0
+      integer(c_int), value :: arg1
+    end function
+    real(c_double) function add_f1(arg0, arg1) bind(c)
+      use iso_c_binding
+      real(c_double), value :: arg0
+      integer(c_int), value :: arg1
+    end function
+  end interface
+  interface add
+    procedure add_f0, add_f1
+  end interface
+
+----------------
+Complex types
+----------------
+
+Only a limited set of types can be passed from Fortran / C through the C bindings interface to C++,
+namely integral and floating point types, booleans and pointers to those types.
+
+Array references, |GT| storages, and any type that is `fortran_array_bindable`
+appear as ``bindgen_fortran_array_descriptor`` in the C bindings. This structure allows
+the user to describe the data that needs to be passed to C++.
+
+It is possible to write bindings to functions that accept or return other types.
+During the generation process, they are replaced with pointers to the type ``bindgen_handle``.
+
+.. code-block:: gridtools
+
+  std::vector<int> make_vector_impl() { return {}; }
+  void use_vector_impl(std::vector<int>) {}
+  BINDGEN_EXPORT_BINDING_0(make_vector, make_vector_impl);
+  BINDGEN_EXPORT_BINDING_1(use_vector, use_vector_impl);
+
+The code above will generate the following signatures in the C-header:
+
+.. code-block:: C
+
+  bindgen_handle* make_vector();
+  void use_vector(bindgen_handle*);
+
+The user needs to make sure that the types that stand behind ``bindgen_handle`` match, otherwise
+an exception will be thrown.
+
+--------------------------------------------------------
+Exporting functions with array-type arguments to Fortran
+--------------------------------------------------------
+
+Special macros exist to export function that take array-like arguments to Fortran. While the normal
+macros export such arguments as ``bindgen_fortran_array_descriptor``, the "wrapped" macros create
+additional wrappers around the functions that fill the structures themselves.
+
+.. code-block:: gridtools
+
+  void dummy_impl(int (&a)[2][2]) {}
+  BINDGEN_EXPORT_BINDING_WRAPPED_1(dummy, dummy_impl);
+
+The function ``dummy_impl`` is taking a reference to an array. When exporting this function with
+``BINDGEN_EXPORT_BINDING_WRAPPED_X``, an additional wrapper is generated in the Fortran bindings:
+
+.. code-block:: fortran
+
+  module add_lib
+  implicit none
+    interface
+      subroutine dummy_impl(arg0) bind(c, name="dummy")
+        use iso_c_binding
+        use array_descriptor
+        type(bindgen_fortran_array_descriptor) :: arg0
+      end subroutine
+    end interface
+  contains
+      subroutine dummy(arg0)
+        use iso_c_binding
+        use array_descriptor
+        integer(c_int), dimension(:,:), target :: arg0
+        type(bindgen_fortran_array_descriptor) :: descriptor0
+
+        descriptor0%rank = 2
+        descriptor0%type = 1
+        descriptor0%dims = reshape(shape(arg0), &
+          shape(descriptor0%dims), (/0/))
+        descriptor0%data = c_loc(arg0(lbound(arg0, 1),lbound(arg0, 2)))
+
+        call dummy_impl(descriptor0)
+      end subroutine
+  end
+
+This allows to call the Fortran function ``dummy`` in a convenient way:
+
+.. code-block:: fortran
+
+  integer(c_int), dimension(:, :) :: some_array
+  call dummy(some_array)
+
+The bindings will take care that the rank matches and it will infer the size of the array automatically.
+
+All additional macros behave as mentioned above, namely ``BINDGEN_EXPORT_BINDING_WITH_SIGNATURE_WRAPPED``,
+and ``BINDGEN_EXPORT_BINDING_GENERIC_WRAPPED``.
+
+Data types need to be `fortran_array_wrappable` in order to be compatible with these macros. Natively, only
+C arrays and ``fortran_array_adapter`` are `fortran_array_wrappable`. The latter is an adapter between
+Fortran arrays and |GT| storages, such that the user can pass a Fortran array to a C++ function,
+which then can be transformed into a |GT| storage.
+
+.. code-block:: gridtools
+
+  #include <gridtools/storage/adapter/fortran_array_adapter.hpp>
+
+  using storage_info_t = storage_traits<Backend>::storage_info_t<0, 3>;
+  using data_store_t = storage_traits<Backend>::data_store_t<double, storage_info_t>;
+
+  void modify_array_impl(fortran_array_adapter<data_store_t> inout) {
+      data_store_t data_store{storage_info_t{10, 10, 10}};
+      transform(data_store, inout);
+
+      // use data_store
+
+      transform(inout, data_store);
+  }
+  BINDGEN_EXPORT_BINDING_WRAPPED_1(modify_array, modify_array_impl)
+
+-----------
+CMake usage
+-----------
+
+A call to ``bindgen_add_library`` generates the libraries and the headers. By default,
+the C header file and the Fortran file is written directly into the source tree. This choice was
+taken to improve building in cross-build environments, because the process cannot rely
+on generated binaries being executable on the host system. The output folder can be overwritten
+by setting ``FORTRAN_OUTPUT_DIR`` and ``C_OUTPUT_DIR``.
+
+By default, the name of the generated Fortran module is set to the name of the library. A different
+name can be set with ``FORTRAN_MODULE_NAME``.

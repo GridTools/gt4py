@@ -1,0 +1,7 @@
+add_subdirectory(core)
+add_subdirectory(frontend)
+add_subdirectory(gpu)
+add_subdirectory(cpu_ifirst)
+
+gridtools_add_unit_test(test_positional SOURCES test_positional.cpp)
+gridtools_add_unit_test(test_global_parameter SOURCES test_global_parameter.cpp)

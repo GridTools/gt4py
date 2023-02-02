@@ -1,0 +1,409 @@
+.. _storage-module:
+
+Storage Library
+===============
+
+The Storage Library provides the way to represent multidimensional typed contiguous memory allocations with arbitrary
+layout and alignment. All entities are defined in the ``gridtools::storage`` namespace.
+
+----------
+Data Store
+----------
+
+The key entity of the library, representing a multidimensional array.
+
+  * Data store has no user facing constructors. To create it one should use the :ref:`builder-api`.
+  * The access to the actual data is indirect. Data store has methods to request a view. The view provides data access
+    via overloaded call operator.
+  * Data store is aware of memory spaces. It distinguish between ``target`` and ``host`` data access. Views are
+    requested with ``target_view()``/``target_const_view()``/``host_view()``/``host_const_view()`` methods. If ``target`` and
+    ``host`` spaces are different and the data store holds non constant data, data store performs automatic memory
+    synchronization if needed. It is assumed that the target memory space access is used for doing computations
+    and host access is used for filling, dumping and verifying the data.
+
+.. _data-store:
+
+^^^^^^^^^^^^^^^^^^^
+Data Store Synopsis
+^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: gridtools
+
+ template</* Implementation defined parameters */>
+ class data_store {
+   public:
+     static constexpr size_t ndims; /* Dimensionality */
+     using layout_t = /* Instantiation of gridtools::layout_map. */;
+     using data_t = /* Type of the element. */;
+     // The following invariant is held: for any data_store instancies that have
+     // the same kind_t the strides are also the same.
+     using kind_t = /* A type that identifies the strides set. */;
+
+     // Data store arbitrary label. Mainly for debugging.
+     std::string const &name() const;
+     // The sizes of the data store in each dimension.
+     array<unsigned, ndims> lengths() const;
+     // The strides of the data store in each dimension.
+     array<unsigned, ndims> strides() const;
+
+     // lengths and strides in the form of tuples.
+     // If the length along some dimension is known in compile time (N),
+     // it is represented as an intergral_constant<int, N>,
+     // otherwise as int.
+     auto const& native_lengths() const;
+     auto const& native_strides() const;
+
+     // 1D length of the data store expressed in number of elements.
+     // Namely it is a pointer difference between the last and the first element minus one.
+     unsigned length() const;
+
+     // Supplementary object that holds lengths and strides.
+     auto const &info() const;
+
+     // Request the target view.
+     // If the target and host spaces are different necessary synchronization is performed
+     // and the host counterpart is marked as dirty.
+     auto target_view();
+     // Const version doesn't mark host counterpart as dirty. Synchronization takes place.
+     auto const_target_view();
+
+     // Raw ptr alternatives for target_view/const_target_view.
+     // Synchronization behaviour is the same.
+     data_t *get_target_ptr();
+     data_t const *get_const_target_ptr();
+
+     // Host access methods variations. They only exist if !std::is_const_v<data_t>.
+     auto host_view();
+     auto host_const_view();
+     data_t *get_host_ptr();
+     data_t const *get_const_host_ptr();
+ };
+
+.. _data-view:
+
+^^^^^^^^^^^^^^^^^^
+Data View Synopsis
+^^^^^^^^^^^^^^^^^^
+
+Data view is a supplemental struct that is returned form data store access methods. The distinctive property:
+data view is a POD. Hence it can be passed to the target device by copying the memory. For the gpu data stores
+all data view methods are declared as device only.
+
+.. code-block:: gridtools
+
+ template <class T, size_t N>
+ struct some_view {
+     // POD members here
+
+     // The meta info methods are the same as for data_store.
+     array<unsigned, N> lengths() const;
+     array<unsigned, N> strides() const;
+     auto const& native_lengths() const;
+     auto const& native_strides() const&
+     unsigned length() const;
+     auto const &info() const;
+
+     // raw access
+     T *data() const;
+     // multi dimensional indexed access
+     T &operator()(int... /*number of arguments equals to N*/ ) const;
+     // variation with array as an argument
+     T &operator()(array<int, N> const &) const;
+ };
+
+.. note:: On data store synchronization behaviour
+
+ If target and host spaces are different and the data is mutable, data store manages both target and host allocations.
+ Internally it keeps a flag that can be either ``clean``, ``dirty target`` or ``dirty host``.
+ When a view is requested and the correspondent allocation is marked as dirty, the data store performs a memory transfer
+ and the allocation is marked as clean. The counterpart allocation is marked as dirty if a non-constant view is requested.
+ Each new view request potentially invalidates the previously created views.
+ Therefore, is is best practice to limit the scope of view objects as much as possible to avoid stale
+ data views. Here are some illustrations:
+
+ .. code-block:: gridtools
+
+  template <class View>
+  __global__ void kernel(View view) { view(0) = view(1) = OxDEADBEEF; }
+
+  ...
+
+  // host and target allocations are made here. The state is set to clean
+  auto ds = builder<gpu>.type<int>().dimensions(2)();
+
+  // no memory transfer because of the clean state
+  // the state becomes dirty_target
+  auto host_view = ds->host_view();
+  // the use of the host view
+  host_view(0) = host_view(1) = 42;
+
+  // memory transfer to the target space because the state is dirty_target
+  // the state becomes dirty_host
+  // host_view becomes stale at this point
+  auto target_view = ds->target_view();
+
+  // the use of the target view
+  kernel<<<1,1>>>(target_view);
+
+  // memory transfer to the host space because the state is dirty_host
+  // the state becomes clean
+  // both host_view and target_view are stale at this point
+  auto host_view_2 = ds->const_host_view();
+  // the use of the second host view
+  assert(host_view_2(0) == OxDEADBEEF);
+  assert(host_view_2(1) == OxDEADBEEF);
+
+ We can refactor this to exclude the possibility of using state data:
+
+ .. code-block:: gridtools
+
+  {
+      auto v = ds->host_view();
+      v(0) = v(1) = 42;
+  }
+
+  kernel<<<1,1>>>(ds->target_view());
+
+  {
+      auto v = ds->const_host_view();
+      assert(v(0) == OxDEADBEEF);
+      assert(v(1) == OxDEADBEEF);
+  }
+
+.. _builder-api:
+
+-----------
+Builder API
+-----------
+
+The builder design pattern is used for data store construction. The API is defined in `gridtools/storage/builder.hpp`.
+Here a single user facing symbol is defined -- ``storage::builder``.
+It is a value template parametrized by ``Traits`` (see below).
+The idea is that the user takes a builder with the desired traits, customize it with requested properties and finally
+calls the ``build()`` method (or alternatively the overloaded call operator) to produce a ``std::shared_ptr`` to a data store.
+For example:
+
+.. code-block:: gridtools
+
+ auto ds = storage::builder<storage::gpu>
+         .type<double>()
+         .name("my special data")
+         .dimensions(132, 132, 80)
+         .halos(2, 2, 0)
+         .selector<1, 1, 0>()
+         .value(42)
+         .build();
+
+ assert(ds->const_host_view()(1, 2, 3) == 42);
+
+
+One can also use partially specified builder to produce several data stores:
+
+.. code-block:: gridtools
+
+ auto const my_builder = storage::builder<storage::gpu>.dimensions(10, 10, 10);
+ auto foo = my_builder.type<int>().name("foo")();
+ auto bar = my_builder.type<tuple<int, double>>()();
+ auto baz = my_builder
+          .type<double const>
+          .initialize([](int i, int j, int k){ return i + j + k; })
+          .build();
+
+This API implements an advanced variation of the builder design pattern. Unlike classic builder, the setters don't
+return a reference `*this`, but a new instance of a potentially different class. Because of that an improper
+usage of builder is caught at compile time:
+
+.. code-block:: gridtools
+
+ // compilation failure: dimensions should be set
+ auto bad0 = builder<cpu_ifirst>.type<double>().build();
+
+ // compilation failure: value and initialize setters are mutually exclusive
+ auto bad1 = builder<cpu_ifirst>
+           .type<int>()
+           .dimensions(10)
+           .value(42)
+           .initialize([](int i) { return i;})
+           .build();
+
+^^^^^^^^^^^^^^^^
+Builder Synopsis
+^^^^^^^^^^^^^^^^
+
+.. code-block:: gridtools
+
+ template </* Implementation defined parameters. */>
+ class buider_type {
+   public:
+     template <class>
+     auto type() const;
+     template <int>
+     auto id() const;
+     auto unknown_id() const;
+     template <int...>
+     auto layout() const;
+     template <bool...>
+     auto selector() const;
+     auto name(std::string) const;
+     auto dimensions(...) const;
+     auto halos(unsigned...) const;
+     template <class Fun>
+     auto initializer(Fun) const;
+     template <class T>
+     auto value(T) const;
+     auto build() const;
+     auto operator()() const { return build(); }
+ };
+ template <class Traits>
+ constexpr builder_type</* Implementation defined parameters. */> builder = {};
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Constrains on Builder Setters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  * ``type`` and ``dimensions`` should be set before calling ``build``
+  * any property can be set at most once
+  * ``layout`` and ``selector`` properties are mutually exclusive
+  * ``value`` and ``initializer`` properties are mutually exclusive
+  * the template arity of ``layout``/``selector`` equals ``dimension`` arity
+  * ``halos`` arity equals ``dimension`` arity
+  * ``initializer`` argument is callable with ``int`` 's, has ``dimension`` arity
+    and its return type is convertible to ``type`` argument
+  * ``value`` argument type is convertible to `type` argument.
+  * if ``type`` argument is ``const``, ``value`` or ``initializer`` should be set
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Notes on Builder Setters Semantics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  * **id:** The use case of setting ``id`` is to ensure the invariant for ``data_store::kind_t``. It should identify
+    the unique set of dimension sizes. Note the difference: ``data_store::kind_t`` represents the set of unique ``strides``,
+    but ``id`` represents the set of unique sizes. Example:
+
+    .. code-block:: gridtools
+
+     // We have two different sizes that we use in our computation.
+     // Hence we prepare two partially specified builders.
+     auto const builder_a = builder<gpu>.id<0>.dimensions(3, 4, 5);
+     auto const builder_b = builder<gpu>.id<1>.dimensions(5, 6, 7);
+
+     // We use our builders to make some data_stores.
+     auto a_0 = builder_a.type<double>().build();
+     auto a_1 = builder_a.type<double>().build();
+     auto a_2 = builder_a.type<float>().halos(1, 1, 0).build();
+     auto b_0 = builder_a.type<double>().build();
+
+     // kind_t aliases of a_0 and a_1 are the same.
+     // kind_t aliases of a_0 and b_0 are different,
+     //   because the id property is different.
+     // kind_t aliases of a_0 and a_2 are different,
+     //   even though id property is the same,
+     //   because types are different.
+
+    At the moment ``id``/``kind_t`` matters if data stores are used in the context of |GT| stencil computation.
+    Otherwise there is no need to set ``id``. Note also that setting ``id`` can be skipped if only one set
+    of dimension sizes is used even in |GT| stencil computation context.
+  * **unknown_id:** If ``unknown_id`` is set for the builder, the resulting ``data_store::kind_t`` will be equal to
+    ``sid::unknown_kind``. This will opt out this data store from the optimizations that are used in the gridtools
+    stencil computation. it makes sense to set ``unknown_id`` if the same builder is used to create the data stores with
+    different dimension set and those fields are participating in the same stencil computation.
+  * **dimensions:** Allows to specify the dimensions of the array. Arguments are either
+    of integral type or derived from the ``std::integral_constant`` instantiation. Examples:
+
+    .. code-block:: gridtools
+
+     using gridtools::literals;
+     auto const my_builder = builder<cpu_ifirst>.type<int>();
+     auto dynamic_ds = my_builder.dimensions(2, 3)();
+     auto static_ds = my_builder.dimensions(2_c, 3_c)();
+     auto mixed_ds = my_builder.dimensions(2, 3_c)();
+
+    In this example all data stores act almost the same way.
+    But ``static_ds`` (unlike ``dynamic_ds``) does not hold its dimensions in runtime, it
+    is encoded in the type instead. I.e. meta information (``lengths``/``strides``) takes less space
+    and also indexing/iterating code can be more aggressively optimized by compiler.
+  * **halos:** The memory alignment is controlled by specifying ``Traits`` (the template parameter of the builder).
+    By default each first element of the innermost dimension is aligned. ``halos`` allows to explicitly specify
+    the index of element that should be aligned. Together with chosen element, all elements that share its
+    innermost index will be aligned as well.
+  * **selector:** allows to :term:`mask<Masked Dimension>` out any dimension or several. Example:
+
+    .. code-block:: gridtools
+
+     auto ds = builder<cpu_ifirst>.type<int>().selector<1,0>().dimensions(10, 10).value(-1)();
+     auto view = ds->host_view();
+     // even though the second dimension is masked out
+     // we can used indices in the defined range
+     assert(ds->lengths()[1], 10);
+     assert(view(0, 0) == -1);
+     assert(view(0, 9) == -1);
+     // but elements that differs only by the masked out index refer to the same data
+     assert(&view(0, 1) == &view(0, 9));
+
+  * **layout:** By default the data layout is controlled by ``Traits``. However it is overridable with
+    the ``layout`` setter. Example:
+
+    .. code-block:: gridtools
+
+     auto ds0 = builder<gpu>
+         .type<int>()
+         .layout<0, 2, 4, 1, 3>()
+         .dimensions(10, 10, 10, 10, 10)
+         .name("my tuned storage for the specific use case")
+         .build();
+
+    The template parameters of ``layout`` are a permutation of the value from ``0`` to ``N - 1``, where ``N``
+    is the number of dimensions of the storage. The values indicate the order of the dimensions by decreasing strides.
+    For instance a C array ``X[i][j][k]`` layout would be equivalent to ``.layout<0,1,2>()``.
+    The dimension with stride 1 has the highest index, so in this case, the k-stride is a unit stride. A Fortran style
+    array ``X[i][j][k]`` layout would be equivalent to ``.layout<2,1,0>()``, meaning that the i-stride is a unit-stride
+    (thus, the first index of the ``layout`` is 2).
+
+    There is also the possibility to mask dimensions. This means that the storage appears as n-dimensional but
+    the masked dimensions are ignored. For instance ``.layout_map<1,-1,0>()`` describes a 3-dimensional storage, where
+    the i-stride is a unit stride and the j dimension is masked. In this case the storage is allocated as a
+    two-dimensional array, but it behaves as a three-dimensional array. Accessing the array at ``(i, j, k)`` always
+    returns the element at ``(i, 0, k)``. This kind of storage can be used two implement oriented planes in stencils.
+
+------
+Traits
+------
+
+Builder API needs a traits type to instantiate the ``builder`` object. In order to be used in this context
+this type should model the ``Storage Traits Concept``. The library comes with three predefined traits:
+
+   * **cpu_kfirst:** Layout is chosen to benefit from data locality while doing 3D loop.
+     ``malloc`` allocation. No alignment. ``target`` and ``host`` spaces are the same.
+   * **cpu_ifirst:** Huge page allocation. 8 bytes alignment. Layout is tailored to utilize vectorization while
+     3D looping. ``target`` and ``host`` spaces are the same.
+   * **gpu:** Tailored for GPU. ``target`` and ``host`` spaces are different.
+
+Each traits resides in its own header. Note that ``builder.hpp`` doesn't include any specific traits headers.
+To use a particular trait the user should include the correspondent header.
+
+^^^^^^^^^^^^^^^^^^^^^^
+Defining Custom Traits
+^^^^^^^^^^^^^^^^^^^^^^
+
+To use their own traits, users should provide a type that models the ``Storage Traits Concept``. There is no need
+to place a custom traits within |GT| source tree. The concept is ADL-based. The easiest way to go
+is to copy any of predefined traits and modify it. Skipping some details the concept is defined as follows:
+
+   * traits must specify if the ``target`` and ``host`` memory spaces are the same by providing
+     a ``storage_is_host_referenceable`` ADL-based overload function.
+   * traits must specify alignment in bytes by defining a ``storage_alignment`` function.
+   * ``storage_allocate`` function must be defined to say the library how to target memory is allocated.
+   * ``storage_layout`` function is needed to define the layout_map for a given number of dimensions.
+   * if ``target`` and ``host`` memory spaces are different:
+
+        * ``storage_update_target`` function is needed to define how to move the data from host to target.
+        * ``storage_update_host`` function is needed to define how to move the data from target to host.
+        * ``storage_make_target_view`` function is needed to define a target view.
+
+----------------------
+SID Concept Adaptation
+----------------------
+
+The :ref:`stencil-composition` Library doesn't use the Storage Library directly.
+Instead the ``SID Concept`` is used to specify the requirements on input/output fields.
+``Data store`` models ``SID`` if the ``gridtools/storage/sid.hpp`` header is included.

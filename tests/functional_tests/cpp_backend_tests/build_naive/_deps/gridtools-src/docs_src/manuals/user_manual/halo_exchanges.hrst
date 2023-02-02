@@ -1,0 +1,301 @@
+.. _halo-exchanges:
+
+Halo Exchanges
+========================
+
+----------------
+Introduction
+----------------
+
+The communication module in |GT| is dubbed :term:`GCL`. It's a low level
+halo-update interface for 3D fields that takes 3D arrays of some
+types, and the descriptions of the halos, and perform the exchanges in
+a scalable way.
+
+It is low-level because the requirements from which it was initially
+designed, required easy interoperability with C and Fortran, so the API
+takes pointers and sizes. The sizes are specified by
+``halo_descriptor``, which are loosely inspired by the BLAS description
+of dimensions of matrices. A new, more modern set of interfaces are
+being implemented, to serve more general cases, such as higher
+dimensions and other grids.
+
+We first start with some preliminaries and then discuss the main
+interfaces.
+
+
+----------------
+Preliminaries
+----------------
+
+^^^^^^^^^^^^^^^^
+Processor Grid
+^^^^^^^^^^^^^^^^
+
+The processor grid is a concept that describe a 3D lattice of
+computing elements (you may think of those as MPI tasks). The
+identifiers of them are tuples of indices. This naturally maps to a 3D
+decomposition of a data field.
+
+^^^^^^^^^^^^^^^^
+Layout Map
+^^^^^^^^^^^^^^^^
+
+The communication layer needs two :term:`Layout Maps<Layout Map>`:
+one for describing the data, and one for the
+processor grid. For the user, the dimensions of the data are always
+indicated as first, second, and third (or i, j, k), it is the
+:term:`Layout Map` that indicates the stride orders, as in the following example:
+
+For instance:
+
+.. code-block:: gridtools
+
+  //         i, j, k
+  layout_map<1, 0, 2>
+
+This :term:`Layout Map` indicates that the first dimension in the data (i) is the
+second in the decreasing stride order, while the second (j) has the
+biggest stride, and last dimension (k) is the one with stride 1. The
+largest strides are associated to smaller indices, so that
+``layout_map<0, 1, 2>`` corresponds to a C-layout, while
+``layout_map<2, 1, 0>`` to a Fortran layout.
+
+The second template :term:`Layout Map` in the :term:`Halo Exchange`
+pattern is the map between data coordinates and the processor
+grid coordinates.
+
+The following layout specification
+
+.. code-block:: gridtools
+
+  layout_map<1, 0, 2>
+
+would mean: The first dimension in data matches with the second
+dimension of the computing grid, the second dimension of the data to
+the first of the processing grid, and the third one to the third
+one. This is rarely different from ``layout_map<0, 1, 2>``, so it can
+generally be ignored, but we give an example to clarify its meaning.
+
+Suppose the processor grid (domain decomposition sizes) has size PIxPJx1. Now, we want
+to say that the first dimension on data 'extends' to the
+computing grid on (or that the first dimension in the data corresponds
+to) the first dimension in the computing grid. Let's consider a 2x1
+process grid, and the first dimension of the data being the rows (i)
+and the second the column (j). In this case we are assuming a
+distribution like in :numref:`fig_dist1`.
+
+
+.. _fig_dist1:
+.. figure:: figures/dist1.png
+   :scale: 40%
+
+   Example data distribution among two processes.
+
+In this case the map between data and the processor grid is:
+
+.. code-block:: gridtools
+
+ layout_map<0, 1, 2> // The 3rd dimension stride is 1
+
+On the other hand, having specified
+
+.. code-block:: gridtools
+
+  layout_map<1, 0, 2>
+
+for this map, would imply a layout/distribution like the following :numref:`fig_dist2`.
+
+.. _fig_dist2:
+.. figure:: figures/dist2.png
+   :scale: 40%
+
+   Example data distribution among two processes.
+
+Where the second dimension in the data correspond to the fist
+dimension in the processor grid. Again, the data coordinates
+ordering is the one the user choose to be the logical order in the
+application, not the increasing stride order.
+
+.. _halo-descriptor:
+
+^^^^^^^^^^^^^^^^
+Halo Descriptor
+^^^^^^^^^^^^^^^^
+
+Given  a  dimension of  the  data  (array), the  communication  module
+requires the user to describe it using the ``halo_descriptor`` class,
+which takes five integers. This class identifies the data that needs
+to be exchanged.
+
+Consider a dimension which has ``minus`` halo lines on one side, and
+``plus`` halo lines on the other (The minus and plus indicate the sides
+close to index 0 and the last index of the dimension,
+respectively). The beginning of the inner region is marked by ``begin``
+and its ending by ``end``. The end is inclusive, meaning that the index
+specified by it, is part of the inner region. Another value is
+necessary, which has to be larger than ``end - begin + 1 + minus + plus``, and
+is the ``total_length``. This parameter is the equivalent of the
+"leading dimension" in BLAS. With these five numbers we can describe
+arbitrary dimensions, with paddings on the left and on the right, such
+as the example in :numref:`fig_halo_descriptor`.
+
+The interface for specifying a halo descriptor is fairly simple, where
+the name of arguments should be self-explanatory:
+
+.. code-block:: gridtools
+
+ halo_descriptor(uint_t minus, uint_t plus, uint_t begin, uint_t end, uint_t total_length)
+
+.. todo::
+   annotate example with minus plus begin and end
+
+.. _fig_halo_descriptor:
+.. figure:: figures/halo_descriptor.png
+   :scale: 50%
+
+   Example halo descriptor with one halo point on the left and two on the right.
+
+.. _gcl-communication-module:
+
+-------------------------
+GCL Communication Module
+-------------------------
+
+Now we are ready to describe the :term:`Halo Exchange` patterns objects. The first one is ``halo_exchange_dynamic_ut``. The ``ut`` suffix stands for ``uniform types``, meaning that the data fields that this object will manage must all store the same value types, that are declared at instantiation time. The domain decomposition goes up to three dimensions and the data to be exchanged contained in 3 dimensional arrays (lower dimensions can be handled by setting the missing dimensions to 1). Being designed for three dimensional data, the layout maps have three elements (refer to :numref:storage-info for more information).
+
+The type of the object is defined as in this example:
+
+.. code-block:: gridtools
+
+  using pattern_type = gcl::halo_exchange_dynamic_ut<layout_map<0, 1, 2>,
+                       layout_map<0, 1, 2>, value_type, gcl::cpu>;
+
+The template arguments are:
+
+1. the layout if the data;
+2. the mapping between the data dimensions and processing :term:`Grid`, as described above (leave it as ``layout_map<0, 1, 2>`` if in doubt);
+3. the type of the values to be exchanged;
+4. the place where the data lives and for which the code is optimized. The options for this arguments are ``gcl::gpu`` and ``gcl::cpu``.
+
+The :term:`Halo Exchange` object can be instantiated as:
+
+.. code-block:: gridtools
+
+  pattern_type he(pattern_type::grid_type::period_type(true, false, true), CartComm);
+
+Where ``period_type`` indicates whether the corresponding dimensions are
+periodic or not. ``CartComm`` is the MPI communicator describing the
+computing grid.
+
+After the object has been instantiated, the
+user registers the halos for the corresponding dimension and the five
+numbers we described above, for the three dimensions (0 is the first
+dimension).
+
+.. code-block:: gridtools
+
+  he.add_halo<0>(minus0, plus0, begin0, end0, len0);
+  he.add_halo<1>(minus1, plus1, begin1, end1, len1);
+  he.add_halo<2>(minus2, plus2, begin2, end2, len2);
+
+When the registration is done a setup function must be called before
+running data exchange. The argument in the set up function is the
+maximum number of data arrays that the pattern will exchange in a
+single step. In this example we set it to 3, so that exchanging more
+than 3 fields will lead to a runtime error. Be aware that setting a
+larger number of supported fields leads to larger memory allocations.
+The code looks like:
+
+.. code-block:: gridtools
+
+  he.setup(3);
+
+Now we are ready to exchange the data, by passing (up to) three
+pointers to the data to pack, then calling exchange and then unpack
+into the destination data, as in the following example:
+
+
+.. code-block:: gridtools
+
+  he.pack(array0, array1, array2);
+  he.start_exchange();
+  he.wait();
+  he.unpack(array0, array1, array2)
+
+Alternatively, the pointers can be put in a ``std::vector<value_type*>`` so that the code would look like:
+
+.. code-block:: gridtools
+
+  he.pack(vector_of_pointers);
+  he.start_exchange();
+  he.wait();
+  he.unpack(vector_of_pointers);
+
+An alternative pattern supporting different element types is:
+
+.. code-block:: gridtools
+
+  using pattern_type = halo_exchange_generic<layout_map<0, 1, 2>, arch_type>;
+
+Now the :term:`Layout Map` in the type is the mapping of dimensions to
+the computing grid (the number of dimensions is 3, so the layout map
+has three elements), and arch_type is either ``gcl::gpu`` or ``gcl::cpu``.
+
+The construction of the object is identical to the previous one, but
+the set-up somewhat more complex now, since we have to indicate the
+maximum sizes and number of fields we will exchange using this object.
+
+
+.. code-block:: gridtools
+
+  array<halo_descriptor, 3> halo_dsc;
+  halo_dsc[0] = halo_descriptor(H1, H1, H1, DIM1 + H1 - 1, DIM1 + 2 * H1);
+  halo_dsc[1] = halo_descriptor(H2, H2, H2, DIM2 + H2 - 1, DIM2 + 2 * H2);
+  halo_dsc[2] = halo_descriptor(H3, H3, H3, DIM3 + H3 - 1, DIM3 + 2 * H3);
+
+  he.setup(4, // maximum number of fields
+           field_on_the_fly<int, layoutmap, pattern_type::traits>(null_ptr, halo_dsc),
+           sizeof(biggest_type_to_be_used)); // Estimates the sizes
+
+The halo descriptors above indicate the largest arrays the user will
+exchange, while the ``field_on_the_fly`` specify a type and layout
+(and mandatory traits). The type does not have any effect here, and
+neither the layout. The traits are important, and the halos are
+essential.  With this pattern, the user needs to indicate what is the
+size of the largest value type they will exchange.
+
+.. note:
+
+ This interface is designed, as the one for the
+ ``halo_exchange_dynamic_ut`, is designed to be at a lower level with
+ respect to the others |GT| libraries. The reason for this choice is to
+ base the other libraries on lower-level ones. The communication
+ layers, will be redesigned in future releases of |GT|.
+
+When using the pattern, each data field should be wrapped into a
+``field_on_the_fly`` object, such as
+
+.. code-block:: gridtools
+
+   field_on_the_fly<value_type1, layoutmap1, pattern_type::traits> field1(
+       ptr1, halo_dsc1);
+   field_on_the_fly<value_type2, layoutmap2, pattern_type::traits> field2(
+       ptr2, halo_dsc2);
+   field_on_the_fly<value_type3, layoutmap3, pattern_type::traits> field3(
+       ptr3, halo_dsc3);
+
+
+Now each field can have different types and layouts, and halo
+descriptors. The exchange happens very similarly as before:
+
+.. code-block:: gridtools
+
+   he.pack(field1, field2, field3);
+
+   he.exchange();
+
+   he.unpack(field1, field2, field3);
+
+The interface accepting a ``std::vector`` also works for this pattern (in case all the
+fields have the same type).

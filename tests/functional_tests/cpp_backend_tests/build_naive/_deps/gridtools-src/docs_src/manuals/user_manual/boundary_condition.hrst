@@ -1,0 +1,167 @@
+.. _boundary-conditions:
+
+Boundary Conditions
+=========================
+
+-------------------------
+Introduction
+-------------------------
+
+The boundary condition module in |GT| is designed following the
+principle that boundary conditions can be arbitrarily complex, so we
+want the user to be able to specify any boundary condition code to set
+up their problems.
+
+----------------
+Preliminaries
+----------------
+
+One main concept that is needed for the boundary condition is the one
+of `direction`.
+
+In a 3D regular grid, which is where this implementation of the
+boundary condition library applies, we associate a 3D axis system,
+and the cell indices (i, j, k) naturally lie on it. With this axis
+system the concept of "vector" can be defined to indicate
+distances and directions. Direction is the one thing we need
+here. Instead of using unitary vectors to indicate directions, as
+it is usually the case for euclidean spaces, we use vectors whose
+components are -1, 0, and 1.  For example, :math:`(1, 1, 1)` is the
+direction indicated by the unit vector :math:`(1, 1, 1)/\sqrt3`.
+If we take the center of a 3D grid, then we can define 26
+different directions :math:`\{(i, j, k): i, j, k \in \{-1, 0, 1\}\}\setminus\{(0, 0, 0)\}`
+that identify the different faces, edges and corners of the cube to
+which the grid is topologically analogous with.
+
+The main idea is that a boundary condition class specializes
+`operator()` on a `direction`, or a subset of directions, and then
+perform the user specified computation on the boundaries on those
+directions.
+
+The user can define their own boundary condition classes and perform
+specific computation in each direction. For this reason |GT| provides
+a ``direction`` type which can take three direction values, that are
+indicated as ``minus_``, ``plus_`` and ``zero_``, which are values of an
+``enum`` called ``sign``.
+
+.. _boundary-conditions-class:
+
+---------------------------------
+Boundary Condition Class
+---------------------------------
+
+The boundary condition class is a regular class which need to be copy
+constructible, and whose member functions should be decorated with the
+``GT_FUNCTION`` keyword to enable accelerators. It must not contain references to data that may be not available on the target device where the boundary conditions are applied.
+
+The boundary condition class provides overloads for the ``operator()``
+which take as first argument a ``direction`` object, a number of :term:`Data
+Stores<Data Store>` that are the inputs, and three integer values that will contains the
+coordinate indices of the cell that is being iterated on.
+
+All overloads must have the same number of arguments: the first argument is the direction over which the overload will be applied to, then there is the list of :term:`Data Views<Data View>` that will be accessed by the boundary class, and finally three integers that contains the indices of the element being accessed in the call.
+It is standard practice to let the view types be template
+arguments. For instance, here a class that applies a copy-boundary
+condition (copy the second view into the first one) for all direction
+apart all directions for which the third component is ``minus_``:
+
+.. code-block:: gridtools
+
+  struct example_bc {
+     double value;
+
+     GT_FUNCTION
+     example_bc(double v) : value(v) {}
+
+     template <typename Direction, typename DataField0, typename DataField1>
+     GT_FUNCTION void operator()(Direction,
+                                 DataField0 &data_field0, DataField1 const &data_field1,
+                                 unsigned i, unsigned j, unsigned k) const
+     {
+       data_field0(i, j, k) = data_field1(i, j, k);
+     }
+
+     template <sign I, sign J, typename DataField0, typename DataField1>
+     GT_FUNCTION void operator()(direction<I, J, minus_>,
+                                 DataField0 &data_field0, DataField1 const &,
+                                 unsigned i, unsigned j,  unsigned k) const
+     {
+       data_field0(i, j, k) = value;
+     }
+  };
+
+`operator()` of the boundary class is called by the library, on the 26 directions, and got each value in the data that correspond to each direction. In the previous example, each direction in which the third component is ``minus`` will select the specialized overload, while all other directions select the first implementation.
+
+---------------------------------
+Boundary Condition Application
+---------------------------------
+
+To apply the above boundary conditions class to the data fields, we
+need to construct the boundary object, but also to specify the :term:`Halo`
+regions. The :term:`Halo` regions are specified using
+:term:`Halo Descriptors<Halo Descriptor>`.
+
+To do this we need an array of :term:`Halo Descriptors<Halo Descriptor>` initialized with the :term:`Halo` information of the data fields.
+
+.. note::
+ The fifth number, namely the total length, in the :term:`Halo
+ Descriptor` is not used by the boundary condition application module,
+ but kept to reduce the number of similar concepts.
+
+.. code-block:: gridtools
+
+    array<halo_descriptor, 3> halos;
+    halos[0] = halo_descriptor(1, 1, 1, d1 - 2, d1);
+    halos[1] = halo_descriptor(1, 1, 1, d2 - 2, d2);
+    halos[2] = halo_descriptor(1, 1, 1, d3 - 2, d3);
+
+After this is done we can apply the boundary condition by, as in this
+example, constructing the boundary object and applying it to the data
+fields. The number of data fields to pass is equal to the number of
+fields the ``operator()`` overloads of the boundary class require.
+
+.. code-block:: gridtools
+
+  boundary<example_bc, backend_t>(halos, example_bc(42)).apply(out_s, in_s);
+
+As can be noted, the ``backend`` is also needed to select the proper
+implementation of the boundary application algorithm (see :term:`Backend`). ``out_s`` and
+``in_s`` are the two data fields passed to the application. The fact
+that the first is the output and second is the input derives from the
+signature of the overloads of ``operator()``, and it is user defined.
+
+---------------------------------
+Boundary Predication
+---------------------------------
+
+Predication is an additional feature to control the boundary
+application.  The predicate type have to be specified as template
+argument of the boundary class, and the instantiated object of that
+type passed as third argument of the boundary class constructor, as in
+the following example:
+
+.. code-block:: gridtools
+
+  boundary<direction_bc_input<uint_t>, backend_t, predicate_t>
+    (halos, direction_bc_input<uint_t>(42), predicate_t{}).apply(out_s, in_s);
+
+The predicate must obey a fixed interface, that is, it has to accept
+as argument a ``direction`` object, so that the user can, at runtime,
+disable some ``operator()`` overloads. This can be very useful when
+the user is running on a parallel domain decomposed domain, and only
+the global boundaries need to updated with the boundary conditions
+application and the rest should have their :term:`Halos<Halo>` updated from
+neighbors.
+
+
+.. _provided_boundary_conditions:
+
+------------------------------------------------------------
+Provided Boundary Conditions
+------------------------------------------------------------
+
+|GT| provides few boundary application classes for some common cases. They are
+
+- ``copy_boundary`` to copy the boundary of the last field of the argument list of `apply` into the other ones;
+- ``template <class T> value_boundary`` to set the boundary to a value for all the data fields provided;
+- ``zero_boundary`` to set the boundary to the default constructed value type of the data fields (usually a zero) for the input fields.

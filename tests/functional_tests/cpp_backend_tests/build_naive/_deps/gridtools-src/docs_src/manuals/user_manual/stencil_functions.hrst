@@ -1,0 +1,93 @@
+.. _stencil_functions:
+
+-----------------
+Stencil Functions
+-----------------
+
+Stencil functions offer the possibility to call :term:`Stencil Operators<Stencil Operator>` from other :term:`Stencil Operators<Stencil Operator>`.
+Two variants are available: functional calls which return a value and procedural calls with side-effect on the given arguments (:term:`Accessors<Accessor>`).
+
+^^^^^^^^^^^^^^^^^^^^^^^^
+Function Calls: `call<>`
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The basic syntax for function calls is as follows
+
+.. code-block:: gridtools
+
+   auto x = call<stencil_operator, vertical_interval, return_value_type>::with(eval, accessors...);
+
+Let us describe the template parameters first:
+
+- ``stencil_operator`` is the operator to be called.
+- ``vertical_interval`` is the :term:`Vertical Interval` where the operator will be applied (it can be empty, if the
+  stencil operator has an apply method without a vertical region).
+- ``return_value_type`` is the type of the return value for the function call. The ``return_value_type`` will be
+  automatically deduced from the first ``accessor`` if not specified explicitly.
+
+The context object ``eval`` has to be passed as the first argument to ``with``, followed by the
+:term:`Accessors<Accessor>` which are arguments of the operator.
+
+Note that the first accessor in the stencil operator must be an artificial accessor of type ``inout_accessor``. This
+argument must not be passed to the function, but instead it is the return value of the function.
+
+Example:
+
+.. code-block:: gridtools
+
+  struct lap_function {
+      using out = inout_accessor<0>; // artificial first accessor
+      using in = in_accessor<1, extent<-1, 1, -1, 1>>;
+
+      using param_list = make_param_list<out, in>;
+
+      template <typename Evaluation>
+      GT_FUNCTION static void apply(Evaluation eval) {
+          eval(out()) = 4. * eval(in()) -
+              (eval(in(-1, 0)) + eval(in(0, -1)) + eval(in(0, 1)) + eval(in(1, 0)));
+      }
+  };
+
+  // later:
+  auto ret = call<lap_function>::with(eval, param()); // only one parameter
+
+This function calculates the laplacian of a field. Note that the function is called only with one parameter, because the
+first accessor (``out``) is the artificial accessor representing the return value.
+
+.. note::
+
+   If you pass a vertical interval to ``call``, a matching apply method needs to exist in the called operator.
+
+The :term:`Accessors<Accessor>` which are passed in the function call can have offsets in the usual way. Additionally the whole operator can be shifted to be executed
+on a different grid point, by specifying a relative location with ``at``:
+
+.. code-block:: gridtools
+
+   call<...>::at<offset_i, offset_j, offset_k>::with(...);
+
+For example, you can evaluate the laplacian at the next k-level as follows:
+
+.. code-block:: gridtools
+
+    call<lap_function>::at<0, 0, 1>::with(eval, param());
+
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Procedure Calls: `call_proc<>`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Procedural calls work in the same way as function calls, but all :term:`Accessor`, which are ``inout`` in the operator,
+can be modified.
+
+.. code-block:: gridtools
+
+   call_proc<stencil_operator, vertical_interval>::with(eval, accessors...);
+
+Also offsets work the same way as for function calls. Using ``at`` with ``call_proc`` is not recommended and support
+might be dropped in the future.
+
+You can call the laplacian above with the following syntax:
+
+.. code-block:: gridtools
+
+    call_proc<lap_function>::with(eval, lap(), param());

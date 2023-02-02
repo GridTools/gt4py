@@ -1,0 +1,12 @@
+.. _global-accessor:
+
+-----------------
+Global Parameters
+-----------------
+
+The API allows the user to define an arbitrary object to act as a :term:`Global Parameter` as long as it is trivially copyable.
+To create a :term:`Global Parameter` from a user-defined object, we pass the object to ``global_parameter()``
+
+.. code-block:: gridtools
+
+   auto my_global_parameter = global_parameter(my_object);

@@ -1,0 +1,147 @@
+.. _execution-model:
+
+Execution Model
+===============
+
+Stencil operations are executed in a three dimensional :term:`Iteration Space`. The first two dimensions of the
+iteration space, usually referred to as `I` and `J` dimensions, identify the horizontal dimension. There is no
+prescription for the order of stencil operators in different points of the same `IJ` plane. Stencil operators in the
+third dimension of the iteration space, usually referred as `K` or vertical dimension, can have prescribed order
+of executions. There are three different execution policies for the `K` dimension:
+
+- `forward`: The computation at index `k` in the vertical dimension is executed after index `k - 1` for all points in
+  the horizontal plane;
+- `backward`: The computation at index `k` in the vertical dimension is executed after index `k + 1` for all points in
+  the horizontal plane;
+- `parallel`: No order is specified and execution can happen concurrently.
+
+More concretely, a multistage is a list of stages, implemented with stencil operators, to be executed with a certain
+execution policy. A computation combines several multistages and executes one multistage after the other.
+
+- For each `IJ` plane, the stages of a multistage will be executed strictly one after the other. This means that a
+  stage can assume that the previous stage has been applied to the the whole `IJ` plane before its execution. The user
+  can explicitly create independent stages that do not require this restriction.
+- If the execution policy is `parallel`, a stage cannot impose any assumptions on which stages are applied before in
+  another `IJ` plane.
+- If the execution policy is `forward`, it is guaranteed that if a stage is executed at index ``k`` then all stages of
+  the multistage were already applied to the same column with smaller ``k``. There is no guarantee that previous stages
+  of the multistage have not already been applied to the indices in the same column with larger ``k``.
+- If the execution policy is `backward`, it is guaranteed that if a stage is executed at index ``k`` then all stages of
+  the multistage were already applied to the same column with larger ``k``. Similarly, there is no guarantee that
+  previous stages of the multistage have not already been applied to the indices in the same column with smaller ``k``.
+
+
+----------------------------------
+Extended Compute Domain of a Stage
+----------------------------------
+
+For a clear specification of access restrictions, we need to introduce the concept of extended compute domains.
+
+If a stage is accessing neighbor grid points of field `a`, the computation will consume halo points at the boundary of the compute domain.
+In case field `a` was written in a previous stage of the same multi-stage, the compute domain of the first stage needs to be extended, such
+that the *extended compute domain* of the stage covers the extent of the read access in the later stage.
+
+-------------------
+Access restrictions
+-------------------
+
+The execution model imposes restrictions on how accessors can be evaluated. These restrictions are not checked by GridTools,
+violating these rules results in undefined behavior.
+
+Definitions:
+
+ - *Writing/reading to/from an accessor* is short for *writing/reading to/from a field through an accessor*.
+   Note that the same field could be bound to different accessors, though this is not recommended.
+
+- *Previous/later statement* is short for *previous/later statement in the same stage or any previous/later stage*.
+
+
+The following rules apply to accesses in stages *within the same multi-stage*:
+
+ 1. A stage may read from an accessor unconditionally, if the same accessor is never written to.
+
+ 2. Within a computation an accessor must be written only in a single stage. Within this stage, the accessor must not be read with an horizontal offset.
+
+ 3. A stage may write to an accessor, if there is no read from the same accessor in a previous statement. (Read without horizontal offsets after write is allowed.)
+
+ 4. A stage may read from an accessor and write to it in a later statement, if
+
+    a. all reads of this accessor are in stages where the compute domain is not extended;
+    b. all reads of this accessor are without offsets.
+
+    (Write after read only, if read is in non-extended stages and no offsets are used.)
+
+ 5. Temporaries are not restricted by 4, i.e. a stage may write to an accessor after read in a previous stage of the same accessor, unconditionally.
+    Restriction 2 still applies. Note that read before write is only useful, if the temporary was written in a previous multi-stage.
+
+.. note::
+
+   Higher level tools generating GridTools code, may choose to ignore rule 2 and use `stage_with_extent()` instead.
+
+--------------------------------
+Examples for Access Restrictions
+--------------------------------
+
+In the following we show only the statements inside a stage, correct extents (matching the offset in the accessors are assumed).
+All stages are assumed to be in the same multi-stage.
+
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(a()) = some_value;
+
+    // stage 1
+    eval(b()) = eval(a(i+1)); // ok, read after write
+
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(a()) = some_value;
+
+    // stage 1
+    eval(b()) = eval(a());
+    eval(c()) = some_value;
+
+    // stage 2
+    eval(d()) = eval(c(i+1)); // ok, read after write everywhere
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(b()) = eval(a());
+
+    // stage 1 (extended domain because of read from c in stage 2)
+    eval(a()) = some_value; // error, violating rule 4a
+    eval(c()) = some_value;
+
+    // stage 2
+    eval(d()) = eval(c(i+1));
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(b()) = eval(a(i+1));
+
+    // stage 1
+    eval(a()) = some_value; // error, violating rule 4b
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(b()) = eval(tmp(i+1));
+
+    // stage 1
+    eval(tmp()) = some_value; // ok, see rule 5, temporaries don't violate rule 4
+
+  .. code-block:: gridtools
+
+    // stage 0
+    eval(tmp_a()) = some_value;
+
+    // stage 1
+    eval(tmp_b()) = eval(tmp_a());
+
+    // stage 2
+    eval(tmp_a()) = some_other_value; // error, violating rule 2

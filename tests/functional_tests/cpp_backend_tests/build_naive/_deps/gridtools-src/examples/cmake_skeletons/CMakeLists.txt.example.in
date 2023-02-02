@@ -1,0 +1,50 @@
+# This is a GridTools example.
+# The important steps for compiling a GridTools application/library are numbered
+
+cmake_minimum_required(VERSION @CMAKE_MINIMUM_REQUIRED_VERSION@)
+
+# 1) GridTools needs the language CXX
+project(GridTools-examples LANGUAGES CXX)
+
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CUDA_EXTENSIONS OFF)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+# detect CUDA variant (Clang with CUDA support or NVCC)
+include(detect_features)
+detect_cuda_type(GT_CUDA_TYPE AUTO)
+
+if(GT_CUDA_TYPE STREQUAL "NVCC-CUDA")
+    # 2) Enable the CUDA language if you want to run your code on a CUDA-capable GPU.
+    #    This needs to be done before find_package(GridTools) to properly setup the GridTools targets for CUDA.
+    enable_language(CUDA)
+endif()
+
+# 3) Find the GridTools installation
+find_package(GridTools @GridTools_VERSION@ REQUIRED
+    HINTS @CMAKE_INSTALL_PREFIX@/lib/cmake/GridTools)
+
+enable_testing()
+
+set(EXAMPLES_SRCFILES @EXAMPLES_SRCFILES@)
+foreach(srcfile IN LISTS EXAMPLES_SRCFILES)
+    # one executable for each example in the list
+    add_executable(${srcfile}_cpu_ifirst ${srcfile}.cpp)
+    # 4) An executable/library using GridTools stencil needs to link to backend, here GridTools::stencil_cpu_ifirst
+    target_link_libraries(${srcfile}_cpu_ifirst GridTools::stencil_cpu_ifirst)
+    add_test(NAME ${srcfile}_cpu_ifirst COMMAND $<TARGET_FILE:${srcfile}_cpu_ifirst> 33 44 55)
+endforeach()
+
+if(TARGET GridTools::stencil_gpu)
+    set(EXAMPLE_CUDA_ARCH "@GT_CUDA_ARCH@" CACHE STRING "CUDA compute capability to be used for this example.")
+    foreach(srcfile IN LISTS EXAMPLES_SRCFILES)
+        add_executable(${srcfile}_gpu ${srcfile}.cpp)
+        # The executable links to the target GridTools::stencil_gpu
+        target_link_libraries(${srcfile}_gpu GridTools::stencil_gpu)
+        gridtools_setup_target(${srcfile}_gpu CUDA_ARCH ${EXAMPLE_CUDA_ARCH})
+        add_test(NAME ${srcfile}_gpu COMMAND $<TARGET_FILE:${srcfile}_gpu> 33 44 55)
+    endforeach()
+else()
+    message("A CUDA-capable compiler was found, but GridTools was installed without CUDA support. Skipping the CUDA example...")
+endif()

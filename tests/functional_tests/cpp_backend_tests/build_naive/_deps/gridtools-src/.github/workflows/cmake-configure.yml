@@ -1,0 +1,92 @@
+name: CMake-config
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  clang:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:clang-${{ matrix.version }}
+    strategy:
+        matrix:
+            version: [9, 10]
+            cuda-mode: [AUTO, Clang-CUDA, NVCC-CUDA]
+    steps:
+    - uses: actions/checkout@v2
+    - name: CMake version
+      run: |
+        cmake --version
+    - name: CMake configure expect success
+      if: contains(matrix.cuda-mode, 'AUTO')
+      run: >
+        mkdir build && cd build
+        && cmake .. -DGT_CLANG_CUDA_MODE=${{ matrix.cuda-mode }} > out.log
+        && cat out.log
+        && grep "GPU mode: NOTFOUND" out.log > /dev/null
+    - name: CMake configure expect failure
+      if: (!contains(matrix.cuda-mode, 'AUTO'))
+      run: |
+        mkdir build && cd build
+        if cmake .. -DGT_CLANG_CUDA_MODE=${{ matrix.cuda-mode }}; then
+            false
+        else
+            true
+        fi
+
+  clang-cuda:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:clang-${{ matrix.version }}-cuda-11
+    strategy:
+        matrix:
+            version: [11, 12]
+            cuda-mode: [AUTO, Clang-CUDA, NVCC-CUDA]
+    steps:
+    - uses: actions/checkout@v2
+    - name: CMake version
+      run: |
+        cmake --version
+    - name: CMake configure expect success
+      run: >
+        mkdir build && cd build
+        && cmake .. -DGT_CLANG_CUDA_MODE=${{ matrix.cuda-mode }} > out.log
+        && cat out.log
+        && export expected_mode=${{ matrix.cuda-mode }}
+        && if [ "$expected_mode" = "AUTO" ]; then export expected_mode="Clang-CUDA"; fi
+        && grep "GPU mode: $expected_mode" out.log > /dev/null
+
+  gcc:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:gcc-${{ matrix.version }}
+    strategy:
+        matrix:
+            version: [8, 9, 10, 11]
+    steps:
+    - uses: actions/checkout@v2
+    - name: CMake version
+      run: |
+        cmake --version
+    - name: CMake configure expect success
+      if: contains(matrix.cuda-mode, 'AUTO')
+      run: >
+        mkdir build && cd build
+        && cmake .. > out.log
+        && cat out.log
+        && grep "GPU mode: NOTFOUND" out.log > /dev/null
+
+  gcc-nvcc:
+    runs-on: ubuntu-latest
+    container: ghcr.io/gridtools/gridtools-base:gcc-10-cuda-11
+    steps:
+    - uses: actions/checkout@v2
+    - name: CMake version
+      run: |
+        cmake --version
+    - name: CMake configure expect success
+      run: >
+        mkdir build && cd build
+        && cmake .. > out.log
+        && cat out.log
+        && grep "GPU mode: NVCC-CUDA" out.log > /dev/null

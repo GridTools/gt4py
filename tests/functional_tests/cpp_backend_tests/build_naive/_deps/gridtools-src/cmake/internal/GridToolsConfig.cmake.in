@@ -1,0 +1,48 @@
+#[=======================================================================[.rst:
+
+GridToolsConfig
+---------------
+
+In case the compiler is Clang targeting CUDA, set ``GT_CLANG_CUDA_MODE`` to
+``AUTO`` (default), ``Clang-CUDA`` or ``NVCC-CUDA``. ``AUTO`` will use
+``Clang-CUDA`` if available.
+
+Targets
+^^^^^^^^^^^^^^^^
+
+Depending on the available dependencies (OpenMP, MPI, CUDA) a set of targets is
+exported. A configuration summary will be printed in case of successfully
+detecting GridTools.
+
+#]=======================================================================]
+
+set(GridTools_VERSION @GridTools_VERSION@)
+
+@PACKAGE_INIT@
+
+get_filename_component(GRIDTOOLS_CONFIG_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+# Only setup targets, if GridTools was not already included with a add_subdirectory/FetchContent
+if(NOT @PROJECT_NAME@_BINARY_DIR AND NOT TARGET GridTools::gridtools)
+    include(CMakeFindDependencyMacro)
+    find_dependency(Boost @REQUIRED_BOOST_VERSION@)
+
+    include("${GRIDTOOLS_CONFIG_CMAKE_DIR}/GridToolsTargets.cmake" )
+
+    list(APPEND CMAKE_MODULE_PATH @PACKAGE_GRIDTOOLS_MODULE_PATH@)
+    include(gridtools_setup_targets)
+
+    if(NOT DEFINED GT_CLANG_CUDA_MODE)
+        set(GT_CLANG_CUDA_MODE AUTO)
+    endif()
+    _gt_setup_targets(TRUE ${GT_CLANG_CUDA_MODE})
+else()
+    message(WARNING "find_package(GridTools) ignored, targets are already available.")
+endif()
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(GridTools REQUIRED_VARS GridTools_VERSION VERSION_VAR GridTools_VERSION)
+if(GridTools_FOUND)
+    find_package_message(GridTools "  at ${GRIDTOOLS_CONFIG_CMAKE_DIR}" "[${GRIDTOOLS_CONFIG_CMAKE_DIR}]")
+    _gt_print_configuration_summary()
+endif()

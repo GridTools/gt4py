@@ -1,0 +1,7 @@
+Advanced Functionality
+========================
+
+.. include:: stencil_functions.hrst
+.. include:: software_caches.hrst
+.. include:: expandable_parameters.hrst
+.. include:: global_accessor.hrst

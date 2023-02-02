@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Internal Documentation &mdash; GridTools 2.3.0 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/cscs.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Frequently Asked Questions" href="../faq/faq.html" />
+    <link rel="prev" title="Glossary" href="../glossary/glossary.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GridTools
+            <img src="../_static/logo.svg" class="logo" alt="Logo"/>
+          </a>
+              <div class="version">
+                2.3
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_manual/user_manual.html">User Manual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/glossary.html">Glossary</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Internal Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#indexing-algorithm-pointer-offset-computation">Indexing Algorithm (Pointer Offset Computation)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#old-indexing-approach">Old Indexing Approach</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#issues-regarding-temporaries">Issues Regarding Temporaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#base-pointer-change">Base Pointer Change</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multiple-temporaries-with-different-halo">Multiple Temporaries with Different Halo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#passing-huge-types-down-to-the-offset-computation">Passing Huge Types Down to the Offset Computation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#updated-indexing-algorithm">Updated Indexing Algorithm</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#data-dependence-analysis-in-gridtools">Data Dependence Analysis in GridTools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#a-very-simple-example">A very simple example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#a-more-complex-example">A more complex example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#catching-bad-dependencies">Catching bad dependencies</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#design-of-grid-topology-for-irregular-grids">Design of Grid Topology for Irregular Grids</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#unstructured-mesh">Unstructured Mesh</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#splitters">Splitters</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#introduction">Introduction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#interval-specific-do-methods">Interval Specific Do Methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#loop-interval-computation">Loop Interval Computation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#do-method-overloads">Do Method Overloads</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#do-method-lookup-map">Do Method Lookup Map</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#prototype">Prototype</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GridTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Internal Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/internal/internal.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="internal-documentation">
+<span id="internal"></span><h1>Internal Documentation<a class="headerlink" href="#internal-documentation" title="Permalink to this heading"></a></h1>
+<section id="indexing-algorithm-pointer-offset-computation">
+<h2>Indexing Algorithm (Pointer Offset Computation)<a class="headerlink" href="#indexing-algorithm-pointer-offset-computation" title="Permalink to this heading"></a></h2>
+<p>On the <cite>GridTools</cite> frontend side we are using <code class="docutils literal notranslate"><span class="pre">storage_info</span></code>, <code class="docutils literal notranslate"><span class="pre">data_store</span></code> and <code class="docutils literal notranslate"><span class="pre">data_view</span></code> objects when we deal with data.
+Once this information is passed to the <code class="docutils literal notranslate"><span class="pre">aggregator_type</span></code> and the <code class="docutils literal notranslate"><span class="pre">intermediate</span></code> the information how to access the different
+fields is extracted. This means we extract the raw pointers to the data from the <code class="docutils literal notranslate"><span class="pre">data_store</span></code> objects and the stride
+information is from the <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> objects. The pointers and the strides information are stored in the <code class="docutils literal notranslate"><span class="pre">iterate_domain</span></code>.
+In order to save registers and not wasting resources different <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> instances with a matching ID parameter are
+treated as a single instance. This can be done because the contained stride information has to be the same if the ID is equal.
+<a class="reference internal" href="#fig-flow"><span class="std std-numref">Fig. 7</span></a> shows the storage flow from the frontend to the backend. In this example three data
+stores are created by the user, and two temporaries are created in the <code class="docutils literal notranslate"><span class="pre">intermediate</span></code>. The <code class="docutils literal notranslate"><span class="pre">intermediate</span></code> is extracting the needed
+information from the <code class="docutils literal notranslate"><span class="pre">data_store</span></code> and <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> objects and is feeding the backend with raw data pointers and stride information.</p>
+<figure class="align-default" id="id1">
+<span id="fig-flow"></span><img alt="../_images/flow.png" src="../_images/flow.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 7 </span><span class="caption-text">Transformations applied to storages while passing from frontend to backend.</span><a class="headerlink" href="#id1" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<section id="old-indexing-approach">
+<h3>Old Indexing Approach<a class="headerlink" href="#old-indexing-approach" title="Permalink to this heading"></a></h3>
+<p>As seen before the backend contains stride information and raw data pointers. Unfortunately this is not enough.
+The backend additionally has to store an offset (called index). The reason for this is that the compute domain is
+split up into several blocks. Each block is passed to a GPU streaming multiprocessor that contains several cores.
+Each core has to know its position within the block in order to compute at the right point. So additionally to the
+stride and pointer information that is shared per block an index is stored per core. <a class="reference internal" href="#fig-block-contents"><span class="std std-numref">Fig. 8</span></a>
+shows the contents of two independent blocks. As visible the stride and pointer information is the same but the index is different for each
+thread.</p>
+<figure class="align-default" id="id2">
+<span id="fig-block-contents"></span><img alt="../_images/block_contents.png" src="../_images/block_contents.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 8 </span><span class="caption-text">Old <cite>GridTools</cite> indexing approach.</span><a class="headerlink" href="#id2" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>The index is computed as follows. If there is no <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> the index will be</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\begin{align} i &amp;= (block\_id\_x * block\_size\_x + thread\_id\_x) * stride\_i \\\\ &amp;+ (block\_id\_y * block\_size\_y + thread\_id\_y) * stride\_j \end{align}\end{split}\]</div>
+<p>In case of a <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> the index is shifted into the right direction (like visible in <a class="reference internal" href="#fig-block-contents"><span class="std std-numref">Fig. 8</span></a>).</p>
+</section>
+<section id="issues-regarding-temporaries">
+<h3>Issues Regarding Temporaries<a class="headerlink" href="#issues-regarding-temporaries" title="Permalink to this heading"></a></h3>
+<p>Temporary storages share the same <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> because they all have the same size. The problem with temporaries is that
+computations in the <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> region have to be redundant because we don’t know when the data will be available. To solve the
+problem with redundant computations the temporary storages, that are allocated in the <code class="docutils literal notranslate"><span class="pre">intermediate</span></code>, are extended by a certain
+number of elements. The size of the CUDA block is known beforehand and also the size of the <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> and the number of blocks/threads
+is known. With this information an extended temporary storage can be instantiated. For performance reasons we want the first
+non-<a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> data point of each block to be in an aligned memory position. Therefore we add a certain number of padding elements between
+the blocks. <a class="reference internal" href="#fig-temporary"><span class="std std-numref">Fig. 9</span></a> compares the non-aligned versus the aligned storages. The green dots
+are marking the <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> points. It can be seen that each block has its own <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> region. The blue squares are padding elements and the yellow
+squares are data points. As visible on the right part of the drawing the first data point should be in an aligned memory position.
+In order to achieve this padding elements are added between the blocks.</p>
+<figure class="align-default" id="id3">
+<span id="fig-temporary"></span><img alt="../_images/temporary.png" src="../_images/temporary.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 9 </span><span class="caption-text">Alignment issues on temporary storages.</span><a class="headerlink" href="#id3" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="base-pointer-change">
+<h3>Base Pointer Change<a class="headerlink" href="#base-pointer-change" title="Permalink to this heading"></a></h3>
+<p>When the aligned temporary improvement was introduced the logic in the
+backend was slightly  changed. As shown before the  backend contains a
+pointer to each  of the <code class="docutils literal notranslate"><span class="pre">storage</span></code>. In combination with  an index the
+cuda thread  can identify its  compute position. When  temporaries are
+used one cannot just simply use a base pointer for all the cuda blocks
+and just  multiply the current  block index  with the block  size like
+shown in  the formula above. The  base pointer has to  be computed per
+block. So each block contains a pointer to its own temporary storage.
+See <a class="reference internal" href="#fig-temporary-block-contents"><span class="std std-numref">Fig. 10</span></a>.</p>
+<figure class="align-default" id="id4">
+<span id="fig-temporary-block-contents"></span><img alt="../_images/temporary_block_contents.png" src="../_images/temporary_block_contents.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 10 </span><span class="caption-text">Per-block private base pointers.</span><a class="headerlink" href="#id4" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>There is no difference in resource consumption when using the changed base pointer approach. It was mainly introduced for
+convenience and in order to smoothly integrate the aligned temporary block improvement.</p>
+</section>
+<section id="multiple-temporaries-with-different-halo">
+<h3>Multiple Temporaries with Different Halo<a class="headerlink" href="#multiple-temporaries-with-different-halo" title="Permalink to this heading"></a></h3>
+<p>Formerly <cite>GridTools</cite> used one <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> per temporary storage. This is convenient but consumes more resources than needed.
+Therefore it was replaced by the more resource efficient &quot;one <code class="docutils literal notranslate"><span class="pre">storage_info</span></code> for all temporaries&quot; solution.
+The temporaries are all having the same size. So the stride information can be shared in the backend. The only problem occurs
+when different temporaries (with the same size, as mentioned before) are accessing different <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halos</span></a>. The base pointer is set
+correctly only for the temporary that is using the maximum <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a>. All the other temporaries are unaligned by $max_halo - used_halo$
+points. This happens for instance when computing the horizontal diffusion. The flx and fly temporaries use different <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halos</span></a>. In this case
+the temporary written in the flx stage will be properly aligned because it is accessing the maximum <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> in the aligned direction (x direction). The second temporary written in the fly stage will be unaligned because it does not use the <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> points in x-direction. In order to fix this alignment mistake
+the missing offset is added when setting the base pointer. The information that is passed to the algorithm that extracts the base pointer knows about
+the used <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> of each <code class="docutils literal notranslate"><span class="pre">storage</span></code> and also the maximum <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> in the alinged direction. A value of $max_halo - used_halo$ is added to each base pointer.</p>
+</section>
+<section id="passing-huge-types-down-to-the-offset-computation">
+<h3>Passing Huge Types Down to the Offset Computation<a class="headerlink" href="#passing-huge-types-down-to-the-offset-computation" title="Permalink to this heading"></a></h3>
+<p>In order to fix the alignment when using different <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halos</span></a> we have to pass a lot of type information from the <code class="docutils literal notranslate"><span class="pre">intermediate</span></code> down to the backend. This is exhaustive for the compiler and the performance suffers. This could lead to problems, especially when trying to compile computations with many stages and
+a high number of fields.</p>
+</section>
+<section id="updated-indexing-algorithm">
+<h3>Updated Indexing Algorithm<a class="headerlink" href="#updated-indexing-algorithm" title="Permalink to this heading"></a></h3>
+<p>The new indexing approach tries to avoid the strategy of setting the base pointer to the first point of the block. The new approach is to set the
+pointer to the first non-<a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> point of the block. The method that is setting the index of each cuda thread has to be modified. <a class="reference internal" href="#fig-new-temporary-block-contents"><span class="std std-numref">Fig. 11</span></a> shows the new indexing. As shown, the first non <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> point is used as base pointer. The index
+is also modified in order to point to the correct data location.</p>
+<figure class="align-default" id="id5">
+<span id="fig-new-temporary-block-contents"></span><img alt="../_images/new_temporary_block_contents.png" src="../_images/new_temporary_block_contents.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 11 </span><span class="caption-text">Per-block private base pointers to first non-<a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a> point of the block.</span><a class="headerlink" href="#id5" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+<section id="data-dependence-analysis-in-gridtools">
+<h2>Data Dependence Analysis in GridTools<a class="headerlink" href="#data-dependence-analysis-in-gridtools" title="Permalink to this heading"></a></h2>
+<p>(copied from the wiki)</p>
+<p>A multistage stencil is a sequence of stages.
+Each stage is (basically) made of a stencil operator and a list of placeholders.
+Each placeholders is associated to the arguments in the param_list of the stencil operator positionally,
+that is, as it would happen if the placeholders were passed to the stencil operator according to the param_list.
+The param_list lists accessors, and each accessor have an extent. Each accessor has also an intent,
+which represents the use the stencil operator is going to make of the data, either read-only or read-write.</p>
+<p>So, given a stage we can associate to each placeholder an extent and an intent, simply by scanning the accessors in the param_list of the stage.</p>
+<p>Consider the last stage in a multistage computation. This will have one (or more) output accessors in the param_list of the stencil operator,
+so one (or more) placeholders in the list. This output will be computed by accessing the inputs within the extents that are specified in the corresponding accessors.
+Now, let’s move to the stage just before that.
+Some of its inputs may be used by the last stage as inputs.
+This means that those outputs must be computed in a set of points that will be consumed by the next stage.</p>
+<section id="a-very-simple-example">
+<h3>A very simple example<a class="headerlink" href="#a-very-simple-example" title="Permalink to this heading"></a></h3>
+<p>Let us consider an example (in 1D for simplicity). Suppose we have the following concatenation of stages,
+where we write at the left the outputs and on the right, with an associated extent, are the inputs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">&lt;-</span> <span class="n">f0</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">d</span> <span class="o">&lt;-</span> <span class="n">f1</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">e</span> <span class="o">&lt;-</span> <span class="n">f2</span><span class="p">(</span><span class="n">a</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">d</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We call the arguments placeholders, to be closer to the <cite>GridTools</cite> algorithm. We have 5 placeholders and we start with an initial map such as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Now we visit our sequence of stages from the last to the first.
+The last computes <code class="docutils literal notranslate"><span class="pre">e</span></code> and then needs <code class="docutils literal notranslate"><span class="pre">a</span></code>, <code class="docutils literal notranslate"><span class="pre">d</span></code>, and <code class="docutils literal notranslate"><span class="pre">c</span></code> in different extents. We update the map as follow:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Next we examine <code class="docutils literal notranslate"><span class="pre">f1</span></code>. It writes <code class="docutils literal notranslate"><span class="pre">d</span></code>, and since <code class="docutils literal notranslate"><span class="pre">d</span></code> is needed in an interval <code class="docutils literal notranslate"><span class="pre">&lt;-2,2&gt;</span></code> by <code class="docutils literal notranslate"><span class="pre">f2</span></code>,
+we need to update it’s inputs that need now to be read at an extent that is <code class="docutils literal notranslate"><span class="pre">&lt;-2,2&gt;</span> <span class="pre">+</span> <span class="pre">&lt;x,y&gt;</span></code>, where <code class="docutils literal notranslate"><span class="pre">&lt;x,y&gt;</span></code> is the extent of an input and the <code class="docutils literal notranslate"><span class="pre">+</span></code> operation corresponds to the following operation: <code class="docutils literal notranslate"><span class="pre">&lt;x,y&gt;</span> <span class="pre">+</span> <span class="pre">&lt;u,v&gt;</span> <span class="pre">=</span> <span class="pre">&lt;x+u,</span> <span class="pre">y+v&gt;</span></code>. If the extent needed for the inputs are smaller than the one contained in the map already, we do not update the map, since the needed values are already there. We do it by using the <code class="docutils literal notranslate"><span class="pre">mee</span></code> function that returns the minimum enclosing extent of two extents. So now we update the map as follow:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Now to the last stage to examine: <code class="docutils literal notranslate"><span class="pre">f0</span></code>. It writes <code class="docutils literal notranslate"><span class="pre">a</span></code> and needs <code class="docutils literal notranslate"><span class="pre">b&lt;-1,2&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">c&lt;0,1&gt;</span></code>. According the the map, <code class="docutils literal notranslate"><span class="pre">a</span></code> is needed in <code class="docutils literal notranslate"><span class="pre">&lt;-1,2&gt;</span></code> so</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>The fields <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">d</span></code> are written and the read. They are eligible to be temporary fields. <code class="docutils literal notranslate"><span class="pre">b</span></code> and <code class="docutils literal notranslate"><span class="pre">c</span></code> are inputs,
+and they are needed in <code class="docutils literal notranslate"><span class="pre">&lt;-4,3&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;-3,4&gt;</span></code> respectively. So the number of “halos” around them should be appropriate to avoid access violations.
+The field <code class="docutils literal notranslate"><span class="pre">e</span></code> is the output and it’s written in a single point.</p>
+<p>If we compute <code class="docutils literal notranslate"><span class="pre">f2</span></code> in a point, we need to compute <code class="docutils literal notranslate"><span class="pre">f1</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-2,2&gt;</span></code>, since this will produce the values needed by <code class="docutils literal notranslate"><span class="pre">f2</span></code>.
+We then need to compute <code class="docutils literal notranslate"><span class="pre">f0</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-1,2&gt;</span></code> to produce the values needed for <code class="docutils literal notranslate"><span class="pre">a</span></code>.</p>
+</section>
+<section id="a-more-complex-example">
+<h3>A more complex example<a class="headerlink" href="#a-more-complex-example" title="Permalink to this heading"></a></h3>
+<p>The next example is very similar to the previous one, but now the second stage uses <code class="docutils literal notranslate"><span class="pre">a</span></code> instead of <code class="docutils literal notranslate"><span class="pre">c</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">&lt;-</span> <span class="n">f0</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">d</span> <span class="o">&lt;-</span> <span class="n">f1</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">a</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">e</span> <span class="o">&lt;-</span> <span class="n">f2</span><span class="p">(</span><span class="n">a</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">d</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The map, then, after examining <code class="docutils literal notranslate"><span class="pre">f2</span></code> is as before</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>When we examine <code class="docutils literal notranslate"><span class="pre">f1</span></code>, however, the extents become:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;+&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>When we move to <code class="docutils literal notranslate"><span class="pre">f0</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;+&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">5</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>So, now, to compute <code class="docutils literal notranslate"><span class="pre">f2</span></code> in a point we need to compute <code class="docutils literal notranslate"><span class="pre">f1</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-2,2&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">f0</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-3,4&gt;</span></code>. Note that, when <code class="docutils literal notranslate"><span class="pre">f2</span></code> access <code class="docutils literal notranslate"><span class="pre">a</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-1,</span> <span class="pre">2&gt;</span></code>,
+those values have been computed in abundance to allow the computation of <code class="docutils literal notranslate"><span class="pre">f1</span></code>.</p>
+</section>
+<section id="catching-bad-dependencies">
+<h3>Catching bad dependencies<a class="headerlink" href="#catching-bad-dependencies" title="Permalink to this heading"></a></h3>
+<p>Let’s consider another variation on the same example. Now <code class="docutils literal notranslate"><span class="pre">f1</span></code> writes into <code class="docutils literal notranslate"><span class="pre">c</span></code>, and <code class="docutils literal notranslate"><span class="pre">d</span></code> becomes an input.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">&lt;-</span> <span class="n">f0</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">c</span> <span class="o">&lt;-</span> <span class="n">f1</span><span class="p">(</span><span class="n">b</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">a</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="n">e</span> <span class="o">&lt;-</span> <span class="n">f2</span><span class="p">(</span><span class="n">a</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">d</span><span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">c</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As before the map after examining <code class="docutils literal notranslate"><span class="pre">f2</span></code> is</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>When we analyze <code class="docutils literal notranslate"><span class="pre">f1</span></code> we have</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;+&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>And then <code class="docutils literal notranslate"><span class="pre">f0</span></code></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;</span>
+<span class="n">b</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;+&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">c</span> <span class="o">-&gt;</span> <span class="n">mee</span><span class="p">(</span><span class="o">&lt;-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">,</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="o">&gt;+&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">=</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="o">&gt;</span>
+<span class="n">d</span> <span class="o">-&gt;</span> <span class="o">&lt;-</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="o">&gt;</span>
+<span class="n">e</span> <span class="o">-&gt;</span> <span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>But now we have a problem, if we apply the previous strateg. <code class="docutils literal notranslate"><span class="pre">f1</span></code> is computed to compute <code class="docutils literal notranslate"><span class="pre">c</span></code> in <code class="docutils literal notranslate"><span class="pre">&lt;-2,4&gt;</span></code>,
+the extent associated by the map. A next element of the output would then read the modified values of <code class="docutils literal notranslate"><span class="pre">c</span></code> and
+this is probably wrong. We need to catch this as a problem.
+We cannot write into a field that is accessed in an extent different than <code class="docutils literal notranslate"><span class="pre">&lt;0,0&gt;</span></code> in a previous stage.
+We need a check for this, but it is not yet implemented.</p>
+</section>
+</section>
+<section id="design-of-grid-topology-for-irregular-grids">
+<h2>Design of Grid Topology for Irregular Grids<a class="headerlink" href="#design-of-grid-topology-for-irregular-grids" title="Permalink to this heading"></a></h2>
+<p>The <cite>GridTopology</cite> concept provides:</p>
+<ol class="arabic simple">
+<li><p>Connectivity information to neighbours in the same and different <cite>LocationType</cite>’s.</p></li>
+<li><p>Storage maker functionality</p></li>
+</ol>
+<p>The icosahedral <cite>grid</cite> class requires a class, as a template parameter, that implements a <cite>GridTopology</cite></p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Axis</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">GridTopology</span><span class="o">&gt;</span><span class="w"></span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">grid</span><span class="w"></span>
+</pre></div>
+</div>
+<p>and can be constructed additionally with a runtime instance of the <cite>GridTopology</cite>, depending on whether
+the concrete implementation of that <cite>GridTopology</cite> requires runtime connectivity information.</p>
+<p>Currently there are two concrete implementations of the <cite>GridTopology</cite>:</p>
+<p>1. The <cite>icosahedral_topology</cite> provides connectivity information at compile time, for icosahedral/octahedral grid layouts where all
+the connectivity information can be derived at compiled time from the parallelogram structures based on simple stride rules.</p>
+<p>An example of such structured index layout of the icosahedral grid parallelograms is shown in <a class="reference internal" href="#fig-ico-indices"><span class="std std-numref">Fig. 12</span></a>,
+where the parallelogram can be indexed with three coordinates <cite>i</cite> and <cite>j</cite> and a color that identifies downward/upward triangles.
+This particular data layout assumes an order in the dimensions like i-c-j (being <cite>i</cite> the stride - 1 dimension).
+As an example, the cell with index 14, can be accessed with <cite>{i, c, j}</cite> coordinates <cite>{2, 0, 1}</cite>.
+A similar scheme of indexing for <cite>edges</cite>, and <cite>vertices</cite> is developed.
+All neighbour indexes of any cell/edge/vertex as well as connectivity to different <cite>LocationType</cite> can be express with simple
+offset rules.</p>
+<p>For example, the neighbor indices of any cell can be computed with the following rules:</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="p">{{</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">}}</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">downward</span><span class="w"> </span><span class="n">triangle</span><span class="w"> </span><span class="p">(</span><span class="n">color</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span><span class="w"></span>
+<span class="p">{{</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">}}</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">upward</span><span class="w"> </span><span class="n">triangle</span><span class="w"></span>
+</pre></div>
+</div>
+<p>Similar rules are derived for connectivities among different location types.</p>
+<figure class="align-default" id="ico-indices">
+<span id="fig-ico-indices"></span><a class="reference internal image-reference" href="../_images/ico_indices.png"><img alt="../_images/ico_indices.png" src="../_images/ico_indices.png" style="width: 588.8000000000001px; height: 341.40000000000003px;" /></a>
+<figcaption>
+<p><span class="caption-number">Fig. 12 </span><span class="caption-text">Structured index layout for icosahedral grid</span><a class="headerlink" href="#ico-indices" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>Since all offset rules are based on the structured of the icosahedral parallelograms, and do not depend
+on a particular runtime instance of the grid topology, they are derived at compile time.
+These offsets rules can be extracted using the connectivity class API</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">SrcLocation</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">DestLocation</span><span class="p">,</span><span class="w"> </span><span class="n">uint_t</span><span class="w"> </span><span class="n">Color</span><span class="o">&gt;</span><span class="w"></span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">connectivity</span><span class="w"></span>
+</pre></div>
+</div>
+<p>For the icosahedral grid, the connectivity tables give access to the following 9 type of queries, depending on the <cite>from</cite> and <cite>to</cite> location types. See <a class="reference internal" href="#fig-location-type-opr"><span class="std std-numref">Fig. 13</span></a>.</p>
+<figure class="align-default" id="id6">
+<span id="fig-location-type-opr"></span><a class="reference internal image-reference" href="../_images/location_type_opr.png"><img alt="../_images/location_type_opr.png" src="../_images/location_type_opr.png" style="width: 654.6px; height: 467.4px;" /></a>
+<figcaption>
+<p><span class="caption-number">Fig. 13 </span><span class="caption-text">All possible connectivity queries in an icosahedral grid.</span><a class="headerlink" href="#id6" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Depending on the location type, there are different number of neighbour indices. For example <cite>from&lt;cell&gt;::to&lt;edge&gt;</cite> will return a tuple of three
+edge indices. The order of those neighbours, is part of the API and is defined based on physical meaning of PDE operators.</p>
+</div>
+<p>2. The <cite>unstructured_mesh</cite> implements a <cite>GridTopology</cite> for grid layouts without a clear structure, and therefore runtime lookup tables
+need to be used in order to define connectivities between the different <cite>LocationTypes</cite>.</p>
+<p>Since the connectivity information is stored as lookup tables, the <cite>unstructured_mesh</cite> needs to accept in the ctr an Atlas mesh object,
+that contains all the necessary lookup tables.
+All 9 lookup tables are then stored in two type of (atlas data structure) tables: MultiBlockConnectivity and IrregularConnectivity.
+The main difference is that the connectivity described with a MultiBlockConnectivity shows a uniform number of neighbours for each entry in the table,
+while in the IrregularConnectivity, each entry can have a different number of neighbours.</p>
+<section id="unstructured-mesh">
+<h3>Unstructured Mesh<a class="headerlink" href="#unstructured-mesh" title="Permalink to this heading"></a></h3>
+<p>The <cite>grid</cite> concept has a <cite>GridTopology</cite> type, that can be of two classes (as described above).
+Additionally for the types of <cite>GridTopology</cite> that require a runtime information with the connectivity tables,
+the <cite>grid</cite> also has an <cite>unstructured mesh</cite> instance of type</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="n">unstructured_mesh_t</span><span class="w"> </span><span class="o">=</span><span class="w"></span>
+<span class="w">  </span><span class="k">typename</span><span class="w"> </span><span class="nc">boost</span><span class="o">::</span><span class="n">mpl</span><span class="o">::</span><span class="n">if_c</span><span class="o">&lt;</span><span class="n">is_unstructured_mesh</span><span class="o">&lt;</span><span class="n">GridTopology</span><span class="o">&gt;::</span><span class="n">value</span><span class="p">,</span><span class="w"> </span><span class="n">GridTopology</span><span class="p">,</span><span class="w"> </span><span class="n">empty</span><span class="o">&gt;::</span><span class="n">type</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+</div>
+<p>In case of having a <cite>GridTopology</cite> of <cite>icosahedral_topology</cite> the instance that gets instantiated is an empty class.</p>
+<p>Later this <cite>unstructured_mesh</cite> will be passed to the <cite>iterate_domain</cite> that requires the connectivity information.</p>
+</section>
+</section>
+<section id="splitters">
+<h2>Splitters<a class="headerlink" href="#splitters" title="Permalink to this heading"></a></h2>
+<section id="introduction">
+<h3>Introduction<a class="headerlink" href="#introduction" title="Permalink to this heading"></a></h3>
+<p>This document introduces a prototype code used for the development of a new
+stencil library. The prototype is based on an interval concept, which allows
+the library user to split an axis of the stencil application domain into
+arbitrary intervals. Using these intervals it shall be possible to define
+interval specific stencil update functions. The prototype uses splitters in
+order to sub-divide an axis. Splitters are ordered positions defined at
+compile-time. Note that splitters only define an order but not yet an absolute
+position. At runtime the splitters are placed at an absolute position, in
+between two axis positions. Due to this staggered placement it is easier to
+define loop direction independent intervals. Given the splitters we define
+levels, which specify a position at an offset relative to a splitter. The
+offset is a small positive or negative integral value limited by a predefined
+maximum, e.g. 3. The zero offset is undefined as the splitters are not placed
+in between two axis positions. Given two levels we define closed intervals,
+which specify a loop direction independent range on the axis. See Figure 1 for
+an example interval definition. Note that intervals are always defined in axis
+direction, meaning the “from level” is placed before the “to level” in axis
+direction.</p>
+<figure class="align-default" id="id7">
+<img alt="../_images/splitters_001.png" src="../_images/splitters_001.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 14 </span><span class="caption-text">Splitters, levels and intervals</span><a class="headerlink" href="#id7" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>Figure 1 shows an axis divided by three splitters and an interval spanning the
+range [5, 15]. Note that there are <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">*</span> <span class="pre">(N-1)</span> <span class="pre">/</span> <span class="pre">2</span></code> intervals with N being the
+total number of levels. In order to simplify the implementation the prototype
+internally represents all levels using a unique integer index. Given a level
+(splitter and offset) we can compute an index as splitter times number of offsets
+per splitter plus offset index. The offset index is defined by a mapping of the offset
+values in a positive and continuous range, i.e. the offsets [-2, -1, 1, 2] are
+mapped to the offset indexes [0, 1, 2, 3]. Given an index we can compute a level
+by dividing the index by the number of offsets per splitter. The result corresponds
+to the level splitter while the remainder corresponds to the offset
+index which can be mapped back to a level offset.</p>
+<p>Note that the FunctorDoMethods.cpp for test purposes converts an integer range
+into levels and back into indexes resulting in the following output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Index</span><span class="p">:</span> <span class="mi">0</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">1</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">2</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">3</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">4</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">5</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">6</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">7</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">8</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">9</span>        <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">10</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">11</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">12</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">13</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">14</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">15</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">16</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">17</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">18</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="o">-</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Index</span><span class="p">:</span> <span class="mi">19</span>       <span class="n">Level</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="interval-specific-do-methods">
+<h3>Interval Specific Do Methods<a class="headerlink" href="#interval-specific-do-methods" title="Permalink to this heading"></a></h3>
+<p>The stencil library user will define its update functions using functor objects
+with interval specific Do methods. The Do method overloads allow defining an
+interval specific update function for certain sub domains:</p>
+<figure class="align-default" id="id8">
+<img alt="../_images/splitters_002.png" src="../_images/splitters_002.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 15 </span><span class="caption-text">Functors with interval specific Do method overloads</span><a class="headerlink" href="#id8" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>Note that the functors in the listing define Do method overloads for boundary
+levels as well as for larger axis sub domains. In order to avoid
+inconsistencies we define the following rules: - The Do method intervals shall
+not overlap - The Do method intervals shall be continuous, i.e. gaps are not
+allowed As the Do method overloads are continuous we can use them in order to
+compute the loop bounds. Essentially we want to loop from the first Do method
+interval “from level” to the last Do method interval “to level”.</p>
+</section>
+<section id="loop-interval-computation">
+<h3>Loop Interval Computation<a class="headerlink" href="#loop-interval-computation" title="Permalink to this heading"></a></h3>
+<p>Given one or more functors the loop interval computation prepares the stencil
+library loop execution. Figure 2 illustrates the loop interval computation
+algorithm, which computes a list of maximal size loop intervals such that there
+is a unique set of Do method overloads per loop interval. Using these loop
+intervals the actual loop execution is a simple iteration over all intervals,
+executing a nested loop over all functors for each interval. Thanks to the loop
+interval definition we can work with the same set of Do method overloads on the
+full loop interval.</p>
+<figure class="align-default" id="id9">
+<img alt="../_images/splitters_003.png" src="../_images/splitters_003.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 16 </span><span class="caption-text">Loop interval computation algorithm (Do method overloads in black; computed loop intervals in red)</span><a class="headerlink" href="#id9" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>Note that the algorithm assumes that it is possible to query all Do method
+overloads of a functor. The loop interval computation performs the following
+steps: 1. Compute a Do method overload list for each functor 2. Compute a loop
+interval list using the functor Do method lists 3. Compute a vector of functor
+Do method overload pairs for every loop interval</p>
+</section>
+<section id="do-method-overloads">
+<h3>Do Method Overloads<a class="headerlink" href="#do-method-overloads" title="Permalink to this heading"></a></h3>
+<p>In order to compute a list of all functor Do method overloads, we iterate over
+all intervals and store the ones which have a corresponding functor Do method
+overload. Additionally we can check if the functor follows our rules, i.e. the
+intervals do not overlap. The Do method overload algorithm works on the
+following inputs: - Functor – Functor object - Axis – Maximal interval used for
+the Do method overload search The following pseudo code  implements the Do
+method overload algorithm:</p>
+<figure class="align-default" id="id10">
+<img alt="../_images/splitters_004.png" src="../_images/splitters_004.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 17 </span><span class="caption-text">Functor Do method overload algorithm</span><a class="headerlink" href="#id10" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>Searching all possible Do method intervals has complexity O(N2). Unfortunately
+we had to abandon this idea due to long compilation times. Therefore we
+introduced a hack which allows speeding up the search. It is based on the fact
+that the has_do implementation finds all Do methods of a functor which are
+callable taking overload resolution into account. Therefore we added a
+conversion constructor on the interval class which converts a from level into
+an interval. Due to this implicit conversion we can search for any interval
+starting at a given from level, using the existing has_do implementation. The
+only drawback is a nasty error message in case a functor defines multiple Do
+methods which start at the same from level. Currently we are not aware of a way
+to catch the error inside the library. In addition to the algorithm presented
+above the prototype introduces a number of checks. For instance Do methods are
+not allowed to start or end at the maximum or minimum offset values around a
+splitter. This boundary of unoccupied levels is used for the loop interval
+computation, i.e. the loop interval computation has to introduce new levels
+right before and after the Do methods. The other checks make sure the code
+complies with our rules that the Do method overloads shall be continuous. The
+following input-output pairs illustrate the algorithm:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Functor1, <code class="docutils literal notranslate"><span class="pre">Axis([0,-3],[4,+3])</span> <span class="pre">-&gt;</span> <span class="pre">Interval([0,1],[2,-1])</span></code></p></li>
+<li><p>Functor2, <code class="docutils literal notranslate"><span class="pre">Axis([0,-3],[4,-2])</span> <span class="pre">-&gt;</span> <span class="pre">Interval([0,1],[1,-1]),</span> <span class="pre">Interval([1,1],[4,-2])</span></code></p></li>
+<li><p>Functor2, <code class="docutils literal notranslate"><span class="pre">Axis([4,-1],[</span> <span class="pre">4,-1])</span> <span class="pre">-&gt;</span> <span class="pre">Interval([4,-1],[</span> <span class="pre">4,-1])</span></code></p></li>
+</ul>
+</div></blockquote>
+<p>## Loop Intervals The loop interval computation overlays all functor Do method
+intervals and splits them up into loop intervals. Every loop interval is a sub
+interval of exactly one functor Do method interval. For an illustration have a
+look at the red loop intervals in Figure 2. The loop interval computation works
+on the following inputs: - DoMethods – Vector containing a Do method vector for
+every functor - Axis – Maximal interval used for the Do method overload search
+The following pseudo code implements the loop interval computation algorithm:</p>
+<figure class="align-default" id="id11">
+<img alt="../_images/splitters_005.png" src="../_images/splitters_005.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 18 </span><span class="caption-text">Loop interval algorithm</span><a class="headerlink" href="#id11" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>The above algorithm uses a set instead of a sorted collection in order to store
+the relevant levels. Once the set is complete we convert it to a sorted
+collection via ordered iteration over all levels of the axis. Note that we work
+with the index level representation which allows us to easily go to the next or
+previous level using addition respectively subtraction. These operations are ok
+as we are sure our Do method from and to levels are not splitter boundary
+levels. It is important to introduce a sentinel level after the last Do method
+interval in order to properly compute the loop interval for the last Do method
+interval of a functor. Apart from that the loop interval computation is very
+smooth and there are no special cases to consider.</p>
+<figure class="align-default" id="id12">
+<img alt="../_images/splitters_006.png" src="../_images/splitters_006.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 19 </span><span class="caption-text">Loop interval computation  (note the read sentinel levels after the last functor do method)</span><a class="headerlink" href="#id12" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="do-method-lookup-map">
+<h3>Do Method Lookup Map<a class="headerlink" href="#do-method-lookup-map" title="Permalink to this heading"></a></h3>
+<p>The Do method lookup map computation creates a map which
+associates to every loop interval the matching Do method interval of a functor.
+We compute such a map for every functor, which later on helps us to compute
+on-the-fly the matching Do method overloads given a loop interval. The Do
+method lookup map computation works on the following inputs: - DoMethods – Do
+method vector containing all Do methods of a functor - LoopIntervals – List
+containing all loop intervals The following pseudo code implements the Do
+method lookup map computation:</p>
+<figure class="align-default" id="id13">
+<img alt="../_images/splitters_007.png" src="../_images/splitters_007.png" />
+<figcaption>
+<p><span class="caption-number">Fig. 20 </span><span class="caption-text">Do method lookup map algorithm</span><a class="headerlink" href="#id13" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>The algorithm iterates over loop intervals and Do method intervals at the same
+time, creating a mapping between loop intervals and Do method intervals.
+Usually the Do method intervals span a larger domain than the loop intervals.
+Therefore the mapping is not 1:1.</p>
+</section>
+<section id="prototype">
+<h3>Prototype<a class="headerlink" href="#prototype" title="Permalink to this heading"></a></h3>
+<p>The interval prototype code implements the algorithms discussed in
+chapter 3. The main logic is implemented by the following three files:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>FunctorDoMethods.h</p></li>
+<li><p>LoopIntervals.h</p></li>
+<li><p>FunctorDoMethodLookupMaps.h</p></li>
+</ul>
+</div></blockquote>
+<p>For every file there is a separate
+test program, while the <code class="docutils literal notranslate"><span class="pre">main.cpp</span></code> runs the full algorithm. Using boost
+for_each the test code iterates over all loop intervals and calls the matching
+functor do method overloads:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Run Functor0, Functor1 and Functor2:
+        -&gt; Loop (0,1) - (1,-1)
+                -&gt; Functor1:Do(Interval&lt;Level&lt;0,1&gt;, Level&lt;2,-1&gt; &gt;) called
+                -&gt; Functor2:Do(Interval&lt;Level&lt;0,1&gt;, Level&lt;1,-1&gt; &gt;) called
+        -&gt; Loop (1,1) - (2,-1)
+                -&gt; Functor1:Do(Interval&lt;Level&lt;0,1&gt;, Level&lt;2,-1&gt; &gt;) called
+                -&gt; Functor2:Do(Interval&lt;Level&lt;1,1&gt;, Level&lt;3,-1&gt; &gt;) called
+        -&gt; Loop (2,1) - (3,-2)
+                -&gt; Functor2:Do(Interval&lt;Level&lt;1,1&gt;, Level&lt;3,-1&gt; &gt;) called
+        -&gt; Loop (3,-1) - (3,-1)
+                -&gt; Functor0:Do(Interval&lt;Level&lt;3,-1&gt;, Level&lt;3,-1&gt; &gt;) called
+                -&gt; Functor2:Do(Interval&lt;Level&lt;1,1&gt;, Level&lt;3,-1&gt; &gt;) called
+Done!
+</pre></div>
+</div>
+<p>Note that the prototype works with vectors storing the main information: -
+<code class="docutils literal notranslate"><span class="pre">Functors</span></code> – Vector storing all functors - <code class="docutils literal notranslate"><span class="pre">FunctorDoMethods</span></code> – Vector storing
+a vector of Do methods for every functor - <code class="docutils literal notranslate"><span class="pre">FunctorDoMethodLookupMaps</span></code> – Vector
+storing a do method lookup map for every functor - LoopIntervals – Vector
+storing all loop intervals Note that the <code class="docutils literal notranslate"><span class="pre">Functors</span></code>, <code class="docutils literal notranslate"><span class="pre">FunctorDoMethods</span></code> and
+<code class="docutils literal notranslate"><span class="pre">FunctorDoMethodLookupMaps</span></code> vectors are ordered identically, i.e. if we want to
+combine all information for a specific functor we can do this by accessing the
+same vector indexes.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../glossary/glossary.html" class="btn btn-neutral float-left" title="Glossary" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../faq/faq.html" class="btn btn-neutral float-right" title="Frequently Asked Questions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

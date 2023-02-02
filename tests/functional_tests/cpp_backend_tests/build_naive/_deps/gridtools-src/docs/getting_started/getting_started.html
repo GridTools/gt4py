@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Getting Started &mdash; GridTools 2.3.0 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/cscs.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="User Manual" href="../user_manual/user_manual.html" />
+    <link rel="prev" title="Introduction" href="../introduction/introduction.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> GridTools
+            <img src="../_static/logo.svg" class="logo" alt="Logo"/>
+          </a>
+              <div class="version">
+                2.3
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#coordinate-system">Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#storages">Storages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#storage-traits">Storage Traits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-storages">Building Storages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#stencils">Stencils</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example-naive-2d-laplacian">Example: Naive 2D Laplacian</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#first-gridtools-stencil">First GridTools Stencil</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#update-logic-gridtools-2d-laplacian">Update-logic: GridTools 2D Laplacian</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#calling-the-stencil">Calling the Stencil</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#full-gridtools-laplacian">Full GridTools Laplacian</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#assembling-stencils-smoothing-filter">Assembling Stencils: Smoothing Filter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#apply-method-overload"><cite>apply</cite>-method overload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gt-temporaries"><cite>GridTools</cite> Temporaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functor-calls">Functor Calls</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user_manual/user_manual.html">User Manual</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/internal.html">Internal Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/faq.html">Frequently Asked Questions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">GridTools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Getting Started</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/getting_started/getting_started.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="getting-started">
+<span id="id1"></span><h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading"></a></h1>
+<p>This chapter describes how to use <cite>GridTools</cite> to solve a (simple) PDE.
+We will use a fourth-order horizontal smoothing filter
+to explain the necessary steps to assemble a
+stencil from scratch. We will not go into details in this chapter but
+refer to later chapters for more details.</p>
+<p>Our example PDE is given by</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{\partial \phi}{\partial t} =\begin{cases}
+- \alpha \nabla^4 \phi &amp; z \leq z_\text{0}\\
+0 &amp; z &gt; z_0
+\end{cases}\end{split}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\nabla^4\)</span> is the squared two dimensional horizontal
+Laplacian and we apply the filter only up to some maximal <span class="math notranslate nohighlight">\(z_0\)</span> (to make
+the example more interesting). The filter is calculated in two steps:
+first we calculate the Laplacian of <span class="math notranslate nohighlight">\(\phi\)</span></p>
+<div class="math notranslate nohighlight">
+\[L = \Delta \phi = \left( \frac{\partial^2}{\partial x^2} + \frac{\partial^2}{\partial y^2}\right) \phi\]</div>
+<p>then we calculate the Laplacian of <span class="math notranslate nohighlight">\(L\)</span> as <span class="math notranslate nohighlight">\(-\alpha \nabla^4 \phi = -\alpha  \Delta L\)</span>.</p>
+<p>In the following we will walk through the following steps:</p>
+<ul class="simple">
+<li><p>The <cite>GridTools</cite> coordinate system and its notation.</p></li>
+<li><p>Storages: how does <cite>GridTools</cite> manage the input and output fields.</p></li>
+<li><p>The first stencil: calculating <span class="math notranslate nohighlight">\(L\)</span>, the second order Laplacian of <span class="math notranslate nohighlight">\(\phi\)</span>.</p></li>
+<li><p>The final stencil: function calls, apply-method overloads and temporaries</p></li>
+</ul>
+<section id="coordinate-system">
+<h2>Coordinate System<a class="headerlink" href="#coordinate-system" title="Permalink to this heading"></a></h2>
+<p>For a finite difference discretization we restrict the field
+<span class="math notranslate nohighlight">\(\phi \in \mathbb{R}^3\)</span> to a discrete grid. We use the notation
+<span class="math notranslate nohighlight">\(i = x_i\)</span> and <span class="math notranslate nohighlight">\(j = y_j\)</span> for the horizontal dimension and <span class="math notranslate nohighlight">\(k = z_k\)</span> for
+the vertical dimension, where <span class="math notranslate nohighlight">\(x_i, y_j, z_k\)</span> are the <span class="math notranslate nohighlight">\(x,y,z\)</span>
+coordinates restricted on the grid. The <em>computation domain</em> is defined
+by all grid points in our domain of interest</p>
+<div class="math notranslate nohighlight">
+\[\Lambda = (i,j,k) \quad \text{with}\quad i \in \{ 0\dots N_i-1\}, j \in \{0\dots N_j-1\}, k\in\{0 \dots N_k-1\}\]</div>
+<p><cite>GridTools</cite> supports any number of dimension, however the iteration is always restricted to three dimensions, and <cite>GridTools</cite> will
+treat one dimension, here the <span class="math notranslate nohighlight">\(k\)</span> dimension, differently: the <span class="math notranslate nohighlight">\(ij\)</span>-plane is executed in parallel while the
+computation in <span class="math notranslate nohighlight">\(k\)</span> can be sequential. The consequence is that there must not be a dependency in <span class="math notranslate nohighlight">\(ij\)</span> within
+a stencil while there can be a dependency in <span class="math notranslate nohighlight">\(k\)</span>. For now (this chapter) it is sufficient to just remember that
+the <span class="math notranslate nohighlight">\(ij\)</span>-plane and the <span class="math notranslate nohighlight">\(k\)</span> dimension are treated differently by <cite>GridTools</cite>.</p>
+<p>The calculation domain is surrounded by a <em>boundary region</em> as depicted
+in <a class="reference internal" href="#fig-getting-started-coordinates"><span class="std std-numref">Fig. 1</span></a>. Computation happens
+only within the calculation domain but values may be read from grid
+points in the boundary region.</p>
+<figure class="align-default" id="id2">
+<span id="fig-getting-started-coordinates"></span><a class="reference internal image-reference" href="../_images/coordinates.png"><img alt="../_images/coordinates.png" src="../_images/coordinates.png" style="width: 558.0px; height: 303.59999999999997px;" /></a>
+<figcaption>
+<p><span class="caption-number">Fig. 1 </span><span class="caption-text">Coordinate system</span><a class="headerlink" href="#id2" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="storages">
+<h2>Storages<a class="headerlink" href="#storages" title="Permalink to this heading"></a></h2>
+<p>In this section we will set up the fields for our example: we need a
+storage for the <span class="math notranslate nohighlight">\(\phi\)</span>-field (<code class="docutils literal notranslate"><span class="pre">phi_in</span></code>) and a storage for the output
+(<code class="docutils literal notranslate"><span class="pre">phi_out</span></code>).</p>
+<p>Storages in <cite>GridTools</cite> are n-dimensional array-like objects with the
+following capabilities:</p>
+<ul class="simple">
+<li><p>access an element with <span class="math notranslate nohighlight">\((i,j,k)\)</span> syntax</p></li>
+<li><p>synchronization between CPU memory and a device (e.g. a CUDA capable GPU)</p></li>
+</ul>
+<section id="storage-traits">
+<span id="getting-started-storage-traits"></span><h3>Storage Traits<a class="headerlink" href="#storage-traits" title="Permalink to this heading"></a></h3>
+<p>Since the storages depend on the architecture (e.g. CPU or GPU) our first step
+is to define the <em>storage traits</em> type which typically looks like</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/gpu.hpp&gt;</span><span class="cp"></span>
+<span class="k">using</span><span class="w"> </span><span class="n">traits_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">gpu</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+</div>
+<p>for the CUDA <a class="reference internal" href="../glossary/glossary.html#term-Storage-Traits"><span class="xref std std-term">Storage Traits</span></a> or</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/cpu_ifirst.hpp&gt;</span><span class="cp"></span>
+<span class="k">using</span><span class="w"> </span><span class="n">traits_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">cpu_ifirst</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+</div>
+<p>for the CPU <a class="reference internal" href="../glossary/glossary.html#term-Storage-Traits"><span class="xref std std-term">Storage Traits</span></a>.</p>
+</section>
+<section id="building-storages">
+<h3>Building Storages<a class="headerlink" href="#building-storages" title="Permalink to this heading"></a></h3>
+<p>For efficient memory accesses the index ordering might depend on the target architecture, therefore the
+memory layout will be implicitly decided by storage traits.</p>
+<p><cite>GridTools</cite> storage classes don’t have user facing constructors. The builder design pattern is used instead.
+The library provides the <code class="docutils literal notranslate"><span class="pre">storage::builder</span></code> object template that is instantiated by storage traits.
+To create a storage we need to supply the builder with the desired storage properties by chaining
+the setter methods and finally call the <code class="docutils literal notranslate"><span class="pre">build()</span></code> method which returns a <code class="docutils literal notranslate"><span class="pre">std::shared_ptr</span></code>
+of a newly created storage. The builder also provides overloaded call operator which is a synonym of <code class="docutils literal notranslate"><span class="pre">build()</span></code>.
+There are two required properties that need to be set:
+the type of element, eg <code class="docutils literal notranslate"><span class="pre">.type&lt;double&gt;()</span></code>, and the sizes for each dimension, eg <code class="docutils literal notranslate"><span class="pre">.dimensions(10,</span> <span class="pre">12,</span> <span class="pre">20)</span></code>.
+Other properties are optional.</p>
+<p>If we need several storages that share some properties, we can construct a partially specified builder by
+setting the shared properties and reuse it while building concrete storages.</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="n">uint_t</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span><span class="w"></span>
+<span class="n">uint_t</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">12</span><span class="p">;</span><span class="w"></span>
+<span class="n">uint_t</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span><span class="w"></span>
+
+<span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">builder</span><span class="o">&lt;</span><span class="n">traits_t</span><span class="o">&gt;</span><span class="p">.</span><span class="n">dimensions</span><span class="p">(</span><span class="n">Ni</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">).</span><span class="n">id</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="w"></span>
+<span class="w">               </span><span class="p">.</span><span class="n">name</span><span class="p">(</span><span class="s">&quot;phi&quot;</span><span class="p">)</span><span class="w">                                                </span><span class="c1">//</span>
+<span class="w">               </span><span class="p">.</span><span class="n">type</span><span class="o">&lt;</span><span class="kt">float</span><span class="o">&gt;</span><span class="p">()</span><span class="w">                                              </span><span class="c1">//</span>
+<span class="w">               </span><span class="p">.</span><span class="n">initializer</span><span class="p">([](</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">;</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="c1">//</span>
+<span class="w">               </span><span class="p">.</span><span class="n">build</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="n">name</span><span class="p">(</span><span class="s">&quot;lap&quot;</span><span class="p">).</span><span class="n">type</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">().</span><span class="n">value</span><span class="p">(</span><span class="mi">-1</span><span class="p">).</span><span class="n">build</span><span class="p">();</span><span class="w"></span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It is recommended to use the <code class="docutils literal notranslate"><span class="pre">id</span></code> property each time the <code class="docutils literal notranslate"><span class="pre">dimensions</span></code> property is set.
+<code class="docutils literal notranslate"><span class="pre">id</span></code> should identify the unique set of dimension sizes.
+This is because the stencil computation engine assumes that the storages that have the same <code class="docutils literal notranslate"><span class="pre">id</span></code> have the same
+sizes. However, if only one set of dimensions is used, the <code class="docutils literal notranslate"><span class="pre">id</span></code> property can be skipped.</p>
+</div>
+<p>We can now</p>
+<ul class="simple">
+<li><p>retrieve the name of the field,</p></li>
+<li><p>create a view and read and write values in the field using the parenthesis syntax,</p></li>
+<li><p>query the lengths of each dimension.</p></li>
+</ul>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">phi</span><span class="o">-&gt;</span><span class="n">name</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span><span class="w"></span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">phi_view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">phi</span><span class="o">-&gt;</span><span class="n">host_view</span><span class="p">();</span><span class="w"></span>
+<span class="n">phi_view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.1415</span><span class="p">;</span><span class="w"></span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;phi_view(1, 2, 3) = &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">phi_view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span><span class="w"></span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;j length = &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">phi</span><span class="o">-&gt;</span><span class="n">lengths</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="stencils">
+<h2>Stencils<a class="headerlink" href="#stencils" title="Permalink to this heading"></a></h2>
+<p>A <em>stencil</em> is a kernel that updates array elements according to a fixed
+access pattern.</p>
+<section id="example-naive-2d-laplacian">
+<h3>Example: Naive 2D Laplacian<a class="headerlink" href="#example-naive-2d-laplacian" title="Permalink to this heading"></a></h3>
+<p>The simplest discretization of the 2D Laplacian is the finite difference
+five-point stencil as depicted in <a class="reference internal" href="#fig-getting-started-2dlap"><span class="std std-numref">Fig. 2</span></a>.</p>
+<figure class="align-default" id="id3">
+<span id="fig-getting-started-2dlap"></span><a class="reference internal image-reference" href="../_images/Laplacian2D.png"><img alt="../_images/Laplacian2D.png" src="../_images/Laplacian2D.png" style="width: 469.79999999999995px; height: 328.8px;" /></a>
+<figcaption>
+<p><span class="caption-number">Fig. 2 </span><span class="caption-text">Access pattern of a 2D Laplacian</span><a class="headerlink" href="#id3" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+<p>For the calculation of
+the Laplacian at a given grid point we need the value at the grid point
+itself and its four direct neighbors along the Cartesian axis.</p>
+<p>A naive C++ implementation of the 2D Laplacian stencil looks as follows:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">laplacian</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">lengths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">lengths</span><span class="p">();</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lengths</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lengths</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lengths</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span><span class="w"></span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">boundary_size</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">                </span><span class="n">lap</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">-4.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w">                  </span><span class="c1">//</span>
+<span class="w">                               </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="c1">//</span>
+<span class="w">                               </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">);</span><span class="w"></span>
+<span class="w">            </span><span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+</pre></div>
+</div>
+<p>Apart from the initialization the stencil implementation
+consists of 2 main components:</p>
+<ul class="simple">
+<li><p>Loop-logic: defines the stencil application domain and loop order</p></li>
+<li><p>Update-logic: defines the update formula (here: the 2D Laplacian)</p></li>
+</ul>
+<p>Special care has to be taken at the boundary of the domain. Since the
+Laplacian needs the neighboring points, we cannot calculate the Laplacian
+on the boundary layer and have to exclude it from the loop.</p>
+</section>
+</section>
+<section id="first-gridtools-stencil">
+<h2>First GridTools Stencil<a class="headerlink" href="#first-gridtools-stencil" title="Permalink to this heading"></a></h2>
+<p>In <cite>GridTools</cite> the loop logic and the storage order are implemented (and optimized) by the library while the update function, to
+be applied to each gridpoint, is implemented by the user. The loop logic (for a given architecture) is combined with the
+user-defined update function at compile-time by template meta-programming.</p>
+<section id="update-logic-gridtools-2d-laplacian">
+<h3>Update-logic: GridTools 2D Laplacian<a class="headerlink" href="#update-logic-gridtools-2d-laplacian" title="Permalink to this heading"></a></h3>
+<p>The update-logic is implemented with state-less functors. A
+<cite>GridTools</cite> functor is a <code class="docutils literal notranslate"><span class="pre">struct</span></code> or <code class="docutils literal notranslate"><span class="pre">class</span></code> providing a <em>static</em> method
+called <code class="docutils literal notranslate"><span class="pre">apply</span></code>. The update-logic is implemented in these <a class="reference internal" href="../glossary/glossary.html#term-Apply-Method"><span class="xref std std-term">Apply-Methods</span></a>.
+As the functors are state-less (no member variables, static methods
+only) they can be passed by type, i.e. at compile-time, and therefore
+allow for compile-time optimizations.</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="w"> </span><span class="nc">lap_function</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="k">extent</span><span class="o">&lt;</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">inout_accessor</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="k">param_list</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">make_param_list</span><span class="o">&lt;</span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">eval</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">lap</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="mf">-4.</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">));</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+</pre></div>
+</div>
+<p>In addition to the <code class="docutils literal notranslate"><span class="pre">apply</span></code>-method, the functor contains <code class="docutils literal notranslate"><span class="pre">accessor</span></code> s. These
+two <code class="docutils literal notranslate"><span class="pre">accessor</span></code> s are parameters of the functor, i.e. they are mapped to
+fields passed to the functor. They contain compile-time information if
+they are only used as input parameters, e.g. the <code class="docutils literal notranslate"><span class="pre">in</span></code> accessor in the
+example, or if we want to write into the associated field (<code class="docutils literal notranslate"><span class="pre">inout</span></code>). Additionally,
+the <code class="docutils literal notranslate"><span class="pre">extent</span></code> defines which grid points are needed by the stencil relative
+to the current point. The format for the extent is</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">extent</span><span class="o">&lt;</span><span class="n">i_minus</span><span class="p">,</span><span class="w"> </span><span class="n">i_plus</span><span class="p">,</span><span class="w"> </span><span class="n">j_minus</span><span class="p">,</span><span class="w"> </span><span class="n">j_plus</span><span class="p">,</span><span class="w"> </span><span class="n">k_minus</span><span class="p">,</span><span class="w"> </span><span class="n">k_plus</span><span class="o">&gt;</span><span class="w"></span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">i_minus</span></code> and <code class="docutils literal notranslate"><span class="pre">i_plus</span></code> define an interval on the <span class="math notranslate nohighlight">\(i\)</span>-axis relative to
+the current position; <code class="docutils literal notranslate"><span class="pre">i_minus</span></code> is the negative offset, i.e. zero or a
+negative number, while <code class="docutils literal notranslate"><span class="pre">i_plus</span></code> is the positive offset. Analogously for
+<span class="math notranslate nohighlight">\(j\)</span> and <span class="math notranslate nohighlight">\(k\)</span>. In the Laplacian example, the first two numbers
+in the extent of the <code class="docutils literal notranslate"><span class="pre">in</span></code> accessor define that we want to access the
+field at <span class="math notranslate nohighlight">\(i-1\)</span>, <span class="math notranslate nohighlight">\(i\)</span> and  <span class="math notranslate nohighlight">\(i+1\)</span>. The accessor type and the extent is needed for a
+dependency analysis in the compile-time optimizations for more complex
+stencils. (For example, the computation
+domain needs to be extended when we calculate the Laplacian of the Laplacian later. This is done automatically by the
+library.)</p>
+<p>The first template argument is an index defining the order of the
+parameters, i.e. the order in which the fields are passed to the
+functor. The <code class="docutils literal notranslate"><span class="pre">param_list</span></code> is a <cite>GridTools</cite> keyword which has to be defined for each stencil,
+and should contain the list of accessors.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">apply</span></code>-method needs as first parameter a context
+object, usually called <code class="docutils literal notranslate"><span class="pre">eval</span></code>, which is created and passed to the method by the library on
+invocation. This object contains, among other things, the index of the
+active grid point (<a class="reference internal" href="../glossary/glossary.html#term-Iteration-Point"><span class="xref std std-term">Iteration Point</span></a>) and the mapping of data-pointers to the <code class="docutils literal notranslate"><span class="pre">accessor</span></code> s. The
+second argument is optional and specifies the interval on the <span class="math notranslate nohighlight">\(k\)</span>-axis where this implementation
+of the <a class="reference internal" href="../glossary/glossary.html#term-Apply-Method"><span class="xref std std-term">Apply-Method</span></a> should be executed. This allows to apply a different update-logic on
+<a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a> by overloading the <a class="reference internal" href="../glossary/glossary.html#term-Apply-Method"><span class="xref std std-term">Apply-Method</span></a>. We will define <a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a>
+later. If the second parameter is not specified, a default interval is assumed.</p>
+<p>The body of the <code class="docutils literal notranslate"><span class="pre">apply</span></code>-method looks quite similar to the one in the
+naive implementation, except that each
+field access has to be wrapped by a call to the context object <code class="docutils literal notranslate"><span class="pre">eval</span></code>.
+This is necessary to map the compile-time parameter, the <code class="docutils literal notranslate"><span class="pre">accessor</span></code>, to
+the run-time data in the <code class="docutils literal notranslate"><span class="pre">data_store</span></code>.</p>
+</section>
+<section id="calling-the-stencil">
+<h3>Calling the Stencil<a class="headerlink" href="#calling-the-stencil" title="Permalink to this heading"></a></h3>
+<p>In the naive implementation, the call to the <code class="docutils literal notranslate"><span class="pre">laplacian</span></code> is as simple as</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span><span class="w"> </span><span class="n">boundary_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"></span>
+<span class="n">laplacian</span><span class="p">(</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_size</span><span class="w"> </span><span class="p">);</span><span class="w"></span>
+</pre></div>
+</div>
+<p>since it contains already all the information: the update-logic <em>and</em> the loop-logic.</p>
+<p>The <cite>GridTools</cite> stencil, does not contain any
+information about the loop-logic, i.e. about the domain where we want to apply the stencil operation,
+since we need to specify it in a platform-independent syntax, a <em>domain specific embedded language</em>
+(DSEL), such that the <a class="reference internal" href="../glossary/glossary.html#term-Backend"><span class="xref std std-term">Backend</span></a> can decide on the specific implementation.</p>
+<p>For our example this looks as follows</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="n">uint_t</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span><span class="w"></span>
+<span class="linenos"> 2</span><span class="n">uint_t</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">12</span><span class="p">;</span><span class="w"></span>
+<span class="linenos"> 3</span><span class="n">uint_t</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span><span class="w"></span>
+<span class="linenos"> 4</span><span class="kt">int</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"></span>
+<span class="linenos"> 5</span>
+<span class="linenos"> 6</span><span class="k">auto</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">builder</span><span class="o">&lt;</span><span class="n">storage_traits_t</span><span class="o">&gt;</span><span class="w"> </span><span class="c1">//</span>
+<span class="linenos"> 7</span><span class="w">                   </span><span class="p">.</span><span class="n">type</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">()</span><span class="w">                </span><span class="c1">//</span>
+<span class="linenos"> 8</span><span class="w">                   </span><span class="p">.</span><span class="n">dimensions</span><span class="p">(</span><span class="n">Ni</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">)</span><span class="w">        </span><span class="c1">//</span>
+<span class="linenos"> 9</span><span class="w">                   </span><span class="p">.</span><span class="n">halos</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">         </span><span class="c1">//</span>
+<span class="linenos">10</span>
+<span class="linenos">11</span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">();</span><span class="w"></span>
+<span class="linenos">12</span><span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">();</span><span class="w"></span>
+<span class="linenos">13</span>
+<span class="linenos">14</span><span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_i</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">15</span><span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_j</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">16</span><span class="k">auto</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nl">make_grid</span><span class="p">(</span><span class="n">boundary_i</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">17</span>
+<span class="linenos">18</span><span class="nl">run_single_stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="p">(),</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">);</span><span class="w"></span>
+</pre></div>
+</div>
+<p>In lines 14-16 we setup the physical dimension of the problem.
+First we define which points on the <span class="math notranslate nohighlight">\(i\)</span> and the <span class="math notranslate nohighlight">\(j\)</span>-axis belong
+to the computational domain and which points belong to the boundary (or
+a padding region). For now it is enough to know that these lines define
+a region with a boundary of size 1 surrounding the <span class="math notranslate nohighlight">\(ij\)</span>-plane. In the
+next lines the layers in <span class="math notranslate nohighlight">\(k\)</span> are defined. In this case we have only one
+interval. We will discuss the details later.</p>
+<p>In line 18 we execute the stencil computation. In our example only one stencil participates.
+Hence, we can use the simple <code class="docutils literal notranslate"><span class="pre">run_single_stage</span></code> API. We pass the stencil the backend object, the grid
+(the information about the loop bounds) and the storages on which the computation needs to be executed.
+The number and the order of storage arguments should match the number of stencil accessors.</p>
+</section>
+<section id="full-gridtools-laplacian">
+<h3>Full GridTools Laplacian<a class="headerlink" href="#full-gridtools-laplacian" title="Permalink to this heading"></a></h3>
+<p>The full working example looks as follows:</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="cm">/*</span>
+<span class="linenos"> 2</span><span class="cm"> * GridTools</span>
+<span class="linenos"> 3</span><span class="cm"> *</span>
+<span class="linenos"> 4</span><span class="cm"> * Copyright (c) 2014-2021, ETH Zurich</span>
+<span class="linenos"> 5</span><span class="cm"> * All rights reserved.</span>
+<span class="linenos"> 6</span><span class="cm"> *</span>
+<span class="linenos"> 7</span><span class="cm"> * Please, refer to the LICENSE file in the root directory.</span>
+<span class="linenos"> 8</span><span class="cm"> * SPDX-License-Identifier: BSD-3-Clause</span>
+<span class="linenos"> 9</span><span class="cm"> */</span><span class="w"></span>
+<span class="linenos">10</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/common/defs.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">11</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/stencil/cartesian.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">12</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/builder.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">13</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/sid.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">14</span>
+<span class="linenos">15</span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">gridtools</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">16</span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">stencil</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">17</span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">cartesian</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">18</span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">expressions</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">19</span>
+<span class="linenos">20</span><span class="cp">#ifdef GT_CUDACC</span>
+<span class="linenos">21</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/stencil/gpu.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">22</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/gpu.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">23</span><span class="k">using</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stencil</span><span class="o">::</span><span class="n">gpu</span><span class="o">&lt;&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">24</span><span class="k">using</span><span class="w"> </span><span class="n">storage_traits_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">gpu</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">25</span><span class="cp">#else</span>
+<span class="linenos">26</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/stencil/cpu_ifirst.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">27</span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;gridtools/storage/cpu_ifirst.hpp&gt;</span><span class="cp"></span>
+<span class="linenos">28</span><span class="k">using</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stencil</span><span class="o">::</span><span class="n">cpu_ifirst</span><span class="o">&lt;&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">29</span><span class="k">using</span><span class="w"> </span><span class="n">storage_traits_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">storage</span><span class="o">::</span><span class="n">cpu_ifirst</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">30</span><span class="cp">#endif</span>
+<span class="linenos">31</span>
+<span class="linenos">32</span><span class="k">struct</span><span class="w"> </span><span class="nc">lap_function</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="linenos">33</span><span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="k">extent</span><span class="o">&lt;</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">34</span><span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">inout_accessor</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">35</span>
+<span class="linenos">36</span><span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="k">param_list</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">make_param_list</span><span class="o">&lt;</span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">37</span>
+<span class="linenos">38</span><span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="linenos">39</span><span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">eval</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="linenos">40</span><span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">lap</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="mf">-4.</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">in</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">));</span><span class="w"></span>
+<span class="linenos">41</span><span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="linenos">42</span><span class="p">};</span><span class="w"></span>
+<span class="linenos">43</span>
+<span class="linenos">44</span><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="linenos">45</span><span class="w">    </span><span class="n">uint_t</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">46</span><span class="w">    </span><span class="n">uint_t</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">12</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">47</span><span class="w">    </span><span class="n">uint_t</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">48</span><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"></span>
+<span class="linenos">49</span>
+<span class="linenos">50</span><span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">storage</span><span class="o">::</span><span class="n">builder</span><span class="o">&lt;</span><span class="n">storage_traits_t</span><span class="o">&gt;</span><span class="w"> </span><span class="c1">//</span>
+<span class="linenos">51</span><span class="w">                       </span><span class="p">.</span><span class="n">type</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">()</span><span class="w">                </span><span class="c1">//</span>
+<span class="linenos">52</span><span class="w">                       </span><span class="p">.</span><span class="n">dimensions</span><span class="p">(</span><span class="n">Ni</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">)</span><span class="w">        </span><span class="c1">//</span>
+<span class="linenos">53</span><span class="w">                       </span><span class="p">.</span><span class="n">halos</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span><span class="w">         </span><span class="c1">//</span>
+<span class="linenos">54</span>
+<span class="linenos">55</span><span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">();</span><span class="w"></span>
+<span class="linenos">56</span><span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">();</span><span class="w"></span>
+<span class="linenos">57</span>
+<span class="linenos">58</span><span class="w">    </span><span class="n">halo_descriptor</span><span class="w"> </span><span class="n">boundary_i</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">59</span><span class="w">    </span><span class="n">halo_descriptor</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">60</span><span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_grid</span><span class="p">(</span><span class="n">boundary_i</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">61</span>
+<span class="linenos">62</span><span class="w">    </span><span class="n">run_single_stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="p">(),</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">);</span><span class="w"></span>
+<span class="linenos">63</span><span class="p">}</span><span class="w"></span>
+</pre></div>
+</div>
+<p>There are some points which we did not discuss so far. For a first look at <cite>GridTools</cite> these can be considered fixed patterns and
+we won’t discuss them now in detail.</p>
+<p>A common pattern is to use the preprocessor flag <code class="docutils literal notranslate"><span class="pre">__CUDACC__</span></code> to distinguish between CPU and GPU code.
+Here we use the <cite>GridTools</cite> internal <code class="docutils literal notranslate"><span class="pre">GT_CUDA</span></code> macro to do this. The macro is used to set the correct <a class="reference internal" href="../glossary/glossary.html#term-Backend"><span class="xref std std-term">Backend</span></a>
+and <a class="reference internal" href="../glossary/glossary.html#term-Storage-Traits"><span class="xref std std-term">Storage Traits</span></a> for the CUDA or CPU architecture, respectively.</p>
+<p>The code example can be compiled using the following simple CMake script (requires an installation of <cite>GridTools</cite>, see <a class="reference internal" href="../introduction/introduction.html#installation"><span class="std std-ref">Installing and Validating GridTools</span></a>).</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cmake_minimum_required</span><span class="p">(</span><span class="n">VERSION</span> <span class="mf">3.18.1</span><span class="p">)</span>
+
+<span class="n">project</span><span class="p">(</span><span class="n">GridTools</span><span class="o">-</span><span class="n">laplacian</span> <span class="n">LANGUAGES</span> <span class="n">CXX</span><span class="p">)</span>
+
+<span class="nb">set</span><span class="p">(</span><span class="n">CMAKE_CXX_EXTENSIONS</span> <span class="n">OFF</span><span class="p">)</span> <span class="c1"># Currently required for HIP</span>
+
+<span class="n">find_package</span><span class="p">(</span><span class="n">GridTools</span> <span class="mf">2.2.0</span> <span class="n">REQUIRED</span> <span class="n">QUIET</span><span class="p">)</span>
+
+<span class="k">if</span><span class="p">(</span><span class="n">TARGET</span> <span class="n">GridTools</span><span class="p">::</span><span class="n">stencil_cpu_ifirst</span><span class="p">)</span>
+    <span class="n">add_executable</span><span class="p">(</span><span class="n">gt_laplacian</span> <span class="n">test_gt_laplacian</span><span class="o">.</span><span class="n">cpp</span><span class="p">)</span>
+    <span class="n">target_link_libraries</span><span class="p">(</span><span class="n">gt_laplacian</span> <span class="n">GridTools</span><span class="p">::</span><span class="n">gridtools</span> <span class="n">GridTools</span><span class="p">::</span><span class="n">stencil_cpu_ifirst</span><span class="p">)</span>
+<span class="n">endif</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="assembling-stencils-smoothing-filter">
+<h2>Assembling Stencils: Smoothing Filter<a class="headerlink" href="#assembling-stencils-smoothing-filter" title="Permalink to this heading"></a></h2>
+<p>In the preceding section we saw how a first simple <cite>GridTools</cite> stencil
+is defined and executed. In this section we will use this stencil to
+compute our example PDE. A naive implementation could look as in</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">naive_smoothing</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">alpha</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">kmax</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">lap_boundary</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">full_boundary</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">lengths</span><span class="p">()[</span><span class="mi">0</span><span class="p">];</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">lengths</span><span class="p">()[</span><span class="mi">1</span><span class="p">];</span><span class="w"></span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">.</span><span class="n">lengths</span><span class="p">()[</span><span class="mi">2</span><span class="p">];</span><span class="w"></span>
+
+<span class="w">    </span><span class="c1">// Instantiate temporary fields</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">make_storage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">storage_builder</span><span class="p">.</span><span class="n">dimensions</span><span class="p">(</span><span class="n">Ni</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">lap_storage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lap_storage</span><span class="o">-&gt;</span><span class="n">target_view</span><span class="p">();</span><span class="w"></span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">laplap_storage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">laplap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">laplap_storage</span><span class="o">-&gt;</span><span class="n">target_view</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">    </span><span class="c1">// laplacian of phi</span>
+<span class="w">    </span><span class="n">laplacian</span><span class="p">(</span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">in</span><span class="p">,</span><span class="w"> </span><span class="n">lap_boundary</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="c1">// laplacian of lap</span>
+<span class="w">    </span><span class="n">laplacian</span><span class="p">(</span><span class="n">laplap</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">);</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">full_boundary</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">kmax</span><span class="p">)</span><span class="w"></span>
+<span class="w">                    </span><span class="n">out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">laplap</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">);</span><span class="w"></span>
+<span class="w">                </span><span class="k">else</span><span class="w"></span>
+<span class="w">                    </span><span class="n">out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">);</span><span class="w"></span>
+<span class="w">            </span><span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+</pre></div>
+</div>
+<p>For the <cite>GridTools</cite> implementation we will learn three things in this
+section: how to define special regions in the <span class="math notranslate nohighlight">\(k\)</span>-direction; how to use
+<cite>GridTools</cite> temporaries and how to call functors from functors.</p>
+<section id="apply-method-overload">
+<h3><cite>apply</cite>-method overload<a class="headerlink" href="#apply-method-overload" title="Permalink to this heading"></a></h3>
+<p>Our first <cite>GridTools</cite> implementation will be very close to the naive
+implementation: we will call two times the Laplacian functor from the
+previous section and store the result in two extra fields. Then we will
+call a third functor to compute the final result. This functor shows how
+we can specialize the computation in the <span class="math notranslate nohighlight">\(k\)</span>-direction:</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="w"> </span><span class="nc">smoothing_function_1</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">laplap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">inout_accessor</span><span class="o">&lt;</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="k">param_list</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">make_param_list</span><span class="o">&lt;</span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">,</span><span class="w"> </span><span class="n">out</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;</span><span class="n">eval</span><span class="p">,</span><span class="w"> </span><span class="n">lower_domain</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">out</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="n">phi</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">laplap</span><span class="p">());</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;</span><span class="n">eval</span><span class="p">,</span><span class="w"> </span><span class="n">upper_domain</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">out</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="n">phi</span><span class="p">());</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+</pre></div>
+</div>
+<p>We use two different
+<a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a>, the <code class="docutils literal notranslate"><span class="pre">lower_domain</span></code> and the <code class="docutils literal notranslate"><span class="pre">upper_domain</span></code>, and provide an overload of the
+<a class="reference internal" href="../glossary/glossary.html#term-Apply-Method"><span class="xref std std-term">Apply-Method</span></a> for each interval.</p>
+<p>The <a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a> are defined as</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="n">axis_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">axis</span><span class="o">&lt;</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="k">using</span><span class="w"> </span><span class="n">lower_domain</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">axis_t</span><span class="o">::</span><span class="n">get_interval</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="k">using</span><span class="w"> </span><span class="n">upper_domain</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">axis_t</span><span class="o">::</span><span class="n">get_interval</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+</div>
+<p>The first line defines an axis with 2 <a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a>. From this axis retrieve the <a class="reference internal" href="../glossary/glossary.html#term-Vertical-Interval"><span class="xref std std-term">Vertical Intervals</span></a>
+and give them a name.</p>
+<p>Then we can assemble the computation</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">laplap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_i</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="p">);</span><span class="w"></span>
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_j</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">);</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nl">make_grid</span><span class="p">(</span><span class="n">boundary_i</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">,</span><span class="w"> </span><span class="n">axis_t</span><span class="p">(</span><span class="n">kmax</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kmax</span><span class="p">));</span><span class="w"></span>
+
+<span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">laplap</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nl">execute_parallel</span><span class="p">()</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">smoothing_function_1</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">);</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+
+<span class="nl">run</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="p">(),</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">);</span><span class="w"></span>
+</pre></div>
+</div>
+<p>We cannot use the <code class="docutils literal notranslate"><span class="pre">run_single_stage</span></code> API because now we need to compose a <a class="reference internal" href="../glossary/glossary.html#term-Computation"><span class="xref std std-term">Computation</span></a> from three stencil calls. To achieve that
+we use the full featured <code class="docutils literal notranslate"><span class="pre">run</span></code> API. It requires a stencil composition specification as a first parameter. That specification
+is provided in form of a generic lambda. Its arguments represent the storages that are used in the computation.
+The expression that is returned describes how the stencils should be composed. It is where the <cite>GridTools</cite> DSL is used.
+<code class="docutils literal notranslate"><span class="pre">execute_parallel()</span></code> means that each <span class="math notranslate nohighlight">\(k\)</span>-level can be executed in parallel. The <code class="docutils literal notranslate"><span class="pre">stage</span></code> clause represents
+a call to the stencil with the given arguments.</p>
+<p>In this version we needed to explicitly allocate the temporary fields
+<code class="docutils literal notranslate"><span class="pre">lap</span></code> and <code class="docutils literal notranslate"><span class="pre">laplap</span></code>. In the next section we will learn about
+<cite>GridTools</cite> temporaries.</p>
+</section>
+<section id="gt-temporaries">
+<h3><cite>GridTools</cite> Temporaries<a class="headerlink" href="#gt-temporaries" title="Permalink to this heading"></a></h3>
+<p><cite>GridTools</cite> <em>temporary storages</em> are storages with the lifetime of the
+<code class="docutils literal notranslate"><span class="pre">computation</span></code>. This is exactly what we need for the <code class="docutils literal notranslate"><span class="pre">lap</span></code> and <code class="docutils literal notranslate"><span class="pre">laplap</span></code>
+fields.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Note that temporaries are not allocated explicitly and we cannot
+access them from outside of the computation. Therefore, sometimes it might be
+necessary to replace a temporary by a normal storage for debugging.</p>
+</div>
+<p>To use temporary storages we exclude the correspondent fields from the arguments of our <code class="docutils literal notranslate"><span class="pre">spec</span></code> and declare them as
+temporaries, within the <cite>spec</cite> lambda, using the <code class="docutils literal notranslate"><span class="pre">GT_DECLARE_TMP</span></code> macro. We don’t need the explicit
+instantiations any more and don’t have to pass them to the <code class="docutils literal notranslate"><span class="pre">run</span></code>. The new code looks as follows</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_i</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="p">);</span><span class="w"></span>
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_j</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">);</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nl">make_grid</span><span class="p">(</span><span class="n">boundary_i</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">,</span><span class="w"> </span><span class="n">axis_t</span><span class="p">{</span><span class="n">kmax</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kmax</span><span class="p">});</span><span class="w"></span>
+
+<span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_DECLARE_TMP</span><span class="p">(</span><span class="kt">double</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nl">execute_parallel</span><span class="p">()</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">smoothing_function_1</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">laplap</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">);</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+
+<span class="nl">run</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="p">(),</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">);</span><span class="w"></span>
+</pre></div>
+</div>
+<p>Besides the simplifications in the code (no explicit storage needed), the
+concept of temporaries allows <cite>GridTools</cite> to apply optimization. While normal storages
+have a fixed size, temporaries can have block-private <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halos</span></a> which are used for redundant computation.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It might be semantically incorrect to replace a temporary with a normal storage, as normal storages don’t have the <a class="reference internal" href="../glossary/glossary.html#term-Halo"><span class="xref std std-term">Halo</span></a>
+region for redundant computation. In such case several threads (OpenMP or CUDA) will write the same location multiple
+times. As long as all threads write the same data (which is a requirement for correctness of <cite>GridTools</cite>), this should be
+no problem for correctness on current hardware (might change in the future) but might have side-effects on performance.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This change from normal storages to temporaries did not require any code changes to the functor.</p>
+</div>
+</section>
+<section id="functor-calls">
+<h3>Functor Calls<a class="headerlink" href="#functor-calls" title="Permalink to this heading"></a></h3>
+<p>The next feature we want to use is the <em>stencil function call</em>. In the first example we computed the Laplacian
+and the Laplacian of the Laplacian explicitly and stored the intermediate values in the temporaries. Stencil function
+calls will allow us do the computation on the fly and will allow us to get rid of the temporaries.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Note that this is
+not necessarily a performance optimization. It might well be that the version with temporaries is actually the
+faster one.</p>
+</div>
+<p>In the following we will remove only one of the temporaries. Instead of calling the Laplacian twice from the
+<code class="docutils literal notranslate"><span class="pre">spec</span></code>, we will move one of the calls into the smoothing functor. The new smoothing functor looks as follows</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="w"> </span><span class="nc">smoothing_function_3</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">lap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">in_accessor</span><span class="o">&lt;</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="k">extent</span><span class="o">&lt;</span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="o">&gt;&gt;</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">inout_accessor</span><span class="o">&lt;</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="k">param_list</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">make_param_list</span><span class="o">&lt;</span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">out</span><span class="o">&gt;</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">constexpr</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;</span><span class="n">eval</span><span class="p">,</span><span class="w"> </span><span class="n">lower_domain</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">out</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="n">phi</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">call</span><span class="o">&lt;</span><span class="n">lap_function</span><span class="o">&gt;::</span><span class="k">with</span><span class="p">(</span><span class="n">eval</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">()));</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Evaluation</span><span class="o">&gt;</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_FUNCTION</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">apply</span><span class="p">(</span><span class="n">Evaluation</span><span class="w"> </span><span class="o">&amp;</span><span class="n">eval</span><span class="p">,</span><span class="w"> </span><span class="n">upper_domain</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">eval</span><span class="p">(</span><span class="n">out</span><span class="p">())</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval</span><span class="p">(</span><span class="n">phi</span><span class="p">());</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+</pre></div>
+</div>
+<p>In <code class="docutils literal notranslate"><span class="pre">call</span></code> we specify the functor which we want to apply.  In <code class="docutils literal notranslate"><span class="pre">with</span></code> the <code class="docutils literal notranslate"><span class="pre">eval</span></code> is forwarded, followed by all the
+input arguments for the functor. The functor in the call is required to have exactly one <code class="docutils literal notranslate"><span class="pre">inout_accessor</span></code> which will
+be the return value of the call. Note that <code class="docutils literal notranslate"><span class="pre">smoothing_function_3</span></code> still needs to specify the extents explicitly;
+for functor calls they cannot be inferred automatically.</p>
+<p>One of the <code class="docutils literal notranslate"><span class="pre">stage(lap_function(),</span> <span class="pre">...)</span></code> was now moved inside of the functor, therefore the new spec is just:</p>
+<div class="highlight-gridtools notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_storage</span><span class="p">();</span><span class="w"></span>
+
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_i</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Ni</span><span class="p">);</span><span class="w"></span>
+<span class="k">halo_descriptor</span><span class="w"> </span><span class="nf">boundary_j</span><span class="p">(</span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">halo</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">halo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">Nj</span><span class="p">);</span><span class="w"></span>
+<span class="k">auto</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nl">make_grid</span><span class="p">(</span><span class="n">boundary_i</span><span class="p">,</span><span class="w"> </span><span class="n">boundary_j</span><span class="p">,</span><span class="w"> </span><span class="n">axis_t</span><span class="p">{</span><span class="n">kmax</span><span class="p">,</span><span class="w"> </span><span class="n">Nk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kmax</span><span class="p">});</span><span class="w"></span>
+
+<span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">spec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">phi_new</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="cp">GT_DECLARE_TMP</span><span class="p">(</span><span class="kt">double</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nl">execute_parallel</span><span class="p">()</span><span class="w">                              </span><span class="c1">//</span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">lap_function</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">)</span><span class="w">                   </span><span class="c1">//</span>
+<span class="w">        </span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">smoothing_function_3</span><span class="p">(),</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">lap</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">);</span><span class="w"> </span><span class="c1">//</span>
+<span class="p">};</span><span class="w"></span>
+
+<span class="nl">run</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span><span class="w"> </span><span class="n">stencil_backend_t</span><span class="p">(),</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">phi</span><span class="p">,</span><span class="w"> </span><span class="n">phi_new</span><span class="p">);</span><span class="w"></span>
+</pre></div>
+</div>
+<p>The attentive reader may have noticed that our first versions did more
+work than needed: we calculated the Laplacian of the Laplacian of phi
+(<span class="math notranslate nohighlight">\(\Delta \Delta \phi\)</span>) for all <span class="math notranslate nohighlight">\(k\)</span>-levels, however we used it only for
+<span class="math notranslate nohighlight">\(k&lt;k_\text{max}\)</span>. In this version we do a bit better: we still calculate
+the Laplacian (<span class="math notranslate nohighlight">\(L = \Delta \phi\)</span>) for all levels but we only calculate
+<span class="math notranslate nohighlight">\(\Delta L\)</span> for the levels where we need it.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../introduction/introduction.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../user_manual/user_manual.html" class="btn btn-neutral float-right" title="User Manual" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2019, ETH Zurich.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

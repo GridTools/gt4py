@@ -1,0 +1,158 @@
+Start testing: Oct 04 14:10 CEST
+----------------------------------------------------------
+1/5 Testing: copy_stencil
+1/5 Test: copy_stencil
+Command: "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/copy_stencil"
+Directory: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive
+"copy_stencil" start time: Oct 04 14:10 CEST
+Output:
+----------------------------------------------------------
+Note: Google Test filter = *-*/*_cmdline.*
+[==========] Running 2 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_12_33_61, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<12, 33, 61> >
+[ RUN      ] fn_cartesian_copy/naive_double_domain_size_12_33_61.test
+[       OK ] fn_cartesian_copy/naive_double_domain_size_12_33_61.test (14 ms)
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_12_33_61 (14 ms total)
+
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_23_11_43, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<23, 11, 43> >
+[ RUN      ] fn_cartesian_copy/naive_double_domain_size_23_11_43.test
+[       OK ] fn_cartesian_copy/naive_double_domain_size_23_11_43.test (6 ms)
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_23_11_43 (6 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 2 test suites ran. (20 ms total)
+[  PASSED  ] 2 tests.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"copy_stencil" end time: Oct 04 14:10 CEST
+"copy_stencil" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/5 Testing: copy_stencil_field_view
+2/5 Test: copy_stencil_field_view
+Command: "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/copy_stencil_field_view"
+Directory: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive
+"copy_stencil_field_view" start time: Oct 04 14:10 CEST
+Output:
+----------------------------------------------------------
+Note: Google Test filter = *-*/*_cmdline.*
+[==========] Running 2 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_12_33_61, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<12, 33, 61> >
+[ RUN      ] fn_cartesian_copy/naive_double_domain_size_12_33_61.test
+[       OK ] fn_cartesian_copy/naive_double_domain_size_12_33_61.test (25 ms)
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_12_33_61 (25 ms total)
+
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_23_11_43, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<23, 11, 43> >
+[ RUN      ] fn_cartesian_copy/naive_double_domain_size_23_11_43.test
+[       OK ] fn_cartesian_copy/naive_double_domain_size_23_11_43.test (11 ms)
+[----------] 1 test from fn_cartesian_copy/naive_double_domain_size_23_11_43 (11 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 2 test suites ran. (36 ms total)
+[  PASSED  ] 2 tests.
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"copy_stencil_field_view" end time: Oct 04 14:10 CEST
+"copy_stencil_field_view" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/5 Testing: anton_lap
+3/5 Test: anton_lap
+Command: "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/anton_lap"
+Directory: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive
+"anton_lap" start time: Oct 04 14:10 CEST
+Output:
+----------------------------------------------------------
+Note: Google Test filter = *-*/*_cmdline.*
+[==========] Running 2 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from fn_lap/naive_double_domain_size_12_33_61, where TypeParam = gridtools::test_environment_impl_::test_environment<1ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<12, 33, 61> >
+[ RUN      ] fn_lap/naive_double_domain_size_12_33_61.test
+[       OK ] fn_lap/naive_double_domain_size_12_33_61.test (26 ms)
+[----------] 1 test from fn_lap/naive_double_domain_size_12_33_61 (26 ms total)
+
+[----------] 1 test from fn_lap/naive_double_domain_size_23_11_43, where TypeParam = gridtools::test_environment_impl_::test_environment<1ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<23, 11, 43> >
+[ RUN      ] fn_lap/naive_double_domain_size_23_11_43.test
+[       OK ] fn_lap/naive_double_domain_size_23_11_43.test (12 ms)
+[----------] 1 test from fn_lap/naive_double_domain_size_23_11_43 (12 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 2 test suites ran. (39 ms total)
+[  PASSED  ] 2 tests.
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"anton_lap" end time: Oct 04 14:10 CEST
+"anton_lap" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/5 Testing: fvm_nabla
+4/5 Test: fvm_nabla
+Command: "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/fvm_nabla"
+Directory: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive
+"fvm_nabla" start time: Oct 04 14:10 CEST
+Output:
+----------------------------------------------------------
+Note: Google Test filter = *-*/*_cmdline.*
+[==========] Running 2 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from unstructured_nabla/naive_double_domain_size_12_33_61, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<12, 33, 61> >
+[ RUN      ] unstructured_nabla/naive_double_domain_size_12_33_61.test
+[       OK ] unstructured_nabla/naive_double_domain_size_12_33_61.test (245 ms)
+[----------] 1 test from unstructured_nabla/naive_double_domain_size_12_33_61 (245 ms total)
+
+[----------] 1 test from unstructured_nabla/naive_double_domain_size_23_11_43, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::meta::always<std::__1::integral_constant<bool, true> >, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<23, 11, 43> >
+[ RUN      ] unstructured_nabla/naive_double_domain_size_23_11_43.test
+[       OK ] unstructured_nabla/naive_double_domain_size_23_11_43.test (109 ms)
+[----------] 1 test from unstructured_nabla/naive_double_domain_size_23_11_43 (109 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 2 test suites ran. (354 ms total)
+[  PASSED  ] 2 tests.
+<end of output>
+Test time =   0.36 sec
+----------------------------------------------------------
+Test Passed.
+"fvm_nabla" end time: Oct 04 14:10 CEST
+"fvm_nabla" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/5 Testing: tridiagonal_solve
+5/5 Test: tridiagonal_solve
+Command: "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/tridiagonal_solve"
+Directory: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive
+"tridiagonal_solve" start time: Oct 04 14:10 CEST
+Output:
+----------------------------------------------------------
+Note: Google Test filter = *-*/*_cmdline.*
+[==========] Running 2 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from fn_cartesian_tridiagonal_solve/naive_double_domain_size_12_33_61, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::test_environment_impl_::vertical_stencil, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<12, 33, 61> >
+[ RUN      ] fn_cartesian_tridiagonal_solve/naive_double_domain_size_12_33_61.test
+[       OK ] fn_cartesian_tridiagonal_solve/naive_double_domain_size_12_33_61.test (37 ms)
+[----------] 1 test from fn_cartesian_tridiagonal_solve/naive_double_domain_size_12_33_61 (37 ms total)
+
+[----------] 1 test from fn_cartesian_tridiagonal_solve/naive_double_domain_size_23_11_43, where TypeParam = gridtools::test_environment_impl_::test_environment<0ul, gridtools::stencil::axis<1ul, gridtools::stencil::axis_config::offset_limit<2> >, gridtools::test_environment_impl_::vertical_stencil, std::__1::integer_sequence<unsigned long, 0ul> >::apply<gridtools::fn::backend::naive_impl_::naive, double, gridtools::test_environment_impl_::inlined_params<23, 11, 43> >
+[ RUN      ] fn_cartesian_tridiagonal_solve/naive_double_domain_size_23_11_43.test
+[       OK ] fn_cartesian_tridiagonal_solve/naive_double_domain_size_23_11_43.test (16 ms)
+[----------] 1 test from fn_cartesian_tridiagonal_solve/naive_double_domain_size_23_11_43 (16 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 2 test suites ran. (54 ms total)
+[  PASSED  ] 2 tests.
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"tridiagonal_solve" end time: Oct 04 14:10 CEST
+"tridiagonal_solve" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 04 14:10 CEST

@@ -1,0 +1,310 @@
+.. _stencil-composition:
+
+Stencil Composition
+========================
+
+.. _defining_iteration_space:
+
+---------------------------------------------------
+Defining the Iteration Space: the Grid
+---------------------------------------------------
+
+The :term:`Stencil Operators<Stencil Operator>` describe operations on a single :term:`Iteration Point`.
+The :term:`Iteration Space` defines on which points the operator should be applied. In this section
+we cover how to define the :term:`Iteration Space` with the ``grid`` object.
+
+|GT| offers a set of functions which ease the construction of the ``grid``:
+
+.. cpp:function:: auto make_grid(int size_i, int size_j, int size_k)
+
+   The simplest :term:`Iteration Space` will iterate the cube defined by the :term:`Vertical Intervals<Vertical Interval>` ``[0,
+   size_i-1]``, ``[0, size_j-1]``, ``[0, size_k-1]``. This function must only be used if all stages used within the
+   computation have zero extents.
+
+.. cpp:function:: auto make_grid(halo_descriptor halo_i, halo_descriptor halo_j, int size_z)
+
+   For finer control of the iteration space a :ref:`halo-descriptor` can be passed for the horizontal directions (``I``
+   and ``J``).  The 3rd and 4th argument of the ``halo_descriptor`` define the start and the endpoint of the
+   :term:`Iteration Space`. Note that the minus (first argument) and plus (second argument) of the ``halo_descriptor``
+   should be larger than the maximum extent of the whole computation.
+
+   .. code-block:: gridtools
+
+     auto grid = make_grid({3, 3, 10, 20, 30}, {3, 3, 10, 20, 30}, 10);
+
+   This example will create a grid. The iteration space in ``i`` and ``j`` will be ``[10, 20]`` (including ``20``!). The
+   computation is required not to access data outside of ``[7, 23]``. The iteration space in ``k`` is ``[0, 9]``.
+
+.. cpp:function:: auto make_grid(int size_i, int size_j, Axis axis)
+
+   The vertical axis needs to be passed to the grid when using several vertical regions. The axis can be constructed by
+   passing it the size of each of the vertical regions. Details follow in the coming sections.
+
+.. cpp:function:: auto make_grid(halo_descriptor halo_i, halo_descriptor halo_j, Axis axis)
+
+   See explanations in other functions.
+
+
+.. _vertical_regions:
+
+---------------------------------------------------
+Vertical Regions and Vertical Boundary Conditions
+---------------------------------------------------
+
+The |GT| :term:`Execution Model` allows to be sequential in the vertical dimension (``k``). Additionally, |GT|
+offers the possibility to split the vertical dimension into vertical regions,
+where stencils can perform different operations. Typical applications of this pattern are models which define
+terrain-following coordinates close to the earth surface and flat-coordinates in upper
+levels of the atmosphere. Another use-case are vertical boundary-conditions which can
+be directly integrated into the stencil operation.
+
+.. note::
+   In the following we will distinguish two concepts: first :term:`Vertical Regions<Vertical Region>` are
+   non-overlapping subsets of the vertical :term:`Iteration Space` with run-time defined sizes; second :term:`Vertical
+   Intervals<Vertical Interval>` (or just :term:`Interval<Vertical Interval>`) are compile-time defined descriptions
+   from one vertical level (not every vertical level can be selected, see below) to another.
+
+
+^^^^^^^^^^^^^^^^^^^
+Default Interval
+^^^^^^^^^^^^^^^^^^^
+
+In simple applications, where all vertical levels should be treated equally, |GT| allows to use a default
+:term:`Vertical Interval` which covers the full vertical region. In this and only this case the apply methods of the stencil
+operators should be defined without specifying an :term:`Vertical Interval` (see Section
+:ref:`Apply-Methods<stencil_operators_apply_method>`) and the iteration space should be created using one of the simple
+constructors in the :ref:`previous section<defining_iteration_space>` (namely, either ``make_grid(int, int, int)``, or
+``make_grid(halo_descriptor, halo_descriptor, int)``.
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Defining Vertical Intervals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+|GT| allows to split the full vertical iteration space into regions. The number of vertical regions needs to be specified at
+compile-time, while the size of each region can be defined at run-time.
+
+For defining a computation with more than a single vertical region we need to define an ``axis`` first.
+
+.. code-block:: gridtools
+
+   using my_axis_t = axis<N>
+
+where `N` describes the number of vertical regions.
+
+At runtime the axis is instantiated with the sizes of each region,
+
+.. code-block:: gridtools
+
+   my_axis_t my_axis{N0, N1, N2, ...};
+
+where the ``Nx`` are the sizes of region ``x``. With our axis object we can now generate a grid with one of the following
+signatures
+
+.. code-block:: gridtools
+
+   grid make_grid(int size_i, int size_j, axis<N> my_axis)
+   grid make_grid(halo_descriptor halo_i, halo_descriptor halo_j, axis<N> my_axis)
+
+Each region already defines a :term:`Vertical Interval` which can be queried from the axis by
+
+.. code-block:: gridtools
+
+   using first_interval = my_axis_t::get_interval<0>;
+   using second_interval = my_axis_t::get_interval<1>;
+   using full_interval = my_axis_t::full_interval;
+   ...
+
+Note that the :term:`Vertical Intervals<Vertical Interval>` are compile time object, i.e. C++ types. These :term:`Vertical Intervals<Vertical Interval>`
+are used for defining which :term:`Apply-Method` version of the stencil operator should be used during the iteration.
+
+:term:`Vertical Interval` provides meta-functions which allow to define modified :term:`Vertical Intervals<Vertical Interval>`
+
+- ``interval::first_level``, which is the Interval (a C++ type) describing the first level of the Interval
+- ``interval::last_level``, which is Interval describing the last level of the Interval
+- ``interval::modify<begin, end>``, which is an Interval extended (``begin`` < 0) or shrunk (``begin`` > 0) at the
+  beginning of the Interval and extended (``end`` > 0) or shrunk (``end`` < 0) at the end of the Interval.
+- ``interval::shift<value>``, which is the Interval shifted by ``value``, i.e. it is a shortcut for ``modify<value,
+  value>``.
+
+Examples:
+
+.. code-block:: gridtools
+
+   using axis_t = axis<2>; // axis with 2 vertical regions
+   axis_t my_axis(5, 10); // iteration space spans 5 + 10 levels
+
+   using first_interval = axis_t::get_interval<0>;         // interval [0, 4]
+   using second_interval = axis_t::get_interval<1>;        // [5, 14]
+   using full_interval = my_axis_t::full_interval;         // [0, 14]
+
+   using first_level_only_interval = full_interval::first_level; // [0]
+   using last_level_only_interval = full_interval::last_level;   // [14]
+   using a_middle_level_interval = second_interval::first_level; // [5]
+
+   using a_middle_interval = a_middle_level_interval::modify<-1, 0>; // [4, 5]
+   using a_middle_interval2 = a_middle_interval::shift<1>;           // [5, 6]
+
+.. note::
+
+   Only two levels around a vertical region can be addressed in this way. This can be changed by using the method
+   described in the :ref:`next section<vertical_regions_advanced>`.
+
+
+.. _vertical_regions_advanced:
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Advanced Functionality for Vertical Intervals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``axis`` type has an additional template parameter to change a default restriction:
+
+.. code-block:: gridtools
+
+   template <size_t NIntervals, axis_config::offset_limit<int = 2>> class axis;
+
+- ``offset_limit`` defines how many levels around each vertical region can be addressed by specialized
+  ``Apply``-methods. Increasing this value could have negative implications on compile-time.
+
+----------------------------
+**run**: Computation Driver
+----------------------------
+
+|GT| provides the ``gridtools::run`` function to execute a stencil computation. It has the following signature:
+
+.. cpp:function:: void run(specification, backend, grid, fields ...)
+
+The types of parameters are not specified on purpose: none of the types that ``run`` accepts are part of the public API.
+The parameters have the following meaning:
+
+  * **specification** describes the stencil composition. Even thought technically it is a callable object, it never
+    gets called. It is better to think about this parameter as a micro script that is written in |GT|'s DSL.
+  * **backend** specifies the :term:`Backend` that is used to execute the computation.
+  * **grid** defines the computation space
+  * **fields ...** -- the storages on which the computation is performed. The number of the fields is defined by
+    the ``specification`` parameter. The storage types have to model the SID concept.
+
+---------------------------------
+Stencil Composition Specification
+---------------------------------
+
+Informally the first parameter of the ``run`` should be a generic lambda function, where its arguments represent
+the fields that participate in the computation. Please mind the terminology, the specification arguments are not fields,
+they just represent them. They serve as place holders. The only thing you can do with those arguments is passing them to
+the |GT| syntax constructs described below.
+
+The temporary fields (that are managed by |GT|) should be declared with the lambda by using ``GT_DECLARE_TMP``.
+It accepts the type of the element as a first parameter. Other parameters are the names of the temporaries.
+
+The specification (this generic lambda) returns a single C++ expression split by dots into |GT| syntax clauses.
+The first clause always specifies an execution model. The next zero or more clauses describe software caches. Other
+clauses correspond to computation stages.
+
+The following example demonstrates how to create a specification for a diffusion operator.
+
+.. code-block:: gridtools
+
+ auto const spec = [](auto in, auto coeff, auto out) {
+     GT_DECLARE_TMP(double, lap, flx, fly);
+     return execute_parallel()
+         .ij_cached(lap, flx, fly)
+         .stage(lap_function(), lap, in)
+         .stage(flx_function(), flx, in, lap)
+         .stage(fly_function(), fly, in, lap)
+         .stage(out_function(), out, in, flx, fly, coeff);
+ };
+
+This specification can be executed as follows:
+
+.. code-block:: gridtools
+
+ run(spec, backend_t(), grid, in, coeff, out);
+
+.. _stage:
+
+^^^^^^^^^^^^^^^^^^^^^^^
+The Notion of a Stage
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The main component of |GT| provides the capability of composing different :term:`Stages<Stage>`. A stage is the
+application of a single :term:`Stencil Operator` to an :term:`Iteration Space`. The ability to fuse multiple stages
+allows the |GT| library to improve the memory locality of the computation by taking advantage of the produce consumer
+relations.
+
+A stage is specified by indicating a :term:`Stencil Operator` and some
+:term:`Placeholders<Placeholder>` to its arguments. The placeholders are
+either parameters of the specification lambda function or temporary placeholders declared by ``GT_DECLARE_TMP``.
+The syntax is the following:
+
+.. code-block:: gridtools
+
+ ... .stage(operator(), plc0, plc1, ...) ...
+
+Where the `operator` is the stencil operator of the stage and the `plc0`,
+`plc1`, … are the placeholders. The number and the intent of the placeholders depend on the :term:`Stencil Operator`.
+
+.. note ::
+
+ When composing stencils, each output data field must be written only
+ once. Violating this constraint results in undefined behavior.
+
+.. note::
+
+ The ability to compose stages and profiting from improved memory locality is the key feature of |GT|.
+ If your application
+ is made of a simple stencil, or stencils that cannot be
+ composed (see below), then |GT| might not be the right solution
+ for you.
+
+The data-dependence analysis of |GT| will determine the data flow
+and the :term:`Extents<Extent>` at which each data field will be accessed. This
+information is then passed to the architecture specific backend for
+execution.
+
+^^^^^^^^^^^^^^^^^^^^^^^
+Multi-Pass Computations
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The stencil composition specification allows also to combine several passes with different execution orders
+in a single computation. This is very useful for implementing computations that require two vertical sweeps,
+one ascending and one descending.
+
+.. code-block:: gridtools
+
+ auto const vertical_advection = [](auto utens_stage, auto wcon, auto u_pos) {
+    return multi_pass(
+        execute_forward().stage(forward_op(), utens_stage, wcon),
+        execute_backward().stage(backward_op(), utens_stage, u_pos)
+        );
+ };
+
+This option is particularly useful on multi-core machines with caches, since
+the backend can actively pass information between the two stages thus
+improving substantially the performance.
+
+.. _backend-selection:
+
+---------------------
+Selecting the Backend
+---------------------
+
+One of the key concepts of |GT| is portability between different target architectures.
+Stencil operators are written and composed in an architecture-independent way and then instantiated
+for a given ``backend``. The ``backend`` is a tag type with with the following possible values:
+
+- ``stencil::gpu<>``: a GPU-enabled backend for NVIDIA GPUs
+- ``stencil::cpu_ifirst<>``: a backend for modern CPUs with long vector-length.
+- ``stencil::cpu_kfirst<>``: a legacy CPU-backend with focus on caching of vertical stencils, likely to be removed in the future.
+
+Currently we recommend one of the following two backends for optimal performance
+
+.. code-block:: gridtools
+
+   using backend_t = stencil::gpu<>;
+
+for GPUs or
+
+.. code-block:: gridtools
+
+   using backend_t = stencil::cpu_ifirst<>;
+
+for modern CPUs.

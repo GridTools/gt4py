@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+rm -rf @test_build_dir@
+mkdir -p @test_build_dir@
+@CMAKE_COMMAND@ -S @test_source_dir@ -B @test_build_dir@ && cmake --build @test_build_dir@ && @test_build_dir@/main

@@ -1,0 +1,10 @@
+if (TARGET gcl_cpu)
+    gridtools_add_mpi_test(cpu test_all_to_all_halo_3D SOURCES test_all_to_all_halo_3D.cpp)
+    gridtools_add_mpi_test(cpu test_halo_exchange_3D_cpu SOURCES test_halo_exchange_3D.cpp LIBRARIES gmock)
+    target_compile_definitions(test_halo_exchange_3D_cpu PRIVATE GT_STORAGE_CPU_KFIRST GT_GCL_CPU)
+endif()
+
+if (TARGET gcl_gpu)
+    gridtools_add_mpi_test(gpu test_halo_exchange_3D_gpu SOURCES test_halo_exchange_3D.cpp LIBRARIES gmock)
+    target_compile_definitions(test_halo_exchange_3D_gpu PRIVATE GT_STORAGE_GPU GT_GCL_GPU)
+endif()

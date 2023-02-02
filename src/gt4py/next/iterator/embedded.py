@@ -1053,10 +1053,7 @@ def np_as_located_field(
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
-            try:
-                return a[_shift_field_indices(indices, offsets) if offsets else indices]
-            except Exception:
-                return np.nan
+            return a[_shift_field_indices(indices, offsets) if offsets else indices]
 
         return LocatedFieldImpl(
             getter,
