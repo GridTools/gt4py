@@ -27,6 +27,7 @@ from gt4py.next.ffront.fbuiltins import (
     as_offset,
     astype,
     broadcast,
+    float32,
     float64,
     int32,
     int64,
@@ -34,7 +35,6 @@ from gt4py.next.ffront.fbuiltins import (
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.builtins import float32
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
