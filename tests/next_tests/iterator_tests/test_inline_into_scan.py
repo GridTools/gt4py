@@ -82,6 +82,3 @@ def test_respect_scoping():
     )
     actual = InlineIntoScan().visit(testee)
     assert actual == expected
-
-
-test_respect_scoping()

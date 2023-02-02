@@ -33,8 +33,8 @@ def test_scan_in_field_op(program_processor, lift_mode):
 
     isize = 1
     ksize = 3
-    IDim = Dimension("I", kind=DimensionKind.HORIZONTAL)
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    IDim = Dimension("I")
+    KDim = Dimension("K")
     Koff = offset("Koff")
     inp = np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
     out = np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
@@ -62,7 +62,7 @@ def test_scan_in_field_op(program_processor, lift_mode):
         inp,
         out=out,
         lift_mode=lift_mode,
-        offset_provider={"I": IDim, "K": KDim, "Koff": KDim},
+        offset_provider={"Koff": KDim},
         column_axis=KDim,
     )
 

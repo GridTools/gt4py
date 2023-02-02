@@ -13,14 +13,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py import eve
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir, type_inference
+
+
+def _count_tuple(count: int, dtype: type_inference.Tuple | type_inference.EmptyTuple) -> int:
+    if isinstance(dtype, type_inference.EmptyTuple):
+        return count
+    assert isinstance(dtype.others, (type_inference.Tuple, type_inference.EmptyTuple))
+    return _count_tuple(count + 1, dtype.others)
+
+
+def _get_tuple_size(node: ir.Node) -> int:
+    infered_type = type_inference.infer(node)
+    assert isinstance(infered_type, type_inference.Val)
+    assert isinstance(infered_type.kind, type_inference.Value)
+    dtype = infered_type.dtype
+    assert isinstance(dtype, (type_inference.Tuple, type_inference.EmptyTuple))
+    return _count_tuple(0, dtype)
 
 
 class MergeTuple(eve.NodeTranslator):
     """Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t."""
 
-    # TODO if we don't check if the inner tuple `t` has same size N, i.e. outer and inner have same size
-    # we will have issues, in case the result is assigned into an external buffer which expects tuple of smaller size
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         if node.fun == ir.SymRef(id="make_tuple") and all(
             isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
@@ -28,11 +42,17 @@ class MergeTuple(eve.NodeTranslator):
         ):
             assert isinstance(node.args[0], ir.FunCall)
             first_expr = node.args[0].args[1]
+
             for i, v in enumerate(node.args):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
                 if not (int(v.args[0].value) == i and v.args[1] == first_expr):
                     return self.generic_visit(node)
+
+            if _get_tuple_size(first_expr) != len(
+                node.args
+            ):  # not all elements of the tuple are used, don't remove
+                return self.generic_visit(node)
 
             return first_expr
         return self.generic_visit(node)

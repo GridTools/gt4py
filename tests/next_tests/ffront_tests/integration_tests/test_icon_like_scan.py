@@ -23,11 +23,7 @@ from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
-
-# TODO duplicated from test_execution
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
-    yield request.param
+from ..ffront_test_utils import fieldview_backend
 
 
 Cell = Dimension("Cell")
@@ -46,7 +42,7 @@ def _scan(
 ) -> tuple[float, float, bool]:
     z_q_m1, w_m1, first = state
     z_g = z_b + z_a * z_q_m1
-    z_q_new = -z_c * z_g
+    z_q_new = (0.0 - z_c) * z_g
     w_new = z_a * w_m1 * z_g
     return (z_q, w, False) if first else (z_q_new, w_new, False)
 
@@ -57,12 +53,12 @@ def _solve_nonhydro_stencil_52_like(
     z_beta: Field[[Cell, KDim], float],
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
-) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float]]:
+) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float], Field[[Cell, KDim], bool]]:
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
-    z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
-    return z_q_res, w_res
+    z_q_res, w_res, dummy = _scan(w, z_q, z_a, z_b, z_c)
+    return z_q_res, w_res, dummy
 
 
 @program
@@ -71,6 +67,7 @@ def solve_nonhydro_stencil_52_like(
     z_beta: Field[[Cell, KDim], float],
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
+    dummy: Field[[Cell, KDim], bool],
 ):
 
     _solve_nonhydro_stencil_52_like(
@@ -78,7 +75,7 @@ def solve_nonhydro_stencil_52_like(
         z_beta,
         z_q,
         w,
-        out=(z_q[:, 1:], w[:, 1:]),
+        out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:]),
     )
 
 
@@ -102,9 +99,10 @@ def solve_nonhydro_stencil_52_like_z_q(
     z_beta: Field[[Cell, KDim], float],
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
+    z_q_out: Field[[Cell, KDim], float],
 ):
 
-    _solve_nonhydro_stencil_52_like_z_q(z_alpha, z_beta, z_q, w, out=z_q[:, 1:])
+    _solve_nonhydro_stencil_52_like_z_q(z_alpha, z_beta, z_q, w, out=z_q_out[:, 1:])
 
 
 @field_operator
@@ -127,40 +125,10 @@ def solve_nonhydro_stencil_52_like_z_q_tup(
     z_beta: Field[[Cell, KDim], float],
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
+    z_q_out: Field[[Cell, KDim], float],
 ):
 
-    _solve_nonhydro_stencil_52_like_z_q_tup(z_alpha, z_beta, z_q, w, out=(z_q[:, 1:],))
-
-
-@field_operator
-def _solve_nonhydro_stencil_52_like_w(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-) -> Field[[Cell, KDim], float]:
-    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
-    z_c = z_beta * z_alpha(Koff[1])
-    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
-    z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
-    return w_res
-
-
-@program
-def solve_nonhydro_stencil_52_like_w(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-):
-
-    _solve_nonhydro_stencil_52_like_w(
-        z_alpha,
-        z_beta,
-        z_q,
-        w,
-        out=w[:, 1:],
-    )
+    _solve_nonhydro_stencil_52_like_z_q_tup(z_alpha, z_beta, z_q, w, out=(z_q_out[:, 1:],))
 
 
 def reference(
@@ -207,54 +175,60 @@ def test_setup():
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
         z_q_ref, w_ref = reference(z_alpha, z_beta, z_q, w)
+        dummy = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
 
     return setup()
 
 
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Needs implementation of scan projector.")
+    if fieldview_backend == roundtrip.executor:
+        pytest.skip("Inline into scan breaks embedded execution.")
+
     solve_nonhydro_stencil_52_like_z_q.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
         test_setup.z_q,
         test_setup.w,
+        test_setup.z_q_out,
         offset_provider={"Koff": KDim},
     )
 
-    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
+    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
 
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Needs implementation of scan projector.")
+    if fieldview_backend == roundtrip.executor:
+        pytest.skip("Inline into scan breaks embedded execution.")
+
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
         test_setup.z_q,
         test_setup.w,
+        test_setup.z_q_out,
+        offset_provider={"Koff": KDim},
+    )
+
+    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
+
+
+def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
+    if fieldview_backend == roundtrip.executor:
+        pytest.skip("Inline into scan breaks embedded execution.")
+
+    solve_nonhydro_stencil_52_like.with_backend(fieldview_backend)(
+        test_setup.z_alpha,
+        test_setup.z_beta,
+        test_setup.z_q,
+        test_setup.w,
+        test_setup.dummy,
         offset_provider={"Koff": KDim},
     )
 
     assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-
-
-# def test_solve_nonhydro_stencil_52_like_w(test_setup):
-#     solve_nonhydro_stencil_52_like_w(
-#         test_setup.z_alpha,
-#         test_setup.z_beta,
-#         test_setup.z_q,
-#         test_setup.w,
-#         offset_provider={"Koff": KDim},
-#     )
-
-#     assert np.allclose(test_setup.w_ref, test_setup.w)
-
-
-# def test_solve_nonhydro_stencil_52_like(test_setup):
-#     solve_nonhydro_stencil_52_like(
-#         test_setup.z_alpha,
-#         test_setup.z_beta,
-#         test_setup.z_q,
-#         test_setup.w,
-#         offset_provider={"Koff": KDim},
-#     )
-
-#     assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-#     assert np.allclose(test_setup.w_ref, test_setup.w)
+    assert np.allclose(test_setup.w_ref, test_setup.w)
