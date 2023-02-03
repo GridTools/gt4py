@@ -34,8 +34,7 @@ else:
     ArrayLike = Any
     DTypeLike = Any
 
-from . import layout
-from . import utils as storage_utils
+from . import layout, utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):

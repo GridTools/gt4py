@@ -22,8 +22,7 @@ import pytest
 
 import gt4py.cartesian.definitions as gt_definitions
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
-from gt4py.cartesian.frontend import nodes
+from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
 from gt4py.cartesian.gtscript import (
     __INLINED,
     IJ,

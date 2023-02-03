@@ -21,8 +21,7 @@ from gt4py import eve
 from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.codegen import JinjaTemplate as as_jinja
+from gt4py.eve.codegen import FormatTemplate as as_fmt, JinjaTemplate as as_jinja
 
 
 __all__ = ["NpirCodegen"]

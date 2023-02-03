@@ -21,9 +21,14 @@ import numpy
 
 from gt4py.cartesian import utils as gt_utils
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace
-from gt4py.cartesian.utils.attrib import Any, AttributeClassLike
-from gt4py.cartesian.utils.attrib import Dict as DictOf
-from gt4py.cartesian.utils.attrib import attribclass, attribkwclass, attribute
+from gt4py.cartesian.utils.attrib import (
+    Any,
+    AttributeClassLike,
+    Dict as DictOf,
+    attribclass,
+    attribkwclass,
+    attribute,
+)
 
 
 @enum.unique

@@ -24,11 +24,8 @@ import numpy as np
 import pytest
 
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py import cartesian as gt
-from gt4py import cartesian as gt4pyc
-from gt4py import storage as gt_storage
-from gt4py.cartesian import gtscript
-from gt4py.cartesian import utils as gt_utils
+from gt4py import cartesian as gt, cartesian as gt4pyc, storage as gt_storage
+from gt4py.cartesian import gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
 from gt4py.cartesian.frontend.nodes import Index
 from gt4py.cartesian.gtc.definitions import Shape

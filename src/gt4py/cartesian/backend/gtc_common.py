@@ -20,8 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py.cartesian import backend as gt_backend
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import backend as gt_backend, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir
