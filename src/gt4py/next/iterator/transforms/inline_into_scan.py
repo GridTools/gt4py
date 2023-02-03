@@ -52,7 +52,7 @@ def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
         inlined = InlineLifts().visit(node)
         inlined = InlineLambdas.apply(
             inlined,
-            opcount_preserving=True,
+            opcount_preserving=False,
             force_inline_lift=True,
         )
         if inlined == node:
