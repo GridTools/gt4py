@@ -30,6 +30,8 @@ Cell = Dimension("Cell")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 Koff = FieldOffset("Koff", KDim, (KDim,))
 
+# TODO make a test case without the dummy (which can work in gtfn because of unconditional tuple merging)
+
 
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
@@ -69,7 +71,6 @@ def solve_nonhydro_stencil_52_like(
     w: Field[[Cell, KDim], float],
     dummy: Field[[Cell, KDim], bool],
 ):
-
     _solve_nonhydro_stencil_52_like(
         z_alpha,
         z_beta,
@@ -101,7 +102,6 @@ def solve_nonhydro_stencil_52_like_z_q(
     w: Field[[Cell, KDim], float],
     z_q_out: Field[[Cell, KDim], float],
 ):
-
     _solve_nonhydro_stencil_52_like_z_q(z_alpha, z_beta, z_q, w, out=z_q_out[:, 1:])
 
 
@@ -127,7 +127,6 @@ def solve_nonhydro_stencil_52_like_z_q_tup(
     w: Field[[Cell, KDim], float],
     z_q_out: Field[[Cell, KDim], float],
 ):
-
     _solve_nonhydro_stencil_52_like_z_q_tup(z_alpha, z_beta, z_q, w, out=(z_q_out[:, 1:],))
 
 
