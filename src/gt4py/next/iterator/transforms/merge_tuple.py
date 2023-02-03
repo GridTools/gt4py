@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from dataclasses import dataclass
+
 from gt4py import eve
 from gt4py.next.iterator import ir, type_inference
 
@@ -31,8 +33,21 @@ def _get_tuple_size(node: ir.Node) -> int:
     return _count_tuple(0, dtype)
 
 
+@dataclass(frozen=True)
 class MergeTuple(eve.NodeTranslator):
     """Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t."""
+
+    ignore_tuple_size: bool
+
+    @classmethod
+    def apply(cls, node: ir.Node, ignore_tuple_size: bool = False):
+        """
+        Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t.
+
+        If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
+        is greater than the length of the outer tuple.
+        """
+        return cls(ignore_tuple_size).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         if node.fun == ir.SymRef(id="make_tuple") and all(
@@ -48,10 +63,7 @@ class MergeTuple(eve.NodeTranslator):
                 if not (int(v.args[0].value) == i and v.args[1] == first_expr):
                     return self.generic_visit(node)
 
-            if _get_tuple_size(first_expr) != len(
-                node.args
-            ):  # not all elements of the tuple are used, don't remove
-                return self.generic_visit(node)
+            if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
+                return first_expr
 
-            return first_expr
         return self.generic_visit(node)

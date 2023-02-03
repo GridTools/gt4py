@@ -164,6 +164,7 @@ class GTFNTranslationStep(
         stencil_src = gtfn_backend.generate(
             program,
             enable_itir_transforms=self.enable_itir_transforms,
+            unconditional_tuple_merge=True,  # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             imperative=self.use_imperative_backend,
             **inp.kwargs,
         )

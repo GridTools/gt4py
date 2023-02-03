@@ -54,6 +54,7 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lift=False,
+    unconditional_tuple_merge=False,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -82,7 +83,7 @@ def apply_common_transforms(
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:
-        ir = MergeTuple().visit(ir)
+        ir = MergeTuple.apply(ir, ignore_tuple_size=unconditional_tuple_merge)
         # TODO needs to re-run multiple times as there might be multiple levels of lambdas around the scan
         ir = InlineIntoScan().visit(ir)
         ir = InlineLambdas.apply(ir, True, True)
