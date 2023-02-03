@@ -1,5 +1,5 @@
-import functional.iterator.ir as itir
-from functional.program_processors.processor_interface import program_executor
+import gt4py.next.iterator.ir as itir
+from gt4py.next.program_processors.processor_interface import program_executor
 
 
 @program_executor

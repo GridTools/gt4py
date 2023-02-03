@@ -77,6 +77,8 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
             num_targets=num_targets
         )
 
+    sdfg.view()
+
     return target_field
 
 
