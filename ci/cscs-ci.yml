@@ -66,7 +66,6 @@ test py38:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - pip install clang-format
   - tox --sitepackages -r -e $PYVERSION_PREFIX-all-cuda112
   variables:
     CRAY_CUDA_MPS: 1
