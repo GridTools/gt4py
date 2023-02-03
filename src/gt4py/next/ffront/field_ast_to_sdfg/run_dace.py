@@ -1,6 +1,7 @@
 from typing import Any, Sequence
 
 import dace
+from dace.transformation.dataflow import MapFusion
 import numpy as np
 
 from gt4py.next.ffront import program_ast as past
@@ -18,24 +19,26 @@ def convert_arg(arg: Any) -> Any:
 def run_dace(
     program: past.Program, closure_vars: dict[str, Any], args: Sequence[Any], kwargs: dict[str, Any]
 ):
-    program_lowering = past_to_sdfg.PastToSDFG()
+    program_lowering = past_to_sdfg.PastToSDFG(closure_vars)
     program_lowering.visit(program)
     sdfg: dace.SDFG = program_lowering.sdfg
     sdfg.save("gt4py_dace.sdfg")
-    sdfg.view()
 
-    converted_args = [convert_arg(arg) for arg in args]
+    sdfg.simplify()
+    sdfg.apply_transformations_repeated(MapFusion)
 
-    shape_and_stride_symbols = dict()
-    for param, arg in zip(program.params, converted_args):
-        shape_and_stride_symbols[str(param.id)] = arg
-        for i, value in enumerate(arg.shape):
-            shape_and_stride_symbols[f"_size_{param.id}_{i}"] = value
-        for i, value in enumerate(arg.strides):
-            shape_and_stride_symbols[f"_stride_{param.id}_{i}"] = value // arg.dtype.itemsize
+    #sdfg.view()
+
+    converted_args = {}
+
+    for param, arg in zip(program.params, args):
+        converted_args[str(param.id)] = convert_arg(arg)
+
+    for dim, size in enumerate(converted_args[program.params[0].id].shape):
+        converted_args[f"size{dim}"] = size
 
     with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "build_type", value="Debug")
-        dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        dace.config.Config.set("compiler", "build_type", value="RelWithDebInfo")
+        #dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(**shape_and_stride_symbols)
+        sdfg(**converted_args)

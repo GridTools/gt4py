@@ -8,7 +8,9 @@ def unstructured_shift(source_field: np.array, target_to_source_map: np.array) -
     target_field = np.zeros((target_size, num_neighbors))
     for target_element in range(0, target_size):
         for neighbor in range(0, num_neighbors):
-            target_field[target_element, neighbor] = source_field[target_to_source_map[target_element, neighbor]]
+            target_field[target_element, neighbor] = source_field[
+                target_to_source_map[target_element, neighbor]
+            ]
     return target_field
 
 
@@ -20,9 +22,7 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
     sdfg = dace.SDFG(name="unstructured_shift")
     state = sdfg.add_state("state", True)
 
-    source_shape = (
-        dace.symbol("num_sources", dtype=dace.int64),
-    )
+    source_shape = (dace.symbol("num_sources", dtype=dace.int64),)
     map_shape = (
         dace.symbol("num_targets", dtype=dace.int64),
         dace.symbol("num_neighbors", dtype=dace.int64),
@@ -74,7 +74,7 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
             target_field=target_field,
             num_neighbors=num_neighbors,
             num_sources=source_field.shape[0],
-            num_targets=num_targets
+            num_targets=num_targets,
         )
 
     sdfg.view()
@@ -91,7 +91,7 @@ def test_unstructured_shift():
             [2, 0],
             [0, 1],
         ],
-        dtype=np.int64
+        dtype=np.int64,
     )
 
     expected = unstructured_shift(source_field, mapping)
@@ -131,7 +131,7 @@ def test_partial_sum():
             [2, 0],
             [0, 1],
         ],
-        dtype=np.int64
+        dtype=np.int64,
     )
 
     expected = unstructured_shift(source_field, mapping)
