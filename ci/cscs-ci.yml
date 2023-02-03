@@ -25,7 +25,7 @@ build py38 baseimage:
   allow_failure: true
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/gt4py-ci:$PYVERSION
-    DOCKERFILE: Dockerfile
+    DOCKERFILE: ci/base.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "CI_PROJECT_DIR=$CI_PROJECT_DIR"]'
     <<: *py38
 
@@ -44,7 +44,7 @@ build py38 image:
   stage: image
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
-    DOCKERFILE: Dockerfile_image
+    DOCKERFILE: ci/checkout.Dockerfile
     DOCKER_BUILD_ARGS: '["PYVERSION=$PYVERSION", "CSCS_REGISTRY_PATH=$CSCS_REGISTRY_PATH"]'
     <<: *py38
 
