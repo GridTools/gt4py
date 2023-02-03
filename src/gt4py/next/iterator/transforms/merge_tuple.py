@@ -40,7 +40,7 @@ class MergeTuple(eve.NodeTranslator):
     ignore_tuple_size: bool
 
     @classmethod
-    def apply(cls, node: ir.Node, ignore_tuple_size: bool = False):
+    def apply(cls, node: ir.Node, ignore_tuple_size: bool = False) -> ir.Node:
         """
         Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t.
 
@@ -49,7 +49,7 @@ class MergeTuple(eve.NodeTranslator):
         """
         return cls(ignore_tuple_size).visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         if node.fun == ir.SymRef(id="make_tuple") and all(
             isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
             for arg in node.args
