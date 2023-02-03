@@ -3,9 +3,9 @@ from typing import Any, Sequence
 import dace
 import numpy as np
 
-from functional.ffront import program_ast as past
-from functional.ffront.field_ast_to_sdfg import past_to_sdfg
-from functional.iterator.embedded import LocatedField
+from gt4py.next.ffront import program_ast as past
+from gt4py.next.ffront.field_ast_to_sdfg import past_to_sdfg
+from gt4py.next.iterator.embedded import LocatedField
 
 
 def convert_arg(arg: Any) -> Any:

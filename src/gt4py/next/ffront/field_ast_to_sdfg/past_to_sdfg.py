@@ -1,28 +1,27 @@
 import dace
 
-import eve
-from functional.ffront import program_ast as past
-from functional.type_system import type_specifications as ts
-
-
-def type_spec_to_dtype(type_: ts.ScalarType):
-    if type_.kind == ts.ScalarKind.BOOL:
-        return dace.bool_
-    elif type_.kind == ts.ScalarKind.INT32:
-        return dace.int32
-    elif type_.kind == ts.ScalarKind.INT64:
-        return dace.int64
-    elif type_.kind == ts.ScalarKind.FLOAT32:
-        return dace.float32
-    elif type_.kind == ts.ScalarKind.FLOAT64:
-        return dace.float64
-    raise ValueError(f"scalar type {type_} not supported")
+import gt4py.eve as eve
+from gt4py.next.ffront import program_ast as past
+from gt4py.next.type_system import type_specifications as ts
+from .utility import type_spec_to_dtype
 
 
 class PastToSDFG(eve.NodeVisitor):
     sdfg: dace.SDFG
 
+    def visit_Name(self, node: past.Name):
+        ...
+
+    def visit_Call(self, node: past.Call):
+        ...
+
+    def visit_Constant(self, node: past.Constant):
+        ...
+
     def visit_Program(self, node: past.Program):
+        ...
+
+    def visit_Program_that_adds_stuff(self, node: past.Program):
         self.sdfg = dace.SDFG(name=node.id)
         last_state = self.sdfg.add_state("state", True)
 
