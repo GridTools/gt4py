@@ -23,4 +23,4 @@ import sys
 from gt4py.cartesian.gtscript import *
 
 
-sys.modules["__gtscript__"] = sys.modules["gt4py.__gtscript__"]
+sys.modules["__gtscript__"] = sys.modules["gt4py.cartesian.__gtscript__"]

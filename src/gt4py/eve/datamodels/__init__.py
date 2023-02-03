@@ -113,6 +113,5 @@ Examples:
 
 """
 
-from . import core as core  # noqa: F401  # imported but unused
-from . import validators as validators  # noqa: F401  # imported but unused
+from . import core as core, validators as validators  # noqa: F401  # imported but unused
 from .core import *  # noqa:   # star unused import

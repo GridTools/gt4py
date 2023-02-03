@@ -21,4 +21,4 @@ definitions for the keywords of the DSL.
 import sys
 
 
-sys.modules["__externals__"] = sys.modules["gt4py.__externals__"]
+sys.modules["__externals__"] = sys.modules["gt4py.cartesian.__externals__"]

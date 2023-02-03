@@ -1,0 +1,16 @@
+name: Gt4py / Coverage
+
+on:
+  workflow_run:
+    workflows: ["Gt4py / Test"]
+    types:
+    - completed
+
+jobs:
+  upload:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/template_coverage.yml
+    with:
+      workflow_run_id: ${{ github.event.workflow_run.id }}
+      coverage_flag: gt4py-all
+    secrets: inherit
