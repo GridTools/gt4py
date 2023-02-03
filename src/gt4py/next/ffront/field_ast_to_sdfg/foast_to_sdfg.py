@@ -16,9 +16,7 @@ class FoastToSDFG(eve.NodeTranslator):
     def visit_Symbol(self, node: foast.Symbol) -> str:
         if isinstance(node.type, ts.FieldType):
             num_dims = len(node.type.dims)
-            shape = tuple(
-                dace.symbol(f"size{i}", dtype=dace.int64) for i in range(num_dims)
-            )
+            shape = tuple(dace.symbol(f"size{i}", dtype=dace.int64) for i in range(num_dims))
             dtype = type_spec_to_dtype(node.type.dtype)
             self.sdfg.add_array(name=str(node.id), shape=shape, dtype=dtype, transient=False)
             return str(node.id)
@@ -38,31 +36,26 @@ class FoastToSDFG(eve.NodeTranslator):
         right_name = self.visit(node.right)
         output_name = self.sdfg.temp_data_name()
 
-        shape = tuple(
-            dace.symbol(f"size{i}", dtype=dace.int64) for i in range(num_dims)
-        )
+        shape = tuple(dace.symbol(f"size{i}", dtype=dace.int64) for i in range(num_dims))
         dtype = type_spec_to_dtype(node.type.dtype)
         self.sdfg.add_array(name=output_name, shape=shape, dtype=dtype, transient=True)
 
-        self.last_state = self.sdfg.add_state_after(self.last_state, f"binary_op_{node.op}")
+        self.last_state = self.sdfg.add_state_after(self.last_state, f"binary_op_{node.op.value}")
 
         domain = {f"idx{i}": f"0:size{i}" for i in range(num_dims)}
 
         input_memlets = {
             "left_element": dace.Memlet(
-                data=left_name,
-                subset=", ".join(f"idx{i}" for i in range(num_dims))
+                data=left_name, subset=", ".join(f"idx{i}" for i in range(num_dims))
             ),
             "right_element": dace.Memlet(
-                data=right_name,
-                subset=", ".join(f"idx{i}" for i in range(num_dims))
+                data=right_name, subset=", ".join(f"idx{i}" for i in range(num_dims))
             ),
         }
 
         output_memlets = {
             "output_element": dace.Memlet(
-                data=output_name,
-                subset=", ".join(f"idx{i}" for i in range(num_dims))
+                data=output_name, subset=", ".join(f"idx{i}" for i in range(num_dims))
             ),
         }
 
@@ -80,6 +73,7 @@ class FoastToSDFG(eve.NodeTranslator):
 
     def visit_Return(self, node: foast.Return) -> str:
         return_name = self.visit(node.value)
+        self.sdfg.arrays[return_name].transient = False
         return return_name
 
     def visit_FieldOperator(self, node: foast.FieldOperator) -> str:

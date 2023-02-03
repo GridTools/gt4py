@@ -11,7 +11,7 @@ IDim = Dimension("IDim")
 
 @field_operator(backend=run_dace_fieldview)
 def add(a: Field[[IDim], float], b: Field[[IDim], float]) -> Field[[IDim], float]:
-    return a + b
+    return a + b + a - a
 
 
 def test_dace_backend():
