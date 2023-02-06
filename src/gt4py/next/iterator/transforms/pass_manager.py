@@ -85,10 +85,15 @@ def apply_common_transforms(
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = MergeTuple.apply(ir, ignore_tuple_size=unconditional_tuple_merge)
-        # TODO needs to re-run multiple times as there might be multiple levels of lambdas around the scan
-        ir = InlineIntoScan().visit(ir)
-        ir = InlineLambdas.apply(ir, True, True)
-        ir = InlineIntoScan().visit(ir)
+        for _ in range(10):
+            # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
+            inlined = InlineIntoScan().visit(ir)
+            inlined = InlineLambdas.apply(inlined, True, True)
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining into scan did not converge.")
 
     ir = NormalizeShifts().visit(ir)
 
