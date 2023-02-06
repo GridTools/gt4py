@@ -17,7 +17,6 @@ import random
 import string
 from typing import Collection, Dict, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
-import gt4py.eve.concepts
 from gt4py.eve.concepts import (
     AnySourceLocation,
     FrozenNode,

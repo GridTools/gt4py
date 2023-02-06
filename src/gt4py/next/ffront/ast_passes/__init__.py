@@ -12,8 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
-
 from .simple_assign import SingleAssignTargetPass
 from .single_static_assign import SingleStaticAssignPass
 from .stringify_annotations import StringifyAnnotationsPass

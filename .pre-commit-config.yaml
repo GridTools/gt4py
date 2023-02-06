@@ -83,7 +83,7 @@ repos:
     exclude: |
       (?x)^(
       setup.py |
-      docs/user/conf.py |
+      docs/user/cartesian/conf.py |
       src/gt4py/cartesian/__gtscript__.py |
       src/gt4py/cartesian/__init__.py |
       src/gt4py/cartesian/gtscript.py |
