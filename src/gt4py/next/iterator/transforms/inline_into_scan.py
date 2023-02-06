@@ -52,7 +52,7 @@ def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
         inlined = InlineLifts().visit(node)
         inlined = InlineLambdas.apply(
             inlined,
-            opcount_preserving=False,  # we fully inline because of the limitation of `scan`s in fieldview, see ADR 14.
+            opcount_preserving=False,  # TODO consider enabling opcount_preserving
             force_inline_lift=True,
         )
         if inlined == node:
