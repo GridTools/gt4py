@@ -30,8 +30,6 @@ Cell = Dimension("Cell")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 Koff = FieldOffset("Koff", KDim, (KDim,))
 
-# TODO make a test case without the dummy (which can work in gtfn because of unconditional tuple merging)
-
 
 @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
@@ -56,6 +54,7 @@ def _solve_nonhydro_stencil_52_like(
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
 ) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float], Field[[Cell, KDim], bool]]:
+    """No projector required as we write all output of the scan (including dummy field)"""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
@@ -77,6 +76,37 @@ def solve_nonhydro_stencil_52_like(
         z_q,
         w,
         out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:]),
+    )
+
+
+@field_operator
+def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
+    z_alpha: Field[[Cell, KDim], float],
+    z_beta: Field[[Cell, KDim], float],
+    z_q: Field[[Cell, KDim], float],
+    w: Field[[Cell, KDim], float],
+) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float]]:
+    """In inlining, relies on MergeTuple with ignore_tuple_size=True (only working with gtfn)."""
+    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
+    z_c = z_beta * z_alpha(Koff[1])
+    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
+    z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
+    return z_q_res, w_res
+
+
+@program
+def solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
+    z_alpha: Field[[Cell, KDim], float],
+    z_beta: Field[[Cell, KDim], float],
+    z_q: Field[[Cell, KDim], float],
+    w: Field[[Cell, KDim], float],
+):
+    _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
+        z_alpha,
+        z_beta,
+        z_q,
+        w,
+        out=(z_q[:, 1:], w[:, 1:]),
     )
 
 
@@ -199,10 +229,12 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Needs implementation of scan projector.")
+    # if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    #     pytest.skip("Needs implementation of scan projector.")
     if fieldview_backend == roundtrip.executor:
-        pytest.skip("Inline into scan breaks embedded execution.")
+        pytest.skip(
+            "Inline into scan breaks embedded execution and relies on MergeTuple ignore_tuple_size==True."
+        )
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -226,6 +258,22 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
         test_setup.z_q,
         test_setup.w,
         test_setup.dummy,
+        offset_provider={"Koff": KDim},
+    )
+
+    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
+    assert np.allclose(test_setup.w_ref, test_setup.w)
+
+
+def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
+    if fieldview_backend == roundtrip.executor:
+        pytest.skip("Only working in gtfn with MergeTuple ignore_tuple_size==True.")
+
+    solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
+        test_setup.z_alpha,
+        test_setup.z_beta,
+        test_setup.z_q,
+        test_setup.w,
         offset_provider={"Koff": KDim},
     )
 
