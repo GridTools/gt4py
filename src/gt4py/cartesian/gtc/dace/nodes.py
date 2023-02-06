@@ -15,7 +15,7 @@
 import base64
 import pickle
 import typing
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Optional, Set, Union
 
 import dace.data
 import dace.dtypes
@@ -114,9 +114,9 @@ class StencilComputation(library.LibraryNode):
     def __init__(
         self,
         name="unnamed_vloop",
-        oir_node: VerticalLoop = None,
-        extents: Dict[int, Extent] = None,
-        declarations: Dict[str, Decl] = None,
+        oir_node: Optional[VerticalLoop] = None,
+        extents: Optional[Dict[int, Extent]] = None,
+        declarations: Optional[Dict[str, Decl]] = None,
         expansion_order=None,
         *args,
         **kwargs,

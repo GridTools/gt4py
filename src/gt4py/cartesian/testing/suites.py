@@ -26,9 +26,8 @@ import pytest
 import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import cartesian as gt, cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript, utils as gt_utils
-from gt4py.cartesian.definitions import AccessKind, Boundary, CartesianSpace, FieldInfo
-from gt4py.cartesian.frontend.nodes import Index
-from gt4py.cartesian.gtc.definitions import Shape
+from gt4py.cartesian.definitions import AccessKind, FieldInfo
+from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
 from gt4py.storage import utils as storage_utils
 
@@ -135,7 +134,6 @@ class SuiteMeta(type):
         cls_dict["origin"] = tuple(o[0] for o in max_boundary)
 
     def parametrize_generation_tests(cls_name, cls_dict):
-
         backends = cls_dict["backends"]
         dtypes = cls_dict["dtypes"]
         field_params = cls_dict["field_params"]

@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Dict, Union
+from typing import Any, Collection, Dict, Optional, Union
 
 import numpy as np
 
@@ -41,7 +41,6 @@ def _offset_limit(root: eve.Node) -> int:
 
 
 class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
-
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
     GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
@@ -85,7 +84,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         accessor_ref: gtcpp.AccessorRef,
         *,
         symtable: Dict[str, gtcpp.GTAccessor],
-        temp_decls: Dict[str, gtcpp.Temporary] = None,
+        temp_decls: Optional[Dict[str, gtcpp.Temporary]] = None,
         **kwargs: Any,
     ):
         temp_decls = temp_decls or {}

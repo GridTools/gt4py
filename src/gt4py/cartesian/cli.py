@@ -18,7 +18,19 @@ import importlib
 import pathlib
 import sys
 from types import ModuleType
-from typing import Any, Callable, Dict, Generator, KeysView, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    KeysView,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import click
 import tabulate
@@ -270,7 +282,7 @@ def list_backends() -> None:
 @click.option(
     "--backend",
     "-b",
-    type=BackendChoice(BackendChoice.get_backend_names()),
+    type=BackendChoice(cast(Sequence[str], BackendChoice.get_backend_names())),
     required=True,
     help="Choose a backend",
     is_eager=True,

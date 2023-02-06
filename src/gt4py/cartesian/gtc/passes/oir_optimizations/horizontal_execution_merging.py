@@ -166,7 +166,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self,
         node: oir.FieldAccess,
         *,
-        offset_symbol_map: Dict[Tuple[str, Tuple[int, int, int]], str] = None,
+        offset_symbol_map: Optional[Dict[Tuple[str, Tuple[int, int, int]], str]] = None,
         **kwargs: Any,
     ) -> Union[oir.FieldAccess, oir.ScalarAccess]:
         if offset_symbol_map:
