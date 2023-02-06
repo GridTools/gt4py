@@ -47,12 +47,12 @@ def _should_inline(node: ir.FunCall) -> bool:
 
 
 def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
-    # TODO consider extracting this similar function from passmanager
+    # TODO(havogt): consider extracting this similar function from passmanager
     for _ in range(10):
         inlined = InlineLifts().visit(node)
         inlined = InlineLambdas.apply(
             inlined,
-            opcount_preserving=False,
+            opcount_preserving=False,  # we fully inline because of the limitation of `scan`s in fieldview, see ADR 14.
             force_inline_lift=True,
         )
         if inlined == node:
@@ -80,7 +80,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     - it is called with the original args of the scan: `sym0, f(sym0,sym1,sym2)`
     - wrap the new scanpass in a scan call with the original `forward` and `init`
     - call it with the extrated symrefs
-    - note: there is no symbol clash, re-used
+    - note: there is no symbol clash
     """
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
