@@ -214,7 +214,9 @@ def test_tuple_of_tuple_of_field_output(program_processor_no_gtfn_exec, column_a
 def test_field_of_tuple_output(program_processor_no_gtfn_exec, stencil, column_axis):
     program_processor, validate = program_processor_no_gtfn_exec
     if stencil == tuple_output1 and column_axis is not None:
-        pytest.xfail("need to transform tuple of Column to Column of tuple")
+        pytest.xfail(
+            "Constructing a tuple with `(,)` results in tuple of Columns instead of Column of tuple. Forbid?"
+        )
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -254,7 +256,9 @@ def test_field_of_tuple_output(program_processor_no_gtfn_exec, stencil, column_a
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil, column_axis):
     program_processor, validate = program_processor
     if stencil == tuple_output1 and column_axis is not None:
-        pytest.xfail("need to transform tuple of Column to Column of tuple")
+        pytest.xfail(
+            "Constructing a tuple with `(,)` results in tuple of Columns instead of Column of tuple. Forbid?"
+        )
 
     @fendef
     def fencil(size0, size1, size2, inp1, inp2, out1, out2):
@@ -363,7 +367,9 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 def test_field_of_extra_dim_output(program_processor_no_gtfn_exec, stencil, column_axis):
     program_processor, validate = program_processor_no_gtfn_exec
     if stencil == tuple_output1 and column_axis is not None:
-        pytest.xfail("need to transform tuple of Column to Column of tuple")
+        pytest.xfail(
+            "Constructing a tuple with `(,)` results in tuple of Columns instead of Column of tuple. Forbid?"
+        )
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
