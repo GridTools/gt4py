@@ -336,11 +336,11 @@ def test_offset_field(fieldview_backend):
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
     a_I_float_1 = np_as_located_field(IDim, KDim)(
-        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * 11)], axis=0)
+        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
     )
     offset_field_arr = np.asarray(np.ones((size - 1, size - 1)), dtype=int64)
     offset_field_comp = np.append(
-        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * 10)], axis=0
+        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
     )
     offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
     out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
