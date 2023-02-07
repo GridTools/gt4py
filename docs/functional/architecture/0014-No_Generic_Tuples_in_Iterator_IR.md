@@ -54,7 +54,7 @@ lift(lambda a,b: return make_tuple(deref(a), deref(b)))
 
 ## Conclusion
 
-Iterator IR is focused around liftable stencils. Passing tuples of iterators pointing to different locations is not a useful feature in Iterator IR as in the stencil body you need to work with the decomposed tuple anyway to move it to the right locations, to be able to deref.
+The composability of Iterator IR is focused around liftable stencils. Lifting requires that all input iterators current location types match. Passing tuples of iterators pointing to different locations is not a useful feature in Iterator IR, as this makes the resulting function non-liftable and thus non-composable.
 
 TODO improve this blabla
 
