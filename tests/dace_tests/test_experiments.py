@@ -94,6 +94,11 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
         schedule=dace.ScheduleType.Sequential,
     )
 
+    sdfg.simplify()
+    from dace.transformation.dataflow import MapFusion
+    sdfg.apply_transformations_repeated(MapFusion)
+    sdfg.view()
+
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "build_type", value="Debug")
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
@@ -106,11 +111,6 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
             num_sources=source_field.shape[0],
             num_targets=num_targets,
         )
-
-    sdfg.simplify()
-    from dace.transformation.dataflow import MapFusion
-    sdfg.apply_transformations_repeated(MapFusion)
-    sdfg.view()
 
     return target_field
 
