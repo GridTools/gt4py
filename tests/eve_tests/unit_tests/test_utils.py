@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -22,12 +20,12 @@ from typing import Any
 
 import pytest
 
-import eve
-from eve.utils import XIterable
+from gt4py import eve
+from gt4py.eve.utils import XIterable
 
 
 def test_getitem_():
-    from eve.utils import getitem_
+    from gt4py.eve.utils import getitem_
 
     mapping = {
         "true": True,
@@ -169,7 +167,7 @@ def hash_algorithm(request):
 
 
 def test_shash(unique_data_items, hash_algorithm):
-    from eve.utils import content_hash
+    from gt4py.eve.utils import content_hash
 
     # Test hash consistency
     for item in unique_data_items:
@@ -191,7 +189,7 @@ def test_shash(unique_data_items, hash_algorithm):
 # -- CaseStyleConverter --
 @pytest.fixture
 def name_with_cases():
-    from eve.utils import CaseStyleConverter
+    from gt4py.eve.utils import CaseStyleConverter
 
     cases = {
         "words": ["first", "second", "UPPER", "Title"],
@@ -207,7 +205,7 @@ def name_with_cases():
 
 
 def test_case_style_converter(name_with_cases):
-    from eve.utils import CaseStyleConverter
+    from gt4py.eve.utils import CaseStyleConverter
 
     words = name_with_cases.pop("words")
     for case, cased_string in name_with_cases.items():
@@ -228,7 +226,7 @@ def test_case_style_converter(name_with_cases):
 # -- UIDGenerator --
 class TestUIDGenerator:
     def test_random_id(self):
-        from eve.utils import UIDGenerator, UIDs
+        from gt4py.eve.utils import UIDGenerator, UIDs
 
         a = UIDs.random_id()
         b = UIDs.random_id()
@@ -250,7 +248,7 @@ class TestUIDGenerator:
         assert len(UIDs.sequential_id(width=10)) == 10
 
     def test_sequential_id(self):
-        from eve.utils import UIDGenerator, UIDs
+        from gt4py.eve.utils import UIDGenerator, UIDs
 
         i = UIDs.sequential_id()
         assert UIDs.sequential_id() != i
@@ -273,7 +271,7 @@ class TestUIDGenerator:
     def test_reset_sequence(self):
         import warnings
 
-        from eve.utils import UIDGenerator, UIDs
+        from gt4py.eve.utils import UIDGenerator, UIDs
 
         i = UIDs.sequential_id()
         counter = int(i)
@@ -309,7 +307,7 @@ class TestUIDGenerator:
 
 # -- Iterators --
 def test_xiter():
-    from eve.utils import xiter
+    from gt4py.eve.utils import xiter
 
     it = xiter(range(6))
     assert isinstance(it, XIterable)
@@ -321,6 +319,6 @@ def test_xiter():
 
 
 def test_xenumerate():
-    from eve.utils import xenumerate
+    from gt4py.eve.utils import xenumerate
 
     assert list(xenumerate(string.ascii_letters[:3])) == [(0, "a"), (1, "b"), (2, "c")]
