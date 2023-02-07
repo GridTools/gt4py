@@ -8,6 +8,7 @@ Authors
 * Cruz, Felipe. ETH Zurich - CSCS
 * Dahm, Johann. Allen Institute for AI
 * Davis, Eddie. Allen Institute for AI
+* Deconinck, Florian. SSAI/NASA-GSFC
 * Ehrengruber, Till. ETH Zurich - CSCS
 * George, Rhea. Allen Institute for AI
 * González Paredes, Enrique. ETH Zurich - CSCS
