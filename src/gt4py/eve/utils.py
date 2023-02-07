@@ -1279,7 +1279,7 @@ class XIterable(Iterable[T]):
 
     def groupby(
         self,
-        key: Union[str, List[Any], Callable[[T], Any]],
+        key: Union[str, List[Any], Callable[[T], Any] | operator.itemgetter[tuple[Any, ...]]],
         *attr_keys: str,
         as_dict: bool = False,
     ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:

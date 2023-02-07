@@ -300,7 +300,7 @@ class _Unifier:
 def unify(dtype: Type, constraints: set[tuple[Type, Type]]) -> Type:
     """Unify all given constraints."""
     # Deduplicate nodes, this can speed up later things a bit
-    memo = dict[T, T]()
+    memo = dict[T, T]()  # type: ignore[valid-type] # T has a bound
     dtype = _Dedup().visit(dtype, memo=memo)
     constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
     del memo
