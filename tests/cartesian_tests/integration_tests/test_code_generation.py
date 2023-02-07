@@ -69,8 +69,7 @@ def test_lazy_stencil(backend):
             field_a = field_b
 
 
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_temporary_field_declared_in_if(backend):
     @gtscript.stencil(backend=backend)
     def definition(field_a: gtscript.Field[np.float_]):
@@ -82,8 +81,7 @@ def test_temporary_field_declared_in_if(backend):
             field_a = field_b
 
 
-@pytest.mark.requires_gpu
-@pytest.mark.parametrize("backend", CPU_BACKENDS)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_stage_without_effect(backend):
     @gtscript.stencil(backend=backend)
     def definition(field_a: gtscript.Field[np.float_]):
@@ -430,7 +428,6 @@ def test_mask_with_offset_written_in_conditional(backend):
     def stencil(
         outp: gtscript.Field[np.float_],
     ):
-
         with computation(PARALLEL), interval(...):
             cond = True
             if cond[0, -1, 0] or cond[0, 0, 0]:
