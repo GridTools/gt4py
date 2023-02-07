@@ -19,12 +19,13 @@ from functools import reduce
 import numpy as np
 import pytest as pytest
 
+from gt4py.next.ffront import experimental
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
-    as_offset,
     astype,
     broadcast,
     float32,
@@ -333,6 +334,7 @@ def test_astype_float(fieldview_backend):
 
 
 def test_offset_field(fieldview_backend):
+
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
     a_I_float_1 = np_as_located_field(IDim, KDim)(
