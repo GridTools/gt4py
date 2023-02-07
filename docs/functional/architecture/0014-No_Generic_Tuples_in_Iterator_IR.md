@@ -5,7 +5,7 @@ tags: [iterator]
 # [No Generic Tuples in Iterator IR]
 
 - **Status**: valid
-- **Authors**: Enrique G. Pareded (@egparedes), Felix Thaler (@fthaler), Hannes Vogt (@havogt), Till Ehrengruber (@tehrengruber)
+- **Authors**: Enrique G. Paredes (@egparedes), Felix Thaler (@fthaler), Hannes Vogt (@havogt), Till Ehrengruber (@tehrengruber)
 - **Created**: 2022-01-18
 - **Updated**: 2022-01-18
 
