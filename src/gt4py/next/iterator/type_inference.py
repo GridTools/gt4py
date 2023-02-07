@@ -12,11 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import typing
 from collections import abc
+from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.next.common import DimensionKind
+from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
@@ -26,6 +28,9 @@ from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unif
 """Constraint-based inference for the iterator IR."""
 
 T = typing.TypeVar("T", bound="Type")
+
+# list of nodes that have a type
+TYPED_IR_NODES = (ir.Expr, ir.FunctionDefinition, ir.StencilClosure, ir.FencilDefinition)
 
 
 class EmptyTuple(Type):
@@ -374,15 +379,54 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
     return current_loc_in, current_loc_out
 
 
-class _TypeInferrer(eve.NodeTranslator):
+@dataclasses.dataclass
+class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
 
-    def __init__(self, offset_provider):
-        self.offset_provider = offset_provider
+    offset_provider: Optional[dict[str, Connectivity | Dimension]]
+    collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
+    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
 
-    def visit_SymRef(
-        self, node: ir.SymRef, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
-    ) -> Type:
+    @classmethod
+    def apply(
+        cls,
+        node: ir.Node,
+        offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+        symtypes: Optional[dict[str, Type]] = None,
+        reindex: bool = True,
+    ) -> dict[int, Type]:
+        """
+        Infer the types of the child expressions of a given iterator IR expression.
+
+        The result is a dictionary mapping the id of child nodes to their type.
+        """
+        if symtypes is None:
+            symtypes = {}
+
+        # Collect preliminary types of all nodes and constraints on them
+        inferrer = cls(offset_provider=offset_provider)
+        inferrer.visit(node, symtypes=symtypes)
+
+        # Ensure dict order is pre-order of the tree
+        collected_types = dict(reversed(inferrer.collected_types.items()))
+
+        # Compute the most general type that satisfies all constraints
+        unified_types = unify(list(collected_types.values()), inferrer.constraints)
+
+        if reindex:
+            unified_types = reindex_vars(list(unified_types))
+
+        return {
+            id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)
+        }
+
+    def visit(self, node, **kwargs):
+        type_ = super().visit(node, **kwargs)
+        if isinstance(node, TYPED_IR_NODES):
+            self.collected_types[id(node)] = type_
+        return type_
+
+    def visit_SymRef(self, node: ir.SymRef, symtypes: dict[str, Type], **kwargs) -> Type:
         if node.id in symtypes:
             res = symtypes[node.id]
             if isinstance(res, LetPolymorphic):
@@ -405,47 +449,41 @@ class _TypeInferrer(eve.NodeTranslator):
 
         return TypeVar.fresh()
 
-    def visit_Literal(
-        self, node: ir.Literal, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
-    ) -> Val:
+    def visit_Literal(self, node: ir.Literal, **kwargs) -> Val:
         return Val(kind=Value(), dtype=Primitive(name=node.type))
 
-    def visit_AxisLiteral(
-        self,
-        node: ir.AxisLiteral,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
-    ) -> Val:
+    def visit_AxisLiteral(self, node: ir.AxisLiteral, **kwargs) -> Val:
         return Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar())
 
-    def visit_OffsetLiteral(
-        self,
-        node: ir.OffsetLiteral,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
-    ) -> TypeVar:
+    def visit_OffsetLiteral(self, node: ir.OffsetLiteral, **kwargs) -> TypeVar:
         return TypeVar.fresh()
 
     def visit_Lambda(
-        self, node: ir.Lambda, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
+        self,
+        node: ir.Lambda,
+        symtypes: dict[str, Type],
+        **kwargs,
     ) -> FunctionType:
         ptypes = {p.id: TypeVar.fresh() for p in node.params}
-        ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
+        ret = self.visit(node.expr, symtypes=symtypes | ptypes, **kwargs)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
     def visit_FunCall(
-        self, node: ir.FunCall, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
+        self,
+        node: ir.FunCall,
+        symtypes: dict[str, Type],
+        **kwargs,
     ) -> Type:
         if isinstance(node.fun, ir.SymRef):
             if node.fun.id == "make_tuple":
                 # Calls to make_tuple are handled as being part of the grammar,
                 # not as function calls
-                argtypes = self.visit(node.args, constraints=constraints, symtypes=symtypes)
+                argtypes = self.visit(node.args, symtypes=symtypes, **kwargs)
                 kind = TypeVar.fresh()
                 size = TypeVar.fresh()
                 dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
                 for d, a in zip(dtype, argtypes):
-                    constraints.add((Val(kind=kind, dtype=d, size=size), a))
+                    self.constraints.add((Val(kind=kind, dtype=d, size=size), a))
                 return Val(kind=kind, dtype=dtype, size=size)
             if node.fun.id == "tuple_get":
                 # Calls to tuple_get are handled as being part of the grammar,
@@ -455,7 +493,7 @@ class _TypeInferrer(eve.NodeTranslator):
                 if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
                     raise TypeError("The first argument to tuple_get must be a literal int")
                 idx = int(node.args[0].value)
-                tup = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
+                tup = self.visit(node.args[1], symtypes=symtypes, **kwargs)
                 kind = TypeVar.fresh()
                 elem = TypeVar.fresh()
                 size = TypeVar.fresh()
@@ -469,13 +507,13 @@ class _TypeInferrer(eve.NodeTranslator):
                     dtype=dtype,
                     size=size,
                 )
-                constraints.add((tup, val))
+                self.constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
                 # as function calls, as the type depends on the offset provider
                 current_loc_in, current_loc_out = _infer_shift_location_types(
-                    node.args, self.offset_provider, constraints
+                    node.args, self.offset_provider, self.constraints
                 )
                 defined_loc = TypeVar.fresh()
                 dtype_ = TypeVar.fresh()
@@ -500,53 +538,53 @@ class _TypeInferrer(eve.NodeTranslator):
                 )
             if node.fun.id.endswith("domain"):
                 for arg in node.args:
-                    constraints.add(
+                    self.constraints.add(
                         (
                             Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-                            self.visit(arg, constraints=constraints, symtypes=symtypes),
+                            self.visit(arg, symtypes=symtypes, **kwargs),
                         )
                     )
                 return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
 
-        fun = self.visit(node.fun, constraints=constraints, symtypes=symtypes)
-        args = Tuple.from_elems(*self.visit(node.args, constraints=constraints, symtypes=symtypes))
+        fun = self.visit(node.fun, symtypes=symtypes, **kwargs)
+        args = Tuple.from_elems(*self.visit(node.args, symtypes=symtypes, **kwargs))
         ret = TypeVar.fresh()
-        constraints.add((fun, FunctionType(args=args, ret=ret)))
+        self.constraints.add((fun, FunctionType(args=args, ret=ret)))
         return ret
 
     def visit_FunctionDefinition(
         self,
         node: ir.FunctionDefinition,
-        constraints: set[tuple[Type, Type]],
         symtypes: dict[str, Type],
+        **kwargs,
     ) -> FunctionDefinitionType:
         if node.id in symtypes:
             raise TypeError(f"Multiple definitions of symbol {node.id}")
 
         fun = self.visit(
             ir.Lambda(params=node.params, expr=node.expr),
-            constraints=constraints,
             symtypes=symtypes,
+            **kwargs,
         )
-        constraints.add((fun, FunctionType()))
+        self.constraints.add((fun, FunctionType()))
         return FunctionDefinitionType(name=node.id, fun=fun)
 
     def visit_StencilClosure(
         self,
         node: ir.StencilClosure,
-        constraints: set[tuple[Type, Type]],
         symtypes: dict[str, Type],
+        **kwargs,
     ) -> Closure:
-        domain = self.visit(node.domain, constraints=constraints, symtypes=symtypes)
-        stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
-        output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
-        inputs = Tuple.from_elems(
-            *self.visit(node.inputs, constraints=constraints, symtypes=symtypes)
-        )
+        domain = self.visit(node.domain, symtypes=symtypes, **kwargs)
+        stencil = self.visit(node.stencil, symtypes=symtypes, **kwargs)
+        output = self.visit(node.output, symtypes=symtypes, **kwargs)
+        inputs = Tuple.from_elems(*self.visit(node.inputs, symtypes=symtypes, **kwargs))
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
-        constraints.add((domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar())))
-        constraints.add(
+        self.constraints.add(
+            (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
+        )
+        self.constraints.add(
             (
                 output,
                 Val(
@@ -558,7 +596,7 @@ class _TypeInferrer(eve.NodeTranslator):
                 ),
             )
         )
-        constraints.add(
+        self.constraints.add(
             (
                 stencil,
                 FunctionType(args=inputs, ret=Val(kind=Value(), dtype=output_dtype, size=Column())),
@@ -569,8 +607,8 @@ class _TypeInferrer(eve.NodeTranslator):
     def visit_FencilDefinition(
         self,
         node: ir.FencilDefinition,
-        constraints: set[tuple[Type, Type]],
         symtypes: dict[str, Type],
+        **kwargs,
     ) -> FencilDefinitionType:
         ftypes = []
         fmap = dict[str, LetPolymorphic]()
@@ -578,14 +616,17 @@ class _TypeInferrer(eve.NodeTranslator):
         # statements; that is, functions can only reference other functions
         # that are defined before
         for f in node.function_definitions:
-            c = set[tuple[Type, Type]]()
-            ftype: FunctionDefinitionType = self.visit(f, constraints=c, symtypes=symtypes | fmap)
-            ftype = typing.cast(FunctionDefinitionType, unify(ftype, c))
+            collected_types = _TypeInferrer.apply(
+                f, offset_provider=self.offset_provider, symtypes=symtypes | fmap, reindex=False
+            )
+            ftype = typing.cast(FunctionDefinitionType, collected_types[id(f)])
             ftypes.append(ftype)
             fmap[ftype.name] = LetPolymorphic(dtype=ftype.fun)
+            assert not set(self.collected_types.keys()) & set(collected_types.keys())
+            self.collected_types = {**self.collected_types, **collected_types}
 
         params = {p.id: TypeVar.fresh() for p in node.params}
-        self.visit(node.closures, constraints=constraints, symtypes=symtypes | fmap | params)
+        self.visit(node.closures, symtypes=symtypes | fmap | params, **kwargs)
         return FencilDefinitionType(
             name=node.id,
             fundefs=Tuple.from_elems(*ftypes),
@@ -599,17 +640,8 @@ def infer(
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    if symtypes is None:
-        symtypes = dict()
-
-    # Collect constraints
-    constraints = set[tuple[Type, Type]]()
-    dtype = _TypeInferrer(offset_provider=offset_provider).visit(
-        expr, constraints=constraints, symtypes=symtypes
-    )
-    # Compute the most general type that satisfies all constraints
-    unified = unify(dtype, constraints)
-    return reindex_vars(unified)
+    inferred_types = _TypeInferrer.apply(expr, offset_provider, symtypes)
+    return inferred_types[id(expr)]
 
 
 class PrettyPrinter(eve.NodeTranslator):
