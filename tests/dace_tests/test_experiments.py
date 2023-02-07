@@ -10,6 +10,8 @@ def unstructured_shift(source_field: np.array, target_to_source_map: np.array) -
         for neighbor in range(0, num_neighbors):
             target_field[target_element, neighbor] = source_field[
                 target_to_source_map[target_element, neighbor]
+            ] + source_field[
+                target_to_source_map[target_element, neighbor]
             ]
     return target_field
 
@@ -45,6 +47,34 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
         ),
     }
 
+    tmp_name = sdfg.temp_data_name()
+    sdfg.add_array(tmp_name, shape=("num_targets", "num_neighbors"), dtype=source_field.dtype.type, transient=True)
+    output_memlets = {
+        "target_field_element": dace.Memlet(
+            data=tmp_name,
+            subset="idx_target, idx_neighbors",
+        )
+    }
+
+    tasklet_code = "target_field_element = source_field_whole[target_to_source_map_element]"
+    state.add_mapped_tasklet(
+        name="ushift",
+        map_ranges=domain,
+        inputs=input_memlets,
+        code=tasklet_code,
+        outputs=output_memlets,
+        external_edges=True,
+        schedule=dace.ScheduleType.Sequential,
+    )
+
+    state = sdfg.add_state_after(state)
+    input_memlets = {
+        "source_element": dace.Memlet(
+            data=tmp_name,
+            subset="idx_target, idx_neighbors",
+        ),
+    }
+
     output_memlets = {
         "target_field_element": dace.Memlet(
             data="target_field",
@@ -52,10 +82,10 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
         )
     }
 
-    tasklet_code = "target_field_element = source_field_whole[target_to_source_map_element]"
+    tasklet_code = "target_field_element = 2 * source_element"
 
     state.add_mapped_tasklet(
-        name="ushift",
+        name="multiply",
         map_ranges=domain,
         inputs=input_memlets,
         code=tasklet_code,
@@ -77,6 +107,9 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
             num_targets=num_targets,
         )
 
+    sdfg.simplify()
+    from dace.transformation.dataflow import MapFusion
+    sdfg.apply_transformations_repeated(MapFusion)
     sdfg.view()
 
     return target_field
