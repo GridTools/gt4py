@@ -21,9 +21,11 @@ import typing
 
 import pytest
 
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve import type_definitions as type_def
-from gt4py.eve import type_validation as type_val
+from gt4py.eve import (
+    extended_typing as xtyping,
+    type_definitions as type_def,
+    type_validation as type_val,
+)
 from gt4py.eve.extended_typing import (
     Any,
     Dict,
@@ -84,7 +86,7 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
     (
-        type_def.frozendict[int, str],  # type: ignore[misc]
+        type_def.frozendict[int, str],
         (
             type_def.frozendict(),
             type_def.frozendict({3: "three"}),

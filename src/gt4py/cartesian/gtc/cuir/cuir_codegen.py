@@ -26,8 +26,7 @@ from gt4py.cartesian.gtc.common import (
 )
 from gt4py.cartesian.gtc.cuir import cuir
 from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.eve.concepts import LeafNode
 
 

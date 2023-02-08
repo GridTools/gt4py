@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from cached_property import cached_property
 
-from gt4py.cartesian import config as gt_config
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import config as gt_config, utils as gt_utils
 from gt4py.cartesian.definitions import StencilID
 
 

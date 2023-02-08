@@ -21,8 +21,7 @@ a high-level stencil function definition using a specific code generating backen
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
 
-from gt4py.cartesian import backend as gt_backend
-from gt4py.cartesian import frontend as gt_frontend
+from gt4py.cartesian import backend as gt_backend, frontend as gt_frontend
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.type_hints import StencilFunc
 

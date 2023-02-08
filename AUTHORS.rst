@@ -10,10 +10,15 @@ Authors
 * Davis, Eddie. Allen Institute for AI
 * Deconinck, Florian. SSAI/NASA-GSFC
 * Ehrengruber, Till. ETH Zurich - CSCS
+* Farabullini, Nicoletta. ETH Zurich - C2SM
 * George, Rhea. Allen Institute for AI
 * González Paredes, Enrique. ETH Zurich - CSCS
+* Gopal, Abishek. ETH Zurich - EXCLAIM
 * Groner, Linus. ETH Zurich - CSCS
 * Häuselmann, Rico. ETH Zurich - CSCS
+* Kardos, Péter. ETH Zurich - EXCLAIM
+* Kellerhals, Samuel. ETH Zurich - EXCLAIM
+* Luz, Magdalena. ETH Zurich - EXCLAIM
 * Madonna, Alberto. ETH Zurich - CSCS
 * Mariotti, Kean. ETH Zurich - CSCS
 * Müller, Christoph. MeteoSwiss

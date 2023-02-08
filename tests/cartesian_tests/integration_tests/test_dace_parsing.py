@@ -20,8 +20,7 @@ import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-from gt4py import cartesian as gt4pyc
-from gt4py import storage as gt_storage
+from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder

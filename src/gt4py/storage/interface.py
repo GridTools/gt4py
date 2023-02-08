@@ -31,11 +31,10 @@ except ImportError:
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import ArrayLike, DTypeLike
 else:
-    ArrayLike = Any
-    DTypeLike = Any
+    ArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
+    DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
 
-from . import layout
-from . import utils as storage_utils
+from . import layout, utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):

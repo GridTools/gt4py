@@ -23,8 +23,7 @@ from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 if TYPE_CHECKING:
-    from gt4py.cartesian.backend.base import Backend as BackendType
-    from gt4py.cartesian.backend.base import CLIBackendMixin
+    from gt4py.cartesian.backend.base import Backend as BackendType, CLIBackendMixin
     from gt4py.cartesian.frontend.base import Frontend as FrontendType
     from gt4py.cartesian.stencil_object import StencilObject
 
