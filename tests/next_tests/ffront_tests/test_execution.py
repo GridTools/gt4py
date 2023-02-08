@@ -19,7 +19,6 @@ from functools import reduce
 import numpy as np
 import pytest as pytest
 
-from gt4py.next.ffront import experimental
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
