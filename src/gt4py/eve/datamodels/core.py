@@ -120,14 +120,16 @@ class GenericDataModelTP(DataModelTP, Protocol):
         ...
 
 
+_DM = TypeVar("_DM", bound="DataModel")
+
 GenericDataModelT = TypeVar("GenericDataModelT", bound=GenericDataModelTP)
 
 AttrsValidator = Callable[[Any, Attribute, _T], Any]
-FieldValidator = Callable[["DataModel", Attribute, _T], None]
+FieldValidator = Callable[[_DM, Attribute, _T], None]
 BoundFieldValidator = Callable[[Attribute, _T], None]
 
-RootValidator = Callable[[Type["DataModel"], "DataModel"], None]
-BoundRootValidator = Callable[["DataModel"], None]
+RootValidator = Callable[[Type[_DM], _DM], None]
+BoundRootValidator = Callable[[_DM], None]
 
 FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
 
@@ -157,9 +159,9 @@ Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
 
 
 if sys.version_info >= (3, 10):
-    _dataclass_opts: Final = {"slots": True}
+    _dataclass_opts: Final[dict[str, Any]] = {"slots": True}
 else:
-    _dataclass_opts: Final = {}
+    _dataclass_opts: Final[Dict[str, Any]] = {}
 
 
 @dataclasses.dataclass(**_dataclass_opts)
@@ -622,7 +624,10 @@ def validator(name: str) -> Callable[[FieldValidator], FieldValidator]:
     return _field_validator_maker
 
 
-def root_validator(func: RootValidator, /) -> classmethod:
+_RV = TypeVar("_RV", bound=RootValidator)
+
+
+def root_validator(cls_method: _RV, /) -> _RV:
     """Define a custom root validator (decorator function).
 
     The decorated functions should have the following signature:
@@ -630,7 +635,6 @@ def root_validator(func: RootValidator, /) -> classmethod:
     where ``cls`` will be the class of the model and ``instance`` the
     actual instance being validated.
     """
-    cls_method = classmethod(func)
     setattr(cls_method, _ROOT_VALIDATOR_TAG, None)
     return cls_method
 

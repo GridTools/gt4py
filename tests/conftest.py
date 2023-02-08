@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""GlobalDecl configuration of test generation and execution using pytest."""
+"""Global configuration of pytest for collecting and running tests."""
 
 
 # Ignore hidden folders and disabled tests

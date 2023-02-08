@@ -6,12 +6,9 @@ Describe the content of the PR and links to related issues, bugs of features.
 
 Before submitting this PR, please make sure:
 
-- [ ] The code builds cleanly without new errors or warnings
-- [ ] The code passes all the existing tests
-- [ ] If this PR adds a new feature, new tests have been added to test these
-new features
-- [ ] All relevant documentation has been updated or added
-
+- [ ] You have run the code checks, tests and documentation build successfully
+- [ ] All fixes and all new functionality are tested and documentation is up to date
+- [ ] You looked at the [review checklist](https://github.com/GridTools/gt4py/blob/main/REVIEW_CHECKLIST.txt)
 
 Additionally, if this PR contains code authored by new contributors:
 
