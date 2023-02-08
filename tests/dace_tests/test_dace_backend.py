@@ -3,7 +3,7 @@ import numpy as np
 from gt4py.next.common import Dimension, Field
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.iterator.embedded import np_as_located_field
-from next.program_processors.runners.dace_iterator import run_dace_iterator
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 
 IDim = Dimension("IDim")
