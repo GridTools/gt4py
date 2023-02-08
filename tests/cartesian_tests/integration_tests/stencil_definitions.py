@@ -14,8 +14,7 @@
 
 import numpy as np
 
-from gt4py.cartesian import gtscript
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import gtscript, utils as gt_utils
 from gt4py.cartesian.gtscript import (
     __INLINED,
     BACKWARD,

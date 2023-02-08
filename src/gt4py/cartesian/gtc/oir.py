@@ -23,7 +23,7 @@ from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound, LocNode
+from gt4py.cartesian.gtc.common import AxisBound as AxisBound, LocNode as LocNode
 from gt4py.eve import datamodels
 
 

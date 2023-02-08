@@ -15,8 +15,7 @@
 import numpy as np
 import pytest
 
-from gt4py.cartesian import gtscript
-from gt4py.cartesian import testing as gt_testing
+from gt4py.cartesian import gtscript, testing as gt_testing
 from gt4py.cartesian.gtscript import (
     PARALLEL,
     Field,

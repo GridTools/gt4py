@@ -36,10 +36,7 @@ except ModuleNotFoundError:
     # Fall back to pure Python toolz
     import toolz  # type: ignore[import] # noqa: F401
 
-from .. import exceptions
-from .. import extended_typing as xtyping
-from .. import type_validation as type_val
-from .. import utils
+from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
     Any,
     Callable,
@@ -97,7 +94,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
         utils.FrozenNamespace[Attribute], None
     )
     __datamodel_root_validators__: ClassVar[
-        Tuple[xtyping.NonDataDescriptor["DataModelTP", "BoundRootValidator"], ...]
+        Tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
     ] = ()
     # Optional
     __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)

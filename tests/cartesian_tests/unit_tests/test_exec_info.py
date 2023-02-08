@@ -17,12 +17,10 @@ from typing import Any, Dict
 
 import numpy as np
 import pytest
-from hypothesis import given
-from hypothesis import strategies as hyp_st
+from hypothesis import given, strategies as hyp_st
 from hypothesis.extra.numpy import arrays as st_arrays
 
-from gt4py import cartesian as gt4pyc
-from gt4py import storage as gt_storage
+from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 
 from ..definitions import ALL_BACKENDS

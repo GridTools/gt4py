@@ -23,9 +23,7 @@ import dataclasses
 import functools
 import typing as _typing
 
-from . import exceptions
-from . import extended_typing as xtyping
-from . import utils
+from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
     Any,
     Dict,

@@ -15,8 +15,7 @@
 import numpy as np
 import pytest
 
-from gt4py import cartesian as gt4pyc
-from gt4py import storage as gt_storage
+from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 
 from ..definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS

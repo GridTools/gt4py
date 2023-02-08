@@ -20,8 +20,7 @@ from __future__ import annotations
 import abc
 import re
 import sys
-from enum import Enum as Enum  # noqa: F401  # imported but unused
-from enum import IntEnum as IntEnum  # noqa: F401  # imported but unused
+from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
 
 from boltons.typeutils import classproperty as classproperty  # type: ignore[import]  # noqa: F401
 from frozendict import frozendict as _frozendict  # type: ignore[attr-defined]  # noqa: F401
@@ -79,7 +78,7 @@ class NothingType(type):
 class NOTHING(metaclass=NothingType):
     """Marker to avoid confusion with `None` in contexts where `None` could be a valid value."""
 
-    def __new__(cls: type) -> NoReturn:  # type: ignore[misc]  # should return an instance
+    def __new__(cls: type) -> NoReturn:
         raise TypeError(f"{cls.__name__} is used as a sentinel value and cannot be instantiated.")
 
 
