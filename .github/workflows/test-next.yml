@@ -12,7 +12,7 @@ on:
     - "tests/cartesian_tests/**"
 
 jobs:
-  tox:
+  test-next:
     strategy:
       matrix:
         python-version: ["3.10"]
