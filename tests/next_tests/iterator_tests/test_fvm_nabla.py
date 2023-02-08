@@ -15,8 +15,6 @@
 import numpy as np
 import pytest
 
-from .conftest import run_processor
-
 
 pytest.importorskip("atlas4py")
 
@@ -33,6 +31,7 @@ from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from .conftest import run_processor
 from .fvm_nabla_setup import assert_close, nabla_setup
 
 
@@ -353,6 +352,7 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
     )
 
 
+@pytest.mark.requires_atlas
 def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:

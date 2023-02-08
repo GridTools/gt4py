@@ -1,0 +1,1 @@
+alias pre-commit="PIP_USER=no pre-commit" # pre-commit does not support user installation, see https://github.com/pre-commit/pre-commit/issues/1151

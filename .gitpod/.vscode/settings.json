@@ -2,5 +2,6 @@
     "python.formatting.provider": "black",
     "python.testing.pytestEnabled": true,
     "python.defaultInterpreterPath": "/workspace/gt4py/.venv/bin/python",
+    "files.insertFinalNewline": true,
     "python.terminal.activateEnvironment": true
 }
