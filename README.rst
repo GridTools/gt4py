@@ -5,7 +5,7 @@ Python library for generating high-performance implementations of stencil kernel
 
 |license| |slack|_
 
-|qa| |test-cartesian| |test-next| |test-storage| |test-eve|
+|test-cartesian| |test-next| |test-storage| |test-eve| |qa|
 
 .. |license| image:: https://img.shields.io/github/license/GridTools/gt4py
    :alt:
