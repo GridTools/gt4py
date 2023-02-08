@@ -18,6 +18,8 @@ import itertools
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
+import numpy as np
+
 from gt4py.cartesian.frontend.node_util import (
     IRNodeMapper,
     IRNodeVisitor,
@@ -73,20 +75,29 @@ def _convert_dtype(data_type) -> common.DataType:
 
 def _make_literal(v: numbers.Number) -> gtir.Literal:
     value: Union[BuiltinLiteral, str]
-    if isinstance(v, bool):
+    if isinstance(v, (bool, np.bool_)):
         dtype = common.DataType.BOOL
         value = common.BuiltInLiteral.TRUE if v else common.BuiltInLiteral.FALSE
     else:
-        if isinstance(v, int):
-            # note: could be extended to support 32 bit integers by checking the values magnitude
+        if isinstance(v, (int, np.int64)):
             dtype = common.DataType.INT64
-        elif isinstance(v, float):
+        elif isinstance(v, (float, np.float64)):
             dtype = common.DataType.FLOAT64
+        elif isinstance(v, np.float32):
+            dtype = common.DataType.FLOAT32
+        elif isinstance(v, np.int64):
+            dtype = common.DataType.INT32
+        elif isinstance(v, np.int32):
+            dtype = common.DataType.INT32
+        elif isinstance(v, np.int16):
+            dtype = common.DataType.INT16
+        elif isinstance(v, np.int8):
+            dtype = common.DataType.INT8
         else:
-            print(
-                f"Warning: Only INT64 and FLOAT64 literals are supported currently. Implicitly upcasting `{v}` to FLOAT64"
+            raise TypeError(
+                "Warning: Only INTs, FLOAT64 and FLOAT32 (via np.X types) literals are "
+                f"supported currently. Type {type(v)} unsupported."
             )
-            dtype = common.DataType.FLOAT64
         value = str(v)
     return gtir.Literal(dtype=dtype, value=value)
 
