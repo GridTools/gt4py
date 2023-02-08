@@ -20,7 +20,6 @@ from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
 
-
 float64 = float
 IDim = Dimension("IDim")
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))

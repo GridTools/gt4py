@@ -3,13 +3,13 @@ import numpy as np
 from gt4py.next.common import Dimension, Field
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.program_processors.runners.dace_fieldview import run_dace_fieldview
+from next.program_processors.runners.dace_iterator import run_dace_iterator
 
 
 IDim = Dimension("IDim")
 
 
-@field_operator(backend=run_dace_fieldview)
+@field_operator(backend=run_dace_iterator)
 def add(a: Field[[IDim], float], b: Field[[IDim], float]) -> Field[[IDim], float]:
     return a + b + a - a
 
