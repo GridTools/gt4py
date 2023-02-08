@@ -23,6 +23,7 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
     Conditional,
+    DefaultInitialized,
     ImperativeFunctionDefinition,
     InitStmt,
     ReturnStmt,
@@ -316,10 +317,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self.imp_list_ir.append(
             Conditional(
                 cond_type=f"{cond_idx}_t",
-                init_stmt=InitStmt(
+                initializer=DefaultInitialized(
                     init_type=f"{cond_idx}_t",
-                    lhs=gtfn_ir_common.Sym(id=cond_idx),
-                    rhs=gtfn_ir.Literal(value="0.", type="float64"),
+                    name=gtfn_ir_common.Sym(id=cond_idx),
                 ),
                 cond=cond,
                 if_stmt=AssignStmt(lhs=gtfn_ir_common.SymRef(id=cond_idx), rhs=if_),

@@ -35,9 +35,14 @@ class InitStmt(AssignStmt):
     init_type: str = "auto"
 
 
+class DefaultInitialized(Stmt):
+    init_type: str = "auto"
+    name: Sym
+
+
 class Conditional(Stmt):
     cond_type: str
-    init_stmt: Stmt
+    initializer: Union[DefaultInitialized, InitStmt]
     cond: Expr
     if_stmt: AssignStmt
     else_stmt: AssignStmt
