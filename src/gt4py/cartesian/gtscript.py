@@ -307,6 +307,7 @@ def stencil(
             backend=backend,
             build_options=build_options,
             externals=externals or {},
+            dtypes=dtypes or {},
         )
         definition_func.__annotations__ = original_annotations
         return out
@@ -449,16 +450,16 @@ def lazy_stencil(
             build_options.name = f"{definition_func.__name__}"
         if backend and "dace" in backend:
             stencil = DaCeLazyStencil(
-                StencilBuilder(
-                    definition_func, backend=backend, options=build_options
-                ).with_externals(externals or {})
+                StencilBuilder(definition_func, backend=backend, options=build_options)
+                .with_externals(externals or {})
+                .with_dtypes(dtypes or {})
             )
 
         else:
             stencil = LazyStencil(
-                StencilBuilder(
-                    definition_func, backend=backend, options=build_options
-                ).with_externals(externals or {})
+                StencilBuilder(definition_func, backend=backend, options=build_options)
+                .with_externals(externals or {})
+                .with_dtypes(dtypes or {})
             )
         if eager:
             stencil = stencil.implementation
