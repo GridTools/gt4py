@@ -1150,7 +1150,7 @@ def nshiftd(
     return impl
 
 
-@builtins.nshiftd_list_get.register(EMBEDDED)
+@builtins.list_get.register(EMBEDDED)
 def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
@@ -1175,6 +1175,69 @@ def list_reduce(fun, init):
                     else builtins.deref(builtins.shift(i)(lst))  # temporary hack for sparse fields
                     for lst in lists
                 ),
+            )
+        return res
+
+    return sten
+
+
+@dataclasses.dataclass(frozen=True)
+class ListIterator:
+    it: ItIterator
+    list_offset: Tag
+    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
+
+    def deref(self) -> Any:
+        return _List(
+            values=list(
+                builtins.deref(builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i)))
+                if builtins.can_deref(
+                    builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i))
+                )
+                else None
+                for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
+            )
+        )
+
+    # TODO can_deref alternative
+
+    def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
+        return ListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
+
+
+@builtins.nshift.register(EMBEDDED)
+def nshift(
+    offset: runtime.Offset,
+) -> Callable[[ItIterator], ItIterator]:  # TODO allow multiple offsets?
+    # TODO offset provider should be part of the iterator interface?
+    def impl(it: ItIterator) -> ItIterator:
+        offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+        return ListIterator(it, offset_str)
+
+    return impl
+
+
+@builtins.nshift_reduce.register(EMBEDDED)
+def nshift_reduce(fun, init):
+    def sten(*its):
+        # TODO: assert check_that_all_iterators_are_compatible(*iters)
+        first_list = deref(its[0])  # with current hack sparse field must not be first
+        n = len(first_list)
+        lists = [
+            deref(it)
+            if isinstance(it, ListIterator)
+            else _List(values=[builtins.deref(builtins.shift(i)(it)) for i in range(n)])
+            for it in its
+        ]
+        res = init
+        for i in range(n):
+            # we can check a single argument
+            # because all arguments share the same pattern
+            if first_list[i] is None:
+                break
+            res = fun(
+                res,
+                *(lst[i] for lst in lists),
             )
         return res
 

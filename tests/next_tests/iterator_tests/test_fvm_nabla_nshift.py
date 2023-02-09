@@ -29,8 +29,8 @@ from gt4py.next.iterator.builtins import (
     list_get,
     make_tuple,
     named_range,
-    nshiftd,
-    nshiftd_list_reduce,
+    nshift,
+    nshift_reduce,
     or_,
     shift,
     tuple_get,
@@ -58,7 +58,7 @@ E2V = offset("E2V")
 
 @fundef
 def compute_zavgS(pp, S_M):
-    pp_neighs = nshiftd(E2V)(pp)
+    pp_neighs = deref(nshift(E2V)(pp))
     zavg = 0.5 * (list_get(0, pp_neighs) + list_get(1, pp_neighs))
     return deref(S_M) * zavg
 
@@ -83,8 +83,9 @@ def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
     # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(shift(V2E)(zavgS), sign)
     # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
-    pnabla_M = library.nshiftd_list_dot(nshiftd(V2E)(zavgS), sign)
+    # pnabla_M = library.nshiftd_list_dot(nshiftd(V2E)(zavgS), sign)
     # pnabla_M = list_reduce(lambda a, b, c: a + b * c, 0.0)(nshiftd(V2E)(zavgS), sign)
+    pnabla_M = nshift_reduce(lambda a, b, c: a + b * c, 0.0)(nshift(V2E)(zavgS), sign)
     return pnabla_M / deref(vol)
 
 
@@ -95,7 +96,7 @@ def pnabla(pp, S_MXX, S_MYY, sign, vol):
 
 @fundef
 def compute_zavgS2(pp, S_M):
-    pp_neighs = nshiftd(E2V)(pp)
+    pp_neighs = deref(nshift(E2V)(pp))
     zavg = 0.5 * (list_get(0, pp_neighs) + list_get(1, pp_neighs))
     s = deref(S_M)
     return make_tuple(tuple_get(0, s) * zavg, tuple_get(1, s) * zavg)
@@ -111,13 +112,13 @@ def tuple_dot_fun(acc, zavgS, sign):
 
 @fundef
 def tuple_dot(a, b):
-    return nshiftd_list_reduce(tuple_dot_fun, make_tuple(0.0, 0.0))(a, b)
+    return nshift_reduce(tuple_dot_fun, make_tuple(0.0, 0.0))(a, b)
 
 
 @fundef
 def compute_pnabla2(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS2)(pp, S_M)
-    pnabla_M = tuple_dot(nshiftd(V2E)(zavgS), sign)
+    pnabla_M = tuple_dot(nshift(V2E)(zavgS), sign)
     return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 
@@ -336,19 +337,19 @@ def sign(node_indices, is_pole_edge):
         return if_(
             or_(
                 deref(is_pole_edge),
-                eq(deref(node_indices), list_get(0, nshiftd(E2V)(node_indices2))),
+                eq(deref(node_indices), list_get(0, deref(nshift(E2V)(node_indices2)))),
             ),
             1.0,
             -1.0,
         )
 
-    return nshiftd(V2E)(lift(impl)(node_indices, is_pole_edge))
+    return nshift(V2E)(lift(impl)(node_indices, is_pole_edge))
 
 
 @fundef
 def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    pnabla_M = library.nshiftd_list_dot(nshiftd(V2E)(zavgS), sign(node_index, is_pole_edge))
+    pnabla_M = library.nshift_dot(nshift(V2E)(zavgS), sign(node_index, is_pole_edge))
 
     return pnabla_M / deref(vol)
 

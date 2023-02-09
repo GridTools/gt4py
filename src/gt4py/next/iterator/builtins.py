@@ -44,12 +44,22 @@ def nshiftd(*args):
 
 
 @builtin_dispatch
-def nshiftd_list_get(*args):
+def list_get(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
 def nshiftd_list_reduce(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def nshift(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def nshift_reduce(*args):
     raise BackendNotSelectedError()
 
 
@@ -396,8 +406,10 @@ BUILTINS = {
     "can_deref",
     "shift",
     "nshiftd",
-    "nshiftd_list_get",
+    "list_get",
     "nshiftd_list_reduce",
+    "nshift",
+    "nshift_reduce",
     "lift",
     "reduce",
     "plus",
