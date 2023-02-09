@@ -22,8 +22,7 @@ import pytest
 
 import gt4py.cartesian.definitions as gt_definitions
 from gt4py.cartesian import gtscript
-from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
-from gt4py.cartesian.frontend import nodes
+from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
 from gt4py.cartesian.gtscript import (
     __INLINED,
     IJ,
@@ -72,7 +71,7 @@ def parse_definition(
         definition_func, externals=externals or {}
     )
     definition_ir = gt_frontend.GTScriptParser(
-        definition_func, externals=externals or {}, options=build_options
+        definition_func, externals=externals or {}, options=build_options, dtypes=dtypes
     ).run()
 
     setattr(definition_func, "__annotations__", original_annotations)
@@ -1317,6 +1316,32 @@ class TestDTypes:
                 module=self.__class__.__name__,
                 dtypes={"dtype": test_dtype},
             )
+
+
+class TestBuiltinDTypes:
+    @staticmethod
+    def literal_add_func(
+        in_field: gtscript.Field[float],
+        out_field: gtscript.Field["my_float"],
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field + 42.0
+
+    @pytest.mark.parametrize("the_float", [np.float32, np.float64])
+    def test_literal_floating_parametrization(self, the_float):
+        def_ir = parse_definition(
+            definition_func=self.literal_add_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            dtypes={float: the_float, "my_float": the_float},
+        )
+        # Check fields dtype are replaced only when str is used
+        def_ir.api_fields[0].data_type == nodes.DataType.FLOAT64
+        def_ir.api_fields[1].data_type == nodes.DataType.from_dtype(the_float)
+        # Check scalar literal dtype is always replaced
+        assert def_ir.computations[0].body.stmts[
+            0
+        ].value.rhs.data_type == nodes.DataType.from_dtype(the_float)
 
 
 class TestAssignmentSyntax:

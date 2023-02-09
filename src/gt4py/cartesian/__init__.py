@@ -21,6 +21,7 @@ from . import (
     cli,
     config,
     definitions,
+    frontend,
     gt_cache_manager,
     gtscript,
     loader,

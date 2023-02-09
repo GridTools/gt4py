@@ -59,7 +59,7 @@ class GtirPipeline:
     def _set_cached(self, steps: Sequence[PASS_T], node: gtir.Stencil) -> gtir.Stencil:
         return self._cache.setdefault((self.stencil_id, tuple(steps)), node)
 
-    def full(self, skip: Sequence[PASS_T] = None) -> gtir.Stencil:
+    def full(self, skip: Optional[Sequence[PASS_T]] = None) -> gtir.Stencil:
         skip = skip or []
         pipeline = [step for step in self.steps() if step not in skip]
         return self._get_cached(pipeline) or self._set_cached(pipeline, self.apply(pipeline))

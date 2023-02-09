@@ -21,9 +21,7 @@ import ast
 import copy
 import re
 
-from . import datamodels, exceptions
-from . import extended_typing as xtyping
-from . import trees, utils
+from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,

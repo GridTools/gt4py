@@ -66,12 +66,15 @@ test py38:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox --sitepackages -r -e $PYVERSION_PREFIX-all-cuda112
+  - tox run --sitepackages -r -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
+  parallel:
+    matrix:
+      - BACKEND: [internal, dace]
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 120
-    NUM_PROCESSES: 12
+    NUM_PROCESSES: auto
     <<: *py38
 
 test py39:

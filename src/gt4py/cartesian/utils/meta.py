@@ -20,7 +20,7 @@ import inspect
 import operator
 import platform
 import textwrap
-from typing import Tuple
+from typing import Callable, Dict, List, Tuple, Type
 
 from packaging import version
 
@@ -262,7 +262,7 @@ class ASTTransformPass(ASTPass):
 
 
 class ASTEvaluator(ASTPass):
-    AST_OP_TO_OP = {
+    AST_OP_TO_OP: Dict[Type, Callable] = {
         # Arithmetic operations
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
@@ -425,6 +425,7 @@ class QualifiedNameCollector(ASTPass):
             self.name_nodes[node.id].append(node)
 
     def _get_name_components(self, node: ast.AST):
+        components: List
         if isinstance(node, ast.Name):
             components = [node.id]
             valid = self.prefixes is None or node.id in self.prefixes

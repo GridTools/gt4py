@@ -74,7 +74,11 @@ class Frontend(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def generate(
-        cls, definition: AnyStencilFunc, externals: Dict[str, Any], options: BuildOptions
+        cls,
+        definition: AnyStencilFunc,
+        externals: Dict[str, Any],
+        dtypes: Dict[Type, Type],
+        options: BuildOptions,
     ) -> gtir.Stencil:
         """
         Generate a StencilDefinition from a stencil Python function.

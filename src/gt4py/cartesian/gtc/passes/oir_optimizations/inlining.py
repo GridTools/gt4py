@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy as cp
-from typing import Any, Dict, Optional, Set, Type, Union, cast
+from typing import Any, Dict, Optional, Set, Union, cast
 
 from gt4py import eve
 from gt4py.cartesian.gtc import oir
@@ -88,7 +88,7 @@ class MaskInlining(eve.NodeTranslator):
         *,
         masks_to_inline: Dict[str, oir.Expr],
         **kwargs: Any,
-    ) -> Union[oir.AssignStmt, Type[eve.NOTHING]]:
+    ) -> Union[oir.AssignStmt, eve.NothingType]:
         if node.left.name in masks_to_inline:
             return eve.NOTHING
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
