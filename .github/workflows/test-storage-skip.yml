@@ -1,4 +1,4 @@
-name: "Skip: Test / Storage (CPU)"
+name: "Skipped: Test / Storage (CPU)"
 
 on:
   pull_request:

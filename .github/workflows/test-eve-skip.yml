@@ -1,4 +1,4 @@
-name: "Skip: Test / Eve"
+name: "Skipped: Test / Eve"
 
 on:
   pull_request:
