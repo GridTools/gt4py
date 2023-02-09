@@ -317,7 +317,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self.imp_list_ir.append(
             Conditional(
                 cond_type=f"{cond_idx}_t",
-                initializer=InitStmt(
+                init_stmt=InitStmt(
                     init_type=f"{cond_idx}_t",
                     lhs=gtfn_ir_common.Sym(id=cond_idx),
                     rhs=EmptyListInitializer(),

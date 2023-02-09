@@ -41,7 +41,7 @@ class EmptyListInitializer(Expr):
 
 class Conditional(Stmt):
     cond_type: str
-    initializer: InitStmt
+    init_stmt: InitStmt
     cond: Expr
     if_stmt: AssignStmt
     else_stmt: AssignStmt

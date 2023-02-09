@@ -274,7 +274,7 @@ class GTFNIMCodegen(GTFNCodegen):
     Conditional = as_mako(
         """
           using ${cond_type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
-          ${initializer}
+          ${init_stmt}
           if (${cond}) {
             ${if_stmt}
           } else {
