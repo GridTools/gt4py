@@ -69,7 +69,7 @@ test py38:
   - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
   parallel:
     matrix:
-      - BACKEND: [internal, dace]
+    - BACKEND: [internal, dace]
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
