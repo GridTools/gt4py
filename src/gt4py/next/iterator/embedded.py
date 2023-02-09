@@ -24,6 +24,7 @@ import math
 from typing import (
     Any,
     Callable,
+    Generic,
     Iterable,
     Literal,
     Mapping,
@@ -34,6 +35,7 @@ from typing import (
     SupportsInt,
     TypeAlias,
     TypeGuard,
+    TypeVar,
     Union,
     cast,
     overload,
@@ -325,6 +327,7 @@ def lift(stencil):
                 self.args = args
                 self.offsets = offsets or []
                 self.elem = elem
+                self.offset_provider = args[0].offset_provider
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
@@ -1112,6 +1115,70 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
         return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
 
     return impl
+
+
+DT = TypeVar("DT")
+
+
+@dataclasses.dataclass(frozen=True)
+class _List(Generic[DT]):
+    values: list[Optional[DT]]
+
+    def __getitem__(self, i: int):
+        return self.values[i]
+
+    def __len__(self):
+        return len(self.values)
+
+
+@builtins.nshiftd.register(EMBEDDED)
+def nshiftd(
+    offset: runtime.Offset,
+) -> Callable[[ItIterator], _List]:  # TODO allow multiple offsets?
+    # TODO offset provider should be part of the iterator interface?
+    def impl(it: ItIterator) -> _List:
+        offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+        return _List(
+            values=list(
+                builtins.deref(it.shift(offset_str, i))
+                if builtins.can_deref(it.shift(offset_str, i))
+                else None
+                for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
+            )
+        )
+
+    return impl
+
+
+@builtins.nshiftd_list_get.register(EMBEDDED)
+def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
+    return lst[i]
+
+
+@builtins.nshiftd_list_reduce.register(EMBEDDED)
+def list_reduce(fun, init):
+    def sten(*lists):
+        # TODO: assert check_that_all_iterators_are_compatible(*iters)
+        first_list = lists[0]
+        n = len(first_list)
+        res = init
+        for i in range(n):
+            # we can check a single argument
+            # because all arguments share the same pattern
+            if first_list[i] is None:
+                break
+            res = fun(
+                res,
+                *(
+                    lst[i]
+                    if isinstance(lst, _List)
+                    else builtins.deref(builtins.shift(i)(lst))  # temporary hack for sparse fields
+                    for lst in lists
+                ),
+            )
+        return res
+
+    return sten
 
 
 @dataclasses.dataclass(frozen=True)
