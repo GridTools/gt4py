@@ -1,4 +1,4 @@
-name: "Test / Cartesian (CPU)"
+name: "Skip: Test / Cartesian (CPU)"
 
 on:
   pull_request:
