@@ -269,7 +269,7 @@ class GTFNIMCodegen(GTFNCodegen):
 
     InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
 
-    DefaultInitialized = as_fmt("{init_type} {name} = {{}};")
+    EmptyListInitializer = as_fmt("{{}}")
 
     Conditional = as_mako(
         """
