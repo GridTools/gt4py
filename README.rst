@@ -3,15 +3,26 @@ GT4Py: GridTools for Python
 
 Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL).
 
-|tox| |format| |slack|_
+|license| |slack|_
 
-.. |tox| image:: https://github.com/GridTools/gt4py/workflows/Tox%20(CPU%20only)/badge.svg?event=schedule
-   :alt:
-.. |format| image:: https://github.com/GridTools/gt4py/workflows/Formatting%20&%20compliance/badge.svg?branch=main
+|test-cartesian| |test-next| |test-storage| |test-eve| |qa|
+
+.. |license| image:: https://img.shields.io/github/license/GridTools/gt4py
    :alt:
 .. |slack| image:: https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a
    :alt:
 .. _slack: https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g
+
+.. |test-cartesian| image:: https://github.com/GridTools/gt4py/actions/workflows/test-cartesian.yml/badge.svg?branch=main
+   :alt:
+.. |test-next| image:: https://github.com/GridTools/gt4py/actions/workflows/test-next.yml/badge.svg?branch=main
+   :alt:
+.. |test-storage| image:: https://github.com/GridTools/gt4py/actions/workflows/test-storage.yml/badge.svg?branch=main
+   :alt:
+.. |test-eve| image:: https://github.com/GridTools/gt4py/actions/workflows/test-eve.yml/badge.svg?branch=main
+   :alt:
+.. |qa| image:: https://github.com/GridTools/gt4py/actions/workflows/code-quality.yml/badge.svg?branch=main
+   :alt:
 
 ⚡️ Quick Start
 ---------------

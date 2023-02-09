@@ -7,7 +7,7 @@ on:
     - trying
     - staging
 jobs:
-  build:
+  gt4py-gitlab-ci:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
