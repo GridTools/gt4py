@@ -24,6 +24,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     python-openssl \
     libreadline-dev \
     git \
+    rustc \
     htop && \
     rm -rf /var/lib/apt/lists/*
 
