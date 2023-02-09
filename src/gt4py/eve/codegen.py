@@ -743,3 +743,7 @@ class TemplatedGenerator(NodeVisitor):
 
     def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}
+
+
+def as_fmt():
+    return None

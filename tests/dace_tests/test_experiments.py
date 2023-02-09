@@ -8,11 +8,10 @@ def unstructured_shift(source_field: np.array, target_to_source_map: np.array) -
     target_field = np.zeros((target_size, num_neighbors))
     for target_element in range(0, target_size):
         for neighbor in range(0, num_neighbors):
-            target_field[target_element, neighbor] = source_field[
-                target_to_source_map[target_element, neighbor]
-            ] + source_field[
-                target_to_source_map[target_element, neighbor]
-            ]
+            target_field[target_element, neighbor] = (
+                source_field[target_to_source_map[target_element, neighbor]]
+                + source_field[target_to_source_map[target_element, neighbor]]
+            )
     return target_field
 
 
@@ -48,7 +47,12 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
     }
 
     tmp_name = sdfg.temp_data_name()
-    sdfg.add_array(tmp_name, shape=("num_targets", "num_neighbors"), dtype=source_field.dtype.type, transient=True)
+    sdfg.add_array(
+        tmp_name,
+        shape=("num_targets", "num_neighbors"),
+        dtype=source_field.dtype.type,
+        transient=True,
+    )
     output_memlets = {
         "target_field_element": dace.Memlet(
             data=tmp_name,
@@ -94,8 +98,10 @@ def unstructured_shift_dace(source_field: np.array, target_to_source_map: np.arr
         schedule=dace.ScheduleType.Sequential,
     )
 
+    sdfg.view()
     sdfg.simplify()
     from dace.transformation.dataflow import MapFusion
+
     sdfg.apply_transformations_repeated(MapFusion)
     sdfg.view()
 

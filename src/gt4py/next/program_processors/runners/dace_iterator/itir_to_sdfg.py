@@ -1,25 +1,86 @@
+import dace
 import sympy
 
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
-import dace
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
+
+from .itir_to_tasklet import PythonTaskletCodegen
 from .utility import type_spec_to_dtype
+
+
+class _ShiftCollector(eve.NodeVisitor):
+    def __init__(self, sdfg: dace.SDFG, last_state: dace.SDFGState):
+        self.sdfg = sdfg
+        self.last_state = last_state
+        self.offset_table = dict()
+
+    def visit_FunCall(self, node: itir.FunCall):
+        if isinstance(node.fun, itir.SymRef) and node.fun.id == "shift":
+            pass
+        else:
+            pass
 
 
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     offset_providers: dict[str, NeighborTableOffsetProvider]
 
-    def __init__(self, param_types: list[ts.TypeSpec], offset_provider: dict[str, NeighborTableOffsetProvider]):
+    def __init__(
+        self,
+        param_types: list[ts.TypeSpec],
+        offset_provider: dict[str, NeighborTableOffsetProvider],
+    ):
         self.param_types = param_types
         self.offset_providers = offset_provider
 
-    def visit_StencilClosure(self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]) -> dace.SDFG:
+    @staticmethod
+    def _check_no_lifts(node: itir.StencilClosure):
+        if any(
+            getattr(fun, "id", "") == "lift"
+            for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
+        ):
+            return False
+        return True
+
+    @staticmethod
+    def _check_no_inner_lambdas(node: itir.StencilClosure):
+        if len(eve.walk_values(node.stencil).if_isinstance(itir.Lambda).to_list()) > 1:
+            return False
+        return True
+
+    @staticmethod
+    def _check_shift_offsets_are_literals(node: itir.StencilClosure):
+        fun_calls = eve.walk_values(node).if_isinstance(itir.FunCall)
+        shifts = [nd for nd in fun_calls if getattr(nd.fun, "id", "") == "shift"]
+        for shift in shifts:
+            if not all(isinstance(arg, itir.Literal) for arg in shift.args[1:]):
+                return False
+        return True
+
+    def visit_StencilClosure(
+        self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
+    ) -> dace.SDFG:
+        """
+        Preconditions:
+            node has no lifts
+            node has exactly 1 itir.Lambda node which is at the top level
+            offset arguments to shifts are literals
+        """
+        assert ItirToSDFG._check_no_lifts(node)
+        assert ItirToSDFG._check_no_inner_lambdas(node)
+        assert ItirToSDFG._check_shift_offsets_are_literals(node)
+
         sdfg = dace.SDFG(name="stencil_closure")
+        last_state = sdfg.add_state()
+
+        shift_collector = _ShiftCollector(sdfg, last_state)
+        shift_collector.visit(node.stencil)
+        last_state = shift_collector.last_state
 
         assert isinstance(node.output, itir.SymRef)
+        assert len(eve.walk_values(node).if_isinstance(itir.Lambda).to_list()) == 1
 
         domain = self._visit_named_range(node.domain)
         shape = array_table[node.output.id].shape
@@ -30,10 +91,10 @@ class ItirToSDFG(eve.NodeVisitor):
             sdfg.add_array(inp.id, shape=shape, dtype=dace.float64)
 
         input_memlets = {
-            f"{inp.id}_entire": dace.Memlet(
+            str(lambda_param.id): dace.Memlet(
                 data=str(inp.id), subset=",".join(f"0:{size}" for size in sdfg.arrays[inp.id].shape)
             )
-            for inp in node.inputs
+            for inp, lambda_param in zip(node.inputs, node.stencil.params)
         }
         output_memlets = {
             f"{node.output.id}_element": dace.Memlet(
@@ -42,17 +103,19 @@ class ItirToSDFG(eve.NodeVisitor):
             )
         }
 
-        map_range = {
-            f"i_{dim}": f"{lb}:{ub}"
-            for dim, (lb, ub) in domain
-        }
-        last_state = sdfg.add_state()
+        map_range = {f"i_{dim}": f"{lb}:{ub}" for dim, (lb, ub) in domain}
+
+        stencil_body = PythonTaskletCodegen().visit(node.stencil)
+        # stencil_args = ','.join(str(inp) for inp in node.inputs)
+
         last_state.add_mapped_tasklet(
             name="addition",
             map_ranges=map_range,
             inputs=input_memlets,
-            code=f"{node.output.id}_element = [](){{ return 7; }}();",
-            language=dace.Language.CPP,
+            code=f"{node.output.id}_element = {stencil_body}",
+            # language=dace.Language.CPP,
+            # code=f"{node.output.id}_element = (lambda : 7)()",
+            language=dace.Language.Python,
             outputs=output_memlets,
             external_edges=True,
             schedule=dace.ScheduleType.Sequential,
@@ -81,7 +144,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 closure_sdfg,
                 None,
                 inputs={str(inp.id) for inp in closure.inputs},
-                outputs={str(closure.output.id)}
+                outputs={str(closure.output.id)},
             )
 
             input_accesses = [last_state.add_access(inp.id) for inp in closure.inputs]
@@ -94,7 +157,8 @@ class ItirToSDFG(eve.NodeVisitor):
                     nsdfg_node,
                     inner_name.id,
                     dace.Memlet(
-                        data=access_node.data, subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[access_node.data].shape)
+                        data=access_node.data,
+                        subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[access_node.data].shape),
                     ),
                 )
 
@@ -104,7 +168,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 output_access,
                 None,
                 dace.Memlet(
-                    data=output_access.data, subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[output_access.data].shape)
+                    data=output_access.data,
+                    subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[output_access.data].shape),
                 ),
             )
 
