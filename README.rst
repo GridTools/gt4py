@@ -1,7 +1,8 @@
-GT4Py: GridTools for Python
-===========================
+|logo|
 
-Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL).
+.. |logo| image:: docs/user/cartesian/_static/logo.svg
+   :alt:
+.. _logo: https://GridTools.github.io/gt4py
 
 |license| |slack|_
 
@@ -23,6 +24,10 @@ Python library for generating high-performance implementations of stencil kernel
    :alt:
 .. |qa| image:: https://github.com/GridTools/gt4py/actions/workflows/code-quality.yml/badge.svg?branch=main
    :alt:
+
+
+Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL).
+
 
 ⚡️ Quick Start
 ---------------
