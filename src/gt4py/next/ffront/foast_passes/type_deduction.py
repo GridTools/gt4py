@@ -724,10 +724,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_1 = node.args[1].type
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
+        if not type_info.is_integral(arg_1):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. "
+                f"Excepted integer for offset field dtype, but got {arg_1.dtype}"
+                f"{node.location}",
+            )
+
         if arg_0.source not in arg_1.dims:
-            raise GTTypeError(
-                f"Incompatible argument in call to `{node.func.id}`. "
-                f"{arg_0.source} not in list of offset field dimensions {arg_1.dims}."
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Incompatible argument in call to `{node.func.id}`. "
+                f"{arg_0.source} not in list of offset field dimensions {arg_1.dims}. "
+                f"{node.location}",
             )
 
         return foast.Call(
