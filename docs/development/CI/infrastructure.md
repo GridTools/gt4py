@@ -6,6 +6,94 @@ The following workflows are currently active:
 
 ![workflows](workflows.drawio.svg)
 
+<!--
+@startuml workflows
+
+left to right direction
+'
+'folder src_eve [
+'src/gt4py/eve/*
+']
+'
+'card eve [
+'Test / Eve
+']
+'
+'src_eve -[plain]-> eve
+
+!include <C4/C4_Component>
+
+hide stereotype
+
+file src_eve [
+eve sources changed
+]
+file src_car [
+cartesian sources changed
+]
+file src_nxt [
+next sources changed
+]
+file src_sto [
+storage sources changed
+]
+file src_cab [
+cartesian backend sources changed
+]
+file cfg_wfl [
+workflows changed
+]
+file other [
+other files changed
+]
+
+agent eve [
+Test / Eve
+]
+agent car [
+Test / Cartesian (CPU)
+]
+agent nxt [
+Test / Next (CPU)
+]
+agent sto [
+Test / Storage (CPU)
+]
+agent qua [
+Code Quality
+]
+
+Lay_R(src_eve, src_car)
+Lay_R(src_car, src_nxt)
+Lay_R(src_nxt, src_sto)
+Lay_R(src_sto, src_cab)
+Lay_R(src_cab, cfg_wfl)
+Lay_R(cfg_wfl, other)
+
+
+Rel(src_eve, car, ' ')
+Rel(src_car, car, ' ')
+Rel(src_sto, car, ' ')
+Rel(cfg_wfl, car, ' ')
+Rel(other, car, ' ')
+
+Rel(src_eve, eve, ' ')
+Rel(cfg_wfl, eve, ' ')
+
+Rel(src_eve, nxt, ' ')
+Rel(src_nxt, nxt, ' ')
+Rel(src_sto, nxt, ' ')
+Rel(cfg_wfl, nxt, ' ')
+Rel(other, nxt, ' ')
+
+Rel(src_sto, sto, ' ')
+Rel(src_cab, sto, ' ')
+Rel(cfg_wfl, sto, ' ')
+
+@enduml
+-->
+![](workflows.svg)
+
 The `Eve / Test` and `Gt4py / Test` workflows run the automated tests for the two packages. These workflows also save the code coverage output as workflow artifacts.
 
 The `Eve / Coverage` and `Gt4py / Coverage` workflows are triggered by a successful run of the tests. They download the coverage artifacts and publish them to codecov.io.
