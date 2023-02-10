@@ -23,32 +23,24 @@ from .conftest import run_processor
 
 
 IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
 
 
 @fundef
 def test_conditional(inp):
-    return if_(deref(inp), make_tuple(1, 2), make_tuple(3, 4))
+    tmp = if_(eq(deref(inp), 0), make_tuple(1.0, 2.0), make_tuple(3.0, 4.0))
+    return tuple_get(0, tmp) + tuple_get(1, tmp)
 
 
-def test_conditional_w_tuple(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_conditional_w_tuple(program_processor):
+    program_processor, validate = program_processor
 
-    shape = [5, 7, 9]
+    shape = [5]
 
-    inp = np.random.randint(0, 2, shape)
-    inp = np_as_located_field(IDim, JDim, KDim)(inp)
-
-    out = (
-        np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-        np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-    )
+    inp = np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
+    out = np_as_located_field(IDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
     }
     run_processor(
         test_conditional[dom],
@@ -58,5 +50,5 @@ def test_conditional_w_tuple(program_processor_no_gtfn_exec):
         offset_provider={},
     )
     if validate:
-        assert np.all(out[0][inp == 1] == 1)
-        assert np.all(out[1][inp == 1] == 2)
+        assert np.all(out[np.asarray(inp) == 0] == 3.0)
+        assert np.all(out[np.asarray(inp) == 1] == 7.0)
