@@ -83,7 +83,7 @@ def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
     # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(shift(V2E)(zavgS), sign)
     # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
-    pnabla_M = library.nshiftd_list_dot(nshiftd(V2E)(zavgS), sign)
+    pnabla_M = library.nshiftd_list_dot(nshiftd(V2E)(zavgS), deref(sign))
     # pnabla_M = list_reduce(lambda a, b, c: a + b * c, 0.0)(nshiftd(V2E)(zavgS), sign)
     return pnabla_M / deref(vol)
 
@@ -117,7 +117,7 @@ def tuple_dot(a, b):
 @fundef
 def compute_pnabla2(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS2)(pp, S_M)
-    pnabla_M = tuple_dot(nshiftd(V2E)(zavgS), sign)
+    pnabla_M = tuple_dot(nshiftd(V2E)(zavgS), deref(sign))
     return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 

@@ -890,20 +890,25 @@ def make_in_iterator(
             sparse_dimensions.append(axis.value)
 
     new_pos: Position = pos.copy()
+    sparse_dimensions = set(sparse_dimensions)
+    assert len(sparse_dimensions) <= 1, sparse_dimensions
     for sparse_dim in set(sparse_dimensions):
-        init = [None] * sparse_dimensions.count(sparse_dim)
+        init = [None]  # * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert _column_range is not None
         new_pos[column_axis] = _column_range.start
-    return MDIterator(
+    it = MDIterator(
         inp,
         new_pos,
         incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
+    if len(sparse_dimensions) == 1:
+        it = SparseListIterator(it, next(iter(sparse_dimensions)))
+    return it
 
 
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
@@ -1169,12 +1174,7 @@ def list_reduce(fun, init):
                 break
             res = fun(
                 res,
-                *(
-                    lst[i]
-                    if isinstance(lst, _List)
-                    else builtins.deref(builtins.shift(i)(lst))  # temporary hack for sparse fields
-                    for lst in lists
-                ),
+                *(lst[i] for lst in lists),
             )
         return res
 
@@ -1191,6 +1191,30 @@ class ListIterator:
         return _List(
             values=list(
                 builtins.deref(builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i)))
+                if builtins.can_deref(
+                    builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i))
+                )
+                else None
+                for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
+            )
+        )
+
+    # TODO can_deref alternative
+
+    def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
+        return ListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
+
+
+@dataclasses.dataclass(frozen=True)
+class SparseListIterator:
+    it: ItIterator
+    list_offset: Tag
+    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
+
+    def deref(self) -> Any:
+        return _List(
+            values=list(
+                builtins.deref(builtins.shift(*self.offsets, i)(self.it))
                 if builtins.can_deref(
                     builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i))
                 )
@@ -1223,12 +1247,7 @@ def nshift_reduce(fun, init):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
         first_list = deref(its[0])  # with current hack sparse field must not be first
         n = len(first_list)
-        lists = [
-            deref(it)
-            if isinstance(it, ListIterator)
-            else _List(values=[builtins.deref(builtins.shift(i)(it)) for i in range(n)])
-            for it in its
-        ]
+        lists = [deref(it) for it in its]
         res = init
         for i in range(n):
             # we can check a single argument
