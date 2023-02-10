@@ -1,6 +1,6 @@
 |logo|
 
-.. |logo| image:: docs/user/cartesian/_static/logo.svg
+.. |logo| image:: https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg
    :alt:
 .. _logo: https://GridTools.github.io/gt4py
 
