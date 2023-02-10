@@ -1,13 +1,20 @@
-name: "Skipped: Test / Eve"
+name: "Skipped: Test Eve"
 
 on:
   pull_request:
     branches:
     - main
     paths-ignore: # inverse of corresponding workflow
-    - "src/gt4py/eve/**"
-    - "tests/eve_tests/**"
-    - "workflows/**"
+    - "!src/gt4py/eve/**"
+    - "!tests/eve_tests/**"
+    - "!workflows/**"
+    - "!*.cfg"
+    - "!*.ini"
+    - "!*.toml"
+    - "examples/**"
+    - "*.md"
+    - "*.rst"
+    - "*.txt"
 
 jobs:
   test-eve:

@@ -1,4 +1,4 @@
-name: "Skipped: Test / Next (CPU)"
+name: "Skipped: Test Next (CPU)"
 
 on:
   pull_request:
@@ -7,6 +7,10 @@ on:
     paths: # inverse of corresponding workflow
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
+    - "examples/**"
+    - "*.md"
+    - "*.rst"
+    - "*.txt"
 
 jobs:
   test-next:

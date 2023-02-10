@@ -7,10 +7,17 @@ on:
   pull_request:
     branches:
     - main
-    paths: # Run only when gt4py.eve sources or tests have changed.
+    paths: # Run when gt4py.eve files or package settings have changed
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
     - "workflows/**"
+    - "*.cfg"
+    - "*.ini"
+    - "*.toml"
+    - "!examples/**"
+    - "!*.md"
+    - "!*.rst"
+    - "!*.txt"
 
 jobs:
   test-eve:

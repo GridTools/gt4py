@@ -1,4 +1,4 @@
-name: "Test / Next (CPU)"
+name: "Test Next (CPU)"
 
 on:
   push:
@@ -7,9 +7,13 @@ on:
   pull_request:
     branches:
     - main
-    paths-ignore: # Skip if only gt4py.cartesian has been updated
+    paths-ignore: # Skip if only gt4py.cartesian or irrelevant doc files have been updated
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
+    - "examples/**"
+    - "*.md"
+    - "*.rst"
+    - "*.txt"
 
 jobs:
   test-next:
