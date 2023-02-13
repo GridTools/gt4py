@@ -1,0 +1,23 @@
+include:
+- remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+stages:
+- test
+
+run tests:
+  extends: .container-runner-daint-gpu
+  stage: test
+  image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
+  script:
+  - cd /gt4py.src
+  - python -c "import cupy"
+  - tox run -e storage-$PYVERSION_PREFIX-$BACKEND-cuda112
+  parallel:
+    matrix:
+    - BACKEND: [internal, dace]
+  variables:
+    CRAY_CUDA_MPS: 1
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: 120
+    NUM_PROCESSES: auto
+    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
