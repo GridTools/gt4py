@@ -6,7 +6,7 @@ stages:
   - test
 
 build images:
-  stage: cscs_ci
+  stage: build
 
   parallel:
     matrix:
@@ -22,7 +22,7 @@ build images:
       - local: ci/images.yml
 
 run tests:
-  stage: cscs_ci
+  stage: test
   needs: ["build image"]
   parallel:
     matrix:
