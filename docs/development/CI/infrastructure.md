@@ -4,107 +4,105 @@
 
 The following workflows are currently active:
 
-![workflows](workflows.drawio.svg)
+<!-- ![workflows](workflows.drawio.svg) -->
 
 <!--
 @startuml workflows
 
 left to right direction
-'
-'folder src_eve [
-'src/gt4py/eve/*
-']
-'
-'card eve [
-'Test / Eve
-']
-'
-'src_eve -[plain]-> eve
+skinparam linetype ortho
 
-!include <C4/C4_Component>
+'!include <C4/C4_Component>
 
-hide stereotype
-
-file src_eve [
+card always [
+always
+]
+file src_eve #Plum;line:MediumOrchid;text:black [
 eve sources changed
 ]
-file src_car [
+file src_car #Gold;line:DarkGoldenRod;text:black [
 cartesian sources changed
 ]
-file src_nxt [
+file src_nxt #APPLICATION;line:CornFlowerBlue;text:black [
 next sources changed
 ]
-file src_sto [
+file src_sto #Aquamarine;line:DarkCyan;text:black [
 storage sources changed
 ]
-file src_cab [
+file src_cab #Gold;line:DarkGoldenRod;text:black [
 cartesian backend sources changed
 ]
-file cfg_wfl [
+file cfg_wfl #Coral;line:Tomato;text:black[
 workflows changed
 ]
-file other [
+file other #PaleGreen;line:ForestGreen;text:black [
 other files changed
 ]
 
-agent eve [
+agent eve #Plum;line:MediumOrchid;text:black [
 Test / Eve
 ]
-agent car [
+agent car #Gold;line:DarkGoldenRod;text:black [
 Test / Cartesian (CPU)
 ]
-agent nxt [
+agent nxt #APPLICATION;line:CornFlowerBlue;text:black [
 Test / Next (CPU)
 ]
-agent sto [
+agent sto #Aquamarine;line:DarkCyan;text:black [
 Test / Storage (CPU)
 ]
 agent qua [
 Code Quality
 ]
 
-Lay_R(src_eve, src_car)
-Lay_R(src_car, src_nxt)
-Lay_R(src_nxt, src_sto)
-Lay_R(src_sto, src_cab)
-Lay_R(src_cab, cfg_wfl)
-Lay_R(cfg_wfl, other)
+always  -[hidden]r-> src_eve
+src_eve -[hidden]r-> src_car
+src_car -[hidden]r-> src_nxt
+src_nxt -[hidden]r-> src_sto
+src_sto -[hidden]r-> src_cab
+src_cab -[hidden]r-> cfg_wfl
+cfg_wfl -[hidden]r-> other
 
+always  -d-> qua
 
-Rel(src_eve, car, ' ')
-Rel(src_car, car, ' ')
-Rel(src_sto, car, ' ')
-Rel(cfg_wfl, car, ' ')
-Rel(other, car, ' ')
+src_eve -[#MediumOrchid,thickness=2]d-> car
+src_car -[#DarkGoldenRod,thickness=2]d-> car
+src_sto -[#DarkCyan,thickness=2]d-> car
+cfg_wfl -[#Tomato,thickness=2]d-> car
+other   -[#ForestGreen,thickness=2]d-> car
 
-Rel(src_eve, eve, ' ')
-Rel(cfg_wfl, eve, ' ')
+src_eve -[#MediumOrchid,thickness=2]d-> eve
+cfg_wfl -[#Tomato,thickness=2]d-> eve
 
-Rel(src_eve, nxt, ' ')
-Rel(src_nxt, nxt, ' ')
-Rel(src_sto, nxt, ' ')
-Rel(cfg_wfl, nxt, ' ')
-Rel(other, nxt, ' ')
+src_eve -[#MediumOrchid,thickness=2]d-> nxt
+src_nxt -[#CornFlowerBlue,thickness=2]d-> nxt
+src_sto -[#DarkCyan,thickness=2]d-> nxt
+cfg_wfl -[#Tomato,thickness=2]d-> nxt
+other   -[#ForestGreen,thickness=2]d-> nxt
 
-Rel(src_sto, sto, ' ')
-Rel(src_cab, sto, ' ')
-Rel(cfg_wfl, sto, ' ')
+src_sto -[#DarkCyan,thickness=2]d-> sto
+src_cab -[#DarkGoldenRod,thickness=2]d-> sto
+cfg_wfl -[#Tomato,thickness=2]d-> sto
 
 @enduml
 -->
 ![](workflows.svg)
 
-The `Eve / Test` and `Gt4py / Test` workflows run the automated tests for the two packages. These workflows also save the code coverage output as workflow artifacts.
-
-The `Eve / Coverage` and `Gt4py / Coverage` workflows are triggered by a successful run of the tests. They download the coverage artifacts and publish them to codecov.io.
-
-The `Documentation` workflow executes the Jupyter nodebook of the quick start guide to make sure it's in sync with the code.
+The `Test / Eve`, and `Test / Storages` workflows run the automated tests for the two packages. `Test / Cartesian` and `Test / Next` run the automated tests for the two respective `GT4Py` subpackages. In all cases only tests are run that do not require the presence of a GPU.
 
 The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like mypy or flake8.
+
+Code coverage workflows are currently disabled.
 
 ### When are workflows triggered
 
 The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, eve tests will not be run when only GT4Py sources are changed.
+
+## CSCS-CI
+
+CI pipelines for tests that require GPUs can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users.
+
+Currently only the cartesian tests are enabled.
 
 ## Integration with external tools
 
@@ -120,6 +118,8 @@ The testing workflows already use a matrix strategy to run the automated tests o
 
 ## Future improvements
 
+- Reenable code coverage workflows.
+- Enable GPU testing on CSCS-CI for `next` and `storage`.
 - Split code quality: it might be better to run code quality tools separate for each project in the monorepo.
 - Split documentation: once there is proper HTML documentation generated for the projects, it might make sense to have that run as one job per project.
 - Template for tests: although there is a reusable workflow for the code coverage uploading, it probably make sense to reuse some of the workflow description for the tests as well.
