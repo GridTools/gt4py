@@ -28,7 +28,6 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
         backends: [internal-cpu, dace-cpu]
-
     steps:
     - uses: actions/checkout@v2
     - name: Install boost
@@ -59,4 +58,4 @@ jobs:
       run: |
         pyversion_no_dot=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion_no_dot//./}
-        tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
+        VIRTUALENV_SYSTEM_SITE_PACKAGES=1 tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}

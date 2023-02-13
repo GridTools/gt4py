@@ -57,7 +57,7 @@ jobs:
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
         pyversion_no_dot="${pyversion_no_dot/./}"
-        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}
+        VIRTUALENV_SYSTEM_SITE_PACKAGES=1 tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
     # - name: Upload coverage.json artifact
     #   uses: actions/upload-artifact@v3
