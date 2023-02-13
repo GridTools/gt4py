@@ -1,3 +1,5 @@
+import textwrap
+
 import dace
 import sympy
 
@@ -25,21 +27,21 @@ class _ShiftCollector(eve.NodeVisitor):
 
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
-    offset_providers: dict[str, NeighborTableOffsetProvider]
+    offset_provider: dict[str, NeighborTableOffsetProvider]
 
     def __init__(
-        self,
-        param_types: list[ts.TypeSpec],
-        offset_provider: dict[str, NeighborTableOffsetProvider],
+            self,
+            param_types: list[ts.TypeSpec],
+            offset_provider: dict[str, NeighborTableOffsetProvider],
     ):
         self.param_types = param_types
-        self.offset_providers = offset_provider
+        self.offset_provider = offset_provider
 
     @staticmethod
     def _check_no_lifts(node: itir.StencilClosure):
         if any(
-            getattr(fun, "id", "") == "lift"
-            for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
+                getattr(fun, "id", "") == "lift"
+                for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
         ):
             return False
         return True
@@ -60,7 +62,7 @@ class ItirToSDFG(eve.NodeVisitor):
         return True
 
     def visit_StencilClosure(
-        self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
+            self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
         """
         Preconditions:
@@ -91,7 +93,7 @@ class ItirToSDFG(eve.NodeVisitor):
             sdfg.add_array(inp.id, shape=shape, dtype=dace.float64)
 
         input_memlets = {
-            str(lambda_param.id): dace.Memlet(
+            f"{lambda_param.id}_full": dace.Memlet(
                 data=str(inp.id), subset=",".join(f"0:{size}" for size in sdfg.arrays[inp.id].shape)
             )
             for inp, lambda_param in zip(node.inputs, node.stencil.params)
@@ -105,14 +107,18 @@ class ItirToSDFG(eve.NodeVisitor):
 
         map_range = {f"i_{dim}": f"{lb}:{ub}" for dim, (lb, ub) in domain}
 
-        stencil_body = PythonTaskletCodegen().visit(node.stencil)
-        # stencil_args = ','.join(str(inp) for inp in node.inputs)
+        stencil_args = '\n'.join(f"{param} = {param}_full" for param in node.stencil.params)
+        stencil_body = PythonTaskletCodegen(offset_provider=self.offset_provider).visit(node.stencil)
+        stencil_code = textwrap.dedent(f"""
+            {stencil_args}
+            {node.output.id}_element = {stencil_body}
+        """)
 
         last_state.add_mapped_tasklet(
             name="addition",
             map_ranges=map_range,
             inputs=input_memlets,
-            code=f"{node.output.id}_element = {stencil_body}",
+            code=stencil_code,
             # language=dace.Language.CPP,
             # code=f"{node.output.id}_element = (lambda : 7)()",
             language=dace.Language.Python,
