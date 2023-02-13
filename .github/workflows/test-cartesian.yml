@@ -59,4 +59,4 @@ jobs:
       run: |
         pyversion_no_dot=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion_no_dot//./}
-        tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
+        python -m tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
