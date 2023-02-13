@@ -25,7 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install -c ./constraints.txt .[testing] pre-commit
-        python -m pre-commit install-hooks
+        pre-commit install-hooks
     - name: Run checks
       run: |
         python -m pip list
