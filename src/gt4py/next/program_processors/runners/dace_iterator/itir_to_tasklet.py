@@ -2,6 +2,8 @@ import gt4py.eve as eve
 import gt4py.eve.codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next.iterator import ir as itir
+from typing import Any
+from gt4py.next.common import Dimension
 
 
 class CPPTaskletCodegen(eve.codegen.TemplatedGenerator):
@@ -93,6 +95,11 @@ class CPPTaskletCodegen(eve.codegen.TemplatedGenerator):
 
 
 class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
+    offset_provider: dict[str, Any]
+
+    def __init__(self, offset_provider: dict[str, Any]):
+        self.offset_provider = offset_provider
+
     _builtins_mapping = {
         #     "abs": "abs",
         #     "sin": "std::sin",
@@ -131,8 +138,8 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         #     "bool": "bool",
         "plus": "({} + {})",
         "minus": "({} - {})",
-        #     "multiplies": "std::multiplies{}",
-        #     "divides": "std::divides{}",
+        "multiplies": "({} * {})",
+        "divides": "({} / {})",
         #     "eq": "std::equal_to{}",
         #     "not_eq": "std::not_equal_to{}",
         #     "less": "std::less{}",
@@ -154,17 +161,39 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
 
     Sym = as_fmt("auto {id}")
 
+    def visit_Literal(self, node: itir.Literal):
+        return str(node.value)
+
+    def _visit_iterator_sym(self, node: itir.SymRef):
+        return node.id, ("i_IDim",)
+
     def _visit_deref(self, node: itir.FunCall):
-        if isinstance(node.args[0], itir.SymRef):
-            return f"{node.args[0].id}[i_IDim]"
+        iterator = node.args[0]
+        if isinstance(iterator, itir.SymRef):
+            return self._visit_iterator_sym(iterator)
         sym_ref, index = self.visit(node.args[0])
-        return f"{sym_ref}[{index}]"
+        return f"{sym_ref}[{', '.join(index)}]"
 
     def _visit_shift(self, node: itir.FunCall) -> tuple[str, tuple[str, ...]]:
-        if isinstance(node.args[0], itir.SymRef):
-            return self.visit(node.args[0]), ("i_IDim",)
+        iterator = node.args[0]
+        if isinstance(iterator, itir.SymRef):
+            sym, index = self._visit_iterator_sym(iterator)
+        else:
+            sym, index = self.visit(iterator)
+        amount = self.visit(node.fun.args[1])
 
+        shifted_axis = 0  # TODO: compute actual index
+
+        offseted_index = tuple(
+            value if axis != shifted_axis else f"({value} + {amount})"
+            for axis, value in enumerate(index)
+        )
+
+        return sym, offseted_index
+
+    def _visit_indirect_addressing(self, node: itir.FunCall):
         raise NotImplementedError()
+
 
     def _visit_bin_op_builtin(self, node: itir.FunCall):
         fmt = PythonTaskletCodegen._builtins_mapping[str(node.fun.id)]
@@ -174,6 +203,18 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
     def visit_FunCall(self, node: itir.FunCall):
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
+        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
+            offset = node.fun.args[0]
+            assert isinstance(offset, itir.OffsetLiteral)
+            offset_name = offset.value
+            if offset_name not in self.offset_provider:
+                raise ValueError(f"offset provider for `{offset_name}` is missing")
+            offset_provider = self.offset_provider[offset_name]
+            if isinstance(offset_provider, Dimension):
+                return self._visit_shift(node)
+            else:
+                return self._visit_indirect_addressing(node)
+
         if isinstance(node.fun, itir.SymRef):
             if str(node.fun.id) in PythonTaskletCodegen._builtins_mapping:
                 return self._visit_bin_op_builtin(node)

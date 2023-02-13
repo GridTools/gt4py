@@ -9,6 +9,7 @@ from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
+import dace
 
 
 def convert_arg(arg: Any):
@@ -42,5 +43,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         for param, arg in zip(array_params, array_args)
         for sym, size in zip(sdfg.arrays[str(param.id)].shape, np.asarray(arg).shape)
     }
-    sdfg.view()
-    sdfg(**regular_args, **shape_args)
+    with dace.config.temporary_config():
+        #dace.config.Config.set("compiler", "build_type", value="Debug")
+        #dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        #dace.config.Config.set("frontend", "check_args", value=True)
+        sdfg(**regular_args, **shape_args)
