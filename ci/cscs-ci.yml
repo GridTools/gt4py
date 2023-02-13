@@ -1,5 +1,9 @@
+include:
+- remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
 stages:
-  - cscs_ci
+  - build
+  - test
 
 build images:
   stage: cscs_ci
@@ -15,7 +19,7 @@ build images:
 
   trigger:
     include:
-      - local: images.yml
+      - local: ci/images.yml
 
 run tests:
   stage: cscs_ci
@@ -31,8 +35,8 @@ run tests:
 
   trigger:
     include:
-      - local: cartesian.yml
-      - local: storage.yml
+      - local: ci/cartesian.yml
+      - local: ci/storage.yml
 
 
 
