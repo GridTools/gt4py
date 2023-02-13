@@ -269,6 +269,8 @@ class GTFNIMCodegen(GTFNCodegen):
 
     InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
 
+    EmptyListInitializer = as_mako("{}")
+
     Conditional = as_mako(
         """
           using ${cond_type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
