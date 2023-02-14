@@ -25,7 +25,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install -c ./constraints.txt pip setuptools wheel
-        python -m pip install -c ./constraints.txt pre-commit .[testing]
+        python -m pip install -r ./requirements-dev.txt
+        python -m pip install -c ./constraints.txt .[testing]
         pre-commit install-hooks
     - name: Run checks
       run: |
