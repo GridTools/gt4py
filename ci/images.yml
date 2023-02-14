@@ -9,8 +9,8 @@ build base image:
   extends: .container-builder
   stage: baseimage
   rules:
-    if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-    when: manual
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+      when: manual
   allow_failure: true
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/gt4py-ci:$PYVERSION
@@ -21,7 +21,7 @@ build checkout image:
   extends: .container-builder
   stage: image
   rules:
-    if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
     DOCKERFILE: ci/checkout.Dockerfile
