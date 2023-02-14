@@ -92,11 +92,28 @@ class ItirToSDFG(eve.NodeVisitor):
             shape = array_table[node.output.id].shape  # Assume same as output
             sdfg.add_array(inp.id, shape=shape, dtype=dace.float64)
 
+        neighbor_tables = [
+            (offset, table)
+            for offset, table in self.offset_provider.items()
+            if isinstance(table, NeighborTableOffsetProvider)
+        ]
+
+        for offset, table in neighbor_tables:
+            name = f"__connectivity_{offset}"
+            shape = array_table[name].shape
+            sdfg.add_array(name, shape=shape, dtype=dace.int64)
+
         input_memlets = {
             f"{lambda_param.id}_full": dace.Memlet(
                 data=str(inp.id), subset=",".join(f"0:{size}" for size in sdfg.arrays[inp.id].shape)
             )
             for inp, lambda_param in zip(node.inputs, node.stencil.params)
+        }
+        connectivity_memlets = {
+            f"__connectivity_{offset}_full": dace.Memlet(
+                data=f"__connectivity_{offset}", subset=",".join(f"0:{size}" for size in sdfg.arrays[f"__connectivity_{offset}"].shape)
+            )
+            for offset, _ in neighbor_tables
         }
         output_memlets = {
             f"{node.output.id}_element": dace.Memlet(
@@ -115,12 +132,10 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         last_state.add_mapped_tasklet(
-            name="addition",
+            name=node.stencil.id if isinstance(node.stencil, itir.FunctionDefinition) else "lambda",
             map_ranges=map_range,
-            inputs=input_memlets,
+            inputs={**input_memlets, **connectivity_memlets},
             code=stencil_code,
-            # language=dace.Language.CPP,
-            # code=f"{node.output.id}_element = (lambda : 7)()",
             language=dace.Language.Python,
             outputs=output_memlets,
             external_edges=True,
@@ -142,6 +157,16 @@ class ItirToSDFG(eve.NodeVisitor):
             else:
                 raise NotImplementedError()
 
+        neighbor_tables = [
+            (offset, table)
+            for offset, table in self.offset_provider.items()
+            if isinstance(table, NeighborTableOffsetProvider)
+        ]
+
+        for offset, table in neighbor_tables:
+            shape = (dace.symbol(sdfg.temp_data_name()) for _ in range(2))
+            sdfg.add_array(f"__connectivity_{offset}", shape=shape, dtype=dace.int64)
+
         for closure in node.closures:
             last_state = sdfg.add_state_after(last_state)
 
@@ -149,11 +174,18 @@ class ItirToSDFG(eve.NodeVisitor):
             nsdfg_node = last_state.add_nested_sdfg(
                 closure_sdfg,
                 None,
-                inputs={str(inp.id) for inp in closure.inputs},
+                inputs={
+                    *{str(inp.id) for inp in closure.inputs},
+                    *{f"__connectivity_{offset}" for offset, _ in neighbor_tables}
+                },
                 outputs={str(closure.output.id)},
             )
 
             input_accesses = [last_state.add_access(inp.id) for inp in closure.inputs]
+            connectivity_accesses = [
+                last_state.add_access(f"__connectivity_{offset}")
+                for offset, _ in neighbor_tables
+            ]
             output_access = last_state.add_access(closure.output.id)
 
             for inner_name, access_node in zip(closure.inputs, input_accesses):
@@ -162,6 +194,18 @@ class ItirToSDFG(eve.NodeVisitor):
                     None,
                     nsdfg_node,
                     inner_name.id,
+                    dace.Memlet(
+                        data=access_node.data,
+                        subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[access_node.data].shape),
+                    ),
+                )
+
+            for (offset, _), access_node in zip(neighbor_tables, connectivity_accesses):
+                last_state.add_edge(
+                    access_node,
+                    None,
+                    nsdfg_node,
+                    f"__connectivity_{offset}",
                     dace.Memlet(
                         data=access_node.data,
                         subset=", ".join(f"0:{sh}" for sh in sdfg.arrays[access_node.data].shape),
@@ -179,11 +223,11 @@ class ItirToSDFG(eve.NodeVisitor):
                 ),
             )
 
+        #sdfg.view()
         sdfg.validate()
         return sdfg
 
     def _visit_named_range(self, node: itir.FunCall) -> tuple[sympy.Basic, ...]:
-        # cartesian_domain(named_range(IDim, start, end))
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 
