@@ -26,10 +26,16 @@ run tests:
     matrix:
     - PYVERSION_PREFIX: py310
       PYVERSION: 3.10.9
+      SUBPACKAGE: [cartesian, storage]
+      BACKEND: [internal, dace]
     - PYVERSION_PREFIX: py39
       PYVERSION: 3.9.1
+      SUBPACKAGE: [cartesian, storage]
+      BACKEND: [internal, dace]
     - PYVERSION_PREFIX: py38
       PYVERSION: 3.8.5
+      SUBPACKAGE: [cartesian, storage]
+      BACKEND: [internal, dace]
 
   trigger:
     include:

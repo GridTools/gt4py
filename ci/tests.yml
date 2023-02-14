@@ -13,10 +13,7 @@ run tests:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
-  parallel:
-    matrix:
-    - BACKEND: [internal, dace]
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX-$BACKEND-cuda112
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
