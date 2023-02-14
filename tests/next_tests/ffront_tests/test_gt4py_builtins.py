@@ -36,7 +36,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
     rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
-    inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    inp_field = array_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
     def maxover_fieldoperator(inp_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
@@ -58,7 +58,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     Edge = rs.Edge
     edge_num = np.max(rs.v2e_table)
     inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
-    inp_field = np_as_located_field(Edge)(inp_field_arr)
+    inp_field = array_as_located_field(Edge)(inp_field_arr)
 
     @field_operator(backend=fieldview_backend)
     def maxover_negvals(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
@@ -78,7 +78,7 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
     rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
-    in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    in_field = array_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator
     def minover_fieldoperator(input: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
@@ -98,8 +98,8 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
     in_array = np.random.default_rng().uniform(low=-1, high=1, size=rs.v2e_table.shape)
-    in_field = np_as_located_field(Vertex, V2EDim)(in_array)
-    out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices))
+    in_field = array_as_located_field(Vertex, V2EDim)(in_array)
+    out_field = array_as_located_field(Vertex)(np.zeros(rs.num_vertices))
 
     @field_operator
     def minover_fieldoperator(input: Field[[Vertex, V2EDim], float64]) -> Field[[Vertex], float64]:
@@ -141,7 +141,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 
     rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
-    nb_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
+    nb_field = array_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
     def reduction(nb_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
@@ -179,11 +179,11 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple():
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float_1 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float_1 = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator
     def conditional_nested_tuple(
@@ -212,8 +212,8 @@ def test_conditional_nested_tuple():
 
 
 def test_broadcast_simple(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = array_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
@@ -225,7 +225,7 @@ def test_broadcast_simple(fieldview_backend):
 
 
 def test_broadcast_scalar(fieldview_backend):
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def scalar_broadcast() -> Field[[IDim], float64]:
@@ -237,9 +237,9 @@ def test_broadcast_scalar(fieldview_backend):
 
 
 def test_broadcast_two_fields(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    b_J_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
-    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    b_J_int = array_as_located_field(JDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = array_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def broadcast_two_fields(
@@ -257,8 +257,8 @@ def test_broadcast_two_fields(fieldview_backend):
 
 
 def test_broadcast_shifted(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_IJ_int = array_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def simple_broadcast(inp: Field[[IDim], int64]) -> Field[[IDim, JDim], int64]:
@@ -271,10 +271,10 @@ def test_broadcast_shifted(fieldview_backend):
 
 
 def test_conditional(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def conditional(
@@ -288,9 +288,9 @@ def test_conditional(fieldview_backend):
 
 
 def test_conditional_promotion(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(
@@ -304,8 +304,8 @@ def test_conditional_promotion(fieldview_backend):
 
 
 def test_conditional_compareop(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def conditional_promotion(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -319,10 +319,10 @@ def test_conditional_compareop(fieldview_backend):
 
 
 def test_conditional_shifted(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator()
     def conditional_shifted(
@@ -347,9 +347,9 @@ def test_conditional_shifted(fieldview_backend):
 
 def test_promotion(fieldview_backend):
     ksize = 5
-    a = np_as_located_field(Edge, KDim)(np.ones((size, ksize)))
-    b = np_as_located_field(KDim)(np.ones((ksize)) * 2)
-    c = np_as_located_field(Edge, KDim)(np.zeros((size, ksize)))
+    a = array_as_located_field(Edge, KDim)(np.ones((size, ksize)))
+    b = array_as_located_field(KDim)(np.ones((ksize)) * 2)
+    c = array_as_located_field(Edge, KDim)(np.zeros((size, ksize)))
 
     @field_operator(backend=fieldview_backend)
     def promotion(

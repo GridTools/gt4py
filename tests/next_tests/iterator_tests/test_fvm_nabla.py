@@ -24,8 +24,8 @@ from gt4py.next.iterator.atlas_utils import AtlasTable
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
+    array_as_located_field,
     index_field,
-    np_as_located_field,
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
@@ -130,10 +130,10 @@ def test_compute_zavgS(program_processor, lift_mode):
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
-    pp = np_as_located_field(Vertex)(setup.input_field)
-    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
+    pp = array_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(array_as_located_field(Edge), setup.S_fields))
 
-    zavgS = np_as_located_field(Edge)(np.zeros((setup.edges_size)))
+    zavgS = array_as_located_field(Edge)(np.zeros((setup.edges_size)))
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
 
@@ -188,15 +188,15 @@ def test_compute_zavgS2(program_processor, lift_mode):
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
-    pp = np_as_located_field(Vertex)(setup.input_field)
+    pp = array_as_located_field(Vertex)(setup.input_field)
 
-    S = np_as_located_field(Edge)(
+    S = array_as_located_field(Edge)(
         np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
     )
 
     zavgS = (
-        np_as_located_field(Edge)(np.zeros((setup.edges_size))),
-        np_as_located_field(Edge)(np.zeros((setup.edges_size))),
+        array_as_located_field(Edge)(np.zeros((setup.edges_size))),
+        array_as_located_field(Edge)(np.zeros((setup.edges_size))),
     )
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
@@ -228,13 +228,13 @@ def test_nabla(program_processor, lift_mode):
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
 
-    sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
-    pp = np_as_located_field(Vertex)(setup.input_field)
-    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
-    vol = np_as_located_field(Vertex)(setup.vol_field)
+    sign = array_as_located_field(Vertex, V2E)(setup.sign_field)
+    pp = array_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(array_as_located_field(Edge), setup.S_fields))
+    vol = array_as_located_field(Vertex)(setup.vol_field)
 
-    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
-    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MXX = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
     v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
@@ -283,15 +283,15 @@ def test_nabla2(program_processor, lift_mode):
     program_processor, validate = program_processor
     setup = nabla_setup()
 
-    sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
-    pp = np_as_located_field(Vertex)(setup.input_field)
-    S_M = np_as_located_field(Edge)(
+    sign = array_as_located_field(Vertex, V2E)(setup.sign_field)
+    pp = array_as_located_field(Vertex)(setup.input_field)
+    S_M = array_as_located_field(Edge)(
         np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
     )
-    vol = np_as_located_field(Vertex)(setup.vol_field)
+    vol = array_as_located_field(Vertex)(setup.vol_field)
 
-    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
-    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MXX = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
     v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)
@@ -362,13 +362,13 @@ def test_nabla_sign(program_processor, lift_mode):
     setup = nabla_setup()
 
     # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
-    is_pole_edge = np_as_located_field(Edge)(setup.is_pole_edge_field)
-    pp = np_as_located_field(Vertex)(setup.input_field)
-    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
-    vol = np_as_located_field(Vertex)(setup.vol_field)
+    is_pole_edge = array_as_located_field(Edge)(setup.is_pole_edge_field)
+    pp = array_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(array_as_located_field(Edge), setup.S_fields))
+    vol = array_as_located_field(Vertex)(setup.vol_field)
 
-    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
-    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MXX = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = array_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
 
     e2v = NeighborTableOffsetProvider(AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2)
     v2e = NeighborTableOffsetProvider(AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7)

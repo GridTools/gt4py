@@ -20,8 +20,8 @@ from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import deref, lift, plus, reduce, shift
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
+    array_as_located_field,
     index_field,
-    np_as_located_field,
 )
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.formatters import gtfn
@@ -129,7 +129,7 @@ def sum_edges_to_vertices(in_edges):
 def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    out = array_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
@@ -152,7 +152,7 @@ def sum_edges_to_vertices_reduce(in_edges):
 def test_sum_edges_to_vertices_reduce(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    out = array_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
@@ -177,7 +177,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(
 ):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Vertex)
-    out = np_as_located_field(Cell)(np.zeros([9]))
+    out = array_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
     run_processor(
@@ -202,9 +202,9 @@ def sparse_stencil(non_sparse, inp):
 
 def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    non_sparse = np_as_located_field(Edge)(np.zeros(18))
-    inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    non_sparse = array_as_located_field(Edge)(np.zeros(18))
+    inp = array_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.ones([9]) * 10
 
@@ -227,9 +227,9 @@ V2V = offset("V2V")
 
 def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    non_sparse = np_as_located_field(Edge)(np.zeros(18))
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    non_sparse = array_as_located_field(Edge)(np.zeros(18))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.asarray(list(sum(row) for row in v2v_arr))
 
@@ -257,8 +257,8 @@ def slice_sparse_stencil(sparse):
 
 def test_slice_sparse(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1]
 
@@ -284,8 +284,8 @@ def slice_twice_sparse_stencil(sparse):
 
 def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
     run_processor(
@@ -310,8 +310,8 @@ def shift_sliced_sparse_stencil(sparse):
 
 def test_shift_sliced_sparse(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
@@ -337,8 +337,8 @@ def slice_shifted_sparse_stencil(sparse):
 
 def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
@@ -373,8 +373,8 @@ def test_lift(program_processor, lift_mode):
     if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         # TODO(tehrengruber): only a temporary solution until index fields are supported in the
         #  gtfn backend.
-        inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+        inp = array_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
+    out = array_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
@@ -396,8 +396,8 @@ def sparse_shifted_stencil(inp):
 
 def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
@@ -426,9 +426,9 @@ def shift_sparse_stencil2(inp):
 def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Vertex)
-    inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
-    out1 = np_as_located_field(Vertex)(np.zeros([9]))
-    out2 = np_as_located_field(Vertex)(np.zeros([9]))
+    inp_sparse = array_as_located_field(Edge, E2V)(e2v_arr)
+    out1 = array_as_located_field(Vertex)(np.zeros([9]))
+    out2 = array_as_located_field(Vertex)(np.zeros([9]))
 
     offset_provider = {
         "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
@@ -475,8 +475,8 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = array_as_located_field(Vertex, V2V)(v2v_arr)
+    out = array_as_located_field(Vertex)(np.zeros([9]))
 
     ref = []
     for row in v2v_arr:

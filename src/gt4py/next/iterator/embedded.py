@@ -1038,10 +1038,13 @@ def _shift_field_indices(
     )
 
 
-def np_as_located_field(
-    *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
+from gt4py.storage import DimensionIdentifier
+
+
+def array_as_located_field(
+    *axes: DimensionIdentifier, origin: Optional[dict[DimensionIdentifier, int]] = None
 ) -> Callable[[np.ndarray], LocatedFieldImpl]:
-    def _maker(a: np.ndarray) -> LocatedFieldImpl:
+    def _maker(a: ArrayLike) -> LocatedFieldImpl:
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
 

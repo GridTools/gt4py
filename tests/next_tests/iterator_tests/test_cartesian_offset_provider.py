@@ -16,7 +16,7 @@ import numpy as np
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import double_roundtrip, roundtrip
 
@@ -53,8 +53,8 @@ def fencil_swapped(output, input):
 
 
 def test_cartesian_offset_provider():
-    inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
+    inp = array_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
+    out = array_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
 
     fencil(out, inp)
     assert out[0][0] == 42
@@ -85,12 +85,12 @@ def delay_complete_shift_fencil(output, input):
 
 
 def test_delay_complete_shift():
-    inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
+    inp = array_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
 
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
+    out = array_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
     delay_complete_shift_fencil(out, inp)
     assert out[0, 0] == 43
 
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
+    out = array_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
     delay_complete_shift_fencil(out, inp, backend=roundtrip.executor)
     assert out[0, 0] == 43

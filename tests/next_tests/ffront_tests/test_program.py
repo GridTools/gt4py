@@ -22,7 +22,7 @@ import pytest
 from gt4py.next.common import Field, GTTypeError
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 from .past_common_fixtures import (
@@ -46,8 +46,8 @@ def fieldview_backend(request):
 
 def test_identity_fo_execution(fieldview_backend, identity_def):
     size = 10
-    in_field = np_as_located_field(IDim)(np.ones((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    in_field = array_as_located_field(IDim)(np.ones((size)))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
     identity = field_operator(identity_def, backend=fieldview_backend)
 
     identity(in_field, out=out_field, offset_provider={})
@@ -57,9 +57,9 @@ def test_identity_fo_execution(fieldview_backend, identity_def):
 
 def test_shift_by_one_execution(fieldview_backend):
     size = 10
-    in_field = np_as_located_field(IDim)(np.arange(0, size, 1, dtype=np.float64))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
-    out_field_ref = np_as_located_field(IDim)(
+    in_field = array_as_located_field(IDim)(np.arange(0, size, 1, dtype=np.float64))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
+    out_field_ref = array_as_located_field(IDim)(
         np.array([i + 1.0 if i in range(0, size - 1) else 0 for i in range(0, size)])
     )
 
@@ -84,8 +84,8 @@ def test_shift_by_one_execution(fieldview_backend):
 
 def test_copy_execution(fieldview_backend, copy_program_def):
     size = 10
-    in_field = np_as_located_field(IDim)(np.ones((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    in_field = array_as_located_field(IDim)(np.ones((size)))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
     copy_program = program(copy_program_def, backend=fieldview_backend)
 
     copy_program(in_field, out_field, offset_provider={})
@@ -95,9 +95,9 @@ def test_copy_execution(fieldview_backend, copy_program_def):
 
 def test_double_copy_execution(fieldview_backend, double_copy_program_def):
     size = 10
-    in_field = np_as_located_field(IDim)(np.ones((size)))
-    intermediate_field = np_as_located_field(IDim)(np.zeros((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
+    in_field = array_as_located_field(IDim)(np.ones((size)))
+    intermediate_field = array_as_located_field(IDim)(np.zeros((size)))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
     double_copy_program = program(double_copy_program_def, backend=fieldview_backend)
 
     double_copy_program(in_field, intermediate_field, out_field, offset_provider={})
@@ -107,9 +107,9 @@ def test_double_copy_execution(fieldview_backend, double_copy_program_def):
 
 def test_copy_restricted_execution(fieldview_backend, copy_restrict_program_def):
     size = 10
-    in_field = np_as_located_field(IDim)(np.ones((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
-    out_field_ref = np_as_located_field(IDim)(
+    in_field = array_as_located_field(IDim)(np.ones((size)))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
+    out_field_ref = array_as_located_field(IDim)(
         np.array([1 if i in range(1, 2) else 0 for i in range(0, size)])
     )
     copy_restrict_program = program(copy_restrict_program_def, backend=fieldview_backend)
@@ -121,9 +121,9 @@ def test_copy_restricted_execution(fieldview_backend, copy_restrict_program_def)
 
 def test_calling_fo_from_fo_execution(fieldview_backend, identity_def):
     size = 10
-    in_field = np_as_located_field(IDim)(2 * np.ones((size)))
-    out_field = np_as_located_field(IDim)(np.zeros((size)))
-    out_field_ref = np_as_located_field(IDim)(2 * 2 * 2 * np.ones((size)))
+    in_field = array_as_located_field(IDim)(2 * np.ones((size)))
+    out_field = array_as_located_field(IDim)(np.zeros((size)))
+    out_field_ref = array_as_located_field(IDim)(2 * 2 * 2 * np.ones((size)))
 
     @field_operator
     def pow_two(field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
@@ -144,10 +144,10 @@ def test_calling_fo_from_fo_execution(fieldview_backend, identity_def):
 
 def test_tuple_program_return_constructed_inside(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(2 * np.ones((size,)))
-    out_a = np_as_located_field(IDim)(np.zeros((size,)))
-    out_b = np_as_located_field(IDim)(np.zeros((size,)))
+    a = array_as_located_field(IDim)(np.ones((size,)))
+    b = array_as_located_field(IDim)(2 * np.ones((size,)))
+    out_a = array_as_located_field(IDim)(np.zeros((size,)))
+    out_b = array_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
     def pack_tuple(
@@ -172,10 +172,10 @@ def test_tuple_program_return_constructed_inside(fieldview_backend):
 
 def test_tuple_program_return_constructed_inside_with_slicing(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(2 * np.ones((size,)))
-    out_a = np_as_located_field(IDim)(np.zeros((size,)))
-    out_b = np_as_located_field(IDim)(np.zeros((size,)))
+    a = array_as_located_field(IDim)(np.ones((size,)))
+    b = array_as_located_field(IDim)(2 * np.ones((size,)))
+    out_a = array_as_located_field(IDim)(np.zeros((size,)))
+    out_b = array_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
     def pack_tuple(
@@ -202,12 +202,12 @@ def test_tuple_program_return_constructed_inside_with_slicing(fieldview_backend)
 
 def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
     size = 10
-    a = np_as_located_field(IDim)(np.ones((size,)))
-    b = np_as_located_field(IDim)(2 * np.ones((size,)))
-    c = np_as_located_field(IDim)(3 * np.ones((size,)))
-    out_a = np_as_located_field(IDim)(np.zeros((size,)))
-    out_b = np_as_located_field(IDim)(np.zeros((size,)))
-    out_c = np_as_located_field(IDim)(np.zeros((size,)))
+    a = array_as_located_field(IDim)(np.ones((size,)))
+    b = array_as_located_field(IDim)(2 * np.ones((size,)))
+    c = array_as_located_field(IDim)(3 * np.ones((size,)))
+    out_a = array_as_located_field(IDim)(np.zeros((size,)))
+    out_b = array_as_located_field(IDim)(np.zeros((size,)))
+    out_c = array_as_located_field(IDim)(np.zeros((size,)))
 
     @field_operator
     def pack_tuple(
@@ -234,8 +234,8 @@ def test_tuple_program_return_constructed_inside_nested(fieldview_backend):
 
 def test_wrong_argument_type(fieldview_backend, copy_program_def):
     size = 10
-    inp = np_as_located_field(JDim)(np.ones((size,)))
-    out = np_as_located_field(IDim)(np.zeros((size,)))
+    inp = array_as_located_field(JDim)(np.ones((size,)))
+    out = array_as_located_field(IDim)(np.zeros((size,)))
 
     copy_program = program(copy_program_def, backend=fieldview_backend)
 
@@ -254,8 +254,8 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
 
 def test_dimensions_domain():
     size = 10
-    a = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    out_field = np_as_located_field(IDim, JDim)(np.ones((size, size)))
+    a = array_as_located_field(IDim, JDim)(np.ones((size, size)))
+    out_field = array_as_located_field(IDim, JDim)(np.ones((size, size)))
 
     @field_operator()
     def empty_domain_fieldop(a: Field[[IDim, JDim], float64]):
@@ -276,9 +276,9 @@ def test_dimensions_domain():
 
 def test_input_kwargs(fieldview_backend):
     size = 10
-    input_1 = np_as_located_field(IDim, JDim)(np.ones((size, size)))
-    input_2 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
-    input_3 = np_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
+    input_1 = array_as_located_field(IDim, JDim)(np.ones((size, size)))
+    input_2 = array_as_located_field(IDim, JDim)(np.ones((size, size)) * 2)
+    input_3 = array_as_located_field(IDim, JDim)(np.ones((size, size)) * 3)
 
     expected = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
 
@@ -290,7 +290,7 @@ def test_input_kwargs(fieldview_backend):
     ) -> Field[[IDim, JDim], float64]:
         return c * a - b
 
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    out = array_as_located_field(IDim, JDim)(np.zeros((size, size)))
     fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
@@ -303,11 +303,11 @@ def test_input_kwargs(fieldview_backend):
     ):
         fieldop_input_kwargs(a, b, c, out=out)
 
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    out = array_as_located_field(IDim, JDim)(np.zeros((size, size)))
     program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    out = np_as_located_field(IDim, JDim)(np.zeros((size, size)))
+    out = array_as_located_field(IDim, JDim)(np.zeros((size, size)))
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 

@@ -44,9 +44,9 @@ from .ffront_test_utils import *
 
 
 def test_arithmetic(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def arithmetic(
@@ -60,8 +60,8 @@ def test_arithmetic(fieldview_backend):
 
 
 def test_power(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -72,8 +72,8 @@ def test_power(fieldview_backend):
 
 
 def test_floordiv(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_I_int = array_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("FloorDiv not yet supported.")
@@ -87,8 +87,8 @@ def test_floordiv(fieldview_backend):
 
 
 def test_mod(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_I_int = array_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Modulo not yet supported.")
@@ -102,9 +102,9 @@ def test_mod(fieldview_backend):
 
 
 def test_bit_xor(fieldview_backend):
-    a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    b_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    b_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def binary_xor(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
@@ -115,9 +115,9 @@ def test_bit_xor(fieldview_backend):
 
 
 def test_bit_and(fieldview_backend):
-    a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    b_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    b_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def bit_and(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
@@ -128,9 +128,9 @@ def test_bit_and(fieldview_backend):
 
 
 def test_bit_or(fieldview_backend):
-    a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    b_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    b_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def bit_or(inp1: Field[[IDim], bool], inp2: Field[[IDim], bool]) -> Field[[IDim], bool]:
@@ -144,8 +144,8 @@ def test_bit_or(fieldview_backend):
 
 
 def test_unary_neg(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    a_I_int = array_as_located_field(IDim)(np.random.randn(size).astype("int64"))
+    out_I_int = array_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     @field_operator(backend=fieldview_backend)
     def uneg(inp: Field[[IDim], int64]) -> Field[[IDim], int64]:
@@ -156,8 +156,8 @@ def test_unary_neg(fieldview_backend):
 
 
 def test_unary_invert(fieldview_backend):
-    a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def tilde_fieldop(inp1: Field[[IDim], bool]) -> Field[[IDim], bool]:
@@ -168,8 +168,8 @@ def test_unary_invert(fieldview_backend):
 
 
 def test_unary_not(fieldview_backend):
-    a_I_bool = np_as_located_field(IDim)(np.random.randn(size).astype(bool))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_bool = array_as_located_field(IDim)(np.random.randn(size).astype(bool))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def not_fieldop(inp1: Field[[IDim], bool]) -> Field[[IDim], bool]:
@@ -183,9 +183,9 @@ def test_unary_not(fieldview_backend):
 
 
 def test_basic_trig(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def basic_trig_fieldop(
@@ -205,9 +205,9 @@ def test_basic_trig(fieldview_backend):
 
 
 def test_exp_log(fieldview_backend):
-    a_float = np_as_located_field(IDim)(np.ones((size)))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_float = array_as_located_field(IDim)(np.ones((size)))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def exp_log_fieldop(
@@ -222,9 +222,9 @@ def test_exp_log(fieldview_backend):
 
 
 def test_roots(fieldview_backend):
-    a_float = np_as_located_field(IDim)(np.ones((size)))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_float = array_as_located_field(IDim)(np.ones((size)))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def roots_fieldop(
@@ -239,10 +239,10 @@ def test_roots(fieldview_backend):
 
 
 def test_is_values(fieldview_backend):
-    out_bool_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    out_bool_2 = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    out_bool_1 = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    out_bool_2 = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_bool = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
     @field_operator(backend=fieldview_backend)
     def is_isinf_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], bool]:
@@ -270,9 +270,9 @@ def test_is_values(fieldview_backend):
 
 
 def test_rounding_funs(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def rounding_funs_fieldop(

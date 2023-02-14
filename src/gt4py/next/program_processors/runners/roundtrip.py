@@ -94,7 +94,7 @@ def ${id}(${','.join(params)}):
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
         dtype = np_dtype(node.dtype)
-        return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
+        return f"{node.id} = array_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -151,7 +151,7 @@ def fencil_generator(
         import numpy as np
         {builtins_import}
         from gt4py.next.iterator.runtime import *
-        from gt4py.next.iterator.embedded import np_as_located_field
+        from gt4py.next.iterator.embedded import array_as_located_field
         """
     )
 

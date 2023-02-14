@@ -19,11 +19,11 @@ from gt4py.next.iterator import embedded
 
 
 def make_located_field(dtype=np.float64):
-    return embedded.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
+    return embedded.array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
 
 
 def test_located_field_1d():
-    foo = embedded.np_as_located_field("foo")(np.zeros((1,)))
+    foo = embedded.array_as_located_field("foo")(np.zeros((1,)))
 
     foo[0] = 42
 
@@ -32,7 +32,7 @@ def test_located_field_1d():
 
 
 def test_located_field_2d():
-    foo = embedded.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
+    foo = embedded.array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
 
     foo[0, 0] = 42
 

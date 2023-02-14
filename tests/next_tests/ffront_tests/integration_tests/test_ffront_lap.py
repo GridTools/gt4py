@@ -17,7 +17,7 @@ import numpy as np
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 
 
 IDim = Dimension("IDim")
@@ -66,7 +66,7 @@ def lap_ref(inp):
 
 def test_ffront_lap():
     shape = (20, 20)
-    as_ij = np_as_located_field(IDim, JDim)
+    as_ij = array_as_located_field(IDim, JDim)
     input = as_ij(np.fromfunction(lambda x, y: x**2 + y**2, shape))
 
     result_lap = as_ij(np.zeros_like(input))

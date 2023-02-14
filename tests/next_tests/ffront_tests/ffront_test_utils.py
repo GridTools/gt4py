@@ -24,8 +24,8 @@ from gt4py.next.common import DimensionKind
 from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
+    array_as_located_field,
     index_field,
-    np_as_located_field,
 )
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
@@ -120,7 +120,7 @@ def reduction_setup():
         V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
         E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
         inp=index_field(edge, dtype=np.int64),
-        out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
+        out=array_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
             "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
             "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),

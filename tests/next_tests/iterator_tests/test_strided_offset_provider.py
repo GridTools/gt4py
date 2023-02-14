@@ -17,7 +17,7 @@ import pytest
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import deref, lift, named_range, shift, unstructured_domain
-from gt4py.next.iterator.embedded import StridedNeighborOffsetProvider, np_as_located_field
+from gt4py.next.iterator.embedded import StridedNeighborOffsetProvider, array_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
 from .conftest import run_processor
@@ -56,12 +56,12 @@ def test_strided_offset_provider(program_processor_no_gtfn_exec):
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()
-    inp = np_as_located_field(LocAB)(
+    inp = array_as_located_field(LocAB)(
         rng.normal(
             size=(LocAB_size,),
         )
     )
-    out = np_as_located_field(LocA)(np.zeros((LocA_size,)))
+    out = array_as_located_field(LocA)(np.zeros((LocA_size,)))
     ref = np.sum(np.asarray(inp).reshape(LocA_size, max_neighbors), axis=-1)
 
     run_processor(fencil, program_processor, LocA_size, out, inp)

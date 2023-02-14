@@ -688,8 +688,8 @@ def scan_operator(
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
         >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-        >>> inp = embedded.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = embedded.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> inp = embedded.array_as_located_field(KDim)(np.ones((10,)))
+        >>> out = embedded.array_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val

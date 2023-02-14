@@ -27,7 +27,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.decorator import FieldOperator
 from gt4py.next.ffront.fbuiltins import Dimension, Field, float64
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_translation
 
@@ -125,9 +125,9 @@ def test_math_function_builtins_execution(fieldview_backend, builtin_name: str, 
     else:
         ref_impl: Callable = getattr(np, builtin_name)
 
-    inps = [np_as_located_field(IDim)(np.asarray(input)) for input in inputs]
+    inps = [array_as_located_field(IDim)(np.asarray(input)) for input in inputs]
     expected = ref_impl(*inputs)
-    out = np_as_located_field(IDim)(np.zeros_like(expected))
+    out = array_as_located_field(IDim)(np.zeros_like(expected))
 
     builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(fieldview_backend)
 

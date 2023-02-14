@@ -17,7 +17,7 @@ import pytest
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
@@ -80,9 +80,9 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = np_as_located_field(IDim, JDim, origin={IDim: 2, JDim: 2})(inp[:, :, 0])
-    coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
-    out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
+    inp_s = array_as_located_field(IDim, JDim, origin={IDim: 2, JDim: 2})(inp[:, :, 0])
+    coeff_s = array_as_located_field(IDim, JDim)(coeff[:, :, 0])
+    out_s = array_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
     run_processor(
         hdiff, program_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode

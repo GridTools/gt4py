@@ -57,7 +57,7 @@ def fencil_example():
     )
     IDim = Dimension("I")
     params = [
-        embedded.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        embedded.array_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
         np.float32(3.14),
     ]
     return fencil, params

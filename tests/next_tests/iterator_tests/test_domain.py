@@ -19,7 +19,7 @@ import pytest
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import deref
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
 
 from .conftest import DummyConnectivity
@@ -52,12 +52,14 @@ I = Dimension("I")
 def test_embedded_error_on_wrong_domain():
     dom = CartesianDomain([("I", range(1))])
 
-    out = np_as_located_field(I)(
+    out = array_as_located_field(I)(
         np.zeros(
             1,
         )
     )
     with pytest.raises(RuntimeError, match="expected `UnstructuredDomain`"):
         foo[dom](
-            np_as_located_field(I)(np.zeros((1,))), out=out, offset_provider={"bar": connectivity}
+            array_as_located_field(I)(np.zeros((1,))),
+            out=out,
+            offset_provider={"bar": connectivity},
         )

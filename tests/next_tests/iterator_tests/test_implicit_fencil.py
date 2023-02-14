@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, fundef
 
 from .conftest import run_processor
@@ -33,11 +33,11 @@ def dom():
 
 
 def a_field():
-    return np_as_located_field(I)(np.asarray(range(_isize)))
+    return array_as_located_field(I)(np.asarray(range(_isize)))
 
 
 def out_field():
-    return np_as_located_field(I)(np.zeros(shape=(_isize,)))
+    return array_as_located_field(I)(np.zeros(shape=(_isize,)))
 
 
 @fundef
