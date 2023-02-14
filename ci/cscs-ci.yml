@@ -22,7 +22,7 @@ build py38 baseimage:
   extends: .container-builder
   stage: baseimage
   rules:
-  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_PIPELINE_SOURCE == "push"
     changes:
     - ci/base.Dockerfile
     allow_failure: false
