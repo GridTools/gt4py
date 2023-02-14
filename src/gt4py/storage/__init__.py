@@ -19,6 +19,7 @@
 from . import interface, layout
 from .interface import empty, from_array, full, ones, zeros  # noqa: F401
 from .layout import from_name, register
+from .protocol import DimensionIdentifier, StorageProtocol
 
 
 try:
@@ -34,8 +35,11 @@ __all__ = [
     "from_array",
     "full",
     "ones",
-    "zeros" "from_name",
+    "zeros",
+    "from_name",
     "register",
+    "StorageProtocol",
+    "DimensionIdentifier",
 ]
 
 if "dace_descriptor" in globals():

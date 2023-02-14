@@ -46,6 +46,7 @@ import numpy.typing as npt
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.iterator import builtins, runtime, utils
+from gt4py.storage import StorageProtocol
 
 
 EMBEDDED = "embedded"
@@ -160,12 +161,12 @@ class ItIterator(Protocol):
 
 
 @runtime_checkable
-class LocatedField(Protocol):
+class LocatedField(StorageProtocol, Protocol):
     """A field with named dimensions providing read access."""
 
     @property
     @abc.abstractmethod
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
@@ -717,9 +718,10 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    return (
-        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
-    )
+    if isinstance(field_or_tuple, tuple):
+        return _get_axes(field_or_tuple[0])
+    else:
+        return field_or_tuple.__gt_dims__
 
 
 def _single_vertical_idx(
@@ -910,7 +912,7 @@ class LocatedFieldImpl(MutableLocatedField):
     """A Field with named dimensions/axes."""
 
     @property
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._axes
 
     def __init__(
@@ -1079,7 +1081,7 @@ class IndexField(LocatedField):
             return self.dtype.type(index[0])
 
     @property
-    def axes(self) -> tuple[common.Dimension]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return (self.axis,)
 
 
@@ -1096,7 +1098,7 @@ class ConstantField(LocatedField):
         return self.dtype(self.value)
 
     @property
-    def axes(self) -> tuple[()]:
+    def __gt_dims__(self) -> tuple[()]:
         return ()
 
 
@@ -1185,7 +1187,7 @@ def _get_axeses(field):
         return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
     else:
         assert is_located_field(field)
-        return (field.axes,)
+        return (_get_axes(field),)
 
 
 def _build_tuple_result(field, indices):
@@ -1215,7 +1217,7 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        self.axes = axeses[0]
+        self.__gt_dims__ = axeses[0]
 
     def field_getitem(self, indices):
         return _build_tuple_result(self.data, indices)
@@ -1316,14 +1318,14 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             if column is None:
                 assert _is_concrete_position(pos)
-                ordered_indices = get_ordered_indices(out.axes, pos)
+                ordered_indices = get_ordered_indices(out.__gt_dims__, pos)
                 out.field_setitem(ordered_indices, res)
             else:
                 col_pos = pos.copy()
                 for k in column.col_range:
                     col_pos[column.axis] = k
                     assert _is_concrete_position(col_pos)
-                    ordered_indices = get_ordered_indices(out.axes, col_pos)
+                    ordered_indices = get_ordered_indices(out.__gt_dims__, col_pos)
                     out.field_setitem(ordered_indices, res[k])
 
         _column_range = None

@@ -35,7 +35,9 @@ def get_param_description(
 ) -> interface.ScalarParameter | interface.BufferParameter:
     view: np.ndarray = np.asarray(obj)
     if view.ndim > 0:
-        return interface.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
+        return interface.BufferParameter(
+            name, tuple(dim.value for dim in obj.__gt_dims__), view.dtype
+        )
     else:
         return interface.ScalarParameter(name, view.dtype)
 
