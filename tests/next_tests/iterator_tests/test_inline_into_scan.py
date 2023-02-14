@@ -16,7 +16,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 
 
-# TODO remove duplication with test_eta_reduction
+# TODO(havogt): remove duplication with test_eta_reduction
 def _make_scan(*args: list[str], scanpass_body: ir.Expr) -> ir.Expr:
     return ir.FunCall(
         fun=ir.SymRef(id="scan"),
