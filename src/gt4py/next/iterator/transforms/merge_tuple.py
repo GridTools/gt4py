@@ -26,6 +26,7 @@ def _count_tuple(count: int, dtype: type_inference.Tuple | type_inference.EmptyT
 
 
 def _get_tuple_size(node: ir.Node) -> int:
+    # TODO(havogt) This fails if the tuple is a SymRef. Use type information from (entire) tree when available.
     infered_type = type_inference.infer(node)
     assert isinstance(infered_type, type_inference.Val)
     dtype = infered_type.dtype

@@ -88,7 +88,11 @@ def apply_common_transforms(
         for _ in range(10):
             # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
             inlined = InlineIntoScan().visit(ir)
-            inlined = InlineLambdas.apply(inlined, True, True)
+            inlined = InlineLambdas.apply(
+                inlined,
+                opcount_preserving=True,
+                force_inline_lift=True
+            )
             if inlined == ir:
                 break
             ir = inlined

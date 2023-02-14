@@ -43,6 +43,7 @@ def _contains_scan(node: ir.Expr) -> bool:
 
 
 def _should_inline(node: ir.FunCall) -> bool:
+    # TODO(havogt): This fails if the scan is captured. Check if the inferred type is a column, once available.
     return not any(_contains_scan(arg) for arg in node.args)
 
 
@@ -67,20 +68,22 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Inline non-SymRef arguments into the scan.
 
-    example:
-    scan(λ(state, isym0, isym1) → body(state, isym0, isym1), forward, init)(sym0, f(sym0,sym1,sym2))
+    Example:
+    
+        scan(λ(state, isym0, isym1) → body(state, isym0, isym1), forward, init)(sym0, f(sym0,sym1,sym2))
     to
-    scan(λ(state, sym0, sym1, sym2) → (λ(isym0, isym1) → body(state, isym0, isym1))(sym0, f(sym0,sym1,sym2)), forward, init)(sym0, sym1,sym2)
+    
+        scan(λ(state, sym0, sym1, sym2) → (λ(isym0, isym1) → body(state, isym0, isym1))(sym0, f(sym0,sym1,sym2)), forward, init)(sym0, sym1,sym2)
 
-    algorithm:
-    - take args of scan: `sym0`, `f(sym0, sym1, sym2)`
-    - extract all symrefs that are not builtins: `sym0`, `sym1`, `sym2`
-    - create a lambda with first (state/carry) param taken from original scanpass (`state`) and new Symbols with the name of the extracted symrefs: `λ(state, sym0, sym1, sym2)`
-    - the body is a call to the original scanpass, but with `state` param removed `λ(isym0, isym1) → body(state, isym0, isym1)` (`state` is captured)
-    - it is called with the original args of the scan: `sym0, f(sym0,sym1,sym2)`
-    - wrap the new scanpass in a scan call with the original `forward` and `init`
-    - call it with the extrated symrefs
-    - note: there is no symbol clash
+    Algorithm:
+      - take args of scan: `sym0`, `f(sym0, sym1, sym2)`
+      - extract all symrefs that are not builtins: `sym0`, `sym1`, `sym2`
+      - create a lambda with first (state/carry) param taken from original scanpass (`state`) and new Symbols with the name of the extracted symrefs: `λ(state, sym0, sym1, sym2)`
+      - the body is a call to the original scanpass, but with `state` param removed `λ(isym0, isym1) → body(state, isym0, isym1)` (`state` is captured)
+      - it is called with the original args of the scan: `sym0, f(sym0,sym1,sym2)`
+      - wrap the new scanpass in a scan call with the original `forward` and `init`
+      - call it with the extrated symrefs
+      - note: there is no symbol clash
     """
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -90,7 +93,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert isinstance(original_scan_call, ir.FunCall)
             refs_in_args = _extract_symrefs(original_scan_args, kwargs["symtable"])
             original_scanpass = original_scan_call.args[0]
-            assert isinstance(original_scanpass, (ir.FunctionDefinition, ir.Lambda))
+            assert isinstance(original_scanpass, (ir.Lambda))
 
             new_scanpass = ir.Lambda(
                 params=[
