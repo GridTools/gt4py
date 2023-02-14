@@ -193,7 +193,23 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         return sym, offseted_index
 
     def _visit_indirect_addressing(self, node: itir.FunCall):
-        raise NotImplementedError()
+        iterator = node.args[0]
+        if isinstance(iterator, itir.SymRef):
+            sym, index = self._visit_iterator_sym(iterator)
+        else:
+            sym, index = self.visit(iterator)
+
+        offset = node.fun.args[0].value
+        element = self.visit(node.fun.args[1])
+
+        shifted_axis = 0  # TODO: compute actual index
+
+        offseted_index = tuple(
+            value if axis != shifted_axis else f"__connectivity_{offset}_full[{value}, {element}]"
+            for axis, value in enumerate(index)
+        )
+
+        return sym, offseted_index
 
 
     def _visit_bin_op_builtin(self, node: itir.FunCall):

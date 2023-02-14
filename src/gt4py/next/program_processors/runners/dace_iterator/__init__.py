@@ -7,6 +7,7 @@ from gt4py.next.iterator.embedded import LocatedField
 from gt4py.next.iterator.transforms import apply_common_transforms
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 
 from .itir_to_sdfg import ItirToSDFG
 import dace
@@ -34,6 +35,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     regular_args = {name.id: convert_arg(arg) for name, arg in zip(program.params, args)}
 
+    neighbor_tables = [
+        (offset, table)
+        for offset, table in offset_provider.items()
+        if isinstance(table, NeighborTableOffsetProvider)
+    ]
+
+    connectivity_args = {
+        f"__connectivity_{offset}": table.table
+        for offset, table in neighbor_tables
+    }
+    connectivity_shape_args = {
+        str(sym): size
+        for offset, _ in neighbor_tables
+        for sym, size in zip(sdfg.arrays[f"__connectivity_{offset}"].shape, offset_provider[offset].table.shape)
+    }
+
     array_params = [
         param for param, type_ in zip(program.params, arg_types) if isinstance(type_, ts.FieldType)
     ]
@@ -47,4 +64,4 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         #dace.config.Config.set("compiler", "build_type", value="Debug")
         #dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         #dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(**regular_args, **shape_args)
+        sdfg(**regular_args, **shape_args, **connectivity_args, **connectivity_shape_args)
