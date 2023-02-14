@@ -170,9 +170,10 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
     def _visit_deref(self, node: itir.FunCall):
         iterator = node.args[0]
         if isinstance(iterator, itir.SymRef):
-            return self._visit_iterator_sym(iterator)
-        sym_ref, index = self.visit(node.args[0])
-        return f"{sym_ref}[{', '.join(index)}]"
+            sym, index = self._visit_iterator_sym(iterator)
+        else:
+            sym, index = self.visit(node.args[0])
+        return f"{sym}[{', '.join(index)}]"
 
     def _visit_shift(self, node: itir.FunCall) -> tuple[str, tuple[str, ...]]:
         iterator = node.args[0]

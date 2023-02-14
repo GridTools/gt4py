@@ -109,10 +109,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
         stencil_args = '\n'.join(f"{param} = {param}_full" for param in node.stencil.params)
         stencil_body = PythonTaskletCodegen(offset_provider=self.offset_provider).visit(node.stencil)
-        stencil_code = textwrap.dedent(f"""
-            {stencil_args}
-            {node.output.id}_element = {stencil_body}
-        """)
+        stencil_code = textwrap.dedent(
+            f"{stencil_args}\n"
+            f"{node.output.id}_element = {stencil_body}"
+        )
 
         last_state.add_mapped_tasklet(
             name="addition",
