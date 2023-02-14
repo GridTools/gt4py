@@ -55,5 +55,5 @@ ENV PATH="/root/.pyenv/shims:${PATH}"
 
 
 RUN pip install --upgrade pip setuptools wheel 
-RUN pip install --upgrade tox cupy-cuda112
+RUN pip install --upgrade tox cupy-cuda112 numpy
 
