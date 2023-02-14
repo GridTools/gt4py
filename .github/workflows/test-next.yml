@@ -49,11 +49,12 @@ jobs:
     - name: Install python dependencies
       shell: bash
       run: |
+        python -m pip install -c ./constraints.txt pip setuptools wheel
         python -m pip install -r ./requirements-dev.txt
     - name: Run tox tests
       env:
         NUM_PROCESSES: auto
-        VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
+        # VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
       shell: bash
       run: |
         pyversion_no_dot="${{ matrix.python-version }}"
