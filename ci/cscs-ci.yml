@@ -1,10 +1,6 @@
 include:
 - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
-stages:
-  - build
-  - test
-
 build images:
   stage: build
 
@@ -21,9 +17,11 @@ build images:
     include:
       - local: ci/images.yml
 
+  strategy: depend
+
 run tests:
   stage: test
-  needs: ["build image"]
+  needs: ["build images"]
   parallel:
     matrix:
       - PYVERSION_PREFIX: py310
@@ -38,5 +36,6 @@ run tests:
       - local: ci/cartesian.yml
       - local: ci/storage.yml
 
+  strategy: depend
 
 
