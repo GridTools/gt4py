@@ -68,6 +68,7 @@ from .extended_typing import (
     Type,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 from .type_definitions import NOTHING, NothingType
@@ -1337,7 +1338,7 @@ class XIterable(Iterable[T]):
         if callable(key):
             groupby_key = key
         elif isinstance(key, list):
-            groupby_key = operator.itemgetter(*key)
+            groupby_key = cast(Callable[[T], Any], operator.itemgetter(*key))
         else:
             assert isinstance(key, str)
             groupby_key = operator.attrgetter(key, *attr_keys)

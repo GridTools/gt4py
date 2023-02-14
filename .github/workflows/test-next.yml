@@ -1,0 +1,71 @@
+name: "Test / Next (CPU)"
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+    paths-ignore: # Skip if only gt4py.cartesian has been updated
+    - "src/gt4py/cartesian/**"
+    - "tests/cartesian_tests/**"
+
+jobs:
+  test-next:
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+        tox-env-factor: ["nomesh", "atlas"]
+        os: ["ubuntu-latest"]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install C++ libraries
+      if: ${{ matrix.os == 'macos-latest' }}
+      shell: bash
+      run: |
+        brew install boost
+    - name: Install C++ libraries
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      shell: bash
+      run: |
+        sudo apt install libboost-dev
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip setuptools wheel tox
+    - name: Run tox tests
+      env:
+        NUM_PROCESSES: auto
+      shell: bash
+      run: |
+        pyversion_no_dot="${{ matrix.python-version }}"
+        pyversion_no_dot="${pyversion_no_dot/./}"
+        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}
+    #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
+    # - name: Upload coverage.json artifact
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
+    #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
+    # - name: Gather info
+    #   run: |
+    #     echo ${{ github.ref_type }} >> info.txt
+    #     echo ${{ github.ref }} >> info.txt
+    #     echo ${{ github.sha }} >> info.txt
+    #     echo ${{ github.event.number }} >> info.txt
+    #     echo ${{ github.event.pull_request.head.ref }} >> info.txt
+    #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
+    #     echo ${{ github.run_id }} >> info.txt
+    # - name: Upload info artifact
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
+    #     path: info.txt

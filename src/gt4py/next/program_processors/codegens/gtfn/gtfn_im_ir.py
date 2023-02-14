@@ -35,9 +35,13 @@ class InitStmt(AssignStmt):
     init_type: str = "auto"
 
 
+class EmptyListInitializer(Expr):
+    ...
+
+
 class Conditional(Stmt):
     cond_type: str
-    init_stmt: Stmt
+    init_stmt: InitStmt
     cond: Expr
     if_stmt: AssignStmt
     else_stmt: AssignStmt
