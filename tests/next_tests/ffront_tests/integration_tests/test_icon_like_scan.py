@@ -86,7 +86,7 @@ def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     z_q: Field[[Cell, KDim], float],
     w: Field[[Cell, KDim], float],
 ) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float]]:
-    """In inlining, relies on MergeTuple with ignore_tuple_size=True (only working with gtfn)."""
+    """In inlining, relies on CollapseTuple with ignore_tuple_size=True (only working with gtfn)."""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
@@ -233,7 +233,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     #     pytest.skip("Needs implementation of scan projector.")
     if fieldview_backend == roundtrip.executor:
         pytest.skip(
-            "Inline into scan breaks embedded execution and relies on MergeTuple ignore_tuple_size==True."
+            "Inline into scan breaks embedded execution and relies on CollapseTuple ignore_tuple_size==True."
         )
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
@@ -267,7 +267,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend == roundtrip.executor:
-        pytest.skip("Only working in gtfn with MergeTuple ignore_tuple_size==True.")
+        pytest.skip("Only working in gtfn with CollapseTuple ignore_tuple_size==True.")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
         test_setup.z_alpha,

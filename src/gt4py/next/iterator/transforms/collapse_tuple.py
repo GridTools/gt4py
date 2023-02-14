@@ -35,7 +35,7 @@ def _get_tuple_size(node: ir.Node) -> int:
 
 
 @dataclass(frozen=True)
-class MergeTuple(eve.NodeTranslator):
+class CollapseTuple(eve.NodeTranslator):
     """Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t."""
 
     ignore_tuple_size: bool

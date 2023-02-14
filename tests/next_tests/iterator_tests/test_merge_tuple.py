@@ -15,7 +15,7 @@
 import pytest
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.merge_tuple import MergeTuple
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 
 def _tuple_get(i: int, t: ir.Expr):
@@ -35,7 +35,7 @@ def test_simple(tup_of_size_2):
         args=[_tuple_get(0, tup_of_size_2), _tuple_get(1, tup_of_size_2)],
     )
     expected = tup_of_size_2
-    actual = MergeTuple.apply(testee)
+    actual = CollapseTuple.apply(testee)
     assert actual == expected
 
 
@@ -44,17 +44,17 @@ def test_incompatible_order(tup_of_size_2):
         fun=ir.SymRef(id="make_tuple"),
         args=[_tuple_get(1, tup_of_size_2), _tuple_get(0, tup_of_size_2)],
     )
-    actual = MergeTuple.apply(testee)
+    actual = CollapseTuple.apply(testee)
     assert actual == testee  # did nothing
 
 
 def test_incompatible_size(tup_of_size_2):
     testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, tup_of_size_2)])
-    actual = MergeTuple.apply(testee)
+    actual = CollapseTuple.apply(testee)
     assert actual == testee  # did nothing
 
 
 def test_merged_with_smaller_outer_size(tup_of_size_2):
     testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, tup_of_size_2)])
-    actual = MergeTuple.apply(testee, ignore_tuple_size=True)
+    actual = CollapseTuple.apply(testee, ignore_tuple_size=True)
     assert actual == tup_of_size_2

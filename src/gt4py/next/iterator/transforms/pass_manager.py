@@ -16,6 +16,7 @@ import enum
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
+from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.extended_eta_reduction import ExtendedEtaReduction
@@ -25,7 +26,6 @@ from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.merge_let import MergeLet
-from gt4py.next.iterator.transforms.merge_tuple import MergeTuple
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
@@ -55,7 +55,7 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     force_inline_lift=False,
-    unconditional_tuple_merge=False,
+    unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -84,15 +84,11 @@ def apply_common_transforms(
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:
-        ir = MergeTuple.apply(ir, ignore_tuple_size=unconditional_tuple_merge)
+        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
         for _ in range(10):
             # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
             inlined = InlineIntoScan().visit(ir)
-            inlined = InlineLambdas.apply(
-                inlined,
-                opcount_preserving=True,
-                force_inline_lift=True
-            )
+            inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift=True)
             if inlined == ir:
                 break
             ir = inlined

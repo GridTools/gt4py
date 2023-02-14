@@ -69,10 +69,8 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Inline non-SymRef arguments into the scan.
 
     Example:
-    
         scan(λ(state, isym0, isym1) → body(state, isym0, isym1), forward, init)(sym0, f(sym0,sym1,sym2))
     to
-    
         scan(λ(state, sym0, sym1, sym2) → (λ(isym0, isym1) → body(state, isym0, isym1))(sym0, f(sym0,sym1,sym2)), forward, init)(sym0, sym1,sym2)
 
     Algorithm:
