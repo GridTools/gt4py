@@ -1,0 +1,20 @@
+name: "Skipped: Test / Cartesian (CPU)"
+
+on:
+  pull_request:
+    branches:
+    - main
+    paths: # inverse of corresponding workflow
+    - "src/gt4py/next/**"
+    - "tests/next_tests/**"
+
+jobs:
+  test-cartesian:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+        backends: [internal-cpu, dace-cpu]
+
+    steps:
+    - run: 'echo "No build required"'
