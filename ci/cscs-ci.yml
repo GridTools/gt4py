@@ -39,8 +39,7 @@ run tests:
 
   trigger:
     include:
-    - local: ci/cartesian.yml
-    - local: ci/storage.yml
+    - local: ci/tests.yml
     strategy: depend
 
 
