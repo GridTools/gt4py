@@ -6,16 +6,16 @@ build images:
 
   parallel:
     matrix:
-      - PYVERSION_PREFIX: py310
-        PYVERSION: 3.10.9
-      - PYVERSION_PREFIX: py39
-        PYVERSION: 3.9.1
-      - PYVERSION_PREFIX: py38
-        PYVERSION: 3.8.5
+    - PYVERSION_PREFIX: py310
+      PYVERSION: 3.10.9
+    - PYVERSION_PREFIX: py39
+      PYVERSION: 3.9.1
+    - PYVERSION_PREFIX: py38
+      PYVERSION: 3.8.5
 
   trigger:
     include:
-      - local: ci/images.yml
+    - local: ci/images.yml
     strategy: depend
 
 
@@ -24,17 +24,17 @@ run tests:
   needs: ["build images"]
   parallel:
     matrix:
-      - PYVERSION_PREFIX: py310
-        PYVERSION: 3.10.9
-      - PYVERSION_PREFIX: py39
-        PYVERSION: 3.9.1
-      - PYVERSION_PREFIX: py38
-        PYVERSION: 3.8.5
+    - PYVERSION_PREFIX: py310
+      PYVERSION: 3.10.9
+    - PYVERSION_PREFIX: py39
+      PYVERSION: 3.9.1
+    - PYVERSION_PREFIX: py38
+      PYVERSION: 3.8.5
 
   trigger:
     include:
-      - local: ci/cartesian.yml
-      - local: ci/storage.yml
+    - local: ci/cartesian.yml
+    - local: ci/storage.yml
     strategy: depend
 
 
