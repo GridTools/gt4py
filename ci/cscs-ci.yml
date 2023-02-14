@@ -16,8 +16,8 @@ build images:
   trigger:
     include:
       - local: ci/images.yml
+    strategy: depend
 
-  strategy: depend
 
 run tests:
   stage: test
@@ -35,7 +35,7 @@ run tests:
     include:
       - local: ci/cartesian.yml
       - local: ci/storage.yml
+    strategy: depend
 
-  strategy: depend
 
 
