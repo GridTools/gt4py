@@ -21,8 +21,13 @@ stages:
 build py38 baseimage:
   extends: .container-builder
   stage: baseimage
-  when: manual
-  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+      - ci/base.Dockerfile
+      allow_failure: false
+    - when: manual
+      allow_failure: true
   variables:
     PERSIST_IMAGE_NAME: $CSCS_REGISTRY_PATH/base/gt4py-ci:$PYVERSION
     DOCKERFILE: ci/base.Dockerfile
