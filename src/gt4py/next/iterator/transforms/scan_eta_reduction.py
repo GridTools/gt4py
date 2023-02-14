@@ -24,15 +24,13 @@ def _is_scan(node: ir.Node):
     )
 
 
-class ExtendedEtaReduction(NodeTranslator):
-    """Not strictly an eta reduction.
+class ScanEtaReduction(NodeTranslator):
+    """Applies eta-reduction-like transformation involving scans.
 
-    Simplifies `λ(arg0, arg1, ...) → (λ(param0, param1, ...) → ...)(arg1, arg0, ...)` to `λ(param1, param0, ...)`.
-    Note, unlike the eta reduction, this pass works even if parameters of the outer lambda and arguments in the call
-    of the inner lambda are not in the same order: parameters of the inner lambda are re-ordered. This limits the pass
-    to lambda, i.e. doesn't apply to builtins and `FunctionDefinition`.
-
-    TODO: Currently only implemented for `scan`s, but can be implemented for the general case.
+    Simplifies `λ(x, y) → scan(λ(state, param_y, param_x) → ..., ...)(y, x)` to `scan(λ(state, param_x, param_y) → ..., ...)`.
+    Note, unlike the eta reduction, this pass works even if parameters of the lambda and arguments in the call
+    of the scanpass are not in the same order: parameters of the scanpass are re-ordered. This limits the pass
+    to lambdas, i.e. doesn't apply to builtins and `FunctionDefinition`.
     """
 
     def visit_Lambda(self, node: ir.Lambda) -> ir.Node:

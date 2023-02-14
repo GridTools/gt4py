@@ -19,7 +19,6 @@ from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
-from gt4py.next.iterator.transforms.extended_eta_reduction import ExtendedEtaReduction
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
@@ -28,6 +27,7 @@ from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
+from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -114,7 +114,7 @@ def apply_common_transforms(
         ir = InlineLifts().visit(ir)
 
     ir = EtaReduction().visit(ir)
-    ir = ExtendedEtaReduction().visit(ir)
+    ir = ScanEtaReduction().visit(ir)
 
     if common_subexpression_elimination:
         ir = CommonSubexpressionElimination().visit(ir)

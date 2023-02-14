@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.extended_eta_reduction import ExtendedEtaReduction
+from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
 
 
 def _make_scan(*args: list[str]):
@@ -30,7 +30,7 @@ def _make_scan(*args: list[str]):
     )
 
 
-def test_extended_eta_reduction_for_scan():
+def test_scan_eta_reduction():
     testee = ir.Lambda(
         params=[ir.Sym(id="x"), ir.Sym(id="y")],
         expr=ir.FunCall(
@@ -38,6 +38,8 @@ def test_extended_eta_reduction_for_scan():
             args=[ir.SymRef(id="y"), ir.SymRef(id="x")],
         ),
     )
+    print(testee)
     expected = _make_scan("param_x", "param_y")
-    actual = ExtendedEtaReduction().visit(testee)
+    print(expected)
+    actual = ScanEtaReduction().visit(testee)
     assert actual == expected
