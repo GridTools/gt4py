@@ -222,15 +222,9 @@ class _Renamer:
         except KeyError:
             return
 
-        follow_up_renames = list[tuple[Type, Type]]()
         for node, field in nodes:
             # Default case: just update a field value of the node
             self._update_node(node, field, replacement)
-
-        # Handle follow-up renames
-        for s, d in follow_up_renames:
-            self.register(d)
-            self.rename(s, d)
 
 
 class _Box(Type):

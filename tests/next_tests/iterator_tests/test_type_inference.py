@@ -551,9 +551,8 @@ def test_partial_shift_with_unstructured_offset_provider():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunctionDefinitionType(
-        name="f",
-        fun=ti.FunctionType(
+    expected = ti.LetPolymorphic(
+        dtype=ti.FunctionType(
             args=ti.Tuple.from_elems(
                 ti.TypeVar(idx=0),
             ),
@@ -562,7 +561,7 @@ def test_function_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "f :: (T₀) → T₀"
+    assert ti.pformat(inferred.dtype) == "(T₀) → T₀"
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
