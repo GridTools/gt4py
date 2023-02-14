@@ -1,4 +1,4 @@
-name: "Test / Eve"
+name: "Test Eve"
 
 on:
   push:
@@ -7,17 +7,14 @@ on:
   pull_request:
     branches:
     - main
-    paths: # Run when gt4py.eve files or package settings have changed
+    paths:  # Run when gt4py.eve files (or package settings) are changed
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
     - "workflows/**"
     - "*.cfg"
     - "*.ini"
     - "*.toml"
-    - "!examples/**"
-    - "!*.md"
-    - "!*.rst"
-    - "!*.txt"
+    - "*.yml"
 
 jobs:
   test-eve:

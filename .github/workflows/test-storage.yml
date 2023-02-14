@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
     - main
-    paths: # Run when gt4py.storage files or package settings have changed
+    paths:  # Run when gt4py.storage files (or package settings) are changed
     - "src/gt4py/storage/**"
     - "src/gt4py/cartesian/backend/**"   # For DaCe storages
     - "tests/storage_tests/**"
@@ -15,10 +15,7 @@ on:
     - "*.cfg"
     - "*.ini"
     - "*.toml"
-    - "!examples/**"
-    - "!*.md"
-    - "!*.rst"
-    - "!*.txt"
+    - "*.yml"
 
 jobs:
   test-storage:

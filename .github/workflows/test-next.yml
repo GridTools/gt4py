@@ -7,13 +7,12 @@ on:
   pull_request:
     branches:
     - main
-    paths-ignore: # Skip if only gt4py.cartesian or irrelevant doc files have been updated
+    paths-ignore:  # Skip if only gt4py.cartesian and irrelevant doc files have been updated
     - "src/gt4py/cartesian/**"
     - "tests/cartesian_tests/**"
     - "examples/**"
     - "*.md"
     - "*.rst"
-    - "*.txt"
 
 jobs:
   test-next:

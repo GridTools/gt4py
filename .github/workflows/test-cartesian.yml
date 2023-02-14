@@ -1,21 +1,18 @@
 name: "Test Cartesian (CPU)"
 
 on:
-  schedule:
-  - cron: "30 5 * * *"
   push:
     branches:
     - main
   pull_request:
     branches:
     - main
-    paths-ignore: # Skip if only gt4py.next or irrelevant doc files have been updated
+    paths-ignore:  # Skip if only gt4py.next and irrelevant doc files have been updated
     - "src/gt4py/next/**"
     - "tests/next_tests/**"
     - "examples/**"
     - "*.md"
     - "*.rst"
-    - "*.txt"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
