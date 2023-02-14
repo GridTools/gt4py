@@ -8,6 +8,8 @@ run tests:
   extends: .container-runner-daint-gpu
   stage: test
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
+  rules:
+    if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   script:
   - cd /gt4py.src
   - python -c "import cupy"
