@@ -17,6 +17,8 @@ build images:
     include:
     - local: ci/images.yml
     strategy: depend
+    forward:
+      pipeline_variables: true
 
 
 run tests:
