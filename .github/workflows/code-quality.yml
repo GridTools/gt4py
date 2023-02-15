@@ -22,13 +22,15 @@ jobs:
           **/setup.cfg
           **/constraints.txt
           **/requirements-dev.txt
-    - name: Install dependencies
-      run: |
-        python -m pip install -c ./constraints.txt pip setuptools wheel
-        python -m pip install -r ./requirements-dev.txt
-        python -m pip install -c ./constraints.txt .[testing]
-        pre-commit install-hooks
-    - name: Run checks
-      run: |
-        python -m pip list
-        pre-commit run --all-files
+    # - name: Install dependencies
+    #   run: |
+    #     python -m pip install -c ./constraints.txt pip setuptools wheel
+    #     python -m pip install -r ./requirements-dev.txt
+    #     python -m pip install -c ./constraints.txt .[testing]
+    #     pre-commit install-hooks
+    # - name: Run checks
+    #   run: |
+    #     python -m pip list
+    #     pre-commit run --all-files
+    - uses: pre-commit/action@v3.0.0
+
