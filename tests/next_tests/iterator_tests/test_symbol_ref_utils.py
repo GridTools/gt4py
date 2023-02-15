@@ -57,4 +57,4 @@ def test_get_user_defined_symbols():
 
 def test_collect_symbol_refs():
     ...
-    # TODO
+    # TODO: Test collect_symbol_refs
