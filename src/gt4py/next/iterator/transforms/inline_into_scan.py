@@ -18,7 +18,7 @@ from gt4py import eve
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import symbol_ref_utils
-from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
 
@@ -47,21 +47,10 @@ def _should_inline(node: ir.FunCall) -> bool:
     return not any(_contains_scan(arg) for arg in node.args)
 
 
-def _lambda_and_lift_inliner(node: ir.Lambda) -> ir.Lambda:
-    # TODO(havogt): consider extracting this similar function from passmanager
-    for _ in range(10):
-        inlined = InlineLifts().visit(node)
-        inlined = InlineLambdas.apply(
-            inlined,
-            opcount_preserving=True,
-            force_inline_lift=True,
-        )
-        if inlined == node:
-            break
-        node = inlined
-    else:
-        raise RuntimeError("Inlining lift and lambdas did not converge.")
-    return node
+def _lambda_and_lift_inliner(node: ir.FunCall) -> ir.FunCall:
+    inlined = inline_lambda(node, opcount_preserving=False, force_inline_lift=True)
+    inlined = InlineLifts().visit(inlined)
+    return inlined
 
 
 class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -96,19 +85,18 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             original_scanpass = original_scan_call.args[0]
             assert isinstance(original_scanpass, ir.Lambda)
 
+            new_scanpass_body = ir.FunCall(
+                fun=ir.Lambda(params=[*original_scanpass.params[1:]], expr=original_scanpass.expr),
+                args=original_scan_args,
+            )
+            new_scanpass_body = _lambda_and_lift_inliner(new_scanpass_body)
             new_scanpass = ir.Lambda(
                 params=[
                     original_scanpass.params[0],
                     *(ir.Sym(id=ref) for ref in refs_in_args),
                 ],
-                expr=ir.FunCall(
-                    fun=ir.Lambda(
-                        params=[*original_scanpass.params[1:]], expr=original_scanpass.expr
-                    ),
-                    args=original_scan_args,
-                ),
+                expr=new_scanpass_body,
             )
-            new_scanpass = _lambda_and_lift_inliner(new_scanpass)
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
