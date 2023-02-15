@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -68,6 +68,9 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Inline non-SymRef arguments into the scan.
 
+    Preconditions:
+      - `FunctionDefinitions` are inlined
+
     Example:
         scan(λ(state, isym0, isym1) → body(state, isym0, isym1), forward, init)(sym0, f(sym0,sym1,sym2))
     to
@@ -91,7 +94,7 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert isinstance(original_scan_call, ir.FunCall)
             refs_in_args = _extract_symrefs(original_scan_args, kwargs["symtable"])
             original_scanpass = original_scan_call.args[0]
-            assert isinstance(original_scanpass, (ir.Lambda))
+            assert isinstance(original_scanpass, ir.Lambda)
 
             new_scanpass = ir.Lambda(
                 params=[
