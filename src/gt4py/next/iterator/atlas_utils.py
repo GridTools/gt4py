@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 try:
-    from atlas4py import IrregularConnectivity  # type: ignore[import]
+    from atlas4py import IrregularConnectivity
 except ImportError:
     IrregularConnectivity = None
 

@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import boltons.typeutils  # type: ignore[import]
+import boltons.typeutils
 
 from gt4py.eve import NodeVisitor
 from gt4py.next.iterator import ir
