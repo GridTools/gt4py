@@ -19,6 +19,9 @@ build base image:
 
 build checkout image:
   extends: .container-builder
+  needs:
+    - job: "build base image"
+      optional: true
   stage: image
   rules:
   - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
