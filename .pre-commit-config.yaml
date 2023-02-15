@@ -111,7 +111,7 @@ repos:
   - id: mypy
     name: mypy static type checker
     entry: |
-      mypy --install-types --non-interactive src/
+      mypy --no-install-types --interactive src/
     language: system
     types_or: [python, pyi]
     always_run: true
