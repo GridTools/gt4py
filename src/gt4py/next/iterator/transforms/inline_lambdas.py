@@ -17,8 +17,8 @@ from typing import Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.count_symbol_refs import CountSymbolRefs
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
+from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 def inline_lambda(

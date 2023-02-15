@@ -14,6 +14,19 @@
 
 import numpy as np
 import pytest
+from next_tests.toy_connectivity import (
+    C2E,
+    E2V,
+    V2E,
+    V2V,
+    Cell,
+    Edge,
+    Vertex,
+    c2e_arr,
+    e2v_arr,
+    v2e_arr,
+    v2v_arr,
+)
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import transforms
@@ -28,92 +41,6 @@ from gt4py.next.program_processors.formatters import gtfn
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from .conftest import run_processor
-
-
-Vertex = Dimension("Vertex")
-Edge = Dimension("Edge")
-Cell = Dimension("Cell")
-
-
-# 3x3 periodic   edges        cells
-# 0 - 1 - 2 -    0 1 2
-# |   |   |      9 10 11      0 1 2
-# 3 - 4 - 5 -    3 4 5
-# |   |   |      12 13 14     3 4 5
-# 6 - 7 - 8 -    6 7 8
-# |   |   |      15 16 17     6 7 8
-
-
-c2e_arr = np.array(
-    [
-        [0, 10, 3, 9],  # 0
-        [1, 11, 4, 10],
-        [2, 9, 5, 11],
-        [3, 13, 6, 12],  # 3
-        [4, 14, 7, 13],
-        [5, 12, 8, 14],
-        [6, 16, 0, 15],  # 6
-        [7, 17, 1, 16],
-        [8, 15, 2, 17],
-    ]
-)
-
-v2v_arr = np.array(
-    [
-        [1, 3, 2, 6],
-        [2, 3, 0, 7],
-        [0, 5, 1, 8],
-        [4, 6, 5, 0],
-        [5, 7, 3, 1],
-        [3, 8, 4, 2],
-        [7, 0, 8, 3],
-        [8, 1, 6, 4],
-        [6, 2, 7, 5],
-    ]
-)
-
-e2v_arr = np.array(
-    [
-        [0, 1],
-        [1, 2],
-        [2, 0],
-        [3, 4],
-        [4, 5],
-        [5, 3],
-        [6, 7],
-        [7, 8],
-        [8, 6],
-        [0, 3],
-        [1, 4],
-        [2, 5],
-        [3, 6],
-        [4, 7],
-        [5, 8],
-        [6, 0],
-        [7, 1],
-        [8, 2],
-    ]
-)
-
-
-# order east, north, west, south (counter-clock wise)
-v2e_arr = np.array(
-    [
-        [0, 15, 2, 9],  # 0
-        [1, 16, 0, 10],
-        [2, 17, 1, 11],
-        [3, 9, 5, 12],  # 3
-        [4, 10, 3, 13],
-        [5, 11, 4, 14],
-        [6, 12, 8, 15],  # 6
-        [7, 13, 6, 16],
-        [8, 14, 7, 17],
-    ]
-)
-
-V2E = offset("V2E")
-E2V = offset("E2V")
-C2E = offset("C2E")
 
 
 @fundef
@@ -220,9 +147,6 @@ def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
 
     if validate:
         assert np.allclose(out, ref)
-
-
-V2V = offset("V2V")
 
 
 def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):

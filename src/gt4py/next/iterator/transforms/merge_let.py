@@ -14,7 +14,7 @@
 
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.count_symbol_refs import CountSymbolRefs
+from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 class MergeLet(eve.NodeTranslator):
