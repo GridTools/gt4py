@@ -58,15 +58,15 @@ def indirect_addressing(a: Field[[IDim], float]) -> Field[[IDim], float]:
 
 
 @program(backend=run_dace_iterator)
-def indirect_addressing_program(a: Field[[IDim], float], out: Field[[IDim], float]):
-    indirect_addressing(a, out=out)
+def indirect_addressing_program(z: Field[[IDim], float], out: Field[[IDim], float]):
+    indirect_addressing(z, out=out)
 
 
 def test_indirect_addressing():
     a = np_as_located_field(IDim)(np.array([1, 2, 3], dtype=float))
     r = np_as_located_field(IDim)(np.array([0, 0, 0], dtype=float))
-    e = np_as_located_field(IDim)(np.array([-1, -2, 1], dtype=float))
+    e = np_as_located_field(IDim)(np.array([-1, 2, -1], dtype=float))
 
     indirect_addressing_program(a, out=r, offset_provider={"I2IOff": neighbor_table})
 
-    assert np.allclose(np.asarray(r), np.asarray(r))
+    assert np.allclose(np.asarray(e), np.asarray(r))
