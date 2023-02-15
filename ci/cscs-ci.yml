@@ -66,7 +66,7 @@ test py38:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox run -e SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
