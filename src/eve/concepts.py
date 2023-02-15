@@ -197,7 +197,7 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     frozen classes. Data in the `annex` do not affect the hash or equality
     comparisons of the node, since it is not really a field. Thus, visitors
     and pipeline passes can freely attach computed attributes into the instance
-    `annex`. The `annex` attribute is not copied in implicitly in passes, therefore
+    `annex`. The `annex` attribute is not copied implicitly in passes, therefore
     should be used only for data within a single pass, e.g. for implementing traits,
     see e.g. :class:`SymbolTableTrait`.
     """
