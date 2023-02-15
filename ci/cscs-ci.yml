@@ -20,8 +20,20 @@ build images:
 
 
 run tests:
+  extends: .container-runner-daint-gpu
   stage: test
+  image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$PYVERSION
   needs: ["build images"]
+  script:
+  - cd /gt4py.src
+  - python -c "import cupy"
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX-$BACKEND-cuda112
+  variables:
+    CRAY_CUDA_MPS: 1
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: 120
+    NUM_PROCESSES: auto
+    VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
   parallel:
     matrix:
     - PYVERSION_PREFIX: py310
@@ -36,11 +48,3 @@ run tests:
       PYVERSION: 3.8.5
       SUBPACKAGE: [cartesian, storage]
       BACKEND: [internal, dace]
-
-  trigger:
-    include:
-    - local: ci/tests.yml
-    strategy: depend
-
-
-
