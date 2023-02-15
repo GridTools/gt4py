@@ -119,7 +119,7 @@ class Scan(Node):
 class ScanExecution(Node):
     backend: Backend
     scans: list[Scan]
-    args: list[SymRef]
+    args: list[Expr]
     axis: SymRef
 
 
