@@ -53,6 +53,7 @@ build py310 baseimage:
 
 build py38 image:
   extends: .container-builder
+  needs: ["build py38 baseimage"]
   stage: image
   variables:
     # make sure we use a unique name here, otherwise we could create a race condition, when multiple pipelines
@@ -64,11 +65,13 @@ build py38 image:
 
 build py39 image:
   extends: build py38 image
+  needs: ["build py39 baseimage"]
   variables:
     <<: *py39
 
 build py310 image:
   extends: build py38 image
+  needs: ["build py310 baseimage"]
   variables:
     <<: *py310
 
