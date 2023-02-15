@@ -229,8 +229,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
-    # if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-    #     pytest.skip("Needs implementation of scan projector.")
     if fieldview_backend == roundtrip.executor:
         pytest.skip(
             "Inline into scan breaks embedded execution and relies on CollapseTuple ignore_tuple_size==True."

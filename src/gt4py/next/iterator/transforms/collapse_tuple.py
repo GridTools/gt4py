@@ -18,20 +18,13 @@ from gt4py import eve
 from gt4py.next.iterator import ir, type_inference
 
 
-def _count_tuple(count: int, dtype: type_inference.Tuple | type_inference.EmptyTuple) -> int:
-    if isinstance(dtype, type_inference.EmptyTuple):
-        return count
-    assert isinstance(dtype.others, (type_inference.Tuple, type_inference.EmptyTuple))
-    return _count_tuple(count + 1, dtype.others)
-
-
 def _get_tuple_size(node: ir.Node) -> int:
-    # TODO(havogt) This fails if the tuple is a SymRef. Use type information from (entire) tree when available.
+    # TODO(havogt): This fails if the tuple is a SymRef. Use type information from (entire) tree when available.
     infered_type = type_inference.infer(node)
     assert isinstance(infered_type, type_inference.Val)
     dtype = infered_type.dtype
     assert isinstance(dtype, (type_inference.Tuple, type_inference.EmptyTuple))
-    return _count_tuple(0, dtype)
+    return len(dtype)
 
 
 @dataclass(frozen=True)

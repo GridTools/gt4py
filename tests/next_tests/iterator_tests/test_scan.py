@@ -28,7 +28,7 @@ from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 from .conftest import run_processor
 
 
-def test_scan_in_field_op(program_processor, lift_mode):
+def test_scan_in_stencil(program_processor, lift_mode):
     program_processor, validate = program_processor
 
     isize = 1

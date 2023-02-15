@@ -33,6 +33,9 @@ class EmptyTuple(Type):
         return
         yield
 
+    def __len__(self) -> int:
+        return 0
+
 
 class Tuple(Type):
     """Tuple type with arbitrary number of elements."""
@@ -52,6 +55,9 @@ class Tuple(Type):
         if not isinstance(self.others, (Tuple, EmptyTuple)):
             raise ValueError(f"Can not iterate over partially defined tuple {self}")
         yield from self.others
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
 
 
 class FunctionType(Type):

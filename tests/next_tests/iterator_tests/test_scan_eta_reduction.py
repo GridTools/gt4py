@@ -38,8 +38,6 @@ def test_scan_eta_reduction():
             args=[ir.SymRef(id="y"), ir.SymRef(id="x")],
         ),
     )
-    print(testee)
     expected = _make_scan("param_x", "param_y")
-    print(expected)
     actual = ScanEtaReduction().visit(testee)
     assert actual == expected
