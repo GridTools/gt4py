@@ -28,9 +28,9 @@ build py38 baseimage:
   # Since the base image name is runtime dependent, we need to carry the value of it to
   # the following jobs via a dotenv file.
   before_script:
-    - DOCKER_TAG=`sha256sum ci/base.Dockerfile | head -c 16`
-    - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
-    - echo "BASE_IMAGE=$PERSIST_IMAGE_NAME" >> build.env
+  - DOCKER_TAG=`sha256sum ci/base.Dockerfile | head -c 16`
+  - export PERSIST_IMAGE_NAME=$CSCS_REGISTRY_PATH/base/gt4py-ci:$DOCKER_TAG-$PYVERSION
+  - echo "BASE_IMAGE=$PERSIST_IMAGE_NAME" >> build.env
   artifacts:
     reports:
       dotenv: build.env
