@@ -24,19 +24,6 @@ from gt4py.next.iterator.transforms.symbol_ref_utils import (
 
 
 def test_get_user_defined_symbols():
-    @dataclass
-    class _GetRealItirSymTable(eve.VisitorWithSymbolTableTrait):
-        extracted_symtable: Optional[dict] = None
-
-        @classmethod
-        def apply(cls, ir: itir.Node):
-            obj = cls()
-            obj.visit(ir)
-            return obj.extracted_symtable
-
-        def visit_SymRef(self, node: itir.SymRef, **kwargs):
-            self.extracted_symtable = kwargs["symtable"]
-
     ir = itir.FencilDefinition(
         id="foo",
         function_definitions=[],
@@ -50,7 +37,7 @@ def test_get_user_defined_symbols():
             )
         ],
     )
-    testee = _GetRealItirSymTable.apply(ir)
+    testee = ir.annex.symtable
     actual = get_user_defined_symbols(testee)
     assert actual == {"target_symbol"}
 
