@@ -81,10 +81,8 @@ def compute_zavgS_fencil(
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(shift(V2E)(zavgS), sign)
-    # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
     pnabla_M = library.dot(neighbors(V2E, zavgS), deref(sign))
-    # pnabla_M = list_reduce(lambda a, b, c: a + b * c, 0.0)(neighbors(V2E)(zavgS), sign)
+    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(neighbors(V2E)(zavgS), deref(sign))
     return pnabla_M / deref(vol)
 
 

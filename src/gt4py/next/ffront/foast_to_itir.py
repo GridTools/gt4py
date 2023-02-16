@@ -234,14 +234,6 @@ class FieldOperatorLowering(NodeTranslator):
 
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-    def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        ftype = node.type
-        assert isinstance(ftype, ts.FieldType)
-        init_expr = itir.Literal(value="0", type=str(ftype.dtype))
-        return self._make_reduction_expr(
-            node, lambda expr: im.plus_("acc", expr), init_expr, **kwargs
-        )
-
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall | itir.Literal:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
@@ -376,27 +368,7 @@ class FieldOperatorLowering(NodeTranslator):
         if any(iterator_type_kind(arg.type) is ITIRTypeKind.ITERATOR for arg in args):
             lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
 
-            if any(is_local_type_kind(arg.type) for arg in args):
-                # TODO: multiple different nb dims?
-                def local_dim(field_type):
-                    for dim in field_type.dims:
-                        if dim.kind == DimensionKind.LOCAL:
-                            return dim
-                    raise AssertionError()
-
-                nb_dims = [local_dim(arg.type) for arg in args if is_local_type_kind(arg.type)]
-                assert all(nb_dim == nb_dims[0] for nb_dim in nb_dims)
-                nb_dim = im.ensure_offset(str(nb_dims[0].value) + "Dim")
-                for i, arg in enumerate(args):
-                    if not is_local_type_kind(arg.type):
-                        lowered_args[i] = im.call_(im.call_("ignore_shift")(nb_dim))(
-                            lowered_args[i]
-                        )
-
-                result = im.map_(op, *lowered_args)
-                return result
-            else:
-                return im.map_(op, *lowered_args)
+            return im.map_(op, *lowered_args)
         elif all(iterator_type_kind(arg.type) is ITIRTypeKind.VALUE for arg in args):
             return op(*lowered_args)
         raise AssertionError()

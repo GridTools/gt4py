@@ -380,7 +380,6 @@ def test_tuple_return_2(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     rs = reduction_setup
     Edge = rs.Edge
