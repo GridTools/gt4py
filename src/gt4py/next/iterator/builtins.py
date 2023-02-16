@@ -403,7 +403,7 @@ BUILTINS = {
     "neighbors",
     "list_get",
     "make_list",
-    "map",
+    "map_",
     "lift",
     "reduce",
     "plus",

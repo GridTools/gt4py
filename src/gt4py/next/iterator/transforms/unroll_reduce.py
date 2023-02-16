@@ -30,6 +30,10 @@ def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     )
 
 
+def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+    return isinstance(arg, itir.FunCall) and arg.fun == itir.SymRef(id="neighbors")
+
+
 def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
@@ -38,16 +42,20 @@ def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     )
 
 
-def _is_shifted_or_lifted_and_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return _is_shifted(arg) or (
-        _is_applied_lift(arg)
-        and any(_is_shifted_or_lifted_and_shifted(nested_arg) for nested_arg in arg.args)
+def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+    return (
+        _is_neighbors(arg)
+        or _is_shifted(arg)
+        or (
+            _is_applied_lift(arg)
+            and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
+        )
     )
 
 
-def _get_shifted_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
+def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
     return filter(
-        _is_shifted_or_lifted_and_shifted,
+        _is_neighbors_or_lifted_and_neighbors,
         reduce_args,
     )
 
@@ -63,6 +71,11 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
         assert isinstance(offset, itir.OffsetLiteral)
         assert isinstance(offset.value, str)
         return offset.value
+    elif _is_neighbors(arg):
+        offset = arg.args[0]
+        assert isinstance(offset, itir.OffsetLiteral)
+        assert isinstance(offset.value, str)
+        return offset.value
     else:
         assert _is_applied_lift(arg)
         assert _is_list_of_funcalls(arg.args)
@@ -72,7 +85,7 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
 
 
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
+    return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
 
 
 def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
@@ -133,11 +146,7 @@ class UnrollReduce(NodeTranslator):
     def apply(cls, node: itir.Node, **kwargs):
         return cls().visit(node, **kwargs)
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        node = self.generic_visit(node, **kwargs)
-        if not _is_reduce(node):
-            return node
-
+    def _visit_reduce(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = _get_connectivity(node, offset_provider)
@@ -154,7 +163,7 @@ class UnrollReduce(NodeTranslator):
         derefed_shifted_args = [_make_deref(_make_shift([offset], arg)) for arg in node.args]
         step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
-            check_arg = next(_get_shifted_args(node.args))
+            check_arg = next(_get_neighbors_args(node.args))
             can_deref = _make_can_deref(_make_shift([offset], check_arg))
             step_fun = _make_if(can_deref, step_fun, acc)
         step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
@@ -166,3 +175,14 @@ class UnrollReduce(NodeTranslator):
         )
 
         return expr
+
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+        node = self.generic_visit(node, **kwargs)
+        if _is_reduce(node):
+            return self._visit_reduce(node, **kwargs)
+        if _is_neighbors(node):
+            return itir.FunCall(
+                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=[node.args[0]]),
+                args=[node.args[1]],
+            )
+        return node

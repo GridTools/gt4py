@@ -236,7 +236,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: gtfn bindings don't support tuples")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
@@ -291,9 +291,9 @@ def nabla2(
 
 
 def test_nabla2(program_processor, lift_mode):
+    program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
-    program_processor, validate = program_processor
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)

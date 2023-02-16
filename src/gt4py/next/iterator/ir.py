@@ -149,6 +149,8 @@ BUILTINS = {
     "named_range",
     "neighbors",
     "list_get",
+    "map_",
+    "make_list",
     "lift",
     "make_tuple",
     "tuple_get",

@@ -38,8 +38,8 @@ def basic_reduction():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="x")],
             )
         ],
     )
@@ -56,8 +56,8 @@ def reduction_with_shift_on_second_arg():
         args=[
             ir.SymRef(id="x"),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="y")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
             ),
         ],
     )
@@ -84,6 +84,7 @@ def reduction_with_incompatible_shifts():
     )
 
 
+# TODO check if this test is still relevant
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     UIDs.reset_sequence()
@@ -94,22 +95,30 @@ def reduction_with_irrelevant_full_shift():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(
-                    fun=ir.SymRef(id="shift"),
-                    args=[
-                        ir.OffsetLiteral(value="IrrelevantDim"),
-                        ir.OffsetLiteral(value="0"),
-                        ir.OffsetLiteral(value="Dim"),
-                    ],
-                ),
-                args=[ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[
+                    ir.OffsetLiteral(value="Dim"),
+                    ir.FunCall(
+                        fun=ir.FunCall(
+                            fun=ir.SymRef(id="shift"),
+                            args=[
+                                ir.OffsetLiteral(value="IrrelevantDim"),
+                                ir.OffsetLiteral(value="0"),
+                            ],
+                        ),
+                        args=[ir.SymRef(id="x")],
+                    ),
+                ],
             ),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="y")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
             ),
         ],
     )
+
+
+# TODO add a test with lift
 
 
 @pytest.mark.parametrize(
