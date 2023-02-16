@@ -323,7 +323,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ret=Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T5, defined_loc=T3),
         ),
     ),
-    "reduce": FunctionType(
+    "reduce": FunctionType(  # TODO needs to be fixed
         args=Tuple.from_elems(
             FunctionType(
                 args=Tuple(front=Val_T0_T1, others=ValTuple(kind=Value(), dtypes=T2, size=T1)),
@@ -526,9 +526,28 @@ class _TypeInferrer(eve.NodeTranslator):
                 if not isinstance(node.args[0].value, str):
                     raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
                 connectivity = self.offset_provider[node.args[0].value]
+                current_loc_in, current_loc_out = _infer_shift_location_types(
+                    [node.args[0]], self.offset_provider, constraints
+                )
+                # TODO add constraint on the iterator
+                dtype_ = TypeVar.fresh()
+                size = TypeVar.fresh()
+                it = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
+                constraints.add(
+                    (
+                        it,
+                        Val(
+                            kind=Iterator(),
+                            dtype=dtype_,
+                            size=size,
+                            current_loc=current_loc_in,
+                            defined_loc=current_loc_out,  # TODO is this correct? since we are derefing in neighbors it has to?
+                        ),
+                    )
+                )
                 return ValueList(
-                    dtype=TypeVar.fresh(),
-                    size=TypeVar.fresh(),
+                    dtype=dtype_,
+                    size=size,
                     length=Length(length=connectivity.max_neighbors),
                     has_skip_values=BoolType(value=connectivity.has_skip_values),
                 )

@@ -437,7 +437,7 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
     )
 
 
-def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
+def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {
@@ -458,7 +458,7 @@ def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
             dtype = dtype.others
         return tuple(dtypes)
 
-    fencil_type = type_inference.infer(node.fencil)
+    fencil_type = type_inference.infer(node.fencil, offset_provider=offset_provider)
     assert isinstance(fencil_type, type_inference.FencilDefinitionType)
     assert isinstance(fencil_type.params, type_inference.Tuple)
     all_types = []
@@ -503,4 +503,4 @@ class CreateGlobalTmps(NodeTranslator):
         else:
             res = update_unstructured_domains(res, offset_provider)
         # Use type inference to determine the data type of the temporaries
-        return collect_tmps_info(res)
+        return collect_tmps_info(res, offset_provider=offset_provider)
