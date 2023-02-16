@@ -31,6 +31,7 @@ from gt4py.next.iterator.builtins import (
     named_range,
     neighbors,
     or_,
+    reduce,
     shift,
     tuple_get,
     unstructured_domain,
