@@ -251,10 +251,14 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
-        return im.sym(node.id)
+        result = im.sym(node.id)
+        result.type_ = node.type
+        return result
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
-        return im.ref(node.id)
+        result = im.ref(node.id)
+        result.type_ = node.type
+        return result
 
     def _lift_lambda(self, node: foast.LocatedNode):
         if any(
