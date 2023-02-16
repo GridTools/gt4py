@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Union
+from typing import Callable, Union
 
 from gt4py.next.iterator import ir as itir
 
@@ -271,5 +271,17 @@ def shift_(offset, value=None):
     return call_(call_("shift")(*args))
 
 
+def neighbors_(offset, it):
+    offset = ensure_offset(offset)  # TODO this function should not exist?
+    return call_("neighbors")(offset, it)
+
+
 def literal_(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
+
+
+def map_(op: str | Callable, *its):
+    if isinstance(op, (str, itir.SymRef)):
+        op = call_(op)
+    args = [f"__arg{i}" for i in range(len(its))]
+    return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)
