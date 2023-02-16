@@ -1131,20 +1131,15 @@ class _List(tuple, Generic[DT]):  # TODO encode size in type?
 
 
 @builtins.neighbors.register(EMBEDDED)
-def neighbors(
-    offset: runtime.Offset,
-) -> Callable[[ItIterator], _List]:  # TODO allow multiple offsets?
+def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     # TODO offset provider should be part of the iterator interface?
-    def impl(it: ItIterator) -> _List:
-        offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
-        return _List(
-            builtins.deref(it.shift(offset_str, i))
-            if builtins.can_deref(it.shift(offset_str, i))
-            else None
-            for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
-        )
-
-    return impl
+    offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+    return _List(
+        builtins.deref(it.shift(offset_str, i))
+        if builtins.can_deref(it.shift(offset_str, i))
+        else None
+        for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
+    )
 
 
 @builtins.list_get.register(EMBEDDED)
