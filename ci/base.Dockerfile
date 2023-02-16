@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.2.0-devel-ubuntu20.04
+FROM docker.io/nvidia/cuda:11.2.0-devel-ubuntu20.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -24,6 +24,7 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     python-openssl \
     libreadline-dev \
     git \
+    rustc \
     htop && \
     rm -rf /var/lib/apt/lists/*
 

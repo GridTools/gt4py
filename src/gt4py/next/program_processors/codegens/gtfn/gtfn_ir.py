@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -119,7 +119,7 @@ class Scan(Node):
 class ScanExecution(Node):
     backend: Backend
     scans: list[Scan]
-    args: list[SymRef]
+    args: list[Expr]
     axis: SymRef
 
 
