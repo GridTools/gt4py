@@ -380,27 +380,6 @@ def lift(stencil):
     return impl
 
 
-@builtins.reduce.register(EMBEDDED)
-def reduce(fun, init):
-    def sten(*iters):
-        # TODO: assert check_that_all_iterators_are_compatible(*iters)
-        first_it = iters[0]
-        n = first_it.max_neighbors()
-        res = init
-        for i in range(n):
-            # we can check a single argument
-            # because all arguments share the same pattern
-            if not builtins.can_deref(builtins.shift(i)(first_it)):
-                break
-            res = fun(
-                res,
-                *(builtins.deref(builtins.shift(i)(it)) for it in iters),
-            )
-        return res
-
-    return sten
-
-
 NamedRange: TypeAlias = tuple[Tag | common.Dimension, range]
 
 
@@ -1147,8 +1126,8 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
 
-@builtins.neighbors_list_reduce.register(EMBEDDED)
-def list_reduce(fun, init):
+@builtins.reduce.register(EMBEDDED)
+def reduce(fun, init):
     def sten(*lists):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
         first_list = lists[0]
@@ -1173,6 +1152,10 @@ class SparseListIterator:
     it: ItIterator
     list_offset: Tag
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
+
+    @property
+    def offset_provider(self):
+        return self.it.offset_provider
 
     def deref(self) -> Any:
         return _List(

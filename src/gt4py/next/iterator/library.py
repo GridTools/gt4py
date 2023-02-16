@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator.builtins import neighbors_list_reduce, reduce
+from gt4py.next.iterator.builtins import reduce
 
 
 def sum_(fun=None):
@@ -23,8 +23,4 @@ def sum_(fun=None):
 
 
 def dot(a, b):
-    return reduce(lambda acc, a_n, c_n: acc + a_n * c_n, 0.0)(a, b)
-
-
-def neighbors_list_dot(a, b):
-    return neighbors_list_reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)
+    return reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)

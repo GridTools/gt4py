@@ -148,7 +148,6 @@ BUILTINS = {
     "unstructured_domain",
     "named_range",
     "neighbors",
-    "neighbors_list_reduce",
     "list_get",
     "lift",
     "make_tuple",
