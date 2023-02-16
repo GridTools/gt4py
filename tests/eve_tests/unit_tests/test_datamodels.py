@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
+# GT4Py - GridTools Framework
 #
-# Eve Toolchain - GT4Py Project - GridTools Framework
-#
-# Copyright (c) 2020, CSCS - Swiss National Supercomputing Center, ETH Zurich
+# Copyright (c) 2014-2022, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,7 +17,7 @@ from __future__ import annotations
 import enum
 import types
 import typing
-from typing import Set  # noqa: F401  # imported but unused (used in exec() context)
+from typing import Set  # noqa: F401 # imported but unused (used in exec() context)
 from typing import (
     Any,
     Callable,
@@ -46,7 +44,7 @@ import factory
 import pytest
 import pytest_factoryboy as pytfboy
 
-from eve import datamodels, utils
+from gt4py.eve import datamodels, utils
 
 
 T = TypeVar("T")
@@ -900,21 +898,28 @@ class ModelWithRootValidators(datamodels.DataModel):
     class_counter: ClassVar[int] = 0
 
     @datamodels.root_validator
-    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    @classmethod
+    def _root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert cls is type(instance)
         assert issubclass(cls, ModelWithRootValidators)
         assert isinstance(instance, ModelWithRootValidators)
         cls.class_counter = 0
 
     @datamodels.root_validator
-    def _another_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    @classmethod
+    def _another_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 0
         cls.class_counter += 1
 
     @datamodels.root_validator
-    def _final_root_validator(cls: Type[datamodels.DataModel], instance: datamodels.DataModel):
+    @classmethod
+    def _final_root_validator(
+        cls: Type[datamodels.DataModel], instance: datamodels.DataModel
+    ) -> None:
         cls = cast(Type[ModelWithRootValidators], cls)
         instance = cast(ModelWithRootValidators, instance)
         assert cls.class_counter == 1
@@ -938,16 +943,19 @@ def test_root_validators(model_class: Type[datamodels.DataModel]):
 def test_root_validators_in_subclasses():
     class Model(ModelWithRootValidators):
         @datamodels.root_validator
+        @classmethod
         def _root_validator(cls, instance):
             assert cls.class_counter == 2
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _another_root_validator(cls, instance):
             assert cls.class_counter == 12
             cls.class_counter += 10
 
         @datamodels.root_validator
+        @classmethod
         def _final_root_validator(cls, instance):
             assert cls.class_counter == 22
             if str(instance.int_value) == instance.str_value:

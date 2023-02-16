@@ -12,6 +12,7 @@ repos:
   - id: check-case-conflict
           # - id: check-json
   - id: check-merge-conflict
+    exclude_types: [rst]
   - id: check-toml
   - id: check-yaml
   - id: debug-statements
@@ -29,14 +30,38 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --preserve-quotes, --indent, "2"]
 
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.1.9
+  hooks:
+  - id: insert-license
+    name: Add license for all GT4Py Python source files
+    exclude: ^\..*$
+    types: [python]
+    args: [--comment-style, "|#|", --license-filepath, ./LICENSE_HEADER.txt, --fuzzy-match-generates-todo]
+
+          # - repo: https://github.com/asottile/yesqa
+          #   rev: v1.2.2
+          #   hooks:
+          #   - id: yesqa
+          #     additional_dependencies:
+          #     - flake8==3.8.4
+          #     - darglint
+          #     - flake8-bugbear
+          #     - flake8-builtins
+          #     - flake8-debugger
+          #     - flake8-docstrings
+          #     - flake8-eradicate
+          #     - flake8-mutable
+          #     - flake8-rst-docstrings
+          #     - pygments
+
 - repo: https://github.com/psf/black
   rev: 22.10.0
   hooks:
   - id: black
-    args: [--target-version, py310]
 
-- repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.10.1
+- repo: https://github.com/PyCQA/isort
+  rev: 5.12.0
   hooks:
   - id: isort
 
@@ -58,9 +83,28 @@ repos:
     exclude: |
       (?x)^(
       setup.py |
-      docs/eve/conf.py |
+      docs/user/cartesian/conf.py |
+      src/gt4py/cartesian/__gtscript__.py |
+      src/gt4py/cartesian/__init__.py |
+      src/gt4py/cartesian/gtscript.py |
+      src/gt4py/cartesian/backend/__init__.py |
+      src/gt4py/cartesian/backend/pyext_builder.py |
+      src/gt4py/cartesian/frontend/__init__.py |
+      src/gt4py/cartesian/frontend/nodes.py |
+      src/gt4py/cartesian/frontend/node_util.py |
+      src/gt4py/cartesian/utils/__init__.py |
+      src/gt4py/cartesian/utils/base.py |
+      src/gt4py/cartesian/utils/attrib.py |
+      src/gt4py/cartesian/utils/meta.py |
+      src/gt4py/eve/extended_typing.py |
       tests/conftest.py |
-      tests/functional_tests/.* |
+      tests/cartesian_tests/integration_tests/stencil_definitions.py |
+      tests/cartesian_tests/integration_tests/test_code_generation.py |
+      tests/cartesian_tests/integration_tests/test_cpp_regression.py |
+      tests/cartesian_tests/integration_tests/utils.py |
+      tests/cartesian_tests/unit_tests/test_call_interface.py |
+      tests/cartesian_tests/unit_tests/test_gtscript_frontend.py |
+      tests/next_tests/.* |
       )$
 
 - repo: local
