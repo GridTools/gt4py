@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator.builtins import nshift_reduce, nshiftd_list_reduce, reduce
+from gt4py.next.iterator.builtins import neighbors_list_reduce, reduce
 
 
 def sum_(fun=None):
@@ -26,9 +26,5 @@ def dot(a, b):
     return reduce(lambda acc, a_n, c_n: acc + a_n * c_n, 0.0)(a, b)
 
 
-def nshiftd_list_dot(a, b):
-    return nshiftd_list_reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)
-
-
-def nshift_dot(a, b):
-    return nshift_reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)
+def neighbors_list_dot(a, b):
+    return neighbors_list_reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)

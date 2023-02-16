@@ -39,7 +39,7 @@ def shift(*args):
 
 
 @builtin_dispatch
-def nshiftd(*args):
+def neighbors(*args):
     raise BackendNotSelectedError()
 
 
@@ -49,17 +49,7 @@ def list_get(*args):
 
 
 @builtin_dispatch
-def nshiftd_list_reduce(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def nshift(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
-def nshift_reduce(*args):
+def neighbors_list_reduce(*args):
     raise BackendNotSelectedError()
 
 
@@ -405,11 +395,9 @@ BUILTINS = {
     "deref",
     "can_deref",
     "shift",
-    "nshiftd",
+    "neighbors",
     "list_get",
-    "nshiftd_list_reduce",
-    "nshift",
-    "nshift_reduce",
+    "neighbors_list_reduce",
     "lift",
     "reduce",
     "plus",

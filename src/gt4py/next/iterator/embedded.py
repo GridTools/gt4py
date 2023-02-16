@@ -878,7 +878,7 @@ def make_in_iterator(
     offset_provider: OffsetProvider,
     *,
     column_axis: Optional[Tag],
-) -> MDIterator:
+) -> ItIterator:
     axes = _get_axes(inp)
     sparse_dimensions: list[Tag] = []
     for axis in axes:
@@ -890,9 +890,9 @@ def make_in_iterator(
             sparse_dimensions.append(axis.value)
 
     new_pos: Position = pos.copy()
-    sparse_dimensions = set(sparse_dimensions)
+    sparse_dimensions = list(set(sparse_dimensions))
     assert len(sparse_dimensions) <= 1, sparse_dimensions
-    for sparse_dim in set(sparse_dimensions):
+    for sparse_dim in sparse_dimensions:
         init = [None]  # * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
@@ -907,8 +907,9 @@ def make_in_iterator(
         column_axis=column_axis,
     )
     if len(sparse_dimensions) == 1:
-        it = SparseListIterator(it, next(iter(sparse_dimensions)))
-    return it
+        return SparseListIterator(it, next(iter(sparse_dimensions)))
+    else:
+        return it
 
 
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
@@ -1125,31 +1126,22 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-@dataclasses.dataclass(frozen=True)
-class _List(Generic[DT]):
-    values: list[Optional[DT]]
-
-    def __getitem__(self, i: int):
-        return self.values[i]
-
-    def __len__(self):
-        return len(self.values)
+class _List(tuple, Generic[DT]):  # TODO encode size in type?
+    ...
 
 
-@builtins.nshiftd.register(EMBEDDED)
-def nshiftd(
+@builtins.neighbors.register(EMBEDDED)
+def neighbors(
     offset: runtime.Offset,
 ) -> Callable[[ItIterator], _List]:  # TODO allow multiple offsets?
     # TODO offset provider should be part of the iterator interface?
     def impl(it: ItIterator) -> _List:
         offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
         return _List(
-            values=list(
-                builtins.deref(it.shift(offset_str, i))
-                if builtins.can_deref(it.shift(offset_str, i))
-                else None
-                for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
-            )
+            builtins.deref(it.shift(offset_str, i))
+            if builtins.can_deref(it.shift(offset_str, i))
+            else None
+            for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
         )
 
     return impl
@@ -1160,7 +1152,7 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
 
-@builtins.nshiftd_list_reduce.register(EMBEDDED)
+@builtins.neighbors_list_reduce.register(EMBEDDED)
 def list_reduce(fun, init):
     def sten(*lists):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
@@ -1182,30 +1174,6 @@ def list_reduce(fun, init):
 
 
 @dataclasses.dataclass(frozen=True)
-class ListIterator:
-    it: ItIterator
-    list_offset: Tag
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
-
-    def deref(self) -> Any:
-        return _List(
-            values=list(
-                builtins.deref(builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i)))
-                if builtins.can_deref(
-                    builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i))
-                )
-                else None
-                for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
-            )
-        )
-
-    # TODO can_deref alternative
-
-    def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
-
-
-@dataclasses.dataclass(frozen=True)
 class SparseListIterator:
     it: ItIterator
     list_offset: Tag
@@ -1213,54 +1181,22 @@ class SparseListIterator:
 
     def deref(self) -> Any:
         return _List(
-            values=list(
-                builtins.deref(builtins.shift(*self.offsets, i)(self.it))
-                if builtins.can_deref(
-                    builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i))
-                )
-                else None
-                for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
-            )
+            builtins.deref(builtins.shift(*self.offsets, i)(self.it))
+            if builtins.can_deref(builtins.shift(*self.offsets)(self.it.shift(self.list_offset, i)))
+            else None
+            for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
         )
 
     # TODO can_deref alternative
+    def can_deref(self) -> bool:
+        return True
 
-    def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
+    # TODO
+    def max_neighbors(self) -> int:
+        return 0
 
-
-@builtins.nshift.register(EMBEDDED)
-def nshift(
-    offset: runtime.Offset,
-) -> Callable[[ItIterator], ItIterator]:  # TODO allow multiple offsets?
-    # TODO offset provider should be part of the iterator interface?
-    def impl(it: ItIterator) -> ItIterator:
-        offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
-        return ListIterator(it, offset_str)
-
-    return impl
-
-
-@builtins.nshift_reduce.register(EMBEDDED)
-def nshift_reduce(fun, init):
-    def sten(*its):
-        # TODO: assert check_that_all_iterators_are_compatible(*iters)
-        first_list = deref(its[0])  # with current hack sparse field must not be first
-        n = len(first_list)
-        lists = [deref(it) for it in its]
-        res = init
-        for i in range(n):
-            # we can check a single argument
-            # because all arguments share the same pattern
-            if first_list[i] is None:
-                break
-            res = fun(
-                res,
-                *(lst[i] for lst in lists),
-            )
-        return res
-
-    return sten
+    def shift(self, *offsets: OffsetPart) -> SparseListIterator:
+        return SparseListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
 
 
 @dataclasses.dataclass(frozen=True)
