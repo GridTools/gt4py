@@ -228,9 +228,10 @@ class FieldOperatorLowering(NodeTranslator):
                     im.lambda__("it")(im.deref_(im.shift_(offset_name, offset_index)("it")))
                 )(self.visit(node.func, **kwargs))
             case foast.Name(id=offset_name):
-                return im.neighbors_(
-                    im.ensure_offset(str(offset_name)), self.visit(node.func, **kwargs)
-                )
+                return im.lift_(
+                    im.lambda__("it")(im.neighbors_(im.ensure_offset(str(offset_name)), "it"))
+                )(self.visit(node.func, **kwargs))
+
         raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
     def _visit_reduce(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -293,13 +294,13 @@ class FieldOperatorLowering(NodeTranslator):
     def _make_reduction_expr(
         self,
         node: foast.Call,
-        op: Any,
+        op: Any,  # TODO fix
         init_expr: int | itir.Literal,
         **kwargs,
     ):
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call_(im.call_("reduce")(op, init_expr))("it")
+        val = im.call_(im.call_("reduce")(op, init_expr))(im.deref_("it"))
         return im.lift_(im.lambda__("it")(val))(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
