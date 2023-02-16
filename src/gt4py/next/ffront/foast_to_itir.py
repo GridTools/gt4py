@@ -150,7 +150,9 @@ class FieldOperatorLowering(NodeTranslator):
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
-        return im.ref(node.id)
+        result = im.ref(node.id)
+        result.type_ = node.type
+        return result
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.Expr:
         return im.promote_to_lifted_stencil(lambda tuple_: im.tuple_get_(node.index, tuple_))(

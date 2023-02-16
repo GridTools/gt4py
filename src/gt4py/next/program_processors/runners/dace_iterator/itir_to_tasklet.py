@@ -3,64 +3,67 @@ import gt4py.eve.codegen
 from gt4py.next.iterator import ir as itir
 from typing import Any
 from gt4py.next.common import Dimension
+from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 
 
 _BUILTINS_MAPPING = {
-    #     "abs": "abs",
-    #     "sin": "std::sin",
-    #     "cos": "std::cos",
-    #     "tan": "std::tan",
-    #     "arcsin": "std::asin",
-    #     "arccos": "std::acos",
-    #     "arctan": "std::atan",
-    #     "sinh": "std::sinh",
-    #     "cosh": "std::cosh",
-    #     "tanh": "std::tanh",
-    #     "arcsinh": "std::asinh",
-    #     "arccosh": "std::acosh",
-    #     "arctanh": "std::atanh",
-    #     "sqrt": "std::sqrt",
-    #     "exp": "std::exp",
-    #     "log": "std::log",
-    #     "gamma": "std::tgamma",
-    #     "cbrt": "std::cbrt",
-    #     "isfinite": "std::isfinite",
-    #     "isinf": "std::isinf",
-    #     "isnan": "std::isnan",
-    #     "floor": "std::floor",
-    #     "ceil": "std::ceil",
-    #     "trunc": "std::trunc",
-    #     "minimum": "std::min",
-    #     "maximum": "std::max",
-    #     "fmod": "std::fmod",
-    #     "power": "std::pow",
-    #     "float": "double",
-    #     "float32": "float",
-    #     "float64": "double",
+    "abs": "abs({})",
+    "sin": "math.sin({})",
+    "cos": "math.cos({})",
+    "tan": "math.tan({})",
+    "arcsin": "math.asin({})",
+    "arccos": "math.acos({})",
+    "arctan": "math.atan({})",
+    "sinh": "math.sinh({})",
+    "cosh": "math.cosh({})",
+    "tanh": "math.tanh({})",
+    "arcsinh": "math.asinh({})",
+    "arccosh": "math.acosh({})",
+    "arctanh": "math.atanh({})",
+    "sqrt": "math.sqrt({})",
+    "exp": "math.exp({})",
+    "log": "math.log({})",
+    "gamma": "math.gamma({})",
+    "cbrt": "math.cbrt({})",
+    "isfinite": "math.isfinite({})",
+    "isinf": "math.isinf({})",
+    "isnan": "math.isnan({})",
+    "floor": "math.floor({})",
+    "ceil": "math.ceil({})",
+    "trunc": "math.trunc({})",
+    "minimum": "min({}, {})",
+    "maximum": "max({}, {})",
+    "fmod": "math.fmod({}, {})",
+    "power": "math.pow({}, {})",
+    "float": "dace.float64({})",
+    "float32": "dace.float32({})",
+    "float64": "dace.float64({})",
     #     "int": "long",
-    #     "int32": "std::int32_t",
-    #     "int64": "std::int64_t",
-    #     "bool": "bool",
+    "int32": "dace.int32({})",
+    "int64": "dace.int64({})",
+    "bool": "dace.bool_({})",
     "plus": "({} + {})",
     "minus": "({} - {})",
     "multiplies": "({} * {})",
     "divides": "({} / {})",
-    #     "eq": "std::equal_to{}",
-    #     "not_eq": "std::not_equal_to{}",
-    #     "less": "std::less{}",
-    #     "less_equal": "std::less_equal{}",
-    #     "greater": "std::greater{}",
-    #     "greater_equal": "std::greater_equal{}",
-    #     "and_": "std::logical_and{}",
-    #     "or_": "std::logical_or{}",
-    #     "xor_": "std::bit_xor{}",
-    #     "mod": "std::modulus{}",
-    #     "not_": "std::logical_not{}",
+    "eq": "({} == {})",
+    "not_eq": "({} != {})",
+    "less": "({} < {})",
+    "less_equal": "({} <= {})",
+    "greater": "({} > {})",
+    "greater_equal": "({} >= {})",
+    "and_": "({} & {})",
+    "or_": "({} | {})",
+    "xor_": "({} ^ {})",
+    "mod": "({} % {})",
+    "not_": "~{}",
 }
 
 
 class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
+    domain: dict[str, str]
 
     def __init__(self, offset_provider: dict[str, Any]):
         self.offset_provider = offset_provider
@@ -71,16 +74,21 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
     def visit_Lambda(self, node: itir.Lambda):
         raise ValueError("Lambdas are not supported.")
 
-    def visit_SymRef(self, node: itir.SymRef):
+    def visit_SymRef(self, node: itir.SymRef) -> Any:
+        assert hasattr(node, "type")
+        type_: ts.TypeSpec = node.type
+        if isinstance(type_, ts.FieldType):
+            index = self.domain
+            return str(node.id), index
         return str(node.id)
 
-    def visit_Literal(self, node: itir.Literal):
+    def visit_Literal(self, node: itir.Literal) -> str:
         return str(node.value)
 
-    def visit_FunCall(self, node: itir.FunCall):
+    def visit_FunCall(self, node: itir.FunCall) -> Any:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
-        if isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
+        elif isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
             offset = node.fun.args[0]
             assert isinstance(offset, itir.OffsetLiteral)
             offset_name = offset.value
@@ -88,11 +96,10 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
                 raise ValueError(f"offset provider for `{offset_name}` is missing")
             offset_provider = self.offset_provider[offset_name]
             if isinstance(offset_provider, Dimension):
-                return self._visit_shift(node)
+                return self._visit_direct_addressing(node)
             else:
                 return self._visit_indirect_addressing(node)
-
-        if isinstance(node.fun, itir.SymRef):
+        elif isinstance(node.fun, itir.SymRef):
             if str(node.fun.id) in _BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)
             else:
@@ -102,23 +109,15 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         args = ", ".join(self.visit(node.args))
         return f"{function}({args})"
 
-    def _visit_iterator_sym(self, node: itir.SymRef):
-        return node.id, ("i_IDim",)
-
     def _visit_deref(self, node: itir.FunCall):
         iterator = node.args[0]
-        if isinstance(iterator, itir.SymRef):
-            sym, index = self._visit_iterator_sym(iterator)
-        else:
-            sym, index = self.visit(node.args[0])
+        sym, index = self.visit(iterator)
         return f"{sym}[{', '.join(index)}]"
 
-    def _visit_shift(self, node: itir.FunCall) -> tuple[str, tuple[str, ...]]:
+    def _visit_direct_addressing(self, node: itir.FunCall) -> tuple[str, dict[str, str]]:
         iterator = node.args[0]
-        if isinstance(iterator, itir.SymRef):
-            sym, index = self._visit_iterator_sym(iterator)
-        else:
-            sym, index = self.visit(iterator)
+        sym, index = self.visit(iterator)
+        axis = self.visit(node.fun.args[0])
         amount = self.visit(node.fun.args[1])
 
         shifted_axis = 0  # TODO: compute actual index
@@ -132,22 +131,24 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
 
     def _visit_indirect_addressing(self, node: itir.FunCall):
         iterator = node.args[0]
-        if isinstance(iterator, itir.SymRef):
-            sym, index = self._visit_iterator_sym(iterator)
-        else:
-            sym, index = self.visit(iterator)
+        sym, index = self.visit(iterator)
 
-        offset = node.fun.args[0].value
-        element = self.visit(node.fun.args[1])
+        offset: str = node.fun.args[0].value
+        element: str = self.visit(node.fun.args[1])
 
-        shifted_axis = 0  # TODO: compute actual index
+        table: NeighborTableOffsetProvider = self.offset_provider[offset]
+        shifted_axis = table.origin_axis
+        target_axis = table.neighbor_axis
 
-        offseted_index = tuple(
-            value if axis != shifted_axis else f"__connectivity_{offset}_full[{value}, {element}]"
-            for axis, value in enumerate(index)
-        )
 
-        return sym, offseted_index
+        value = index[shifted_axis]
+        new_value = f"__connectivity_{offset}_full[{value}, {element}]"
+
+        new_index = {
+            **{axis: value for axis, value in index.items() if axis != shifted_axis},
+            target_axis: new_value
+        }
+        return sym, new_index
 
     def _visit_numeric_builtin(self, node: itir.FunCall):
         fmt = _BUILTINS_MAPPING[str(node.fun.id)]

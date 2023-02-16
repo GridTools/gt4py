@@ -70,7 +70,7 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_sdfg.add_array(inp.id, shape=shape, dtype=dtype)
 
         shape = array_table[node.output.id].shape
-        dtype = array_table[inp.id].dtype
+        dtype = array_table[node.output.id].dtype
         closure_sdfg.add_array(node.output.id, shape=shape, dtype=dtype)
 
         for offset, table in neighbor_tables:
@@ -80,7 +80,7 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_sdfg.add_array(name, shape=shape, dtype=dtype)
 
         # Get computational domain of the closure
-        closure_domain = self._visit_named_range(node.domain)
+        closure_domain = self._visit_domain(node.domain)
         map_domain = {f"i_{dim}": f"{lb}:{ub}" for dim, (lb, ub) in closure_domain}
 
         # Add memlets as subsets of the input, output and connectivity arrays.
@@ -104,7 +104,8 @@ class ItirToSDFG(eve.NodeVisitor):
         stencil_expr = closure_to_tasklet(node, self.offset_provider)
         stencil_code = textwrap.dedent(
             f"{stencil_args}\n"
-            f"{node.output.id}_element = {stencil_expr}"
+            # f"{node.output.id}_element = {stencil_expr}"
+            f"{node.output.id}_element = 0"
         )
 
         closure_state.add_mapped_tasklet(
@@ -136,7 +137,7 @@ class ItirToSDFG(eve.NodeVisitor):
         for param, type_ in zip(node.params, self.param_types):
             if isinstance(type_, ts.FieldType):
                 shape = (dace.symbol(program_sdfg.temp_data_name()) for _ in range(len(type_.dims)))
-                dtype = dace.float64
+                dtype = type_spec_to_dtype(type_.dtype)
                 program_sdfg.add_array(str(param.id), shape=shape, dtype=dtype)
             elif isinstance(type_, ts.ScalarType):
                 program_sdfg.add_symbol(param.id, type_spec_to_dtype(type_))
@@ -180,10 +181,11 @@ class ItirToSDFG(eve.NodeVisitor):
             output_memlet = _create_memlet_full(output_access.data, program_sdfg.arrays[output_access.data])
             last_state.add_edge(nsdfg_node, closure.output.id, output_access, None, output_memlet)
 
+        program_sdfg.view()
         program_sdfg.validate()
         return program_sdfg
 
-    def _visit_named_range(self, node: itir.FunCall) -> tuple[sympy.Basic, ...]:
+    def _visit_domain(self, node: itir.FunCall) -> tuple[sympy.Basic, ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 

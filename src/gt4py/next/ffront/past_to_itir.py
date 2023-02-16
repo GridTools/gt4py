@@ -345,7 +345,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         raise NotImplementedError("Only scalar literals supported currently.")
 
     def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
-        return itir.SymRef(id=node.id)
+        result = itir.SymRef(id=node.id)
+        result.type_ = node.type
+        return result
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
