@@ -367,7 +367,6 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(iterator_type_kind(arg.type) is ITIRTypeKind.ITERATOR for arg in args):
             lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
-
             return im.map_(op, *lowered_args)
         elif all(iterator_type_kind(arg.type) is ITIRTypeKind.VALUE for arg in args):
             return op(*lowered_args)
