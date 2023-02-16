@@ -90,6 +90,22 @@ class Val(Type):
     defined_loc: Type = ANYWHERE
 
 
+class Length(Type):
+    length: int
+
+
+class BoolType(Type):
+    value: bool
+
+
+class ValueList(Type):
+    # implict kind == Value
+    dtype: Type = eve.field(default_factory=TypeVar.fresh)
+    size: Type = eve.field(default_factory=TypeVar.fresh)
+    length: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
+
+
 class ValTuple(Type):
     """A tuple of `Val` where all items have the same `kind` and `size`, but different dtypes."""
 
@@ -241,6 +257,7 @@ FLOAT_DTYPE = Primitive(name="float")
 AXIS_DTYPE = Primitive(name="axis")
 NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
+OFFSET_TAG_DTYPE = Primitive(name="offset_tag")
 
 # Some helpers to define the builtins’ types
 T0 = TypeVar.fresh()
@@ -433,7 +450,7 @@ class _TypeInferrer(eve.NodeTranslator):
         ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
-    def visit_FunCall(
+    def visit_FunCall(  # noqa: C901 # TODO too complex
         self, node: ir.FunCall, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
     ) -> Type:
         if isinstance(node.fun, ir.SymRef):
@@ -469,8 +486,46 @@ class _TypeInferrer(eve.NodeTranslator):
                     dtype=dtype,
                     size=size,
                 )
+
                 constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
+            if node.fun.id == "list_get":
+                # TODO remove code duplication with tuple_get
+                # Calls to list_get are handled as being part of the grammar,
+                # not as function calls
+                if len(node.args) != 2:
+                    raise TypeError("list_get requires exactly two arguments")
+                if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
+                    raise TypeError("The first argument to list_get must be a literal int")
+                idx = int(node.args[0].value)
+                lst = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
+                kind = TypeVar.fresh()
+                elem = TypeVar.fresh()
+                size = TypeVar.fresh()
+
+                val_list = ValueList(
+                    dtype=elem,
+                    size=size,
+                    length=TypeVar.fresh(),
+                    has_skip_values=TypeVar.fresh(),
+                )
+                constraints.add((lst, val_list))
+
+                return Val(kind=kind, dtype=elem, size=size)
+            if node.fun.id == "neighbors":
+                if len(node.args) != 2:
+                    raise TypeError("neighbors requires exactly two arguments")
+                if not isinstance(node.args[0], ir.OffsetLiteral):
+                    raise TypeError("The first argument to neighbors must be an OffsetLiteral.")
+                if not isinstance(node.args[0].value, str):
+                    raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
+                connectivity = self.offset_provider[node.args[0].value]
+                return ValueList(
+                    dtype=TypeVar.fresh(),
+                    size=TypeVar.fresh(),
+                    length=Length(length=connectivity.max_neighbors),
+                    has_skip_values=BoolType(value=connectivity.has_skip_values),
+                )
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
                 # as function calls, as the type depends on the offset provider
