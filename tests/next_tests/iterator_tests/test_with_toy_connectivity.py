@@ -30,7 +30,18 @@ from next_tests.toy_connectivity import (
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import transforms
-from gt4py.next.iterator.builtins import deref, lift, list_get, neighbors, plus, reduce, shift
+from gt4py.next.iterator.builtins import (
+    deref,
+    lift,
+    list_get,
+    make_list,
+    map_,
+    multiplies,
+    neighbors,
+    plus,
+    reduce,
+    shift,
+)
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -84,6 +95,56 @@ def test_sum_edges_to_vertices_reduce(program_processor_no_gtfn_exec, lift_mode)
 
     run_processor(
         sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        lift_mode=lift_mode,
+    )
+    if validate:
+        assert np.allclose(out, ref)
+
+
+@fundef
+def map_neighbors(in_edges):
+    return reduce(plus, 0)(map_(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
+
+
+def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = index_field(Edge)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
+
+    run_processor(
+        map_neighbors[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        lift_mode=lift_mode,
+    )
+    if validate:
+        assert np.allclose(out, ref)
+
+
+@fundef
+def map_make_list(in_edges):
+    # TODO what's the semantic if there are skip_values
+    # alternative: make_list(V2E, 2.0) but we don't know the current positionvalues
+    return reduce(plus, 0)(
+        map_(multiplies)(neighbors(V2E, in_edges), make_list(2.0, 2.0, 2.0, 2.0))
+    )
+
+
+def test_map_make_list(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = index_field(Edge)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
+
+    run_processor(
+        map_make_list[{Vertex: range(0, 9)}],
         program_processor,
         inp,
         out=out,

@@ -44,6 +44,16 @@ def neighbors(*args):
 
 
 @builtin_dispatch
+def map_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def make_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def list_get(*args):
     raise BackendNotSelectedError()
 
@@ -392,6 +402,8 @@ BUILTINS = {
     "shift",
     "neighbors",
     "list_get",
+    "make_list",
+    "map",
     "lift",
     "reduce",
     "plus",

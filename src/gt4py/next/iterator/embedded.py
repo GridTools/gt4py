@@ -1126,6 +1126,19 @@ def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
     return lst[i]
 
 
+@builtins.map_.register(EMBEDDED)
+def map_(op):
+    def impl_(*lists):
+        return _List(map(lambda x: op(*x), zip(*lists)))
+
+    return impl_
+
+
+@builtins.make_list.register(EMBEDDED)
+def make_list(*args):
+    return _List(args)
+
+
 @builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*lists):
