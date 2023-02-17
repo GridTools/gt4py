@@ -100,12 +100,12 @@ class ItirToSDFG(eve.NodeVisitor):
         }
 
         # Translate the stencil's code into a DaCe tasklet.
+        index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
         stencil_args = '\n'.join(f"{param} = {param}_full" for param in node.stencil.params)
-        stencil_expr = closure_to_tasklet(node, self.offset_provider)
+        stencil_expr = closure_to_tasklet(node, self.offset_provider, index_domain)
         stencil_code = textwrap.dedent(
             f"{stencil_args}\n"
-            # f"{node.output.id}_element = {stencil_expr}"
-            f"{node.output.id}_element = 0"
+            f"{node.output.id}_element = {stencil_expr}"
         )
 
         closure_state.add_mapped_tasklet(
