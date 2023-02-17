@@ -821,7 +821,6 @@ class ChildModelWithValidators(ModelWithValidators):
 @typing.no_type_check
 @pytest.mark.parametrize("model_class", [ModelWithValidators, ChildModelWithValidators])
 def test_field_validators(model_class: Type[Union[ModelWithValidators, ChildModelWithValidators]]):
-
     with pytest.raises(ValueError, match="int_value"):
         model_class(int_value=-1)
 

@@ -47,9 +47,9 @@ jobs:
         NUM_PROCESSES: auto
       shell: bash
       run: |
-        pyversion_no_dot="${{ matrix.python-version }}"
-        pyversion_no_dot="${pyversion_no_dot/./}"
-        python -m tox run -e storage-py${pyversion_no_dot}-${{ matrix.backends }}
+        pyversion=${{ matrix.python-version }}
+        pyversion_no_dot=${pyversion//./}
+        tox run -e storage-py${pyversion_no_dot}-${{ matrix.backends }}
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
     # - name: Upload coverage.json artifact
     #   uses: actions/upload-artifact@v3

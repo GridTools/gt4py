@@ -433,7 +433,6 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
-
     # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
@@ -948,9 +947,9 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModel], None]:
     return __attrs_post_init__
 
 
-def _make_devtools_pretty() -> Callable[
-    [DataModel, Callable[[Any], Any]], Generator[Any, None, None]
-]:
+def _make_devtools_pretty() -> (
+    Callable[[DataModel, Callable[[Any], Any]], Generator[Any, None, None]]
+):
     def __pretty__(
         self: DataModel, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:

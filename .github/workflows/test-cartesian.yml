@@ -54,6 +54,6 @@ jobs:
         NUM_PROCESSES: auto
       shell: bash
       run: |
-        pyversion_no_dot=${{ matrix.python-version }}
-        pyversion_no_dot=${pyversion_no_dot//./}
-        python -m tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
+        pyversion=${{ matrix.python-version }}
+        pyversion_no_dot=${pyversion//./}
+        tox run -e cartesian-py${pyversion_no_dot}-${{ matrix.backends }}
