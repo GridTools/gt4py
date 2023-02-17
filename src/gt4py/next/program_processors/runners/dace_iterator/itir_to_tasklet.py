@@ -3,7 +3,6 @@ import gt4py.eve.codegen
 from gt4py.next.iterator import ir as itir
 from typing import Any
 from gt4py.next.common import Dimension
-from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 
 
@@ -65,27 +64,26 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
     domain: dict[str, str]
 
-    def __init__(self, offset_provider: dict[str, Any]):
+    def __init__(self, offset_provider: dict[str, Any], domain: dict[str, str]):
         self.offset_provider = offset_provider
+        self.domain = domain
 
-    def visit_FunctionDefinition(self, node: itir.FunctionDefinition):
+    def visit_FunctionDefinition(self, node: itir.FunctionDefinition, **kwargs):
         raise ValueError("Can only lower expressions, not whole functions.")
 
-    def visit_Lambda(self, node: itir.Lambda):
+    def visit_Lambda(self, node: itir.Lambda, **kwargs):
         raise ValueError("Lambdas are not supported.")
 
-    def visit_SymRef(self, node: itir.SymRef) -> Any:
-        assert hasattr(node, "type")
-        type_: ts.TypeSpec = node.type
-        if isinstance(type_, ts.FieldType):
+    def visit_SymRef(self, node: itir.SymRef, *, hack_is_iterator=False, **kwargs) -> Any:
+        if hack_is_iterator:
             index = self.domain
             return str(node.id), index
         return str(node.id)
 
-    def visit_Literal(self, node: itir.Literal) -> str:
+    def visit_Literal(self, node: itir.Literal, **kwargs) -> str:
         return str(node.value)
 
-    def visit_FunCall(self, node: itir.FunCall) -> Any:
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> Any:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
         elif isinstance(node.fun, itir.FunCall) and node.fun.fun.id == "shift":
@@ -109,12 +107,15 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         args = ", ".join(self.visit(node.args))
         return f"{function}({args})"
 
-    def _visit_deref(self, node: itir.FunCall):
+    def _visit_deref(self, node: itir.FunCall, **kwargs):
         iterator = node.args[0]
-        sym, index = self.visit(iterator)
-        return f"{sym}[{', '.join(index)}]"
+        sym, index = self.visit(iterator, hack_is_iterator=True)
+        flat_index = index.items()
+        flat_index = sorted(flat_index, key=lambda x: x[0])
+        flat_index = [x[1] for x in flat_index]
+        return f"{sym}[{', '.join(flat_index)}]"
 
-    def _visit_direct_addressing(self, node: itir.FunCall) -> tuple[str, dict[str, str]]:
+    def _visit_direct_addressing(self, node: itir.FunCall, **kwargs) -> tuple[str, dict[str, str]]:
         iterator = node.args[0]
         sym, index = self.visit(iterator)
         axis = self.visit(node.fun.args[0])
@@ -129,16 +130,16 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
 
         return sym, offseted_index
 
-    def _visit_indirect_addressing(self, node: itir.FunCall):
+    def _visit_indirect_addressing(self, node: itir.FunCall, **kwargs):
         iterator = node.args[0]
-        sym, index = self.visit(iterator)
+        sym, index = self.visit(iterator, hack_is_iterator=True)
 
         offset: str = node.fun.args[0].value
         element: str = self.visit(node.fun.args[1])
 
         table: NeighborTableOffsetProvider = self.offset_provider[offset]
-        shifted_axis = table.origin_axis
-        target_axis = table.neighbor_axis
+        shifted_axis = table.origin_axis.value
+        target_axis = table.neighbor_axis.value
 
 
         value = index[shifted_axis]
@@ -150,15 +151,15 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         }
         return sym, new_index
 
-    def _visit_numeric_builtin(self, node: itir.FunCall):
+    def _visit_numeric_builtin(self, node: itir.FunCall, **kwargs):
         fmt = _BUILTINS_MAPPING[str(node.fun.id)]
         args = self.visit(node.args)
         return fmt.format(*args)
 
 
-def closure_to_tasklet(node: itir.StencilClosure, offset_provider: dict[str, Any]) -> str:
+def closure_to_tasklet(node: itir.StencilClosure, offset_provider: dict[str, Any], domain: dict[str, str]) -> str:
     if isinstance(node.stencil, itir.Lambda):
-        return PythonTaskletCodegen(offset_provider).visit(node.stencil.expr)
+        return PythonTaskletCodegen(offset_provider, domain).visit(node.stencil.expr)
     elif isinstance(node.stencil, itir.SymRef):
         raise NotImplementedError()
     raise ValueError("invalid argument?")
