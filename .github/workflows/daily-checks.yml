@@ -1,4 +1,4 @@
-name: Daily checks
+name: Daily Checks
 
 on:
   push:
