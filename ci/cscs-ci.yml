@@ -79,7 +79,7 @@ test py38:
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
-  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda11x
+  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
   parallel:
     matrix:
     - BACKEND: [internal, dace]
