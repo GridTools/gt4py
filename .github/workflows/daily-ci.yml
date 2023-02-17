@@ -10,6 +10,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
+        tox-module-factor: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest"]
       fail-fast: false
 
@@ -34,7 +35,10 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e requirements-py${pyversion_no_dot}
-    - name: Run checks
+        echo "tox run -e requirements-py${pyversion_no_dot}"
+    - name: Run tests
+      env:
+        NUM_PROCESSES: auto
       run: |
-        tox run -e eve-py${pyversion_no_dot}
+        tox run --skip-missing-interpreters -m test-${{ matrix.tox-module-factor }}-cpu
+
