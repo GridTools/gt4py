@@ -142,7 +142,7 @@ flask==2.2.2
     # via dace
 frozendict==2.3.4
     # via gt4py (/home/enriqueg/Projects/GT/gt4py/main/setup.cfg)
-gridtools-cpp==2.2.2
+gridtools-cpp==2.2.3
     # via gt4py (/home/enriqueg/Projects/GT/gt4py/main/setup.cfg)
 hypothesis==6.68.1
     # via

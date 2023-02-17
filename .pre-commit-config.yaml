@@ -55,17 +55,17 @@ repos:
   - id: debug-statements
 
 - repo: https://github.com/psf/black
-  rev: 22.10.0
+  rev: "23.1.0"
   hooks:
   - id: black
 
 - repo: https://github.com/PyCQA/isort
-  rev: 5.12.0
+  rev: "5.12.0"
   hooks:
   - id: isort
 
 - repo: https://github.com/PyCQA/flake8
-  rev: 5.0.4
+  rev: "5.0.4"  # Must match version in requirements-dev.txt & constraints.txt
   hooks:
   - id: flake8
     additional_dependencies:
@@ -76,8 +76,7 @@ repos:
     - flake8-docstrings
     - flake8-eradicate
     - flake8-mutable
-    # Disabled for now due to random false positives
-    # - flake8-rst-docstrings
+    # - flake8-rst-docstrings  # Disabled for now due to random false positives
     - pygments
     exclude: |
       (?x)^(
@@ -107,10 +106,10 @@ repos:
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.0.0    # must match version in requirements-dev.txt & constraints.txt
+  rev: v1.0.0    # Must match version in requirements-dev.txt & constraints.txt
   hooks:
   - id: mypy
-    additional_dependencies:  # must match versions in setup.cfg
+    additional_dependencies:  # Must match versions in setup.cfg
     - attrs>=21.3
     - black>=22.3
     - boltons>=20.0
