@@ -1,6 +1,9 @@
 name: Daily CI
 
 on:
+  schedule:
+  - cron: '0 4 * * 0,1-5'
+
   pull_request:
     branches:
     - main
@@ -35,7 +38,7 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        echo "tox run -e requirements-py${pyversion_no_dot}"
+        tox run -e requirements-py${pyversion_no_dot}
     - name: Run tests
       env:
         NUM_PROCESSES: auto
