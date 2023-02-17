@@ -79,7 +79,6 @@ test py38:
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
-  - python -c "import cupy"
   - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda11x
   parallel:
     matrix:
