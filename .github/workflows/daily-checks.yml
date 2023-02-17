@@ -1,9 +1,6 @@
 name: Daily Checks
 
 on:
-  push:
-    branches:
-    - main
   pull_request:
     branches:
     - main
