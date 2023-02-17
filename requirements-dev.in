@@ -1,5 +1,6 @@
 clang-format>=9.0
 cmake>=3.18.1
+cogapp>=3.3
 coverage>=5.0
 darglint>=1.6
 devtools>=0.6

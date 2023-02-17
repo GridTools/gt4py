@@ -23,6 +23,7 @@ charset-normalizer==3.0.1  # via requests
 clang-format==15.0.7      # via -r requirements-dev.in, gt4py (pyproject.toml)
 click==8.1.3              # via black, flask, gt4py (pyproject.toml), pip-tools
 cmake==3.25.2             # via -r requirements-dev.in, gt4py (pyproject.toml)
+cogapp==3.3.0             # via -r requirements-dev.in
 colorama==0.4.6           # via tox
 coverage==7.1.0           # via -r requirements-dev.in, pytest-cov
 cryptography==39.0.1      # via types-paramiko, types-pyopenssl, types-redis

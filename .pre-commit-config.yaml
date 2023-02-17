@@ -35,7 +35,7 @@ repos:
 #   hooks:
 #   - id: yesqa
 #     additional_dependencies:
-#     - flake8==5.0.4
+#     - flake8==5.0.4  # version from constraints.txt
 #     - darglint
 #     - flake8-bugbear
 #     - flake8-builtins
@@ -55,17 +55,35 @@ repos:
   - id: debug-statements
 
 - repo: https://github.com/psf/black
-  rev: "23.1.0"
+  #[[[cog
+  # import re
+  # version = re.search('black==([0-9\.]*)', open("constraints.txt").read())[1] 
+  # print(f"rev: '{version}'  # version from constraints.txt")
+  #]]]
+  rev: '23.1.0'  # version from constraints.txt
+  #[[[end]]]
   hooks:
   - id: black
 
 - repo: https://github.com/PyCQA/isort
-  rev: "5.12.0"
+  #[[[cog
+  # import re
+  # version = re.search('isort==([0-9\.]*)', open("constraints.txt").read())[1] 
+  # print(f"rev: '{version}'  # version from constraints.txt")
+  #]]]
+  rev: '5.12.0'  # version from constraints.txt
+  #[[[end]]]
   hooks:
   - id: isort
 
 - repo: https://github.com/PyCQA/flake8
-  rev: "5.0.4"  # Must match version in requirements-dev.txt & constraints.txt
+  #[[[cog
+  # import re
+  # version = re.search('flake8==([0-9\.]*)', open("constraints.txt").read())[1] 
+  # print(f"rev: '{version}'  # version from constraints.txt")
+  #]]]
+  rev: '5.0.4'  # version from constraints.txt
+  #[[[end]]]
   hooks:
   - id: flake8
     additional_dependencies:
@@ -106,10 +124,11 @@ repos:
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.0.0    # Must match version in requirements-dev.txt & constraints.txt
+  rev: v1.0.0  # Must match versions in setup.cfg
   hooks:
   - id: mypy
     additional_dependencies:  # Must match versions in setup.cfg
+    - astunparse>=1.6.3;python_version<'3.9'
     - attrs>=21.3
     - black>=22.3
     - boltons>=20.0
@@ -120,10 +139,13 @@ repos:
     - deepdiff>=5.8
     - devtools>=0.6
     - frozendict>=2.3
-    - gridtools-cpp>=2.2.2,==2.*
+    - frozendict>=2.3
+    - gridtools-cpp>=2.2.3,==2.*
     - jinja2>=2.10
     - lark>=1.1.2
     - mako>=1.1
+    - mako>=1.1
+    - networkx>=2.4
     - networkx>=2.4
     - ninja>=1.10
     - numpy>=1.15,<1.24
@@ -132,12 +154,8 @@ repos:
     - scipy>=1.4
     - setuptools>=60.6
     - tabulate>=0.8
-    - typing-extensions>=4.2
-    - astunparse>=1.6.3;python_version<'3.9'
-    - frozendict>=2.3
-    - mako>=1.1
-    - networkx>=2.4
     - toolz>=0.11
+    - typing-extensions>=4.2
     - xxhash>=1.4.4,<3.1.0
     # Add all type stubs from typeshed
     - types-all
