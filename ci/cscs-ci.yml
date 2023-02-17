@@ -73,14 +73,14 @@ build py310 image:
     <<: *py310
 
 test py38:
-  extends: .container-runner-daint-gpu
+  extends: .container-runner-hohgant-a100
   needs: ["build py38 image"]
   stage: test
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
+  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda11x
   parallel:
     matrix:
     - BACKEND: [internal, dace]
