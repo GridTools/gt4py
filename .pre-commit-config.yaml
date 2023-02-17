@@ -138,7 +138,6 @@ repos:
     - mako>=1.1
     - networkx>=2.4
     - toolz>=0.11
-    - typing_inspect>=0.6.0
     - xxhash>=1.4.4,<3.1.0
     # Add all type stubs from typeshed
     - types-all
