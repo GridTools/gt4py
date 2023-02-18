@@ -56,9 +56,48 @@ jobs:
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
         tox run -e requirements-py${pyversion_no_dot}
+    - name: Check for updated requirements
+      if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
+      shell: bash
+      run: |
+        #echo "REQS_DIFF=$(git diff --no-prefix -U0)" >> $GITHUB_ENV
+        echo "REQS_DIFF=-cachetools==5.3.0         # via tox" >> $GITHUB_ENV
+    - name: Notify updated requirements (if any)
+      if: ${{ env.REQS_DIFF }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      uses: pullreminders/slack-action@master
+      with:
+        args: |
+          {
+            "channel": "C04PXU5R6KY",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Hello, Assistant to the Regional Manager Dwight! *Michael Scott* wants to know where you'd like to take the Paper Company investors to dinner tonight.\n\n *Please select a restaurant:*"
+                }
+              }
+            ]
+          }          
     - name: Run tests
       env:
         NUM_PROCESSES: auto
       run: |
         tox run --skip-missing-interpreters -m test-${{ matrix.tox-module-factor }}-cpu
-
+    - name: Notify slack
+      if: ${{ failure() }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      uses: pullreminders/slack-action@master
+      with:
+        args: '{\"channel\":\"C04PXU5R6KY\",\"text\":\"Daily CI failed: test-${{ matrix.tox-module-factor }}-cpu\"}'
+    - name: Notify slack
+      if: ${{ success() }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      uses: pullreminders/slack-action@master
+      with:
+        args: |
+          {"channel":"C04PXU5R6KY","text":"Daily CI: `test-${{ matrix.tox-module-factor }}-cpu` for succeeded!!"}
