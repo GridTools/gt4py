@@ -37,6 +37,7 @@ jobs:
       shell: bash
       run: |
         sudo apt install libboost-dev
+        echo "BOOST_ROOT=/usr" >> $GITHUB_ENV
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
