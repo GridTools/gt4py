@@ -19,6 +19,36 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
+
+    # - name: TTTTT
+    #   uses: slackapi/slack-github-action@v1.23.0
+    #   with:
+    #     channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
+    #     payload: |
+    #       {
+    #         "text": "GitHub TTTTTT",
+    #         "blocks": [
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "<https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*"
+    #             }
+    #           },
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "`${{ env.REQS_DIFF }}`"
+    #             }
+    #           }
+    #         ]
+    #       }
+    #   env:
+    #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    #     REQS_DIFF: "-cachetools==5.3.0         # via tox"
+
+
     - uses: actions/checkout@v3
     - name: Install C++ libraries
       if: ${{ matrix.os == 'macos-latest' }}
@@ -57,30 +87,40 @@ jobs:
         pyversion_no_dot=${pyversion//./}
         tox run -e requirements-py${pyversion_no_dot}
     - name: Check for updated requirements
+      id: update-requirements
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        #echo "REQS_DIFF=$(git diff --no-prefix -U0)" >> $GITHUB_ENV
-        echo "REQS_DIFF=-cachetools==5.3.0         # via tox" >> $GITHUB_ENV
+        echo "blabla==1.2.3" >> constraint.txt
+        echo "blabla==1.2.3" >> requirements-dev.txt
+        echo "REQS_DIFF=$(git diff --no-prefix -U0)" >> $GITHUB_OUTPUT                 
     - name: Notify updated requirements (if any)
-      if: ${{ env.REQS_DIFF }}
+      if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: pullreminders/slack-action@master
+      uses: slackapi/slack-github-action@v1.23.0
       with:
-        args: |
+        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
+        payload: |
           {
-            "channel": "C04PXU5R6KY",
+            "text": "${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*",
             "blocks": [
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Hello, Assistant to the Regional Manager Dwight! *Michael Scott* wants to know where you'd like to take the Paper Company investors to dinner tonight.\n\n *Please select a restaurant:*"
+                  "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "`${{ env.REQS_DIFF }}`"
                 }
               }
             ]
-          }          
+          }
     - name: Run tests
       env:
         NUM_PROCESSES: auto
@@ -90,14 +130,19 @@ jobs:
       if: ${{ failure() }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: pullreminders/slack-action@master
+      uses: slackapi/slack-github-action@v1.23.0
       with:
-        args: '{\"channel\":\"C04PXU5R6KY\",\"text\":\"Daily CI failed: test-${{ matrix.tox-module-factor }}-cpu\"}'
-    - name: Notify slack
-      if: ${{ success() }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: pullreminders/slack-action@master
-      with:
-        args: |
-          {"channel":"C04PXU5R6KY","text":"Daily CI: `test-${{ matrix.tox-module-factor }}-cpu` for succeeded!!"}
+        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
+        payload: |
+          {
+            "text": "${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Failed tests!*",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Failed tests!*"
+                }
+              }
+            ]
+          }
