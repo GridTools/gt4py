@@ -53,6 +53,7 @@ build py310 baseimage:
 
 build py38 image:
   extends: .container-builder
+  needs: ["build py38 baseimage"]
   stage: image
   variables:
     # make sure we use a unique name here, otherwise we could create a race condition, when multiple pipelines
@@ -64,11 +65,13 @@ build py38 image:
 
 build py39 image:
   extends: build py38 image
+  needs: ["build py39 baseimage"]
   variables:
     <<: *py39
 
 build py310 image:
   extends: build py38 image
+  needs: ["build py310 baseimage"]
   variables:
     <<: *py310
 
@@ -80,10 +83,13 @@ test py38:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox run -e cartesian-$PYVERSION_PREFIX-$BACKEND-cuda112
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   parallel:
     matrix:
-    - BACKEND: [internal, dace]
+    - SUBPACKAGE: [cartesian, storage]
+      VARIANT: [-internal, -dace]
+      SUBVARIANT: [-cuda112, -cpu]
+    - SUBPACKAGE: eve
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -103,3 +109,11 @@ test py310:
   needs: ["build py310 image"]
   variables:
     <<: *py310
+  parallel:
+    matrix:
+    - SUBPACKAGE: [cartesian, storage]
+      VARIANT: [-internal, -dace]
+      SUBVARIANT: [-cuda112, -cpu]
+    - SUBPACKAGE: eve
+    - SUBPACKAGE: next
+      VARIANT: [-nomesh, -atlas]
