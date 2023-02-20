@@ -61,11 +61,12 @@ jobs:
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        echo "blabla==1.2.3" >> CURRENT-constraints.txt
         cp constraints.txt CURRENT-constraints.txt 
-        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)" >> $GITHUB_ENV
+        echo "blabla==1.2.3" >> CURRENT-constraints.txt
+        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)"
+        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)" >> $GITHUB_OUTPUT
     - name: Notify updated requirements (if any)
-      if: ${{ env.REQS_DIFF }}
+      if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: slackapi/slack-github-action@v1.23.0
