@@ -19,36 +19,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-
-    # - name: TTTTT
-    #   uses: slackapi/slack-github-action@v1.23.0
-    #   with:
-    #     channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
-    #     payload: |
-    #       {
-    #         "text": "GitHub TTTTTT",
-    #         "blocks": [
-    #           {
-    #             "type": "section",
-    #             "text": {
-    #               "type": "mrkdwn",
-    #               "text": "<https://github.com/GridTools/gt4py/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*"
-    #             }
-    #           },
-    #           {
-    #             "type": "section",
-    #             "text": {
-    #               "type": "mrkdwn",
-    #               "text": "`${{ env.REQS_DIFF }}`"
-    #             }
-    #           }
-    #         ]
-    #       }
-    #   env:
-    #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-    #     REQS_DIFF: "-cachetools==5.3.0         # via tox"
-
-
     - uses: actions/checkout@v3
     - name: Install C++ libraries
       if: ${{ matrix.os == 'macos-latest' }}
@@ -91,11 +61,11 @@ jobs:
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        echo "blabla==1.2.3" >> constraint.txt
-        echo "blabla==1.2.3" >> requirements-dev.txt
-        echo "REQS_DIFF=$(git diff --no-prefix -U0)" >> $GITHUB_OUTPUT                 
+        echo "blabla==1.2.3" >> CURRENT-constraints.txt
+        cp constraints.txt CURRENT-constraints.txt 
+        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)" >> $GITHUB_ENV
     - name: Notify updated requirements (if any)
-      if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
+      if: ${{ env.REQS_DIFF }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       uses: slackapi/slack-github-action@v1.23.0
@@ -116,7 +86,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "`${{ env.REQS_DIFF }}`"
+                  "text": "${{ env.REQS_DIFF }}"
                 }
               }
             ]

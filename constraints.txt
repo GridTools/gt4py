@@ -59,7 +59,7 @@ identify==2.5.17          # via pre-commit
 idna==3.4                 # via requests
 imagesize==1.4.1          # via sphinx
 importlib-metadata==6.0.0  # via flask, sphinx
-importlib-resources==5.10.2  # via jsonschema
+importlib-resources==5.12.0  # via jsonschema
 inflection==0.5.1         # via pytest-factoryboy
 iniconfig==2.0.0          # via pytest
 isort==5.12.0             # via -r requirements-dev.in
@@ -230,7 +230,7 @@ websockets==10.4          # via dace
 werkzeug==2.2.2           # via flask
 wheel==0.38.4             # via astunparse, pip-tools
 xxhash==3.0.0             # via gt4py (pyproject.toml)
-zipp==3.13.0              # via importlib-metadata, importlib-resources
+zipp==3.14.0              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 pip==23.0                 # via pip-tools
