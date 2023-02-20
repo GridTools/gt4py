@@ -4,8 +4,6 @@
 
 The following workflows are currently active:
 
-<!-- ![workflows](workflows.drawio.svg) -->
-
 <!--
 @startuml workflows
 
@@ -100,9 +98,9 @@ The general idea is to run workflows only when needed. In this monorepo structur
 
 ## CSCS-CI
 
-CI pipelines for tests that require GPUs can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users.
+CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
 
-Currently only the cartesian tests are enabled.
+Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
 
 ## Integration with external tools
 
@@ -118,8 +116,7 @@ The testing workflows already use a matrix strategy to run the automated tests o
 
 ## Future improvements
 
-- Reenable code coverage workflows.
-- Enable GPU testing on CSCS-CI for `next` and `storage`.
+- Reenable code coverage workflows (potentially on CSCS-CI).
 - Split code quality: it might be better to run code quality tools separate for each project in the monorepo.
 - Split documentation: once there is proper HTML documentation generated for the projects, it might make sense to have that run as one job per project.
 - Template for tests: although there is a reusable workflow for the code coverage uploading, it probably make sense to reuse some of the workflow description for the tests as well.
