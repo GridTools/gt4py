@@ -4,9 +4,11 @@ on:
   schedule:
   - cron: '0 4 * * *'
 
+  ## COMMENTED OUT: only for testing CI action changes
   pull_request:
     branches:
     - main
+  ## END
 
 jobs:
   daily-ci:
@@ -48,23 +50,20 @@ jobs:
           **/requirements-dev.txt
     - name: Install tox
       run: |
-        python -m pip install -c ./constraints.txt pip setuptools wheel
-        python -m pip install -c ./constraints.txt tox
+        python -m pip install -c ./constraints.txt pip setuptools wheel tox
         python -m pip list
     - name: Update requirements
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
+        cp constraints.txt CURRENT-constraints.txt 
         tox run -e requirements-py${pyversion_no_dot}
     - name: Check for updated requirements
       id: update-requirements
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        cp constraints.txt CURRENT-constraints.txt 
-        echo "blabla==1.2.3" >> CURRENT-constraints.txt
-        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)"
-        echo "REQS_DIFF=$(diff constraints.txt CURRENT-constraints.txt)" >> $GITHUB_OUTPUT
+        echo "REQS_DIFF=$(diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt)" | tr '\n' ' ' >> $GITHUB_OUTPUT
     - name: Notify updated requirements (if any)
       if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
       env:
@@ -86,8 +85,8 @@ jobs:
               {
                 "type": "section",
                 "text": {
-                  "type": "mrkdwn",
-                  "text": "${{ env.REQS_DIFF }}"
+                  "type": "plain_text",
+                  "text": "Diff:\n${{ steps.update-requirements.outputs.REQS_DIFF }}"
                 }
               }
             ]

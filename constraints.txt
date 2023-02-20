@@ -30,7 +30,7 @@ cryptography==39.0.1      # via types-paramiko, types-pyopenssl, types-redis
 cytoolz==0.12.1           # via gt4py (pyproject.toml)
 dace==0.14.1              # via gt4py (pyproject.toml)
 darglint==1.8.1           # via -r requirements-dev.in
-deepdiff==6.2.3           # via gt4py (pyproject.toml)
+deepdiff==6.2.2           # via gt4py (pyproject.toml)
 devtools==0.10.0          # via -r requirements-dev.in, gt4py (pyproject.toml)
 dill==0.3.6               # via dace
 distlib==0.3.6            # via virtualenv
@@ -51,7 +51,7 @@ flake8-docstrings==1.7.0  # via -r requirements-dev.in
 flake8-eradicate==1.4.0   # via -r requirements-dev.in
 flake8-mutable==1.2.0     # via -r requirements-dev.in
 flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
-flask==2.2.2              # via dace
+flask==2.2.1              # via dace
 frozendict==2.3.4         # via gt4py (pyproject.toml)
 gridtools-cpp==2.2.3      # via gt4py (pyproject.toml)
 hypothesis==6.68.1        # via -r requirements-dev.in, gt4py (pyproject.toml)
