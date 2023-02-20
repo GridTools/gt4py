@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <fn_select.hpp>
+#include "fn_select_gt4py.hpp"
 #include <test_environment.hpp>
 #include GENERATED_FILE
 
@@ -20,9 +20,12 @@ constexpr inline auto d = [](int ksize) {
   };
 };
 constexpr inline auto expected = [](auto...) { return 1; };
+using backend_t =
+    fn_backend_t<block_sizes_t<generated::IDim_t, generated::JDim_t,
+                               generated::KDim_t>::values<32, 8, 1>>;
 
 GT_REGRESSION_TEST(fn_cartesian_tridiagonal_solve, vertical_test_environment<>,
-                   fn_backend_t) {
+                   backend_t) {
   using float_t = typename TypeParam::float_t;
 
   auto wrap = [](auto &&storage) {
@@ -39,8 +42,7 @@ GT_REGRESSION_TEST(fn_cartesian_tridiagonal_solve, vertical_test_environment<>,
   auto d_wrapped = wrap(TypeParam::make_const_storage(d(TypeParam::d(2))));
   auto comp = [&] {
     generated::tridiagonal_solve_fencil(tuple{})(
-        fn_backend_t(),
-        at_key<cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
+        backend_t(), at_key<cartesian::dim::i>(TypeParam::fn_cartesian_sizes()),
         at_key<cartesian::dim::j>(TypeParam::fn_cartesian_sizes()),
         at_key<cartesian::dim::k>(TypeParam::fn_cartesian_sizes()), a_wrapped,
         b_wrapped, c_wrapped, d_wrapped, x_wrapped);
