@@ -79,14 +79,14 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*"
+                  "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements:* ${{ steps.update-requirements.outputs.REQS_DIFF }}"
                 }
               },
               {
                 "type": "section",
                 "text": {
                   "type": "plain_text",
-                  "text": "Diff:\n${{ steps.update-requirements.outputs.REQS_DIFF }}"
+                  "text": "${{ steps.update-requirements.outputs.REQS_DIFF }}"
                 }
               }
             ]
