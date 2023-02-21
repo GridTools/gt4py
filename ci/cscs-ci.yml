@@ -82,7 +82,7 @@ pull py38 image:
   stage: pull
   image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   script:
-    - 'true'
+  - 'true'
   variables:
     <<: *py38
 
