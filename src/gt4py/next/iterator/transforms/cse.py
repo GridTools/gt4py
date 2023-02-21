@@ -68,7 +68,9 @@ def is_collectable_expr(node: ir.Node):
 
 @dataclasses.dataclass
 class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
-    subexprs: dict = dataclasses.field(init=False, repr=False, default_factory=dict)
+    subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
+        init=False, repr=False, default_factory=dict
+    )
 
     @classmethod
     def apply(cls, node: ir.Node):
