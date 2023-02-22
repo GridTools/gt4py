@@ -63,7 +63,7 @@ jobs:
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        echo "REQS_DIFF=$(diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt)" | tr '\n' ' ' >> $GITHUB_OUTPUT
+        echo "REQS_DIFF='$(diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ')'" >> $GITHUB_OUTPUT
     - name: Notify updated requirements (if any)
       if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
       env:
@@ -73,13 +73,13 @@ jobs:
         channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
         payload: |
           {
-            "text": "${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements!*",
+            "text": "TEXTTTT",
             "blocks": [
               {
                 "type": "section",
                 "text": {
-                  "type": "mrkdwn",
-                  "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}: `test-${{ matrix.tox-module-factor }}-cpu (python${{ matrix.python-version }})`>: *Updated requirements:* ${{ steps.update-requirements.outputs.REQS_DIFF }}"
+                  "type": "plain_text",
+                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB"
                 }
               },
               {
