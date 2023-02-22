@@ -17,6 +17,7 @@ stages:
 - baseimage
 - image
 - test
+- coverage
 
 build py38 baseimage:
   extends: .container-builder
@@ -83,13 +84,17 @@ test py38:
   script:
   - cd /gt4py.src
   - python -c "import cupy"
-  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT -- --cov
+  - mv .coverage .coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   parallel:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
       VARIANT: [-internal, -dace]
       SUBVARIANT: [-cuda112, -cpu]
     - SUBPACKAGE: eve
+  artifacts:
+    paths:
+      .coverage-*
   variables:
     CRAY_CUDA_MPS: 1
     SLURM_JOB_NUM_NODES: 1
@@ -117,3 +122,10 @@ test py310:
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
+
+combined coverage:
+  stage: coverage
+  script:
+    - pip install --upgrade pip coverage
+    - coverage combine .coverage-*
+    - coverage json
