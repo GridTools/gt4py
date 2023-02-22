@@ -124,8 +124,12 @@ test py310:
       VARIANT: [-nomesh, -atlas]
 
 combined coverage:
+  image: python:latest
   stage: coverage
   script:
     - pip install --upgrade pip coverage
     - coverage combine .coverage-*
     - coverage json
+    - curl -Os https://uploader.codecov.io/latest/linux/codecov
+    - chmod +x codecov
+    - ./codecov
