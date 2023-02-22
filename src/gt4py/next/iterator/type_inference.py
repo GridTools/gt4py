@@ -157,8 +157,9 @@ class ValTuple(Type):
                 )
                 for dtype, defined_loc in zip(dtypes, defined_locs)
             ]
-            add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
-            add_constraint(self.defined_locs, Tuple.from_elems(*defined_locs))
+            for dtype, defined_loc in zip(dtypes, defined_locs):
+                add_constraint(self.dtypes, dtype)
+                add_constraint(self.defined_locs, defined_loc)
             add_constraint(Tuple.from_elems(*expanded), other)
             return True
         if isinstance(other, EmptyTuple):
