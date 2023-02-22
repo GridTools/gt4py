@@ -34,7 +34,10 @@ file cfg_wfl #Coral;line:Tomato;text:black[
 workflows changed
 ]
 file other #PaleGreen;line:ForestGreen;text:black [
-other files changed
+other files changed, excluding examples (the examples folder) and docs (.md and .rst files)
+]
+file pkg_cfg #PaleGreen;line:ForestGreen;text:black [
+package config files changed
 ]
 
 agent eve #Plum;line:MediumOrchid;text:black [
@@ -71,6 +74,7 @@ other   -[#ForestGreen,thickness=2]d-> car
 
 src_eve -[#MediumOrchid,thickness=2]d-> eve
 cfg_wfl -[#Tomato,thickness=2]d-> eve
+pkg_cfg -[#ForestGreen,thickness=2]d-> eve
 
 src_eve -[#MediumOrchid,thickness=2]d-> nxt
 src_nxt -[#CornFlowerBlue,thickness=2]d-> nxt
@@ -81,12 +85,13 @@ other   -[#ForestGreen,thickness=2]d-> nxt
 src_sto -[#DarkCyan,thickness=2]d-> sto
 src_cab -[#DarkGoldenRod,thickness=2]d-> sto
 cfg_wfl -[#Tomato,thickness=2]d-> sto
+pkg_cfg -[#ForestGreen,thickness=2]d-> sto
 
 @enduml
 -->
 ![](workflows.svg)
 
-The `Test / Eve`, and `Test / Storages` workflows run the automated tests for the two packages. `Test / Cartesian` and `Test / Next` run the automated tests for the two respective `GT4Py` subpackages. In all cases only tests are run that do not require the presence of a GPU.
+The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
 
 The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like mypy or flake8.
 
@@ -101,6 +106,8 @@ The general idea is to run workflows only when needed. In this monorepo structur
 CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
 
 Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
+
+Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md]()
 
 ## Integration with external tools
 
