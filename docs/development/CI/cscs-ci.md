@@ -2,11 +2,11 @@
 
 ## Initial Setup
 
-Follow the steps in [https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc](). You will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
+Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc). You will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
 
 ## Current Configuration
 
-The configuration can be viewed and changed at [https://cicd-ext-mw.cscs.ch/ci/setup_ci]() after logging in with the credentials for "cscs-ci setup for gt4py", which can be found on the internal credentials store in the GT4Py folder.
+The configuration can be viewed and changed on the [setup page](https://cicd-ext-mw.cscs.ch/ci/setup_ci) after logging in with the credentials for "cscs-ci setup for gt4py", which can be found on the internal credentials store in the GT4Py folder.
 
 ### Whitelisted Users
 
@@ -32,4 +32,4 @@ If you intend to make additional changes that require testing, consider creating
 
 ## Caveats Of CSCS-CI
 
-The gitlab pipeline is **not** triggered via a push event. This means any gitlab-ci features that rely on comparing files to the previous commit (like `only:changes`) will not work.
+The gitlab pipeline is **not** triggered via a push event. This means any gitlab-ci features that rely on comparing files to the previous commit (like [`only:changes`](https://docs.gitlab.com/ee/ci/yaml/#onlychanges--exceptchanges)) will not work.
