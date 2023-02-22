@@ -157,7 +157,7 @@ def _free_variables(x: Type) -> set[TypeVar]:
 class _Dedup(eve.NodeTranslator):
     """Deduplicate type nodes that have the same value but a different `id`."""
 
-    def visit(self, node: T, *, memo: dict[T, T]) -> T:  # type: ignore[override]
+    def visit(self, node, *, memo: dict[T, T]) -> typing.Any:  # type: ignore[override]
         if isinstance(node, Type):
             node = super().visit(node, memo=memo)
             return memo.setdefault(node, node)
@@ -336,9 +336,9 @@ def unify(dtypes: list[Type] | Type, constraints: set[tuple[Type, Type]]) -> lis
         return unify([dtypes], constraints)[0]
 
     # Deduplicate type nodes, this can speed up later things a bit
-    memo = dict[T, T]()
-    dtypes = [_Dedup().visit(dtype, memo=memo) for dtype in dtypes]
-    constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
+    memo = dict[Type, Type]()
+    dtypes = _Dedup().visit(dtypes, memo=memo)
+    constraints = _Dedup().visit(constraints, memo=memo)
     del memo
 
     unifier = _Unifier(dtypes, constraints)
