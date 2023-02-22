@@ -406,35 +406,6 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
     constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
 
-    @classmethod
-    def apply(
-        cls,
-        node: ir.Node,
-        offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
-        reindex: bool = True,
-    ) -> dict[int, Type]:
-        """
-        Infer the types of the child expressions of a given iterator IR expression.
-
-        The result is a dictionary mapping the (Python) id of child nodes to their type.
-        """
-        # Collect preliminary types of all nodes and constraints on them
-        inferrer = cls(offset_provider=offset_provider)
-        inferrer.visit(node)
-
-        # Ensure dict order is pre-order of the tree
-        collected_types = dict(reversed(inferrer.collected_types.items()))
-
-        # Compute the most general type that satisfies all constraints
-        unified_types = unify(list(collected_types.values()), inferrer.constraints)
-
-        if reindex:
-            unified_types = reindex_vars(list(unified_types))
-
-        return {
-            id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)
-        }
-
     def visit(self, node, **kwargs) -> typing.Any:
         result = super().visit(node, **kwargs)
         if isinstance(node, TYPED_IR_NODES):
@@ -615,7 +586,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # their parameters to inherit the constraints of the arguments in a call to them. A simple
         # way to do this is to run the type inference on the function itself and reindex its type
         # vars when referencing the function, i.e. in a `SymRef`.
-        collected_types = _TypeInferrer.apply(
+        collected_types = _infer_all(
             fun, offset_provider=self.offset_provider, reindex=False
         )
         fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
@@ -679,6 +650,35 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             fundefs=Tuple.from_elems(*ftypes),
             params=Tuple.from_elems(*params),
         )
+
+
+def _infer_all(
+    cls,
+    node: ir.Node,
+    offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+    reindex: bool = True,
+) -> dict[int, Type]:
+    """
+    Infer the types of the child expressions of a given iterator IR expression.
+
+    The result is a dictionary mapping the (Python) id of child nodes to their type.
+    """
+    # Collect preliminary types of all nodes and constraints on them
+    inferrer = _TypeInferrer(offset_provider=offset_provider)
+    inferrer.visit(node)
+
+    # Ensure dict order is pre-order of the tree
+    collected_types = dict(reversed(inferrer.collected_types.items()))
+
+    # Compute the most general type that satisfies all constraints
+    unified_types = unify(list(collected_types.values()), inferrer.constraints)
+
+    if reindex:
+        unified_types = reindex_vars(list(unified_types))
+
+    return {
+        id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)
+    }
 
 
 def infer(
