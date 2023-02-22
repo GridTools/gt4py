@@ -30,7 +30,13 @@ from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unif
 T = typing.TypeVar("T", bound="Type")
 
 # list of nodes that have a type
-TYPED_IR_NODES = (ir.Expr, ir.FunctionDefinition, ir.StencilClosure, ir.FencilDefinition, ir.Sym)
+TYPED_IR_NODES: typing.Final = (
+    ir.Expr,
+    ir.FunctionDefinition,
+    ir.StencilClosure,
+    ir.FencilDefinition,
+    ir.Sym,
+)
 
 
 class EmptyTuple(Type):
@@ -238,7 +244,8 @@ class FencilDefinitionType(Type):
 
 
 class LetPolymorphic(Type):
-    """Wrapper for let-polymorphic types.
+    """
+    Wrapper for let-polymorphic types.
 
     Used for fencil-level function definitions.
     """
@@ -387,7 +394,14 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
 
 @dataclasses.dataclass
 class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
-    """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
+    """
+    Visit the full iterator IR tree, convert nodes to respective types and generate constraints.
+
+    Attributes:
+        collected_types Mapping from the (Python) id of a node to its type.
+        constraints     Set of constraints, where a constraint is a pair of types that need to
+                        agree. See `unify` for more information.
+    """
 
     offset_provider: Optional[dict[str, Connectivity | Dimension]]
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
@@ -403,7 +417,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         """
         Infer the types of the child expressions of a given iterator IR expression.
 
-        The result is a dictionary mapping the id of child nodes to their type.
+        The result is a dictionary mapping the (Python) id of child nodes to their type.
         """
         # Collect preliminary types of all nodes and constraints on them
         inferrer = cls(offset_provider=offset_provider)
@@ -422,14 +436,15 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)
         }
 
-    def visit(self, node, **kwargs):
+    def visit(self, node, **kwargs) -> typing.Any:
+        result = super().visit(node, **kwargs)
         if isinstance(node, TYPED_IR_NODES):
-            self.collected_types[id(node)] = super().visit(node, **kwargs)
-            return self.collected_types[id(node)]
+            assert isinstance(result, Type)
+            self.collected_types[id(node)] = result
 
-        return super().visit(node, **kwargs)
+        return result
 
-    def visit_Sym(self, node: ir.Sym, **kwargs):
+    def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
         return TypeVar.fresh()
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
