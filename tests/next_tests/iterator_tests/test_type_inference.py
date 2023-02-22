@@ -146,6 +146,16 @@ def test_and():
     assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
 
 
+def test_cast():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="cast_"), args=[ir.Literal(value="1.", type="float"), ir.SymRef(id="int")]
+    )
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int⁰"
+
+
 def test_lift():
     testee = ir.SymRef(id="lift")
     expected = ti.FunctionType(
