@@ -481,8 +481,6 @@ class _TypeInferrer(eve.NodeTranslator):
                 if len(node.args) != 2:
                     raise TypeError("cast_ requires exactly two arguments.")
                 val_arg_type = self.visit(node.args[0], constraints=constraints, symtypes=symtypes)
-                if not isinstance(val_arg_type, Val):
-                    raise TypeError("The first argument to `cast_` must be a value.")
                 type_arg = node.args[1]
                 if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
                     raise TypeError("The second argument to `cast_` must be a type literal.")
