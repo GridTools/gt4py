@@ -585,7 +585,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         collected_types = _TypeInferrer.apply(
             fun, offset_provider=self.offset_provider, reindex=False
         )
-        fun_type = collected_types[id(fun)] = LetPolymorphic(dtype=collected_types[id(fun)])
+        fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
         assert not set(self.collected_types.keys()) & set(collected_types.keys())
         self.collected_types = {**self.collected_types, **collected_types}
 
