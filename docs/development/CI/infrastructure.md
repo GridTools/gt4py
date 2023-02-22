@@ -107,7 +107,7 @@ CI pipelines for all tests can be triggered via CSCS-CI. These automatically run
 
 Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
 
-Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md]()
+Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md](cscs-ci.md)
 
 ## Integration with external tools
 
