@@ -322,6 +322,22 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ret=Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T5, defined_loc=T3),
         ),
     ),
+    "map_": FunctionType(
+        args=Tuple.from_elems(
+            FunctionType(
+                args=ValTuple(kind=Value(), dtypes=T0, size=T1),
+                ret=Val_T0_T1,
+            ),
+        ),
+        ret=FunctionType(
+            args=ValTuple(
+                kind=Value(), dtypes=ValueList(dtype=T0, max_length=T3, has_skip_values=T4), size=T1
+            ),
+            ret=Val(
+                kind=Value(), dtype=ValueList(dtype=T0, max_length=T3, has_skip_values=T4), size=T1
+            ),
+        ),
+    ),
     "reduce": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -499,6 +515,17 @@ class _TypeInferrer(eve.NodeTranslator):
 
                 constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
+            if node.fun.id == "make_list":
+                elems = list(
+                    self.visit(arg, constraints=constraints, symtypes=symtypes) for arg in node.args
+                )
+                # TODO constraints between dtypes of args
+                lst = ValueList(
+                    dtype=elems[0].dtype,
+                    max_length=Length(length=len(elems)),
+                    has_skip_values=TypeVar.fresh(),
+                )
+                return Val(kind=Value(), dtype=lst, size=TypeVar.fresh())
             if node.fun.id == "list_get":
                 # TODO remove code duplication with tuple_get
                 # Calls to list_get are handled as being part of the grammar,
