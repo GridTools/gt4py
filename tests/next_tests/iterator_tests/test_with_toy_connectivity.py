@@ -132,9 +132,7 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
 def map_make_list(in_edges):
     # TODO what's the semantic if there are skip_values
     # alternative: make_list(V2E, 2.0) but we don't know the current position
-    return reduce(plus, 0)(
-        map_(multiplies)(neighbors(V2E, in_edges), make_list(2.0, 2.0, 2.0, 2.0))
-    )
+    return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_list(2, 2, 2, 2)))
 
 
 def test_map_make_list(program_processor_no_gtfn_exec, lift_mode):
