@@ -397,9 +397,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     Visit the full iterator IR tree, convert nodes to respective types and generate constraints.
 
     Attributes:
-        collected_types Mapping from the (Python) id of a node to its type.
-        constraints     Set of constraints, where a constraint is a pair of types that need to
-                        agree. See `unify` for more information.
+        collected_types: Mapping from the (Python) id of a node to its type.
+        constraints: Set of constraints, where a constraint is a pair of types that need to agree.
+            See `unify` for more information.
     """
 
     offset_provider: Optional[dict[str, Connectivity | Dimension]]
@@ -586,9 +586,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # their parameters to inherit the constraints of the arguments in a call to them. A simple
         # way to do this is to run the type inference on the function itself and reindex its type
         # vars when referencing the function, i.e. in a `SymRef`.
-        collected_types = _infer_all(
-            fun, offset_provider=self.offset_provider, reindex=False
-        )
+        collected_types = _infer_all(fun, offset_provider=self.offset_provider, reindex=False)
         fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
         assert not set(self.collected_types.keys()) & set(collected_types.keys())
         self.collected_types = {**self.collected_types, **collected_types}
@@ -676,9 +674,7 @@ def _infer_all(
     if reindex:
         unified_types = reindex_vars(list(unified_types))
 
-    return {
-        id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)
-    }
+    return {id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)}
 
 
 def infer(
