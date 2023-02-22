@@ -96,22 +96,6 @@ class Val(Type):
     defined_loc: Type = ANYWHERE
 
 
-class Length(Type):
-    length: int
-
-
-class BoolType(Type):
-    value: bool
-
-
-class ValueList(Type):
-    # implict kind == Value
-    dtype: Type = eve.field(default_factory=TypeVar.fresh)
-    size: Type = eve.field(default_factory=TypeVar.fresh)
-    length: Type = eve.field(default_factory=TypeVar.fresh)
-    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
-
-
 class ValTuple(Type):
     """A tuple of `Val` where all items have the same `kind` and `size`, but different dtypes."""
 
@@ -226,6 +210,20 @@ class Iterator(Type):
     ...
 
 
+class Length(Type):
+    length: int
+
+
+class BoolType(Type):
+    value: bool
+
+
+class ValueList(Type):
+    dtype: Type = eve.field(default_factory=TypeVar.fresh)
+    max_length: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
+
+
 class Closure(Type):
     """Stencil closure type."""
 
@@ -323,7 +321,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ret=Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T5, defined_loc=T3),
         ),
     ),
-    "reduce": FunctionType(  # TODO needs to be fixed
+    "reduce": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
                 args=Tuple(front=Val_T0_T1, others=ValTuple(kind=Value(), dtypes=T2, size=T1)),
@@ -331,7 +329,12 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ),
             Val_T0_T1,
         ),
-        ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),
+        ret=FunctionType(
+            args=ValTuple(
+                kind=Value(), dtypes=ValueList(dtype=T2, max_length=T3, has_skip_values=T4), size=T1
+            ),
+            ret=Val_T0_T1,
+        ),
     ),
     "scan": FunctionType(
         args=Tuple.from_elems(
@@ -479,7 +482,7 @@ class _TypeInferrer(eve.NodeTranslator):
                     raise TypeError("The first argument to tuple_get must be a literal int")
                 idx = int(node.args[0].value)
                 tup = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
-                kind = TypeVar.fresh()
+                kind = TypeVar.fresh()  # TODO can be Value() as we cannot have tuple of iterator?
                 elem = TypeVar.fresh()
                 size = TypeVar.fresh()
 
@@ -507,13 +510,15 @@ class _TypeInferrer(eve.NodeTranslator):
                 lst = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
                 kind = TypeVar.fresh()
                 elem = TypeVar.fresh()
+                vlst = ValueList(
+                    dtype=elem, max_length=TypeVar.fresh(), has_skip_values=TypeVar.fresh()
+                )
                 size = TypeVar.fresh()
 
-                val_list = ValueList(
-                    dtype=elem,
+                val_list = Val(
+                    kind=Value(),
+                    dtype=vlst,
                     size=size,
-                    length=TypeVar.fresh(),
-                    has_skip_values=TypeVar.fresh(),
                 )
                 constraints.add((lst, val_list))
 
@@ -545,11 +550,15 @@ class _TypeInferrer(eve.NodeTranslator):
                         ),
                     )
                 )
-                return ValueList(
+                lst = ValueList(
                     dtype=dtype_,
-                    size=size,
-                    length=Length(length=connectivity.max_neighbors),
+                    max_length=Length(length=connectivity.max_neighbors),
                     has_skip_values=BoolType(value=connectivity.has_skip_values),
+                )
+                return Val(
+                    kind=Value(),
+                    dtype=lst,
+                    size=size,
                 )
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
