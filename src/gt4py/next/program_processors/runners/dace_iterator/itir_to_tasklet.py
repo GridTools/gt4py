@@ -1,3 +1,5 @@
+import dace
+
 import gt4py.eve as eve
 import gt4py.eve.codegen
 from gt4py.next.iterator import ir as itir
@@ -61,6 +63,7 @@ _BUILTINS_MAPPING = {
 
 
 class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
+    sdfg: dace.SDFG
     offset_provider: dict[str, Any]
     domain: dict[str, str]
 
@@ -141,13 +144,12 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         shifted_axis = table.origin_axis.value
         target_axis = table.neighbor_axis.value
 
-
         value = index[shifted_axis]
         new_value = f"__connectivity_{offset}_full[{value}, {element}]"
 
         new_index = {
             **{axis: value for axis, value in index.items() if axis != shifted_axis},
-            target_axis: new_value
+            target_axis: new_value,
         }
         return sym, new_index
 
@@ -157,7 +159,9 @@ class PythonTaskletCodegen(eve.codegen.TemplatedGenerator):
         return fmt.format(*args)
 
 
-def closure_to_tasklet(node: itir.StencilClosure, offset_provider: dict[str, Any], domain: dict[str, str]) -> str:
+def closure_to_tasklet(
+    node: itir.StencilClosure, offset_provider: dict[str, Any], domain: dict[str, str]
+) -> str:
     if isinstance(node.stencil, itir.Lambda):
         return PythonTaskletCodegen(offset_provider, domain).visit(node.stencil.expr)
     elif isinstance(node.stencil, itir.SymRef):

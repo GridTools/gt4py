@@ -27,7 +27,7 @@ def run_dace(
     sdfg.simplify()
     sdfg.apply_transformations_repeated(MapFusion)
 
-    #sdfg.view()
+    # sdfg.view()
 
     converted_args = {}
 
@@ -39,6 +39,6 @@ def run_dace(
 
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "build_type", value="RelWithDebInfo")
-        #dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        # dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**converted_args)

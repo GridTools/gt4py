@@ -12,11 +12,14 @@ I2IDim = Dimension("I2IDim", kind=DimensionKind.LOCAL)
 IOff = FieldOffset("IOff", IDim, (IDim,))
 I2IOff = FieldOffset("I2IOff", IDim, (IDim, I2IDim))
 
-i2i_neighbor_data = np.array([
-    [2, 1],
-    [0, 2],
-    [1, 0],
-], dtype=np.int64)
+i2i_neighbor_data = np.array(
+    [
+        [2, 1],
+        [0, 2],
+        [1, 0],
+    ],
+    dtype=np.int64,
+)
 i2i_neighbor_table = NeighborTableOffsetProvider(i2i_neighbor_data, IDim, I2IDim, 2)
 
 ADim = Dimension("ADim", kind=DimensionKind.HORIZONTAL)
@@ -25,10 +28,13 @@ A2BDim = Dimension("A2BDim", kind=DimensionKind.LOCAL)
 A2BOff = FieldOffset("A2BOff", BDim, (ADim, A2BDim))
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-a2b_neighbor_data = np.array([
-    [2, 1, 0],
-    [0, 2, 1],
-], dtype=np.int64)
+a2b_neighbor_data = np.array(
+    [
+        [2, 1, 0],
+        [0, 2, 1],
+    ],
+    dtype=np.int64,
+)
 a2b_neighbor_table = NeighborTableOffsetProvider(a2b_neighbor_data, ADim, BDim, 3)
 
 

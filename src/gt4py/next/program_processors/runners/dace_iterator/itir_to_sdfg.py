@@ -41,15 +41,15 @@ class ItirToSDFG(eve.NodeVisitor):
     offset_provider: dict[str, Any]
 
     def __init__(
-            self,
-            param_types: list[ts.TypeSpec],
-            offset_provider: dict[str, NeighborTableOffsetProvider],
+        self,
+        param_types: list[ts.TypeSpec],
+        offset_provider: dict[str, NeighborTableOffsetProvider],
     ):
         self.param_types = param_types
         self.offset_provider = offset_provider
 
     def visit_StencilClosure(
-            self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
+        self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
         assert ItirToSDFG._check_no_lifts(node)
         assert ItirToSDFG._check_no_inner_lambdas(node)
@@ -85,41 +85,112 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add memlets as subsets of the input, output and connectivity arrays.
         input_memlets = {
-            f"{stencil_param.id}_full": _create_memlet_full(str(closure_input.id), closure_sdfg.arrays[closure_input.id])
+            f"{stencil_param.id}_full": _create_memlet_full(
+                str(closure_input.id), closure_sdfg.arrays[closure_input.id]
+            )
             for closure_input, stencil_param in zip(node.inputs, node.stencil.params)
         }
         output_memlets = {
-            f"{node.output.id}_element": _create_memlet_at(str(node.output.id), tuple(idx for idx in map_domain.keys()))
+            f"{node.output.id}_element": _create_memlet_at(
+                str(node.output.id), tuple(idx for idx in map_domain.keys())
+            )
         }
         connectivity_memlets = {
             f"{_connectivity_identifier(conn)}_full": _create_memlet_full(
-                _connectivity_identifier(conn),
-                closure_sdfg.arrays[_connectivity_identifier(conn)]
+                _connectivity_identifier(conn), closure_sdfg.arrays[_connectivity_identifier(conn)]
             )
             for conn, _ in neighbor_tables
         }
 
         # Translate the stencil's code into a DaCe tasklet.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
-        stencil_args = '\n'.join(f"{param} = {param}_full" for param in node.stencil.params)
+        stencil_args = "\n".join(f"{param} = {param}_full" for param in node.stencil.params)
         stencil_expr = closure_to_tasklet(node, self.offset_provider, index_domain)
         stencil_code = textwrap.dedent(
-            f"{stencil_args}\n"
-            f"{node.output.id}_element = {stencil_expr}"
+            f"{stencil_args}\n" f"{node.output.id}_element = {stencil_expr}"
         )
 
-        closure_state.add_mapped_tasklet(
-            name=node.stencil.id if isinstance(node.stencil, itir.FunctionDefinition) else "lambda",
+        mapped_sdfg = dace.SDFG("mapped_sdfg")
+        mapped_sdfg.add_state("mapped_sdfg_entry")
+        memlet: dace.Memlet
+        for name, memlet in {**input_memlets, **connectivity_memlets, **output_memlets}.items():
+            dtype = closure_sdfg.arrays[memlet.data].dtype
+            shape = memlet.subset.size()
+            mapped_sdfg.add_array(name, shape=shape, dtype=dtype)
+
+        self.add_mapped_nested_sdfg(
+            closure_state,
+            sdfg=mapped_sdfg,
             map_ranges=map_domain,
             inputs={**input_memlets, **connectivity_memlets},
-            code=stencil_code,
-            language=dace.Language.Python,
             outputs=output_memlets,
             external_edges=True,
             schedule=dace.ScheduleType.Sequential,
         )
 
         return closure_sdfg
+
+    def add_mapped_nested_sdfg(
+        self,
+        state: dace.SDFGState,
+        map_ranges: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
+        inputs: dict[str, dace.Memlet],
+        sdfg: dace.SDFG,
+        outputs: dict[str, dace.Memlet],
+        schedule: Any = dace.dtypes.ScheduleType.Default,
+        unroll_map: bool = False,
+        location: Any = None,
+        debuginfo: Any = None,
+        external_edges: bool = False,
+        input_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+        output_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+        propagate: bool = True,
+    ) -> tuple[dace.nodes.NestedSDFG, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        nsdfg_node = state.add_nested_sdfg(
+            sdfg,
+            None,
+            set(inputs.keys()),
+            set(outputs.keys()),
+            {sym: sym for sym in sdfg.free_symbols},
+            name=sdfg.name,
+            schedule=schedule,
+            location=location,
+            debuginfo=debuginfo
+        )
+
+        map_entry, map_exit = state.add_map(
+            f"{sdfg.name}_map",
+            map_ranges,
+            schedule,
+            unroll_map,
+            debuginfo
+        )
+
+        if input_nodes is None:
+            input_nodes = {memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()}
+        if output_nodes is None:
+            output_nodes = {memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()}
+        for name, memlet in inputs.items():
+            state.add_memlet_path(
+                input_nodes[memlet.data],
+                map_entry,
+                nsdfg_node,
+                memlet=memlet,
+                src_conn=None,
+                dst_conn=name
+            )
+        for name, memlet in outputs.items():
+            state.add_memlet_path(
+                nsdfg_node,
+                map_exit,
+                output_nodes[memlet.data],
+                memlet=memlet,
+                src_conn=name,
+                dst_conn=None
+            )
+
+        return nsdfg_node, map_entry, map_exit
+
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
@@ -162,7 +233,9 @@ class ItirToSDFG(eve.NodeVisitor):
             nsdfg_connectivities = {name for name in connectivity_names}
             nsdfg_outputs = {str(closure.output.id)}
             nsdfg_all_inputs = {*nsdfg_inputs, *nsdfg_connectivities}
-            nsdfg_node = last_state.add_nested_sdfg(closure_sdfg, None, inputs=nsdfg_all_inputs, outputs=nsdfg_outputs)
+            nsdfg_node = last_state.add_nested_sdfg(
+                closure_sdfg, None, inputs=nsdfg_all_inputs, outputs=nsdfg_outputs
+            )
 
             # Add access nodes for the program parameters to the closure's state in the program.
             input_accesses = [last_state.add_access(inp.id) for inp in closure.inputs]
@@ -171,14 +244,20 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Connect the access nodes to the nested SDFG's inputs via edges.
             for inner_name, access_node in zip(closure.inputs, input_accesses):
-                input_memlet = _create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
+                input_memlet = _create_memlet_full(
+                    access_node.data, program_sdfg.arrays[access_node.data]
+                )
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name.id, input_memlet)
 
             for inner_name, access_node in zip(connectivity_names, connectivity_accesses):
-                conn_memlet = _create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
+                conn_memlet = _create_memlet_full(
+                    access_node.data, program_sdfg.arrays[access_node.data]
+                )
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, conn_memlet)
 
-            output_memlet = _create_memlet_full(output_access.data, program_sdfg.arrays[output_access.data])
+            output_memlet = _create_memlet_full(
+                output_access.data, program_sdfg.arrays[output_access.data]
+            )
             last_state.add_edge(nsdfg_node, closure.output.id, output_access, None, output_memlet)
 
         program_sdfg.view()
@@ -207,8 +286,8 @@ class ItirToSDFG(eve.NodeVisitor):
     @staticmethod
     def _check_no_lifts(node: itir.StencilClosure):
         if any(
-                getattr(fun, "id", "") == "lift"
-                for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
+            getattr(fun, "id", "") == "lift"
+            for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
         ):
             return False
         return True
