@@ -531,7 +531,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             if node.fun.id == "cast_":
                 if len(node.args) != 2:
                     raise TypeError("cast_ requires exactly two arguments.")
-                val_arg_type = self.visit(node.args[0], constraints=constraints, symtypes=symtypes)
+                val_arg_type = self.visit(node.args[0], **kwargs)
                 type_arg = node.args[1]
                 if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
                     raise TypeError("The second argument to `cast_` must be a type literal.")
@@ -541,7 +541,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 current_loc = TypeVar.fresh()
                 defined_loc = TypeVar.fresh()
 
-                constraints.add(
+                self.constraints.add(
                     (
                         val_arg_type,
                         Val(
