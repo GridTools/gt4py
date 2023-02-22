@@ -14,17 +14,17 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import HorizontalDimension, LocalDimension
 from gt4py.next.ffront.fbuiltins import FieldOffset
 
 
-Vertex = Dimension("Vertex")
-Edge = Dimension("Edge")
-Cell = Dimension("Cell")
-V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
-E2VDim = Dimension("E2VDim", kind=DimensionKind.LOCAL)
-C2EDim = Dimension("C2EDim", kind=DimensionKind.LOCAL)
-V2VDim = Dimension("V2VDim", kind=DimensionKind.LOCAL)
+Vertex = HorizontalDimension("Vertex")
+Edge = HorizontalDimension("Edge")
+Cell = HorizontalDimension("Cell")
+V2EDim = LocalDimension("V2EDim", min_length=4, max_length=4)
+E2VDim = LocalDimension("E2VDim", min_length=2, max_length=2)
+C2EDim = LocalDimension("C2EDim", min_length=4, max_length=4)
+V2VDim = LocalDimension("V2VDim", min_length=4, max_length=4)
 
 V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))

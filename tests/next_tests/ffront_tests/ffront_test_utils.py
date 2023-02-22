@@ -20,8 +20,8 @@ from typing import TypeVar
 import numpy as np
 import pytest
 
-from gt4py.next.common import DimensionKind
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.common import HorizontalDimension, LocalDimension, VerticalDimension
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -48,15 +48,15 @@ def debug_itir(tree):
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = VerticalDimension("KDim")
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
 
-Vertex = Dimension("Vertex")
-Edge = Dimension("Edge")
+Vertex = HorizontalDimension("Vertex")
+Edge = HorizontalDimension("Edge")
 EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 size = 10
@@ -65,10 +65,10 @@ size = 10
 @pytest.fixture
 def reduction_setup():
     num_vertices = 9
-    edge = Dimension("Edge")
-    vertex = Dimension("Vertex")
-    v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
-    e2vdim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    edge = HorizontalDimension("Edge")
+    vertex = HorizontalDimension("Vertex")
+    v2edim = LocalDimension("V2E", min_length=4, max_length=4)
+    e2vdim = LocalDimension("E2V", min_length=2, max_length=2)
 
     v2e_arr = np.array(
         [

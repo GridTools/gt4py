@@ -19,9 +19,9 @@ from functools import reduce
 import numpy as np
 import pytest as pytest
 
+from gt4py.next.common import HorizontalDimension, VerticalDimension
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import (
-    Dimension,
     Field,
     FieldOffset,
     astype,
@@ -249,7 +249,7 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
 
 def test_scalar_scan():
     size = 10
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    KDim = VerticalDimension("K")
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     scalar = 1.0
     expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
@@ -269,7 +269,7 @@ def test_scalar_scan():
 
 def test_tuple_scalar_scan():
     size = 10
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    KDim = VerticalDimension("K")
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     tuple_scalar = (1.0, (1.0, 0.0))
     expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))

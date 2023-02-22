@@ -18,7 +18,8 @@ from typing import List
 
 from gt4py.eve import Node
 from gt4py.next import iterator
-from gt4py.next.iterator import builtins
+from gt4py.next.common import Dimension
+from gt4py.next.iterator import builtins, runtime
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -33,7 +34,6 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
-from gt4py.next.iterator.runtime import CartesianAxis
 
 
 TRACING = "tracing"
@@ -158,7 +158,7 @@ def make_node(o):
         return Literal(value=str(o), type="int")
     if isinstance(o, float):
         return Literal(value=str(o), type="float")
-    if isinstance(o, CartesianAxis):
+    if isinstance(o, Dimension):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return tuple(make_node(arg) for arg in o)
@@ -200,7 +200,7 @@ def make_function_definition(fun):
 
 
 class FundefTracer:
-    def __call__(self, fundef_dispatcher: iterator.runtime.FundefDispatcher):
+    def __call__(self, fundef_dispatcher: runtime.FundefDispatcher):
         def fun(*args):
             res = make_function_definition(fundef_dispatcher.fun)
             return res(*args)
@@ -211,7 +211,7 @@ class FundefTracer:
         return iterator.builtins.builtin_dispatch.key == TRACING
 
 
-iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
+runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
@@ -236,7 +236,7 @@ class TracerContext:
         iterator.builtins.builtin_dispatch.pop_key()
 
 
-@iterator.runtime.closure.register(TRACING)
+@runtime.closure.register(TRACING)
 def closure(domain, stencil, output, inputs):
     if hasattr(stencil, "__name__") and stencil.__name__ in iterator.builtins.__all__:
         stencil = _s(stencil.__name__)

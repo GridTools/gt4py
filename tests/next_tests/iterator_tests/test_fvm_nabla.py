@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("atlas4py")
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import library
 from gt4py.next.iterator.atlas_utils import AtlasTable
 from gt4py.next.iterator.builtins import *
@@ -35,8 +35,8 @@ from .conftest import run_processor
 from .fvm_nabla_setup import assert_close, nabla_setup
 
 
-Vertex = Dimension("Vertex")
-Edge = Dimension("Edge")
+Vertex = HorizontalDimension("Vertex")
+Edge = HorizontalDimension("Edge")
 
 V2E = offset("V2E")
 E2V = offset("E2V")

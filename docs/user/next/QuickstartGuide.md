@@ -44,8 +44,9 @@ The following snippet imports the most commonly used features that are needed to
 ```{code-cell} ipython3
 import numpy as np
 
-from gt4py.next.common import DimensionKind
-from gt4py.next.ffront.fbuiltins import Dimension, Field, float64, FieldOffset, neighbor_sum, where
+ 
+from gt4py.next.common import HorizontalDimension
+from gt4py.next.ffront.fbuiltins import  Field, float64, FieldOffset, neighbor_sum, where
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
 ```
@@ -55,8 +56,8 @@ from gt4py.next.iterator.embedded import np_as_located_field, NeighborTableOffse
 Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, *cell* and *K*, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
-CellDim = Dimension("Cell")
-KDim = Dimension("K")
+CellDim = HorizontalDimension("Cell")
+KDim = VerticalDimension("K")
 
 num_cells = 5
 num_layers = 6
@@ -159,8 +160,8 @@ The examples related to unstructured meshes use the mesh below. The edges (in bl
 The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. The corresponding named dimensions are thus the following:
 
 ```{code-cell} ipython3
-CellDim = Dimension("Cell")
-EdgeDim = Dimension("Edge")
+CellDim = HorizontalDimension("Cell")
+EdgeDim = HorizontalDimension("Edge")
 ```
 
 You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge \#6 connects to cells \#0 and \#5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
@@ -219,7 +220,7 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-E2CDim = Dimension("E2C", kind=DimensionKind.LOCAL)
+E2CDim = LocalDimension("E2C", min_length=2, max_length=2)
 E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 ```
 
@@ -372,7 +373,7 @@ print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(
 As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
+C2EDim = LocalDimension("C2E", min_length=3, max_length=3)
 C2E = FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
 C2E_offset_provider = NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)

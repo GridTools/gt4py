@@ -14,7 +14,7 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, scan, shift
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
@@ -33,8 +33,8 @@ def test_scan_in_stencil(program_processor, lift_mode):
 
     isize = 1
     ksize = 3
-    IDim = Dimension("I")
-    KDim = Dimension("K")
+    IDim = HorizontalDimension("I")
+    KDim = HorizontalDimension("K")
     Koff = offset("Koff")
     inp = np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
     out = np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))

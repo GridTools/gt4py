@@ -16,7 +16,7 @@ from typing import Optional, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next.common import DimensionKind, GTSyntaxError, GTTypeError
+from gt4py.next.common import GTSyntaxError, GTTypeError, LocalDimension, VerticalDimension
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
     fbuiltins,
@@ -33,12 +33,12 @@ def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next.common import HorizontalDimension
     >>> scalar_t = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> print(boolified_type(scalar_t))
     bool
 
-    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind))
+    >>> field_t = ts.FieldType(dims=[HorizontalDimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind))
     >>> print(boolified_type(field_t))
     Field[[I], bool]
     """
@@ -64,12 +64,12 @@ def construct_tuple_type(
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
-    >>> mask_type = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
+    >>> from gt4py.next.common import HorizontalDimension
+    >>> mask_type = ts.FieldType(dims=[HorizontalDimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
-    >>> false_branch_types = [ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
+    >>> false_branch_types = [ts.FieldType(dims=[HorizontalDimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
     >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
-    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
+    [FieldType(dims=[HorizontalDimension('I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[HorizontalDimension('I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
     element_types_new = true_branch_types
     for i, element in enumerate(true_branch_types):
@@ -96,16 +96,16 @@ def promote_to_mask_type(
     the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
     In all other cases, the return type takes the dimensions and dtype of the input type.
 
-    >>> from gt4py.next.common import Dimension
-    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
+    >>> from gt4py.next.common import HorizontalDimension
+    >>> I, J = (HorizontalDimension(dim) for dim in ["I", "J"])
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.ScalarType(kind=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
     if isinstance(input_type, ts.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims
@@ -158,10 +158,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next.common import Field, HorizontalDimension
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> IDim = Dimension("IDim")
+    >>> IDim = HorizontalDimension("IDim")
     >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
@@ -226,7 +226,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node,
                 msg=f"Argument `axis` to scan operator `{node.id}` must be a dimension.",
             )
-        if not new_axis.type.dim.kind == DimensionKind.VERTICAL:
+        if not isinstance(new_axis.type.dim, VerticalDimension):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Argument `axis` to scan operator `{node.id}` must be a vertical dimension.",
@@ -281,7 +281,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
-
         TargetType = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
@@ -359,7 +358,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             case ts.TupleType(types=types):
                 new_type = types[node.index]
             case ts.OffsetType(source=source, target=(target1, target2)):
-                if not target2.kind == DimensionKind.LOCAL:
+                if not isinstance(target2, LocalDimension):
                     raise FieldOperatorTypeDeductionError.from_foast_node(
                         new_value, msg="Second dimension in offset must be a local dimension."
                     )

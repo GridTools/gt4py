@@ -28,7 +28,7 @@ from next_tests.toy_connectivity import (
     v2v_arr,
 )
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import deref, lift, plus, reduce, shift
 from gt4py.next.iterator.embedded import (

@@ -15,14 +15,15 @@
 import numpy as np
 import pytest
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, fundef
+from gt4py.next.iterator.runtime import fundef
 
 from .conftest import run_processor
 
 
-I = CartesianAxis("I")
+I = HorizontalDimension("I")
 
 _isize = 10
 

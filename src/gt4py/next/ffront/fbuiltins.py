@@ -17,7 +17,13 @@ from dataclasses import dataclass
 
 from numpy import float32, float64, int32, int64
 
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next.common import (
+    Dimension,
+    Field,
+    HorizontalDimension,
+    LocalDimension,
+    VerticalDimension,
+)
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -25,7 +31,16 @@ from gt4py.next.type_system import type_specifications as ts
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
-TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
+TYPE_BUILTINS = [
+    Field,
+    HorizontalDimension,
+    Dimension,
+    VerticalDimension,
+    int32,
+    int64,
+    float32,
+    float64,
+] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 
@@ -211,7 +226,7 @@ class FieldOffset(runtime.Offset):
     target: tuple[Dimension] | tuple[Dimension, Dimension]
 
     def __post_init__(self):
-        if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:
+        if len(self.target) == 2 and not isinstance(self.target[1], LocalDimension):
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):

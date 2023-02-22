@@ -16,15 +16,15 @@ from typing import Tuple
 
 import pytest
 
-from gt4py.next.common import Field
+from gt4py.next.common import Field, HorizontalDimension
 from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 
 
 float64 = float
-IDim = Dimension("IDim")
+IDim = HorizontalDimension("IDim")
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-JDim = Dimension("JDim")
+JDim = HorizontalDimension("JDim")
 Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 
 

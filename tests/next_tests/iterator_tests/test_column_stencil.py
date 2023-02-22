@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
@@ -30,8 +30,8 @@ from .conftest import run_processor
 I = offset("I")
 K = offset("K")
 
-KDim = Dimension("KDim")
-IDim = Dimension("IDim")
+KDim = HorizontalDimension("KDim")
+IDim = HorizontalDimension("IDim")
 
 
 @fundef

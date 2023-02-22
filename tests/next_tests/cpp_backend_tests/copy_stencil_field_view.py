@@ -18,13 +18,13 @@ from numpy import float64
 
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.iterator.runtime import CartesianAxis
+from gt4py.next.iterator.runtime import HorizontalDimension
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = HorizontalDimension("KDim")
 
 
 @field_operator

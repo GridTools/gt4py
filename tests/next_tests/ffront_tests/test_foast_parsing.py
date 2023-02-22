@@ -40,7 +40,7 @@ import re
 import pytest
 
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next.common import Field, GTTypeError, HorizontalDimension
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
@@ -94,7 +94,7 @@ OR = itir.SymRef(id=or_.fun.__name__)
 XOR = itir.SymRef(id=xor_.fun.__name__)
 LIFT = itir.SymRef(id=lift.fun.__name__)
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = HorizontalDimension("TDim")  # Meaningless dimension, used for tests.
 
 
 # --- Parsing ---
@@ -393,8 +393,8 @@ def test_closure_symbols():
 
 
 def test_wrong_return_type_annotation():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
+    ADim = HorizontalDimension("ADim")
+    BDim = HorizontalDimension("BDim")
 
     def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
         return a
@@ -418,7 +418,7 @@ def test_empty_dims_type():
 
 
 def test_zero_dims_ternary():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
 
     def zero_dims_ternary(
         cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]

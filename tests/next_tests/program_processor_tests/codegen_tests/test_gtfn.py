@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
@@ -55,7 +55,7 @@ def fencil_example():
             )
         ],
     )
-    IDim = Dimension("I")
+    IDim = HorizontalDimension("I")
     params = [
         embedded.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
         np.float32(3.14),

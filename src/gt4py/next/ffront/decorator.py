@@ -31,14 +31,21 @@ from devtools import debug
 
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import DimensionKind, GridType, GTTypeError, Scalar
+from gt4py.next.common import (
+    Dimension,
+    GridType,
+    GTTypeError,
+    LocalDimension,
+    Scalar,
+    VerticalDimension,
+)
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -136,7 +143,7 @@ def _deduce_grid_type(
         if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
             deduced_grid_type = GridType.UNSTRUCTURED
             break
-        if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
+        if isinstance(o, LocalDimension):
             deduced_grid_type = GridType.UNSTRUCTURED
             break
 
@@ -669,9 +676,10 @@ def scan_operator(
     forward: bool = True,
     init: Scalar = 0.0,
     backend=None,
-) -> FieldOperator[foast.ScanOperator] | Callable[
-    [types.FunctionType], FieldOperator[foast.ScanOperator]
-]:
+) -> (
+    FieldOperator[foast.ScanOperator]
+    | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
+):
     """
     Generate an implementation of the scan operator from a Python function object.
 
@@ -679,7 +687,7 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A :ref:`Dimension` to reduce over.
+        axis: A :ref:`Dimension` to scan over.
         forward: Boolean specifying the direction.
         init: Initial value for the carry argument of the scan pass.
 
@@ -687,7 +695,7 @@ def scan_operator(
         >>> import numpy as np
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+        >>> KDim = VerticalDimension("K")
         >>> inp = embedded.np_as_located_field(KDim)(np.ones((10,)))
         >>> out = embedded.np_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)

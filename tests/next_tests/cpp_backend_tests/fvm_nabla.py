@@ -16,9 +16,9 @@ import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import HorizontalDimension, VerticalDimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fundef, offset
+from gt4py.next.iterator.runtime import HorizontalDimension, closure, fundef, offset
 from gt4py.next.iterator.tracing import trace
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
@@ -62,8 +62,8 @@ def zavgS_fencil(edge_domain, out, pp, S_M):
     )
 
 
-Vertex = Dimension("Vertex")
-K = Dimension("K", kind=DimensionKind.VERTICAL)
+Vertex = HorizontalDimension("Vertex")
+K = VerticalDimension("K")
 
 
 def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
@@ -79,8 +79,8 @@ def nabla_fencil(n_vertices, n_levels, out, pp, S_M, sign, vol):
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int
-    origin_axis: Dimension = Dimension("dummy_origin")
-    neighbor_axis: Dimension = Dimension("dummy_neighbor")
+    origin_axis: Dimension = HorizontalDimension("dummy_origin")
+    neighbor_axis: Dimension = HorizontalDimension("dummy_neighbor")
     index_type: type[int] = int
 
     def mapped_index(_, __) -> int:

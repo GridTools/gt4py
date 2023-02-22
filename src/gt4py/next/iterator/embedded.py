@@ -882,7 +882,7 @@ def make_in_iterator(
         if isinstance(axis, runtime.Offset):
             assert isinstance(axis.value, str)
             sparse_dimensions.append(axis.value)
-        elif isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL:
+        elif isinstance(axis, common.LocalDimension):
             # we just use the name of the axis to match the offset literal for now
             sparse_dimensions.append(axis.value)
 

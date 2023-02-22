@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next.common import Field, HorizontalDimension, VerticalDimension
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.iterator.embedded import np_as_located_field
@@ -26,8 +26,8 @@ from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 from ..ffront_test_utils import fieldview_backend
 
 
-Cell = Dimension("Cell")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+Cell = HorizontalDimension("Cell")
+KDim = VerticalDimension("KDim")
 Koff = FieldOffset("Koff", KDim, (KDim,))
 
 

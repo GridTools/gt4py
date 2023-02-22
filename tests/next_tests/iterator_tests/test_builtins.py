@@ -18,6 +18,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -50,7 +51,7 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.runners.gtfn_cpu import (
     GTFNExecutor,
@@ -73,7 +74,7 @@ def asarray(*lists):
     return res
 
 
-IDim = CartesianAxis("IDim")
+IDim = HorizontalDimension("IDim")
 
 
 def asfield(*arrays):
@@ -260,7 +261,7 @@ def test_can_deref(program_processor, stencil):
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
 
-    Node = CartesianAxis("Node")
+    Node = HorizontalDimension("Node")
 
     inp = np_as_located_field(Node)(np.ones((1,)))
     out = np_as_located_field(Node)(np.asarray([0]))
@@ -294,7 +295,7 @@ def test_can_deref(program_processor, stencil):
 #     program_processor, validate = program_processor
 
 #     Neighbor = offset("Neighbor")
-#     Node = CartesianAxis("Node")
+#     Node = HorizontalDimension("Node")
 
 #     @fundef
 #     def _can_deref(inp):

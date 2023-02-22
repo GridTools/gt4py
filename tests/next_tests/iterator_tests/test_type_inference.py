@@ -14,10 +14,9 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import ir, type_inference as ti
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
-from gt4py.next.iterator.runtime import CartesianAxis
 
 
 def test_sym_ref():
@@ -445,7 +444,7 @@ def test_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": HorizontalDimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
@@ -471,7 +470,7 @@ def test_partial_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": HorizontalDimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
@@ -501,7 +500,10 @@ def test_shift_with_unstructured_offset_provider():
     )
     offset_provider = {
         "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+            np.empty((0, 1), dtype=np.int64),
+            HorizontalDimension("Vertex"),
+            HorizontalDimension("Edge"),
+            1,
         )
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -538,10 +540,16 @@ def test_partial_shift_with_unstructured_offset_provider():
     )
     offset_provider = {
         "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+            np.empty((0, 1), dtype=np.int64),
+            HorizontalDimension("Vertex"),
+            HorizontalDimension("Edge"),
+            1,
         ),
         "E2C": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+            np.empty((0, 1), dtype=np.int64),
+            HorizontalDimension("Edge"),
+            HorizontalDimension("Cell"),
+            1,
         ),
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)

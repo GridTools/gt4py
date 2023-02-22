@@ -100,8 +100,10 @@ def run_processor(
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int
-    origin_axis: common.Dimension = common.Dimension("dummy_origin")
-    neighbor_axis: common.Dimension = common.Dimension("dummy_neighbor")
+    origin_axis: common.HorizonalDimension = common.HorizontalDimension("dummy_origin")
+    neighbor_axis: common.LocalDimension = common.LocalDimension(
+        "dummy_neighbor", min_length=0, max_length=0
+    )
     index_type: type[int] = int
 
     def mapped_index(_, __) -> int:

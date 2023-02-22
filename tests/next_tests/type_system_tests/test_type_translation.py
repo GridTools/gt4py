@@ -21,7 +21,6 @@ import pytest
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.ffront.fbuiltins import Dimension
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -31,8 +30,8 @@ class CustomInt32DType:
         return np.dtype(np.int32)
 
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
+IDim = common.HorizontalDimension("IDim")
+JDim = common.HorizontalDimension("JDim")
 
 
 @pytest.mark.parametrize(
@@ -91,7 +90,7 @@ def test_invalid_scalar_kind():
         (
             common.Field[[IDim, JDim], float],
             ts.FieldType(
-                dims=[Dimension("IDim"), Dimension("JDim")],
+                dims=[common.HorizontalDimension("IDim"), common.HorizontalDimension("JDim")],
                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ),

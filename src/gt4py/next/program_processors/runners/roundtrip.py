@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next.common import Dimension
+from gt4py.next.common import VerticalDimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
@@ -160,7 +160,7 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
+        axis_literals = [f'{o} = HorizontalDimension("{o}")' for o in axis_literals]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")
@@ -188,7 +188,7 @@ def fencil_generator(
 def execute_roundtrip(
     ir: itir.Node,
     *args,
-    column_axis: Optional[Dimension] = None,
+    column_axis: Optional[VerticalDimension] = None,
     offset_provider: dict[str, NeighborTableOffsetProvider],
     debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,

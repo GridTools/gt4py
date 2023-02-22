@@ -20,7 +20,7 @@ from typing import Any, Callable
 import numpy as np
 
 from gt4py.eve import NodeTranslator
-from gt4py.next.common import DimensionKind
+from gt4py.next.common import LocalDimension
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -34,7 +34,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
+    return any(isinstance(dim, LocalDimension) for dim in symbol_type.dims)
 
 
 class ITIRTypeKind(enum.Enum):
@@ -108,8 +108,8 @@ def to_value(node: foast.Expr) -> Callable[[itir.Expr], itir.Expr]:
     ---------
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> from gt4py.next.ffront.fbuiltins import float64
-    >>> from gt4py.next.common import Field, Dimension
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import Field, HorizontalDimension
+    >>> IDim = HorizontalDimension("IDim")
     >>> def foo(a: Field[[IDim], "float64"]):
     ...    b = 5
     ...    return a, b
@@ -139,9 +139,9 @@ class FieldOperatorLowering(NodeTranslator):
     --------
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> from gt4py.next.ffront.fbuiltins import float64
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next.common import Field, HorizontalDimension
     >>>
-    >>> IDim = Dimension("IDim")
+    >>> IDim = HorizontalDimension("IDim")
     >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...    return inp
     >>>

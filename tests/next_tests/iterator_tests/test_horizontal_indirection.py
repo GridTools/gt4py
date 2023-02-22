@@ -27,7 +27,7 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import fundef, offset
@@ -53,7 +53,7 @@ def conditional_indirection(inp, cond):
     return deref(compute_shift(cond)(inp))
 
 
-IDim = Dimension("IDim")
+IDim = HorizontalDimension("IDim")
 
 
 def test_simple_indirection(program_processor):

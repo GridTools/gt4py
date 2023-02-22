@@ -14,14 +14,14 @@
 
 import numpy as np
 
-from gt4py.next.common import Field
+from gt4py.next.common import Field, HorizontalDimension
 from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.iterator.embedded import np_as_located_field
 
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
 
 Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
 Joff = FieldOffset("Joff", source=JDim, target=(JDim,))

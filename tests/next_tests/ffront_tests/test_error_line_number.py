@@ -18,7 +18,7 @@ import traceback
 import pytest
 
 from gt4py.next import common
-from gt4py.next.common import Dimension, Field
+from gt4py.next.common import Field, HorizontalDimension
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
@@ -26,7 +26,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSy
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = HorizontalDimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def test_invalid_syntax_error_empty_return():

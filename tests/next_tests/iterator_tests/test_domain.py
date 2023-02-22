@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import deref
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
@@ -46,7 +46,7 @@ def test_deduce_domain():
     )
 
 
-I = Dimension("I")
+I = HorizontalDimension("I")
 
 
 def test_embedded_error_on_wrong_domain():

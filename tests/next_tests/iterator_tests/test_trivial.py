@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next.common import HorizontalDimension, VerticalDimension
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
@@ -29,9 +29,9 @@ I = offset("I")
 J = offset("J")
 K = offset("K")
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = VerticalDimension("KDim")
 
 
 @fundef

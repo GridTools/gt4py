@@ -15,16 +15,17 @@
 import numpy as np
 import pytest
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from gt4py.next.iterator.runtime import closure, fendef, fundef
 
 from .conftest import run_processor
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = HorizontalDimension("KDim")
 
 # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
 # `return a` -> a: field

@@ -17,9 +17,14 @@ from typing import Optional, Pattern
 import pytest
 
 import gt4py.next.ffront.type_specifications
-from gt4py.next.common import DimensionKind, GTTypeError
-from gt4py.next.ffront.fbuiltins import (
+from gt4py.next.common import (
     Dimension,
+    GTTypeError,
+    HorizontalDimension,
+    LocalDimension,
+    VerticalDimension,
+)
+from gt4py.next.ffront.fbuiltins import (
     Field,
     FieldOffset,
     astype,
@@ -35,7 +40,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = HorizontalDimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
@@ -89,14 +94,14 @@ def callable_type_info_cases():
         if not isinstance(symbol_type, ts.CallableType)
     ]
 
-    IDim = Dimension("I")
-    JDim = Dimension("J")
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    IDim = HorizontalDimension("I")
+    JDim = HorizontalDimension("J")
+    KDim = VerticalDimension("K")
 
     bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    field_type = ts.FieldType(dims=[Dimension("I")], dtype=float_type)
+    field_type = ts.FieldType(dims=[HorizontalDimension("I")], dtype=float_type)
     nullary_func_type = ts.FunctionType(args=[], kwargs={}, returns=ts.VoidType())
     unary_func_type = ts.FunctionType(args=[bool_type], kwargs={}, returns=ts.VoidType())
     kwarg_func_type = ts.FunctionType(args=[], kwargs={"foo": bool_type}, returns=ts.VoidType())
@@ -311,9 +316,9 @@ def test_unpack_assign():
     )
 
 
-def dimension_promotion_cases() -> list[
-    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
-]:
+def dimension_promotion_cases() -> (
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([["I", "J"], ["I"]], ["I", "J"], None),
@@ -333,8 +338,8 @@ def dimension_promotion_cases() -> list[
     # transform dimension names into Dimension objects
     return [
         (
-            [[Dimension(el) for el in arg] for arg in args],
-            [Dimension(el) for el in result] if result else result,
+            [[HorizontalDimension(el) for el in arg] for arg in args],
+            [HorizontalDimension(el) for el in result] if result else result,
             msg,
         )
         for args, result, msg in raw_list
@@ -392,8 +397,8 @@ def test_adding_bool():
 
 def test_binop_nonmatching_dims():
     """Binary operations can only work when both fields have the same dimensions."""
-    X = Dimension("X")
-    Y = Dimension("Y")
+    X = HorizontalDimension("X")
+    Y = HorizontalDimension("Y")
 
     def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
         return a + b
@@ -442,9 +447,9 @@ def test_notting_int():
 
 @pytest.fixture
 def remap_setup():
-    X = Dimension("X")
-    Y = Dimension("Y")
-    Y2XDim = Dimension("Y2X", kind=DimensionKind.LOCAL)
+    X = HorizontalDimension("X")
+    Y = HorizontalDimension("Y")
+    Y2XDim = LocalDimension("Y2X")
     Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 
@@ -513,9 +518,9 @@ def test_mismatched_literals():
 
 
 def test_broadcast_multi_dim():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
-    CDim = Dimension("CDim")
+    ADim = HorizontalDimension("ADim")
+    BDim = HorizontalDimension("BDim")
+    CDim = HorizontalDimension("CDim")
 
     def simple_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (ADim, BDim, CDim))
@@ -528,9 +533,9 @@ def test_broadcast_multi_dim():
 
 
 def test_broadcast_disjoint():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
-    CDim = Dimension("CDim")
+    ADim = HorizontalDimension("ADim")
+    BDim = HorizontalDimension("BDim")
+    CDim = HorizontalDimension("CDim")
 
     def disjoint_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (BDim, CDim))
@@ -543,9 +548,9 @@ def test_broadcast_disjoint():
 
 
 def test_broadcast_badtype():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
     BDim = "BDim"
-    CDim = Dimension("CDim")
+    CDim = HorizontalDimension("CDim")
 
     def badtype_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (BDim, CDim))
@@ -558,8 +563,8 @@ def test_broadcast_badtype():
 
 
 def test_where_dim():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
+    ADim = HorizontalDimension("ADim")
+    BDim = HorizontalDimension("BDim")
 
     def simple_where(a: Field[[ADim], bool], b: Field[[ADim, BDim], float64]):
         return where(a, b, 9.0)
@@ -572,7 +577,7 @@ def test_where_dim():
 
 
 def test_where_broadcast_dim():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
 
     def simple_where(a: Field[[ADim], bool]):
         return where(a, 5.0, 9.0)
@@ -585,7 +590,7 @@ def test_where_broadcast_dim():
 
 
 def test_where_tuple_dim():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
 
     def tuple_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), ((8.0, b), (5.0, 9.0)))
@@ -611,7 +616,7 @@ def test_where_tuple_dim():
 
 
 def test_where_bad_dim():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
 
     def bad_dim_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), b)
@@ -624,8 +629,8 @@ def test_where_bad_dim():
 
 
 def test_where_mixed_dims():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
+    ADim = HorizontalDimension("ADim")
+    BDim = HorizontalDimension("BDim")
 
     def tuple_where_mix_dims(
         a: Field[[ADim], bool], b: Field[[ADim], float64], c: Field[[ADim, BDim], float64]
@@ -655,7 +660,7 @@ def test_where_mixed_dims():
 
 
 def test_astype_dtype():
-    ADim = Dimension("ADim")
+    ADim = HorizontalDimension("ADim")
 
     def simple_astype(a: Field[[ADim], float64]):
         return astype(a, bool)

@@ -14,13 +14,13 @@
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
+from gt4py.next.common import GridType, GTTypeError, HorizontalDimension, LocalDimension
 from gt4py.next.ffront.decorator import _deduce_grid_type
 from gt4py.next.ffront.fbuiltins import FieldOffset
 
 
-Dim = Dimension("Dim")
-LocalDim = Dimension("LocalDim", kind=DimensionKind.LOCAL)
+Dim = HorizontalDimension("Dim")
+LocalDim = LocalDimension("LocalDim", min_length=0, max_length=0)
 
 CartesianOffset = FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
 UnstructuredOffset = FieldOffset("UnstructuredOffset", source=Dim, target=(Dim, LocalDim))

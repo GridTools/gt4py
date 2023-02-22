@@ -15,9 +15,10 @@
 import numpy as np
 import pytest
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from .conftest import run_processor
@@ -47,9 +48,9 @@ def lap(inp):
     return dif2(i)(inp) + dif2(j)(inp)
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = HorizontalDimension("KDim")
 
 
 @fendef(offset_provider={"i": IDim, "j": JDim})

@@ -32,6 +32,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from gt4py import eve
 from gt4py.eve.type_definitions import StrEnum
 
 
@@ -42,23 +43,36 @@ DT = TypeVar("DT", bound="DType")
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
 
-@enum.unique
-class DimensionKind(StrEnum):
-    HORIZONTAL = "horizontal"
-    VERTICAL = "vertical"
-    LOCAL = "local"
-
-    def __str__(self):
-        return f"{type(self).__name__}.{self.name}"
-
-
+@eve.utils.noninstantiable
 @dataclass(frozen=True)
 class Dimension:
     value: str
-    kind: DimensionKind = DimensionKind.HORIZONTAL
 
     def __str__(self):
-        return f'Dimension(value="{self.value}", kind={self.kind})'
+        return self.value
+
+
+@dataclass(frozen=True)
+class HorizontalDimension(Dimension):
+    def __str__(self):
+        return f"HorizontalDimension({super()})"
+
+
+@dataclass(frozen=True)
+class VerticalDimension(Dimension):
+    def __str__(self):
+        return f"VerticalDimension({super()})"
+
+
+@dataclass(frozen=True)
+class LocalDimension(Dimension):
+    min_length: int
+    max_length: int
+
+    def __str__(self):
+        return (
+            f"LocalDimension({super()}, min_length={self.min_length}, max_length={self.max_length})"
+        )
 
 
 class DType:

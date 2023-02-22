@@ -15,14 +15,14 @@
 import sys
 
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fundef
+from gt4py.next.iterator.runtime import HorizontalDimension, closure, fundef
 from gt4py.next.iterator.tracing import trace
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = HorizontalDimension("IDim")
+JDim = HorizontalDimension("JDim")
+KDim = HorizontalDimension("KDim")
 
 
 @fundef

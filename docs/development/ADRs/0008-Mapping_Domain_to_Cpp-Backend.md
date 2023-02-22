@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid 
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-06-29
-- **Updated**: 2022-06-29
+- **Updated**: 2023-02-23
 
 This document proposes a (temporary) solution for mapping domain dimensions to field dimensions.
 
@@ -50,6 +50,10 @@ class Dimension:
 # the following field doesn't have correct default order, as without remapping we would interpret first dimension as dim::horizontal
 np_as_located_field(Dimension("K", DimensionKind.VERTICAL), Dimension("Vertex", DimensionKind.HORIZONTAL))
 ```
+
+Note (2023-02-22):
+`kind` is replaced by subclassing `Dimension`: `HorizontalDimension`, `VerticalDimension`
+
 ### Mapping of Cartesian Offsets to Dimensions
 
 When lowering from iterator IR to gtfn_ir, we replace Cartesian offset tags by Dimension tags.

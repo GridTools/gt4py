@@ -14,7 +14,7 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
@@ -23,8 +23,8 @@ from gt4py.next.program_processors.runners import double_roundtrip, roundtrip
 
 I = offset("I")
 J = offset("J")
-I_loc = Dimension("I_loc")
-J_loc = Dimension("J_loc")
+I_loc = HorizontalDimension("I_loc")
+J_loc = HorizontalDimension("J_loc")
 
 
 @fundef

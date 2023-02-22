@@ -18,6 +18,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -25,7 +26,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.ffront.decorator import FieldOperator
-from gt4py.next.ffront.fbuiltins import Dimension, Field, float64
+from gt4py.next.ffront.fbuiltins import Field, float64
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import roundtrip

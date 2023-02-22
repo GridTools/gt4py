@@ -16,10 +16,9 @@ import typing
 from collections import abc
 
 import gt4py.eve as eve
-from gt4py.next.common import DimensionKind
+from gt4py.next.common import Dimension, HorizontalDimension
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -363,12 +362,13 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
-                if isinstance(axis, CartesianAxis):
+                if isinstance(axis, Dimension):
                     continue  # Cartesian shifts don’t change the location type
                 elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
-                    assert (
-                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                    assert isinstance(axis.origin_axis, HorizontalDimension) and isinstance(
+                        axis.neighbor_axis, HorizontalDimension
                     )
+
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
                 else:

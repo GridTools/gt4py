@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve.utils import UIDs
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,
@@ -359,7 +359,7 @@ def test_update_cartesian_domains():
             Temporary(id="_gtmp_1"),
         ],
     )
-    actual = update_cartesian_domains(testee, {"I": CartesianAxis("IDim")})
+    actual = update_cartesian_domains(testee, {"I": HorizontalDimension("IDim")})
     assert actual == expected
 
 

@@ -16,7 +16,7 @@ import functools
 from typing import Callable, Iterator, Type, TypeGuard, cast
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next.common import Dimension, GTTypeError, HorizontalDimension
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -64,8 +64,8 @@ def primitive_constituents(
     """
     Return the primitive types contained in a composite type.
 
-    >>> from gt4py.next.common import Dimension
-    >>> I = Dimension(value="I")
+    >>> from gt4py.next.common import HorizontalDimension
+    >>> I = HorizontalDimension("I")
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
@@ -257,10 +257,10 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
     ---------
     >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
     []
-    >>> I = Dimension(value="I")
-    >>> J = Dimension(value="J")
+    >>> I = HorizontalDimension("I")
+    >>> J = HorizontalDimension("J")
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+    [HorizontalDimension('I'), HorizontalDimension('J')]
     """
     match symbol_type:
         case ts.ScalarType():
@@ -504,7 +504,6 @@ def function_signature_incompatibilities(
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-
     # check positional arguments
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."

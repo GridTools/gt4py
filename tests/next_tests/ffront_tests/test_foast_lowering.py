@@ -18,29 +18,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from gt4py.next.common import DimensionKind, Field
+from gt4py.next.common import Field, HorizontalDimension, LocalDimension
 from gt4py.next.ffront import itir_makers as im, type_specifications as ts_ffront
-from gt4py.next.ffront.fbuiltins import (
-    Dimension,
-    FieldOffset,
-    float32,
-    float64,
-    int32,
-    int64,
-    neighbor_sum,
-)
+from gt4py.next.ffront.fbuiltins import FieldOffset, float32, float64, int32, int64, neighbor_sum
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-IDim = Dimension("IDim")
-Edge = Dimension("Edge")
-Vertex = Dimension("Vertex")
-Cell = Dimension("Cell")
-V2EDim = Dimension("V2E", DimensionKind.LOCAL)
+IDim = HorizontalDimension("IDim")
+Edge = HorizontalDimension("Edge")
+Vertex = HorizontalDimension("Vertex")
+Cell = HorizontalDimension("Cell")
+V2EDim = LocalDimension("V2E", min_length=0, max_length=0)
 V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = HorizontalDimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def debug_itir(tree):
@@ -518,15 +510,17 @@ def test_reduction_lowering_expr():
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> tuple[
-        int,
-        int,
-        int32,
-        int64,
-        int,
-        int32,
-        int64,
-    ]:
+    def int_constrs() -> (
+        tuple[
+            int,
+            int,
+            int32,
+            int64,
+            int,
+            int32,
+            int64,
+        ]
+    ):
         return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -546,15 +540,17 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> tuple[
-        float,
-        float,
-        float32,
-        float64,
-        float,
-        float32,
-        float64,
-    ]:
+    def float_constrs() -> (
+        tuple[
+            float,
+            float,
+            float32,
+            float64,
+            float,
+            float32,
+            float64,
+        ]
+    ):
         return (
             0.1,
             float(0.1),

@@ -158,7 +158,7 @@ def _collect_offset_definitions(
                 )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
-                if not dim.kind == common.DimensionKind.VERTICAL:
+                if not isinstance(dim, common.VerticalDimension):
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
@@ -175,7 +175,7 @@ def _collect_offset_definitions(
                 connectivity.origin_axis,
                 connectivity.neighbor_axis,
             ]:
-                if not dim.kind == common.DimensionKind.HORIZONTAL:
+                if not isinstance(dim, common.HorizontalDimension):
                     raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
                     name=Sym(id=dim.value), alias=_horizontal_dimension
