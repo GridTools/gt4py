@@ -353,10 +353,10 @@ def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     exec(
         textwrap.dedent(
             f"""
-    @fundef
-    def sten_cast(value):
-        return cast_(deref(value), {dtype})
-    """
+            @fundef
+            def sten_cast(value):
+                return cast_(deref(value), {dtype})
+            """
         ).strip(),
         globals(),
         locals,
