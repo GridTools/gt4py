@@ -157,9 +157,8 @@ class ValTuple(Type):
                 )
                 for dtype, defined_loc in zip(dtypes, defined_locs)
             ]
-            for dtype, defined_loc in zip(dtypes, defined_locs):
-                add_constraint(self.dtypes, dtype)
-                add_constraint(self.defined_locs, defined_loc)
+            add_constraint(self.dtypes, Tuple.from_elems(*dtypes))
+            add_constraint(self.defined_locs, Tuple.from_elems(*defined_locs))
             add_constraint(Tuple.from_elems(*expanded), other)
             return True
         if isinstance(other, EmptyTuple):
@@ -347,9 +346,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             Val_T0_T1,
         ),
         ret=FunctionType(
-            args=ValTuple(
-                kind=Value(), dtypes=ValueList(dtype=T2, max_length=T3, has_skip_values=T4), size=T1
-            ),
+            args=ValTuple(kind=Value(), dtypes=T3, size=T1),  # underconstrained
             ret=Val_T0_T1,
         ),
     ),
