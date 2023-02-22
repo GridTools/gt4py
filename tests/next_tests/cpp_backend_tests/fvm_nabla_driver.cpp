@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <fn_select.hpp>
+#include "fn_select_gt4py.hpp"
 #include <test_environment.hpp>
 #include GENERATED_FILE
 
@@ -8,6 +8,10 @@ namespace {
 using namespace gridtools;
 using namespace fn;
 using namespace literals;
+
+using backend_t =
+    fn_backend_t<block_sizes_t<unstructured::dim::horizontal,
+                               unstructured::dim::vertical>::values<32, 8>>;
 
 // copied from gridtools::fn test
 constexpr inline auto pp = [](int vertex, int k) { return (vertex + k) % 19; };
@@ -83,7 +87,7 @@ constexpr inline auto make_expected = [](auto const &mesh) {
 //   TypeParam::verify(expected, actual);
 // }
 
-GT_REGRESSION_TEST(unstructured_nabla, test_environment<>, fn_backend_t) {
+GT_REGRESSION_TEST(unstructured_nabla, test_environment<>, backend_t) {
   using float_t = typename TypeParam::float_t;
 
   auto mesh = TypeParam::fn_unstructured_mesh();
@@ -107,8 +111,9 @@ GT_REGRESSION_TEST(unstructured_nabla, test_environment<>, fn_backend_t) {
   auto vertex_domain = unstructured_domain({mesh.nvertices(), mesh.nlevels()},
                                            {}, v2e_conn, e2v_conn);
 
-  generated::nabla_fencil(e2v_conn, v2e_conn)(fn_backend_t{}, mesh.nvertices(), mesh.nlevels(),
-                               actual, pp_, s_, sign_, vol_);
+  generated::nabla_fencil(e2v_conn, v2e_conn)(backend_t{}, mesh.nvertices(),
+                                              mesh.nlevels(), actual, pp_, s_,
+                                              sign_, vol_);
 
   auto expected = make_expected(mesh);
   TypeParam::verify(expected, actual);
