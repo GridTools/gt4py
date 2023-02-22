@@ -42,13 +42,14 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     ]
 
     connectivity_args = {
-        f"__connectivity_{offset}": table.table
-        for offset, table in neighbor_tables
+        f"__connectivity_{offset}": table.table for offset, table in neighbor_tables
     }
     connectivity_shape_args = {
         str(sym): size
         for offset, _ in neighbor_tables
-        for sym, size in zip(sdfg.arrays[f"__connectivity_{offset}"].shape, offset_provider[offset].table.shape)
+        for sym, size in zip(
+            sdfg.arrays[f"__connectivity_{offset}"].shape, offset_provider[offset].table.shape
+        )
     }
 
     array_params = [
@@ -61,7 +62,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         for sym, size in zip(sdfg.arrays[str(param.id)].shape, np.asarray(arg).shape)
     }
     with dace.config.temporary_config():
-        #dace.config.Config.set("compiler", "build_type", value="Debug")
-        #dace.config.Config.set("compiler", "cpu", "args", value="-O0")
-        #dace.config.Config.set("frontend", "check_args", value=True)
+        # dace.config.Config.set("compiler", "build_type", value="Debug")
+        # dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        # dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**regular_args, **shape_args, **connectivity_args, **connectivity_shape_args)

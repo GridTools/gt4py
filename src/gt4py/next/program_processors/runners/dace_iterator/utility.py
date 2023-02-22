@@ -14,5 +14,3 @@ def type_spec_to_dtype(type_: ts.ScalarType):
     elif type_.kind == ts.ScalarKind.FLOAT64:
         return dace.float64
     raise ValueError(f"scalar type {type_} not supported")
-
-
