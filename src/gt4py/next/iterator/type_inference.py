@@ -651,7 +651,6 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
 
 def _infer_all(
-    cls,
     node: ir.Node,
     offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
     reindex: bool = True,
@@ -682,7 +681,7 @@ def infer(
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    inferred_types = _TypeInferrer.apply(expr, offset_provider)
+    inferred_types = _infer_all(expr, offset_provider)
     return inferred_types[id(expr)]
 
 
