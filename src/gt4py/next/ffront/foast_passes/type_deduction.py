@@ -69,7 +69,7 @@ def construct_tuple_type(
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
     >>> false_branch_types = [ts.FieldType(dims=[HorizontalDimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
     >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
-    [FieldType(dims=[HorizontalDimension('I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[HorizontalDimension('I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
+    [FieldType(dims=[HorizontalDimension(value='I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[HorizontalDimension(value='I')], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
     element_types_new = true_branch_types
     for i, element in enumerate(true_branch_types):
@@ -101,11 +101,11 @@ def promote_to_mask_type(
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.ScalarType(kind=dtype))
-    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
+    FieldType(dims=[HorizontalDimension(value='I'), HorizontalDimension(value='J')], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype))
-    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[HorizontalDimension(value='I'), HorizontalDimension(value='J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
-    FieldType(dims=[HorizontalDimension('I'), HorizontalDimension('J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
+    FieldType(dims=[HorizontalDimension(value='I'), HorizontalDimension(value='J')], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
     if isinstance(input_type, ts.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims

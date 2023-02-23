@@ -260,7 +260,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
     >>> I = HorizontalDimension("I")
     >>> J = HorizontalDimension("J")
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-    [HorizontalDimension('I'), HorizontalDimension('J')]
+    [HorizontalDimension(value='I'), HorizontalDimension(value='J')]
     """
     match symbol_type:
         case ts.ScalarType():
