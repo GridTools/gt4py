@@ -6,6 +6,76 @@ Any test job that runs on CI is encoded in automation tools like tox and pre-com
 
 The following workflows are currently active:
 
+```mermaid
+%%{ init: { 'flowchart': { 'curve': 'basis' } } }%%
+flowchart LR
+    always[always] --> qua[Code Quality]
+
+    src_eve[eve sources changed] --> eve["Test Eve"]
+    src_eve --> car["Test Cartesian (CPU)"]
+    src_eve --> nxt["Test Next (CPU)"]
+
+    src_car[cartesian sources changed] --> car["Test Cartesian (CPU)"]
+
+    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
+
+    src_sto[storage sources changed] --> sto
+    src_sto --> car 
+    src_sto --> nxt
+
+    src_nxt[next sources changed] --> nxt
+
+    cfg_wfl[workflows changed] --> car 
+    cfg_wfl --> eve
+    cfg_wfl --> nxt
+    cfg_wfl --> sto
+
+    other["other files changed, excluding examples (the examples folder) and docs (.md and .rst files)"] --> car
+    other --> nxt
+
+    pkg_cfg[package config files changed] --> eve
+    pkg_cfg --> sto
+
+    style always fill:White,stroke:black;
+    style src_eve fill:Plum,stroke:MediumOrchid;
+    style src_car fill:Gold,stroke:Brown;
+    style src_cab fill:Gold,stroke:Brown;
+    style src_sto fill:Aquamarine,stroke:DarkCyan;
+    style src_nxt fill:APPLICATION,stroke:CornFlowerBlue;
+    style cfg_wfl fill:Coral,stroke:Tomato;
+    style other fill:PaleGreen,stroke:ForestGreen;
+    style pkg_cfg fill:PaleGreen,stroke:ForestGreen;
+
+    style qua fill:White,stroke:black;
+    style eve fill:Plum,stroke:MediumOrchid;
+    style car fill:Gold,stroke:Brown;
+    style sto fill:Aquamarine,stroke:DarkCyan;
+    style nxt fill:APPLICATION,stroke:CornFlowerBlue;
+    
+    linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 3 stroke:MediumOrchid,stroke-width:2px;
+
+    linkStyle 4 stroke:Brown,stroke-width:2px;
+    linkStyle 5 stroke:Brown,stroke-width:2px;
+
+    linkStyle 6 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 7 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 8 stroke:DarkCyan,stroke-width:2px;
+
+    linkStyle 9 stroke:CornFlowerBlue,stroke-width:2px;
+
+    linkStyle 10 stroke:Tomato,stroke-width:2px;
+    linkStyle 11 stroke:Tomato,stroke-width:2px;
+    linkStyle 12 stroke:Tomato,stroke-width:2px;
+    linkStyle 13 stroke:Tomato,stroke-width:2px;
+
+    linkStyle 14 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 15 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 16 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 17 stroke:ForestGreen,stroke-width:2px;
+```
+
 <!--
 @startuml workflows
 
