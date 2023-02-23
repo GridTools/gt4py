@@ -7,7 +7,6 @@ Any test job that runs on CI is encoded in automation tools like tox and pre-com
 The following workflows are currently active:
 
 ```mermaid
-%%{ init: { 'flowchart': { 'curve': 'basis' } } }%%
 flowchart LR
     always[always] --> qua[Code Quality]
 
