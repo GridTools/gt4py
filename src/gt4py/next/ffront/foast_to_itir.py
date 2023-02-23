@@ -40,6 +40,13 @@ def is_local_kind(symbol_type: ts.FieldType) -> bool:
     return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
+def is_local_type_kind(type_):
+    return any(
+        isinstance(t, ts.FieldType) and is_local_kind(t)
+        for t in type_info.primitive_constituents(type_)
+    )
+
+
 def iterator_type_kind(
     symbol_type: ts.TypeSpec,
 ) -> ITIRTypeKind:
@@ -71,6 +78,18 @@ def iterator_type_kind(
 def to_iterator(node: foast.Symbol | foast.Expr):
     if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
         return lambda x: im.lift_(im.lambda__()(x))()
+    return lambda x: x
+
+
+def to_value(node: foast.Symbol | foast.Expr):
+    if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
+        return lambda x: im.deref_(x)
+    return lambda x: x
+
+
+def promote_to_list(node: foast.Symbol | foast.Expr):
+    if not is_local_type_kind(node.type):
+        return lambda x: im.make_const_list_(x)
     return lambda x: x
 
 
@@ -188,14 +207,14 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
         if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
-            return im.map_(
+            return im.as_lifted_lambda(
                 lambda tuple_: im.tuple_get_(node.index, tuple_), self.visit(node.value, **kwargs)
             )
         return im.tuple_get_(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.FunCall:
         if iterator_type_kind(node.type) is ITIRTypeKind.ITERATOR:
-            return im.map_(
+            return im.as_lifted_lambda(
                 lambda *elts: im.make_tuple_(*elts),
                 *[to_iterator(el)(self.visit(el, **kwargs)) for el in node.elts],
             )
@@ -358,16 +377,18 @@ class FieldOperatorLowering(NodeTranslator):
         if isinstance(op, (str, itir.SymRef)):
             op = im.call_(op)
 
-        def is_local_type_kind(type_):
-            return any(
-                isinstance(t, ts.FieldType) and is_local_kind(t)
-                for t in type_info.primitive_constituents(type_)
-            )
-
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(iterator_type_kind(arg.type) is ITIRTypeKind.ITERATOR for arg in args):
-            lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            return im.map_(op, *lowered_args)
+            if any(is_local_type_kind(arg.type) for arg in args):
+                lowered_args = [to_value(arg)(larg) for arg, larg in zip(args, lowered_args)]
+                lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+                res = im.as_lifted_lambda_from_values(
+                    im.map__(op.fun), *lowered_args
+                )  # TODO dont' call op above
+                return res
+            else:
+                lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
+                return im.as_lifted_lambda(op, *lowered_args)
         elif all(iterator_type_kind(arg.type) is ITIRTypeKind.VALUE for arg in args):
             return op(*lowered_args)
         raise AssertionError()
