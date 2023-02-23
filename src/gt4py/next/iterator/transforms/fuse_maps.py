@@ -68,6 +68,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     # TODO think about clashes
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
+        node = self.generic_visit(node)
         if _is_map(node):
             if any(_is_map(arg) for arg in node.args):
                 assert isinstance(node.fun, ir.FunCall)
