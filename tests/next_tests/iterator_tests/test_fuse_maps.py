@@ -97,11 +97,10 @@ def test_simple_reduce():
     testee = _reduce(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="init"),
-        ir.SymRef(id="a"),
         _map(
             _wrap_in_lambda(ir.SymRef(id="multiplies"), "z", "w"),
+            ir.SymRef(id="a"),
             ir.SymRef(id="b"),
-            ir.SymRef(id="c"),
         ),
     )
 
@@ -121,7 +120,6 @@ def test_simple_reduce():
         ir.SymRef(id="init"),
         ir.SymRef(id="a"),
         ir.SymRef(id="b"),
-        ir.SymRef(id="c"),
     )
 
     actual = FuseMaps().visit(testee)

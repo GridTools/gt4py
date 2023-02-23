@@ -79,12 +79,13 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node = self.generic_visit(node)
         if _is_map(node) or _is_reduce(node):
             if any(_is_map(arg) for arg in node.args):
+                first_param = 1 if _is_reduce(node) else 0
                 assert isinstance(node.fun, ir.FunCall)
                 assert isinstance(node.fun.args[0], (ir.Lambda, ir.SymRef))
                 outer_op = self._as_lambda(node.fun.args[0], len(node.args))
                 # inner_op =
-                inlined_args = []
-                new_params = []
+                inlined_args = [] if _is_map(node) else [ir.SymRef(id=outer_op.params[0].id)]
+                new_params = [] if _is_map(node) else [outer_op.params[0]]
                 new_args = []
                 for i in range(len(node.args)):
                     if _is_map(node.args[i]):
@@ -104,8 +105,8 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         new_params.extend(inner_op.params)
                         new_args.extend(map_call.args)
                     else:
-                        inlined_args.append(ir.SymRef(id=outer_op.params[i].id))
-                        new_params.append(outer_op.params[i])
+                        inlined_args.append(ir.SymRef(id=outer_op.params[i + first_param].id))
+                        new_params.append(outer_op.params[i + first_param])
                         new_args.append(node.args[i])
 
                 new_body = inline_lambda(
