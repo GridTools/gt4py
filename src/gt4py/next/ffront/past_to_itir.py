@@ -44,39 +44,39 @@ def _flatten_tuple_expr(
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
-        Lower Program AST (PAST) to Iterator IR (ITIR).
+    Lower Program AST (PAST) to Iterator IR (ITIR).
 
-        Examples
-        --------
-        >>> from gt4py.next.ffront.func_to_past import ProgramParser
-        >>> from gt4py.next.iterator.runtime import offset
-        >>> from gt4py.next.iterator import ir
-        >>> from gt4py.next.common import HorizontalDimension
-    from gt4py.next.ffront.fbuiltins import  Field
-        >>>
-        >>> float64 = float
-        >>> IDim = HorizontalDimension("IDim")
-        >>> Ioff = offset("Ioff")
-        >>>
-        >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
-        ...    ...
-        >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
-        ...    fieldop(inp, out=out)
-        >>>
-        >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
-        >>> fieldop_def = ir.FunctionDefinition(
-        ...     id="fieldop",
-        ...     params=[ir.Sym(id="inp")],
-        ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
-        ... )  # doctest: +SKIP
-        >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
-        ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
-        >>> type(lowered)  # doctest: +SKIP
-        <class 'gt4py.next.iterator.ir.FencilDefinition'>
-        >>> lowered.id  # doctest: +SKIP
-        SymbolName('program')
-        >>> lowered.params  # doctest: +SKIP
-        [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
+    Examples
+    --------
+    >>> from gt4py.next.ffront.func_to_past import ProgramParser
+    >>> from gt4py.next.iterator.runtime import offset
+    >>> from gt4py.next.iterator import ir
+    >>> from gt4py.next.common import HorizontalDimension
+    >>> from gt4py.next.ffront.fbuiltins import Field
+    >>>
+    >>> float64 = float
+    >>> IDim = HorizontalDimension("IDim")
+    >>> Ioff = offset("Ioff")
+    >>>
+    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+    ...    ...
+    >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
+    ...    fieldop(inp, out=out)
+    >>>
+    >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
+    >>> fieldop_def = ir.FunctionDefinition(
+    ...     id="fieldop",
+    ...     params=[ir.Sym(id="inp")],
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
+    ... )  # doctest: +SKIP
+    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
+    ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
+    >>> type(lowered)  # doctest: +SKIP
+    <class 'gt4py.next.iterator.ir.FencilDefinition'>
+    >>> lowered.id  # doctest: +SKIP
+    SymbolName('program')
+    >>> lowered.params  # doctest: +SKIP
+    [Sym(id=SymbolName('inp')), Sym(id=SymbolName('out')), Sym(id=SymbolName('__inp_size_0')), Sym(id=SymbolName('__out_size_0'))]
     """
 
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
