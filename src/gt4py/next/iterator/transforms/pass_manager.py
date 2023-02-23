@@ -19,6 +19,7 @@ from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
+from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
@@ -97,6 +98,7 @@ def apply_common_transforms(
 
     ir = NormalizeShifts().visit(ir)
 
+    ir = FuseMaps().visit(ir)
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
