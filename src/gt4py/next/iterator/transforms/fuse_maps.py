@@ -82,7 +82,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 first_param = 1 if _is_reduce(node) else 0
                 assert isinstance(node.fun, ir.FunCall)
                 assert isinstance(node.fun.args[0], (ir.Lambda, ir.SymRef))
-                outer_op = self._as_lambda(node.fun.args[0], len(node.args))
+                outer_op = self._as_lambda(node.fun.args[0], len(node.args) + first_param)
                 # inner_op =
                 inlined_args = [] if _is_map(node) else [ir.SymRef(id=outer_op.params[0].id)]
                 new_params = [] if _is_map(node) else [outer_op.params[0]]
