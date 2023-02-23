@@ -1109,6 +1109,14 @@ class _List(tuple, Generic[DT]):  # TODO encode size in type?
     ...
 
 
+@dataclasses.dataclass(frozen=True)
+class _ConstList(Generic[DT]):
+    value: DT
+
+    def __getitem__(self, _):
+        return self.value
+
+
 @builtins.neighbors.register(EMBEDDED)
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     # TODO offset provider should be part of the iterator interface?
@@ -1132,6 +1140,11 @@ def map_(op):
         return _List(map(lambda x: op(*x), zip(*lists)))
 
     return impl_
+
+
+@builtins.make_const_list.register(EMBEDDED)
+def make_const_list(value):
+    return _ConstList(value)
 
 
 @builtins.make_list.register(EMBEDDED)

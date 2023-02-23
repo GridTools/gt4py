@@ -34,6 +34,7 @@ from gt4py.next.iterator.builtins import (
     deref,
     lift,
     list_get,
+    make_const_list,
     make_list,
     map_,
     multiplies,
@@ -130,19 +131,23 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
 
 @fundef
 def map_make_list(in_edges):
-    # TODO what's the semantic if there are skip_values
-    # alternative: make_list(V2E, 2.0) but we don't know the current position
     return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_list(2, 2, 2, 2)))
 
 
-def test_map_make_list(program_processor_no_gtfn_exec, lift_mode):
+@fundef
+def map_make_const_list(in_edges):
+    return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
+
+
+@pytest.mark.parametrize("stencil", [map_make_list, map_make_const_list])
+def test_map_make_list(program_processor_no_gtfn_exec, lift_mode, stencil):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
 
     run_processor(
-        map_make_list[{Vertex: range(0, 9)}],
+        stencil[{Vertex: range(0, 9)}],
         program_processor,
         inp,
         out=out,

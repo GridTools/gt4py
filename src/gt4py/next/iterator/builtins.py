@@ -54,6 +54,11 @@ def make_list(*args):
 
 
 @builtin_dispatch
+def make_const_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def list_get(*args):
     raise BackendNotSelectedError()
 
@@ -403,6 +408,7 @@ BUILTINS = {
     "neighbors",
     "list_get",
     "make_list",
+    "make_const_list",
     "map_",
     "lift",
     "reduce",

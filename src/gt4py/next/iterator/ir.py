@@ -151,6 +151,7 @@ BUILTINS = {
     "list_get",
     "map_",
     "make_list",
+    "make_const_list",
     "lift",
     "make_tuple",
     "tuple_get",

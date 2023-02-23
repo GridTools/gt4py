@@ -324,17 +324,15 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "map_": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
-                args=ValTuple(kind=Value(), dtypes=T0, size=T1),
+                args=ValTuple(kind=Value(), dtypes=T2, size=T1),
                 ret=Val_T0_T1,
             ),
         ),
         ret=FunctionType(
-            args=ValTuple(
-                kind=Value(), dtypes=ValueList(dtype=T0, max_length=T3, has_skip_values=T4), size=T1
-            ),
+            args=ValTuple(kind=Value(), dtypes=T3, size=T1),
             ret=Val(
-                kind=Value(), dtype=ValueList(dtype=T0, max_length=T3, has_skip_values=T4), size=T1
-            ),
+                kind=Value(), dtype=ValueList(dtype=T0, max_length=T4, has_skip_values=T5), size=T1
+            ),  # underconstrained
         ),
     ),
     "reduce": FunctionType(
@@ -348,6 +346,12 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=FunctionType(
             args=ValTuple(kind=Value(), dtypes=T3, size=T1),  # underconstrained
             ret=Val_T0_T1,
+        ),
+    ),
+    "make_const_list": FunctionType(
+        args=Tuple.from_elems(Val_T0_T1),
+        ret=Val(
+            kind=Value(), dtype=ValueList(dtype=T0, max_length=T2, has_skip_values=T3), size=T1
         ),
     ),
     "scan": FunctionType(
