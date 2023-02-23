@@ -8,9 +8,13 @@ Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-te
 
 The configuration can be viewed and changed on the [setup page](https://cicd-ext-mw.cscs.ch/ci/setup_ci) after logging in with the credentials for "cscs-ci setup for gt4py", which can be found on the internal CSCS credentials store in the GT4Py folder.
 
+### Pipeline File
+
+The pipeline config for the default pipeline is at `ci/cscs-ci.yml`. Check the [syntax reference for GitLab CI](https://docs.gitlab.com/ee/ci/yaml/) if you are not familiar.
+
 ### Whitelisted Users
 
-The core GT4Py developers should be whitelisted. This means that pipelines run on their PRs automatically and they can run them on other contributor's pipelines by commenting "cscs-ci run [pipeline name]".
+New core GT4Py developers should be added to the whitelist. This means that pipelines run on their PRs automatically and they can run them on other contributor's pipelines by commenting "cscs-ci run [pipeline name]".
 
 ### Pipeline
 

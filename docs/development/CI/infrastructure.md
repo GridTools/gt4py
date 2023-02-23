@@ -1,5 +1,7 @@
 # CI infrastructure
 
+Any test job that runs on CI is encoded in automation tools like tox and pre-commit and can be run locally instead.
+
 ## Workflows
 
 The following workflows are currently active:
@@ -41,16 +43,16 @@ package config files changed
 ]
 
 agent eve #Plum;line:MediumOrchid;text:black [
-Test / Eve
+Test Eve
 ]
 agent car #Gold;line:DarkGoldenRod;text:black [
-Test / Cartesian (CPU)
+Test Cartesian (CPU)
 ]
 agent nxt #APPLICATION;line:CornFlowerBlue;text:black [
-Test / Next (CPU)
+Test Next (CPU)
 ]
 agent sto #Aquamarine;line:DarkCyan;text:black [
-Test / Storage (CPU)
+Test Storage (CPU)
 ]
 agent qua [
 Code Quality
@@ -126,4 +128,3 @@ The testing workflows already use a matrix strategy to run the automated tests o
 - Reenable code coverage workflows (potentially on CSCS-CI).
 - Split code quality: it might be better to run code quality tools separate for each project in the monorepo.
 - Split documentation: once there is proper HTML documentation generated for the projects, it might make sense to have that run as one job per project.
-- Template for tests: although there is a reusable workflow for the code coverage uploading, it probably make sense to reuse some of the workflow description for the tests as well.
