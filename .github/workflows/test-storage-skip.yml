@@ -1,0 +1,23 @@
+name: "Skipped: Test / Storage (CPU)"
+
+on:
+  pull_request:
+    branches:
+    - main
+    paths-ignore: # inverse of corresponding workflow
+    - "src/gt4py/storage/**"
+    - "src/gt4py/cartesian/backend/**"
+    - "tests/storage_tests/**"
+    - "workflows/**"
+
+jobs:
+  test-storage:
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+        backends: [internal-cpu, dace-cpu]
+        os: ["ubuntu-latest"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - run: 'echo "No build required"'

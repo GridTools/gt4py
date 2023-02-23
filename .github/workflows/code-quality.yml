@@ -9,7 +9,7 @@ on:
     - main
 
 jobs:
-  pre-commit:
+  code-quality:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3

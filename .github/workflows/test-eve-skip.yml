@@ -1,0 +1,21 @@
+name: "Skipped: Test / Eve"
+
+on:
+  pull_request:
+    branches:
+    - main
+    paths-ignore: # inverse of corresponding workflow
+    - "src/gt4py/eve/**"
+    - "tests/eve_tests/**"
+    - "workflows/**"
+
+jobs:
+  test-eve:
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+        os: ["ubuntu-latest"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - run: 'echo "No build required"'
