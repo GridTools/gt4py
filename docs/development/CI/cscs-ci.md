@@ -2,11 +2,11 @@
 
 ## Initial Setup
 
-Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc). You will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
+Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc). As mentioned in the documentation, you will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
 
 ## Current Configuration
 
-The configuration can be viewed and changed on the [setup page](https://cicd-ext-mw.cscs.ch/ci/setup_ci) after logging in with the credentials for "cscs-ci setup for gt4py", which can be found on the internal credentials store in the GT4Py folder.
+The configuration can be viewed and changed on the [setup page](https://cicd-ext-mw.cscs.ch/ci/setup_ci) after logging in with the credentials for "cscs-ci setup for gt4py", which can be found on the internal CSCS credentials store in the GT4Py folder.
 
 ### Whitelisted Users
 
@@ -18,7 +18,7 @@ There can be more than one pipeline, each with it's own entry point yaml file. B
 
 ### Regenerating Notification Token
 
-Use the `gridtoolsjenkins` github user (credentials in the internal credentials store) to follow the steps outlined on the setup page (see above). You may be able to regenerate the existing token instead of creating a new one.
+Use the `gridtoolsjenkins` github user (credentials in the internal CSCS credentials store) to follow the steps outlined on the setup page (see above). You may be able to regenerate the existing token instead of creating a new one.
 
 ### Changing Existing Pipeline Entry Point
 
