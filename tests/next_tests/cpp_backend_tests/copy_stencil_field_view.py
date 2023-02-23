@@ -16,9 +16,8 @@ import sys
 
 from numpy import float64
 
-from gt4py.next.common import Field
+from gt4py.next.common import Field, HorizontalDimension
 from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.iterator.runtime import HorizontalDimension
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
 

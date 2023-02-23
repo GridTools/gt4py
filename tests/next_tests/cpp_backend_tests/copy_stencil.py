@@ -14,8 +14,9 @@
 
 import sys
 
+from gt4py.next.common import HorizontalDimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import HorizontalDimension, closure, fundef
+from gt4py.next.iterator.runtime import closure, fundef
 from gt4py.next.iterator.tracing import trace
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 

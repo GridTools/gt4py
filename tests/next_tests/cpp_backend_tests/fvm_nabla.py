@@ -16,9 +16,9 @@ import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from gt4py.next.common import HorizontalDimension, VerticalDimension
+from gt4py.next.common import Dimension, HorizontalDimension, VerticalDimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import HorizontalDimension, closure, fundef, offset
+from gt4py.next.iterator.runtime import closure, fundef, offset
 from gt4py.next.iterator.tracing import trace
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 

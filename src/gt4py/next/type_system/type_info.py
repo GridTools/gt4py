@@ -331,7 +331,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
     :func:`promote_dims` for more details).
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> I, J, K = (HorizontalDimension(value=dim) for dim in ["I", "J", "K"])
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype),
     ...     ts.FieldType(dims=[I, J, K], dtype=dtype),
@@ -374,7 +374,7 @@ def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
     `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
     is used to topologically sort the arguments.
 
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> I, J, K = (HorizontalDimension(value=dim) for dim in ["I", "J", "K"])
     >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
     True
     >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
