@@ -123,7 +123,9 @@ test py310:
       VARIANT: [-nomesh, -atlas]
 
 combined coverage:
-  image: python:latest
+  image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
+  variables:
+    <<: *py310
   stage: coverage
   script:
   - pip install --upgrade pip coverage
