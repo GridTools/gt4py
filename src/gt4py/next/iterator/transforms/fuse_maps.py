@@ -69,35 +69,45 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     # TODO think about clashes
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         if _is_map(node):
-            if _is_map(node.args[1]):  # TODO inline only the second arg
+            if any(_is_map(arg) for arg in node.args):
                 assert isinstance(node.fun, ir.FunCall)
                 outer_op = self._as_lambda(node.fun.args[0], len(node.args))
                 assert isinstance(node.args[1].fun, ir.FunCall)
-                inner_op = self._as_lambda(node.args[1].fun.args[0], len(node.args[1].args))
-                new_body = inline_lambda(
-                    ir.FunCall(
-                        fun=outer_op,
-                        args=[
-                            ir.SymRef(id=outer_op.params[0].id),
+                # inner_op =
+                inlined_args = []
+                new_params = []
+                new_args = []
+                for i in range(len(node.args)):
+                    if _is_map(node.args[i]):
+                        inner_op = self._as_lambda(node.args[i].fun.args[0], len(node.args[i].args))
+                        inlined_args.append(
                             inline_lambda(
                                 ir.FunCall(
                                     fun=inner_op,
                                     args=[*(ir.SymRef(id=param.id) for param in inner_op.params)],
                                 )
-                            ),
-                        ],
+                            )
+                        )
+                        new_params.extend(inner_op.params)
+                        new_args.extend(node.args[i].args)
+                    else:
+                        inlined_args.append(ir.SymRef(id=outer_op.params[i].id))
+                        new_params.append(outer_op.params[i])
+                        new_args.append(node.args[i])
+
+                new_body = inline_lambda(
+                    ir.FunCall(
+                        fun=outer_op,
+                        args=inlined_args,
                     )
                 )
                 new_op = ir.Lambda(
-                    params=[
-                        outer_op.params[0],
-                        *inner_op.params,
-                    ],  # TODO remaining params from outer_op
+                    params=new_params,
                     expr=new_body,
                 )
                 result = ir.FunCall(
                     fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
-                    args=[node.args[0], *node.args[1].args],
+                    args=new_args,
                 )
                 return result
         return self.generic_visit(node)

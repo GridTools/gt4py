@@ -89,38 +89,42 @@ def test_simple_with_lambdas():
     assert expected == actual
 
 
-# def test_multiple_maps():
-#     testee = _map(
-#         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
-#         _map(
-#             _wrap_in_lambda(ir.SymRef(id="multiplies"), "z", "w"),
-#             ir.SymRef(id="a"),
-#             ir.SymRef(id="b"),
-#         ),
-#         _map(
-#             _wrap_in_lambda(ir.SymRef(id="multiplies"), "ww", "www"),
-#             ir.SymRef(id="c"),
-#             ir.SymRef(id="d"),
-#         ),
-#     )
+def test_multiple_maps():
+    testee = _map(
+        _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
+        _map(
+            _wrap_in_lambda(ir.SymRef(id="multiplies"), "z", "w"),
+            ir.SymRef(id="a"),
+            ir.SymRef(id="b"),
+        ),
+        _map(
+            _wrap_in_lambda(ir.SymRef(id="multiplies"), "ww", "www"),
+            ir.SymRef(id="c"),
+            ir.SymRef(id="d"),
+        ),
+    )
 
-#     expected = _map(
-#         ir.Lambda(
-#             params=[ir.Sym(id="x"), ir.Sym(id="z"), ir.Sym(id="w")],
-#             expr=ir.FunCall(
-#                 fun=ir.SymRef(id="plus"),
-#                 args=[
-#                     ir.SymRef(id="x"),
-#                     ir.FunCall(
-#                         fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="z"), ir.SymRef(id="w")]
-#                     ),
-#                 ],
-#             ),
-#         ),
-#         ir.SymRef(id="a"),
-#         ir.SymRef(id="b"),
-#         ir.SymRef(id="c"),
-#     )
+    expected = _map(
+        ir.Lambda(
+            params=[ir.Sym(id="z"), ir.Sym(id="w"), ir.Sym(id="ww"), ir.Sym(id="www")],
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="plus"),
+                args=[
+                    ir.FunCall(
+                        fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="z"), ir.SymRef(id="w")]
+                    ),
+                    ir.FunCall(
+                        fun=ir.SymRef(id="multiplies"),
+                        args=[ir.SymRef(id="ww"), ir.SymRef(id="www")],
+                    ),
+                ],
+            ),
+        ),
+        ir.SymRef(id="a"),
+        ir.SymRef(id="b"),
+        ir.SymRef(id="c"),
+        ir.SymRef(id="d"),
+    )
 
-#     actual = FuseMaps().visit(testee)
-#     assert expected == actual
+    actual = FuseMaps().visit(testee)
+    assert expected == actual
