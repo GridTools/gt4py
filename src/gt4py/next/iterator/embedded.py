@@ -1156,13 +1156,17 @@ def make_list(*args):
 def reduce(fun, init):
     def sten(*lists):
         # TODO: assert check_that_all_iterators_are_compatible(*iters)
-        first_list = lists[0]
-        n = len(first_list)
+        lst = None
+        for cur in lists:
+            if isinstance(cur, _List):
+                lst = cur
+                break
+        n = len(lst)
         res = init
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if first_list[i] is None:
+            if lst[i] is None:
                 break
             res = fun(
                 res,
