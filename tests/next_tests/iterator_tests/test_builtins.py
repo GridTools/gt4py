@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
-import textwrap
 from typing import Callable, Iterable
 
 import numpy as np
@@ -334,10 +333,10 @@ def test_can_deref(program_processor, stencil):
 @pytest.mark.parametrize(
     "input_value, dtype, expected_value",
     [
-        (float64("0.1"), "float32", float64(float32("0.1"))),
-        (int64(42), "bool", int64(1)),
-        (int64(2147483648), "int32", int64(-2147483648)),
-        (int64(2147483648), "int64", int64(2147483648)),  # int64 does not accidentally down-cast
+        (float64("0.1"), float32, float64(float32("0.1"))),
+        (int64(42), bool, int64(1)),
+        (int64(2147483648), int32, int64(-2147483648)),
+        (int64(2147483648), int64, int64(2147483648)),  # int64 does not accidentally down-cast
     ],
 )
 @pytest.mark.parametrize("as_column", [False, True])
@@ -348,20 +347,9 @@ def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     inp = asfield(*asarray(input_value))[0]
     out = asfield((np.zeros_like(*asarray(expected_value))))[0]
 
-    # Note: We need to exec the stencil here since the dtype must be a type literal.
-    locals = {}
-    exec(
-        textwrap.dedent(
-            f"""
-            @fundef
-            def sten_cast(value):
-                return cast_(deref(value), {dtype})
-            """
-        ).strip(),
-        globals(),
-        locals,
-    )
-    sten_cast = locals["sten_cast"]
+    @fundef
+    def sten_cast(value):
+        return cast_(deref(value), dtype)
 
     run_processor(
         sten_cast[{IDim: range(1)}],
