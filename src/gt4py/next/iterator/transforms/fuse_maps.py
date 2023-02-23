@@ -79,14 +79,21 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node = self.generic_visit(node)
         if _is_map(node) or _is_reduce(node):
             if any(_is_map(arg) for arg in node.args):
-                first_param = 1 if _is_reduce(node) else 0
+                first_param = (
+                    0 if _is_map(node) else 1
+                )  # index of the first param of op that maps to args (0 for map, 1 for reduce)
                 assert isinstance(node.fun, ir.FunCall)
                 assert isinstance(node.fun.args[0], (ir.Lambda, ir.SymRef))
                 outer_op = self._as_lambda(node.fun.args[0], len(node.args) + first_param)
-                # inner_op =
-                inlined_args = [] if _is_map(node) else [ir.SymRef(id=outer_op.params[0].id)]
-                new_params = [] if _is_map(node) else [outer_op.params[0]]
+
+                inlined_args = []
+                new_params = []
                 new_args = []
+                if _is_reduce(node):
+                    # param corresponding to reduce acc
+                    inlined_args.append(ir.SymRef(id=outer_op.params[0].id))
+                    new_params.append(outer_op.params[0])
+
                 for i in range(len(node.args)):
                     if _is_map(node.args[i]):
                         map_call = node.args[i]
@@ -130,4 +137,4 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=new_args,
                     )
                 raise AssertionError("unreachable")
-        return self.generic_visit(node)
+        return node
