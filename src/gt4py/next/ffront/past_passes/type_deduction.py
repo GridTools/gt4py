@@ -46,20 +46,12 @@ def _is_integral_scalar(expr: past.Expr) -> bool:
 
 
 def _apply_builtin_action(new_func: past.Name, new_args: list):
-    if type_info.is_integral(new_args[0].type) and type_info.is_integral(new_args[1].type):
-        if new_func.id == "minimum":
-            computed_arg = new_args[0] if new_args[0].value <= new_args[1].value else new_args[1]
-        elif new_func.id == "maximum":
-            computed_arg = new_args[0] if new_args[0].value >= new_args[1].value else new_args[1]
-        else:
-            raise GTTypeError(
-                f"Only `minimum` and `maximum` builtins allowed, but got {new_func.id}"
-            )
+    if new_func.id == "minimum":
+        computed_arg = new_args[0] if new_args[0].value <= new_args[1].value else new_args[1]
+    elif new_func.id == "maximum":
+        computed_arg = new_args[0] if new_args[0].value >= new_args[1].value else new_args[1]
     else:
-        raise GTTypeError(
-            f"Only integer values allowed for `minimum` and `maximum` builtins, "
-            f"but got {new_args[0].type} and {new_args[1].type}"
-        )
+        raise GTTypeError(f"Only `minimum` and `maximum` builtins allowed, but got {new_func.id}")
     return past.Constant(
         value=computed_arg.value, type=computed_arg.type, location=computed_arg.location
     )

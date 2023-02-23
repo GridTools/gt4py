@@ -21,7 +21,7 @@ from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.common import Field, GTTypeError
 from gt4py.next.ffront import program_ast as past, type_specifications as ts
 from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import float64
+from gt4py.next.ffront.fbuiltins import float64, sqrt
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.type_system import type_specifications as ts
@@ -267,3 +267,20 @@ def test_domain_exception_6(identity_def):
     assert exc_info.match("Invalid call to `domain_format_6`")
 
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
+
+
+def test_domain_with_builtin(identity_def):
+    identity = field_operator(identity_def)
+
+    def domain_with_builtin_p(in_field: Field[[IDim], "float64"]):
+        identity(in_field, out=in_field, domain={IDim: (2, sqrt(9))})
+
+    with pytest.raises(
+        GTTypeError,
+    ) as exc_info:
+        ProgramParser.apply_to_function(domain_with_builtin_p)
+
+    assert (
+        re.search("Only `minimum` and `maximum` builtins allowed", exc_info.value.__cause__.args[0])
+        is not None
+    )
