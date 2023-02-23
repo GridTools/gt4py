@@ -485,30 +485,23 @@ class _TypeInferrer(eve.NodeTranslator):
                 if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
                     raise TypeError("The second argument to `cast_` must be a type literal.")
 
-                kind = TypeVar.fresh()
                 size = TypeVar.fresh()
-                current_loc = TypeVar.fresh()
-                defined_loc = TypeVar.fresh()
 
                 constraints.add(
                     (
                         val_arg_type,
                         Val(
-                            kind=kind,
+                            kind=Value(),
                             dtype=TypeVar.fresh(),
                             size=size,
-                            current_loc=current_loc,
-                            defined_loc=defined_loc,
                         ),
                     )
                 )
 
                 return Val(
-                    kind=kind,
+                    kind=Value(),
                     dtype=Primitive(name=type_arg.id),
                     size=size,
-                    current_loc=current_loc,
-                    defined_loc=defined_loc,
                 )
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not

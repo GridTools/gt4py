@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
-import textwrap
 from typing import Callable, Iterable
 
 import numpy as np
