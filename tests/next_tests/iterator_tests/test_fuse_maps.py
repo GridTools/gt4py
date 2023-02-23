@@ -20,6 +20,10 @@ def _map(op: ir.Expr, *args: ir.Expr) -> ir.FunCall:
     return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[op]), args=[*args])
 
 
+def _reduce(op: ir.Expr, init: ir.Expr, *args: ir.Expr) -> ir.FunCall:
+    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[op, init]), args=[*args])
+
+
 def _wrap_in_lambda(fun: ir.Expr, *params: str) -> ir.Lambda:
     return ir.Lambda(
         params=[ir.Sym(id=p) for p in params],
@@ -80,6 +84,41 @@ def test_simple_with_lambdas():
                 ],
             ),
         ),
+        ir.SymRef(id="a"),
+        ir.SymRef(id="b"),
+        ir.SymRef(id="c"),
+    )
+
+    actual = FuseMaps().visit(testee)
+    assert expected == actual
+
+
+def test_simple_reduce():
+    testee = _reduce(
+        _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
+        ir.SymRef(id="init"),
+        ir.SymRef(id="a"),
+        _map(
+            _wrap_in_lambda(ir.SymRef(id="multiplies"), "z", "w"),
+            ir.SymRef(id="b"),
+            ir.SymRef(id="c"),
+        ),
+    )
+
+    expected = _reduce(
+        ir.Lambda(
+            params=[ir.Sym(id="x"), ir.Sym(id="z"), ir.Sym(id="w")],
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="plus"),
+                args=[
+                    ir.SymRef(id="x"),
+                    ir.FunCall(
+                        fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="z"), ir.SymRef(id="w")]
+                    ),
+                ],
+            ),
+        ),
+        ir.SymRef(id="init"),
         ir.SymRef(id="a"),
         ir.SymRef(id="b"),
         ir.SymRef(id="c"),

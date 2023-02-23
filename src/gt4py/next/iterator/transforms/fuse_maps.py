@@ -29,6 +29,14 @@ def _is_map(node: ir.Node) -> TypeGuard[ir.FunCall]:
     )
 
 
+def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
+    return (
+        isinstance(node, ir.FunCall)
+        and isinstance(node.fun, ir.FunCall)
+        and node.fun.fun == ir.SymRef(id="reduce")
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
@@ -69,7 +77,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     # TODO think about clashes
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
-        if _is_map(node):
+        if _is_map(node) or _is_reduce(node):
             if any(_is_map(arg) for arg in node.args):
                 assert isinstance(node.fun, ir.FunCall)
                 assert isinstance(node.fun.args[0], (ir.Lambda, ir.SymRef))
@@ -110,9 +118,15 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     params=new_params,
                     expr=new_body,
                 )
-                result = ir.FunCall(
-                    fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
-                    args=new_args,
-                )
-                return result
+                if _is_map(node):
+                    return ir.FunCall(
+                        fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
+                        args=new_args,
+                    )
+                elif _is_reduce(node):
+                    return ir.FunCall(
+                        fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
+                        args=new_args,
+                    )
+                raise AssertionError("unreachable")
         return self.generic_visit(node)
