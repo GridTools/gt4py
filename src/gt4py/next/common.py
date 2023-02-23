@@ -55,13 +55,13 @@ class Dimension:
 @dataclass(frozen=True)
 class HorizontalDimension(Dimension):
     def __str__(self):
-        return f"HorizontalDimension({super()})"
+        return f'HorizontalDimension(value="{self.value}")'
 
 
 @dataclass(frozen=True)
 class VerticalDimension(Dimension):
     def __str__(self):
-        return f"VerticalDimension({super()})"
+        return f'VerticalDimension(value="{self.value}")'
 
 
 @dataclass(frozen=True)
@@ -70,9 +70,7 @@ class LocalDimension(Dimension):
     max_length: int
 
     def __str__(self):
-        return (
-            f"LocalDimension({super()}, min_length={self.min_length}, max_length={self.max_length})"
-        )
+        return f'LocalDimension(value="{self.value}", min_length={self.min_length}, max_length={self.max_length})'
 
 
 class DType:

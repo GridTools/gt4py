@@ -362,7 +362,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     for provider in offset_provider.values():
         if isinstance(provider, NeighborTableOffsetProvider):
             assert isinstance(provider.origin_axis, HorizontalDimension)
-            assert isinstance(provider.neighbor_axis.kind, HorizontalDimension)
+            assert isinstance(provider.neighbor_axis, HorizontalDimension)
             sizes[provider.origin_axis.value] = max(
                 sizes.get(provider.origin_axis.value, 0),
                 provider.table.shape[0],  # TODO properly expose the size

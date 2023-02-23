@@ -449,7 +449,7 @@ def test_notting_int():
 def remap_setup():
     X = HorizontalDimension("X")
     Y = HorizontalDimension("Y")
-    Y2XDim = LocalDimension("Y2X")
+    Y2XDim = LocalDimension("Y2X", min_length=0, max_length=0)
     Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 

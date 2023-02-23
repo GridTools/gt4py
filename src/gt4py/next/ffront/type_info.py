@@ -17,7 +17,7 @@ from typing import Iterable, Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next.common import GTTypeError, HorizontalDimension
 from gt4py.next.type_system import type_info
 
 
@@ -121,7 +121,7 @@ def function_signature_incompatibilities_scanop(
                 # argument type differ. As such we can not extract the dimensions
                 # and just return a generic field shown in the error later on.
                 # TODO: we want some generic field type here, but our type system does not support it yet.
-                return ts.FieldType(dims=[Dimension("...")], dtype=dtype)
+                return ts.FieldType(dims=[HorizontalDimension("...")], dtype=dtype)
 
         promoted_args.append(
             type_info.apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
