@@ -18,6 +18,7 @@ from gt4py.eve import NodeTranslator, traits
 from gt4py.next.common import GTTypeError
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    fbuiltins,
     program_ast as past,
     type_specifications as ts_ffront,
 )
@@ -42,6 +43,26 @@ def _ensure_no_sliced_field(entry: past.Expr):
 def _is_integral_scalar(expr: past.Expr) -> bool:
     """Check that expression is an integral scalar."""
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
+
+
+def _apply_builtin_action(new_func: past.Name, new_args: list):
+    if type_info.is_integral(new_args[0].type) and type_info.is_integral(new_args[1].type):
+        if new_func.id == "minimum":
+            computed_arg = new_args[0] if new_args[0].value <= new_args[1].value else new_args[1]
+        elif new_func.id == "maximum":
+            computed_arg = new_args[0] if new_args[0].value >= new_args[1].value else new_args[1]
+        else:
+            raise GTTypeError(
+                f"Only `minimum` and `maximum` builtins allowed, but got {new_func.id}"
+            )
+    else:
+        raise GTTypeError(
+            f"Only integer values allowed for `minimum` and `maximum` builtins, "
+            f"but got {new_args[0].type} and {new_args[1].type}"
+        )
+    return past.Constant(
+        value=computed_arg.value, type=computed_arg.type, location=computed_arg.location
+    )
 
 
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
@@ -189,6 +210,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
+            if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
+                return _apply_builtin_action(new_func, new_args)
             _validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {

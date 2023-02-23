@@ -31,6 +31,7 @@ from gt4py.next.ffront.fbuiltins import (
     int64,
     max_over,
     min_over,
+    minimum,
     neighbor_sum,
     where,
 )
@@ -684,7 +685,7 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: (minimum(1, 2), 9), JDim: (4, 6)})
 
     program_domain(a_IJ_float, offset_provider={})
 
