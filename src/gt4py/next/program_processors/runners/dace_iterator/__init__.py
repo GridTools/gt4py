@@ -1,16 +1,29 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Any
 
+import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next.iterator.embedded import LocatedField
+from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import apply_common_transforms
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 
 from .itir_to_sdfg import ItirToSDFG
-import dace
 
 
 def convert_arg(arg: Any):
@@ -62,7 +75,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         for sym, size in zip(sdfg.arrays[str(param.id)].shape, np.asarray(arg).shape)
     }
     with dace.config.temporary_config():
-        # dace.config.Config.set("compiler", "build_type", value="Debug")
-        # dace.config.Config.set("compiler", "cpu", "args", value="-O0")
-        # dace.config.Config.set("frontend", "check_args", value=True)
+        dace.config.Config.set("compiler", "build_type", value="Debug")
+        dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**regular_args, **shape_args, **connectivity_args, **connectivity_shape_args)

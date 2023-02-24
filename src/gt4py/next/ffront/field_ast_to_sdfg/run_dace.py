@@ -1,8 +1,22 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from typing import Any, Sequence
 
 import dace
-from dace.transformation.dataflow import MapFusion
 import numpy as np
+from dace.transformation.dataflow import MapFusion
 
 from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.field_ast_to_sdfg import past_to_sdfg
@@ -27,8 +41,6 @@ def run_dace(
     sdfg.simplify()
     sdfg.apply_transformations_repeated(MapFusion)
 
-    # sdfg.view()
-
     converted_args = {}
 
     for param, arg in zip(program.params, args):
@@ -39,6 +51,6 @@ def run_dace(
 
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "build_type", value="RelWithDebInfo")
-        # dace.config.Config.set("compiler", "cpu", "args", value="-O0")
+        dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**converted_args)
