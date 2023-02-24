@@ -276,7 +276,7 @@ class ItirToSDFG(eve.NodeVisitor):
             assert isinstance(named_range.fun, itir.SymRef)
             assert len(named_range.args) == 3
             dimension = named_range.args[0]
-            assert isinstance(dimension, Dimension)
+            assert isinstance(dimension, itir.AxisLiteral)
             lower_bound = named_range.args[1]
             upper_bound = named_range.args[2]
             sym_lower_bound = dace.symbolic.pystr_to_symbolic(str(lower_bound))
