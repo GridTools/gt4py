@@ -198,9 +198,9 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     comparisons of the node, since it is not really a field. Thus, visitors
     and pipeline passes can freely attach computed attributes into the instance
     `annex`. Note that `annex` attribute is not implicitly copied in the
-    `NodeTranslator`. If you want it to persist accross multiple `NodeTranslation`
-    use a `root_validator` that dynamically recomputed the annex on node 
-    construction (see e.g. :class:`SymbolTableTrait`).
+    :class:`NodeTranslator`. If you want it to persist accross multiple
+    :class:`NodeTranslation` use a `root_validator` to dynamically (re)compute
+    the annex on node construction (see e.g. :class:`SymbolTableTrait`).
     """
 
     __slots__ = ()
