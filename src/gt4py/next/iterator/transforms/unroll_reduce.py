@@ -136,6 +136,14 @@ def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
     )
 
 
+def _make_deref_shift(expr: itir.Expr, offset) -> itir.Expr:
+    if isinstance(expr, itir.FunCall) and expr.fun == itir.SymRef(id="make_const_list"):
+        return expr.args[0]
+    if isinstance(expr, itir.FunCall) and expr.fun == itir.SymRef(id="deref"):
+        return _make_deref(_make_shift([offset], expr.args[0]))
+    return _make_deref(_make_shift([offset], expr))
+
+
 @dataclasses.dataclass(frozen=True)
 class UnrollReduce(NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
@@ -160,7 +168,7 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        derefed_shifted_args = [_make_deref(_make_shift([offset], arg)) for arg in node.args]
+        derefed_shifted_args = [_make_deref_shift(arg, offset) for arg in node.args]
         step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
@@ -178,6 +186,11 @@ class UnrollReduce(NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
+        if isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="list_get"):
+            assert isinstance(node.args[1], itir.FunCall) and node.args[1].fun == itir.SymRef(
+                id="deref"
+            )
+            return _make_deref(_make_shift([node.args[0]], node.args[1].args[0]))
         if _is_reduce(node):
             return self._visit_reduce(node, **kwargs)
         if _is_neighbors(node):

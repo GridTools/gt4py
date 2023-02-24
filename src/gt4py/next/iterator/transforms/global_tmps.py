@@ -451,6 +451,8 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             return dtype.name
         if isinstance(dtype, type_inference.TypeVar):
             return dtype.idx
+        if isinstance(dtype, type_inference.ValueList):
+            return convert_type(dtype.dtype)
         assert isinstance(dtype, type_inference.Tuple)
         dtypes = []
         while isinstance(dtype, type_inference.Tuple):

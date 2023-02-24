@@ -126,9 +126,13 @@ def _lift(f):
 
 def _reduce(f, init):
     def apply(*args):
-        return _combine(*args).shift((ALL_NEIGHBORS,)).deref()
+        return _combine(*args)
 
     return apply
+
+
+def _neighbors(o, x):
+    return x.shift((o, ALL_NEIGHBORS)).deref()
 
 
 def _scan(f, forward, init):
@@ -156,6 +160,7 @@ _START_CTX: Final = {
     "scan": _scan,
     "make_tuple": _make_tuple,
     "tuple_get": _tuple_get,
+    "neighbors": _neighbors,
 }
 
 
