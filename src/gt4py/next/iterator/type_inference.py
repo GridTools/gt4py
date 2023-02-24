@@ -293,7 +293,6 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val_BOOL_T1,
     ),
     "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "cast_": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -402,6 +401,7 @@ class _TypeInferrer(eve.NodeTranslator):
             "shift",
             "cartesian_domain",
             "unstructured_domain",
+            "cast_",
         ):
             raise TypeError(
                 f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
@@ -477,6 +477,32 @@ class _TypeInferrer(eve.NodeTranslator):
                 )
                 constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
+            if node.fun.id == "cast_":
+                if len(node.args) != 2:
+                    raise TypeError("cast_ requires exactly two arguments.")
+                val_arg_type = self.visit(node.args[0], constraints=constraints, symtypes=symtypes)
+                type_arg = node.args[1]
+                if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
+                    raise TypeError("The second argument to `cast_` must be a type literal.")
+
+                size = TypeVar.fresh()
+
+                constraints.add(
+                    (
+                        val_arg_type,
+                        Val(
+                            kind=Value(),
+                            dtype=TypeVar.fresh(),
+                            size=size,
+                        ),
+                    )
+                )
+
+                return Val(
+                    kind=Value(),
+                    dtype=Primitive(name=type_arg.id),
+                    size=size,
+                )
             if node.fun.id == "shift":
                 # Calls to shift are handled as being part of the grammar, not
                 # as function calls, as the type depends on the offset provider
