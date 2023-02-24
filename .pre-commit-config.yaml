@@ -1,3 +1,7 @@
+#
+# This file contains 'cog' markers (https://nedbatchelder.com/code/cog/) 
+# to keep version numbers in sync with 'constraints.txt'
+#
 default_language_version:
   python: python3.10
 repos:
@@ -49,7 +53,6 @@ repos:
   hooks:
   - id: check-case-conflict
   - id: check-merge-conflict
-  # - id: check-json
   - id: check-toml
   - id: check-yaml
   - id: debug-statements
@@ -162,13 +165,10 @@ repos:
     - deepdiff==6.2.3
     - devtools==0.10.0
     - frozendict==2.3.5
-    - frozendict==2.3.5
     - gridtools-cpp==2.2.3
     - jinja2==3.1.2
     - lark==1.1.5
     - mako==1.2.4
-    - mako==1.2.4
-    - networkx==3.0
     - networkx==3.0
     - ninja==1.11.1
     - numpy==1.24.2
