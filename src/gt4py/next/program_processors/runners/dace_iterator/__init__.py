@@ -22,6 +22,7 @@ from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvid
 from gt4py.next.iterator.transforms import apply_common_transforms
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from .utility import connectivity_identifier
 
 from .itir_to_sdfg import ItirToSDFG
 
@@ -55,13 +56,13 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     ]
 
     connectivity_args = {
-        f"__connectivity_{offset}": table.table for offset, table in neighbor_tables
+        connectivity_identifier(offset): table.table for offset, table in neighbor_tables
     }
     connectivity_shape_args = {
         str(sym): size
         for offset, _ in neighbor_tables
         for sym, size in zip(
-            sdfg.arrays[f"__connectivity_{offset}"].shape, offset_provider[offset].table.shape
+            sdfg.arrays[connectivity_identifier(offset)].shape, offset_provider[offset].table.shape
         )
     }
 
