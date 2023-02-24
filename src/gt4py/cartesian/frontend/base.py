@@ -36,7 +36,6 @@ def register(frontend_cls: Type["Frontend"]) -> None:
 
 
 class Frontend(abc.ABC):
-
     name: str
     """Frontend name."""
 

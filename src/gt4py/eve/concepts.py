@@ -274,7 +274,6 @@ class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ign
 
 
 class VType(datamodels.FrozenModel):
-
     # Unique name
     name: str
 

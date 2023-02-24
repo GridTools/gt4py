@@ -22,7 +22,6 @@ class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
     """Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied."""
 
     def can_be_applied(self, graph, expr_index, sdfg, permissive=False):
-
         if not super().can_be_applied(graph, expr_index, sdfg, permissive=permissive):
             return False
 
