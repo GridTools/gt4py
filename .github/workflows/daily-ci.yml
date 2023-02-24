@@ -64,6 +64,7 @@ jobs:
       shell: bash
       run: |
         echo "REQS_DIFF='$(diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ')'" >> $GITHUB_OUTPUT
+        echo "REQS_DIFF_TEST="FOOOOOOOO" >> $GITHUB_OUTPUT
     - name: Notify updated requirements (if any)
       if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
       env:
@@ -79,14 +80,14 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "plain_text",
-                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB"
+                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
                 }
               },
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB"
+                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
                 }
               }
             ]
