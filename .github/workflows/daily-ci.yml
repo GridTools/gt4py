@@ -58,46 +58,47 @@ jobs:
         pyversion_no_dot=${pyversion//./}
         cp constraints.txt CURRENT-constraints.txt 
         tox run -e requirements-py${pyversion_no_dot}
-    - name: Check for updated requirements
-      id: update-requirements
-      #continue-on-error: true
-      if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
-      shell: bash
-      run: |
-        if diff -q constraints.txt CURRENT-constraints.txt; then
-          echo "REQS_DIFF=''" >> $GITHUB_OUTPUT
-        else
-          diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ' > constraints.txt.diff
-          echo "REQS_DIFF='$(cat constraints.txt.diff)'" >> $GITHUB_OUTPUT
-        fi
-        echo "REQS_DIFF_TEST="FOOOOOOOO" >> $GITHUB_OUTPUT
-    - name: Notify updated requirements (if any)
-      if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
-        payload: |
-          {
-            "text": "TEXT",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "plain_text",
-                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
-                }
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
-                }
-              }
-            ]
-          }
+    # TODO(egparedes): add notification for dependencies updates
+    # - name: Check for updated requirements
+    #   id: update-requirements
+    #   continue-on-error: true
+    #   if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
+    #   shell: bash
+    #   run: |
+    #     if diff -q constraints.txt CURRENT-constraints.txt; then
+    #       echo "REQS_DIFF=''" >> $GITHUB_OUTPUT
+    #     else
+    #       diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ' > constraints.txt.diff
+    #       echo "REQS_DIFF='$(cat constraints.txt.diff)'" >> $GITHUB_OUTPUT
+    #     fi
+    #     echo "REQS_DIFF_TEST="FOOOOOOOO" >> $GITHUB_OUTPUT
+    # - name: Notify updated requirements (if any)
+    #   if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
+    #   env:
+    #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    #   uses: slackapi/slack-github-action@v1.23.0
+    #   with:
+    #     channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
+    #     payload: |
+    #       {
+    #         "text": "TEXT",
+    #         "blocks": [
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "plain_text",
+    #               "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
+    #             }
+    #           },
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB/ ${{ steps.update-requirements.outputs.REQS_DIFF_TEST }} /CC"
+    #             }
+    #           }
+    #         ]
+    #       }
     - name: Run tests
       env:
         NUM_PROCESSES: auto
