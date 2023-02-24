@@ -63,8 +63,8 @@ jobs:
       if: ${{ matrix.python-version == '3.8' && matrix.tox-module-factor == 'cartesian' }}
       shell: bash
       run: |
-        REQS_DIFF=$(diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ')
-        echo "REQS_DIFF='${REQS_DIFF}'" >> $GITHUB_OUTPUT
+        diff --changed-group-format='%<' --unchanged-group-format='' constraints.txt CURRENT-constraints.txt |  tr '\n' ' ' > constraints.txt.diff
+        echo "REQS_DIFF='$(cat constraints.txt.diff)'" >> $GITHUB_OUTPUT
         echo "REQS_DIFF_TEST="FOOOOOOOO" >> $GITHUB_OUTPUT
     - name: Notify updated requirements (if any)
       if: ${{ steps.update-requirements.outputs.REQS_DIFF }}
