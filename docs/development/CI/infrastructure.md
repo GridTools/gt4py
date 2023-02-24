@@ -7,7 +7,12 @@ Any test job that runs on CI is encoded in automation tools like tox and pre-com
 The following workflows are currently active:
 
 ```mermaid
-%%{ init: { 'flowchart': { 'curve': 'basis' } } }%%
+%%{ 
+    init: {
+        'flowchart': { 'curve': 'basis' }, 
+        'theme': 'neutral'
+    }
+}%%
 flowchart LR
     always[always] --> qua[Code Quality]
 
@@ -41,7 +46,7 @@ flowchart LR
     style src_car fill:Gold,stroke:Brown,text:black;
     style src_cab fill:Gold,stroke:Brown,text:black;
     style src_sto fill:Aquamarine,stroke:DarkCyan,text:black;
-    style src_nxt fill:APPLICATION,stroke:CornFlowerBlue,text:black;
+    style src_nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
     style cfg_wfl fill:Coral,stroke:Tomato,text:black;
     style other fill:PaleGreen,stroke:ForestGreen,text:black;
     style pkg_cfg fill:PaleGreen,stroke:ForestGreen,text:black;
@@ -50,7 +55,9 @@ flowchart LR
     style eve fill:Plum,stroke:MediumOrchid,text:black;
     style car fill:Gold,stroke:Brown,text:black;
     style sto fill:Aquamarine,stroke:DarkCyan,text:black;
-    style nxt fill:APPLICATION,stroke:CornFlowerBlue,text:black;
+    style nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
+
+    linkStyle 0 stroke:#999,stroke-width:2px;
     
     linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
