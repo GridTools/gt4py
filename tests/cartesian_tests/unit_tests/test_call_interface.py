@@ -154,7 +154,6 @@ def a_stencil(
     from __externals__ import BRANCH
 
     with computation(PARALLEL), interval(...):
-
         if __INLINED(BRANCH):
             arg1 = arg1 * par1 * par2
         else:

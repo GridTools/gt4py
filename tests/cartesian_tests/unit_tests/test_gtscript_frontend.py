@@ -1384,7 +1384,6 @@ class TestAssignmentSyntax:
             gt_frontend.GTScriptSyntaxError,
             match="Assignment to non-zero offsets is not supported.",
         ):
-
             parse_definition(
                 func,
                 externals={"offset": 1},
@@ -1429,7 +1428,6 @@ class TestAssignmentSyntax:
             )
 
     def test_slice(self):
-
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):

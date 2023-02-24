@@ -74,7 +74,6 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
 
 
 def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
-
     access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
@@ -230,7 +229,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
 
         def push_expansion_item(self, item: Union[Map, Loop]) -> "DaCeIRBuilder.IterationContext":
-
             if not isinstance(item, (Map, Loop)):
                 raise ValueError
 
@@ -534,7 +532,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: "DaCeIRBuilder.GlobalContext",
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
     ):
-
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
@@ -569,7 +566,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         ]
 
     def to_state(self, nodes, *, grid_subset: dcir.GridSubset):
-
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             return nodes
@@ -588,7 +584,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
-
         grid_subset = iteration_ctx.grid_subset
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_dataflow(
@@ -691,7 +686,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
-
         grid_subset = union_node_grid_subsets(list(scope_nodes))
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_state(scope_nodes, grid_subset=grid_subset)
