@@ -197,9 +197,10 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     frozen classes. Data in the `annex` do not affect the hash or equality
     comparisons of the node, since it is not really a field. Thus, visitors
     and pipeline passes can freely attach computed attributes into the instance
-    `annex`. The `annex` attribute is not copied implicitly in passes, therefore
-    should be used only for data within a single pass, e.g. for implementing traits,
-    see e.g. :class:`SymbolTableTrait`.
+    `annex`. Note that `annex` attribute is not implicitly copied in the
+    `NodeTranslator`. If you want it to persist accross multiple `NodeTranslation`
+    use a `root_validator` that dynamically recomputed the annex on node 
+    construction (see e.g. :class:`SymbolTableTrait`).
     """
 
     __slots__ = ()
