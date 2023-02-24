@@ -117,7 +117,6 @@ def get_expansion_order_index(expansion_order, axis):
 
 
 def _is_expansion_order_implemented(expansion_specification):
-
     for item in expansion_specification:
         if isinstance(item, Sections):
             break

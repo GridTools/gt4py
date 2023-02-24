@@ -791,7 +791,6 @@ class HorizontalRestriction(eve.GenericNode, Generic[StmtT]):
 
 
 def data_type_to_typestr(dtype: DataType) -> str:
-
     table = {
         DataType.BOOL: "bool",
         DataType.INT8: "int8",

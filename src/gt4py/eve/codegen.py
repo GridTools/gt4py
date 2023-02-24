@@ -31,7 +31,7 @@ import types
 
 import black
 import jinja2
-from mako import template as mako_tpl  # type: ignore[import]
+from mako import template as mako_tpl
 
 from . import exceptions, utils
 from .concepts import CollectionNode, LeafNode, Node, RootNode
