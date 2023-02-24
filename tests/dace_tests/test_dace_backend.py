@@ -1,11 +1,25 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2022, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import numpy as np
 
-from gt4py.next.common import Dimension, Field, DimensionKind
-from gt4py.next.ffront.fbuiltins import FieldOffset
+from gt4py.next.common import Dimension, DimensionKind, Field
 from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.iterator.embedded import np_as_located_field, NeighborTableOffsetProvider
+from gt4py.next.ffront.fbuiltins import FieldOffset
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
+
 
 IDim = Dimension("IDim")
 I2IDim = Dimension("I2IDim", kind=DimensionKind.LOCAL)
@@ -20,7 +34,7 @@ i2i_neighbor_data = np.array(
     ],
     dtype=np.int64,
 )
-i2i_neighbor_table = NeighborTableOffsetProvider(i2i_neighbor_data, IDim, I2IDim, 2)
+i2i_neighbor_table = NeighborTableOffsetProvider(i2i_neighbor_data, IDim, IDim, 2)
 
 ADim = Dimension("ADim", kind=DimensionKind.HORIZONTAL)
 BDim = Dimension("BDim", kind=DimensionKind.HORIZONTAL)

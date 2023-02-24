@@ -151,7 +151,6 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
         result = im.ref(node.id)
-        result.type_ = node.type
         return result
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.Expr:
