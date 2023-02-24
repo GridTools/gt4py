@@ -274,7 +274,7 @@ def test_conditional(fieldview_backend):
     a = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out = np_as_located_field(IDim)(np.zeros((size,), dtype=np.float64))
-    mask = np_as_located_field(IDim)((np.random.randn(size) > 0).astype("bool"))
+    mask = np_as_located_field(IDim)(np.random.randn(size) > 0)
 
     @field_operator(backend=fieldview_backend)
     def conditional(
