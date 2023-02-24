@@ -12,7 +12,7 @@ The configuration can be viewed and changed on the [setup page](https://cicd-ext
 
 ### Pipeline File
 
-The pipeline config for the default pipeline is at `ci/cscs-ci.yml`. Check the [syntax reference for GitLab CI](https://docs.gitlab.com/ee/ci/yaml/) if you are not familiar.
+The pipeline config for the default pipeline is at `ci/cscs-ci.yml`. Check the [syntax reference for GitLab CI](https://docs.gitlab.com/ee/ci/yaml/) if you are not familiar with it.
 
 ### Whitelisted Users
 
