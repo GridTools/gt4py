@@ -2,6 +2,15 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [1.0.1] - 2023-02-20
+
+First version including the experimental `gt4py.next` aka *Declarative GT4Py*. The `gt4py.next` package is excluded from semantic versioning.
+
+### Cartesian
+
+- Parametrized dtype: see option 4 of [the gtscript concept workshop](https://github.com/GridTools/concepts/blob/master/collaboration/gtscript-workshop/GTScript-Syntax-Discussion.md#gtscript-syntax-discussed-issues-20200829])
+
+
 ## [1.0.0] - 2022-12-21
 
 ### Added

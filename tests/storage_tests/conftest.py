@@ -12,26 +12,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Package metadata: version, authors, license and copyright."""
-
-from typing import Final
-
-from packaging import version as pkg_version
+"""Global configuration of storage test generation and execution (with Hypothesis and pytest)."""
 
 
-__all__ = [
-    "__author__",
-    "__copyright__",
-    "__license__",
-    "__version__",
-    "__version_info__",
-]
+import hypothesis as hyp
 
 
-__author__: Final = "ETH Zurich and individual contributors"
-__copyright__: Final = "Copyright (c) 2014-2022 ETH Zurich"
-__license__: Final = "GPL-3.0-or-later"
-
-
-__version__: Final = "1.0.1"
-__version_info__: Final = pkg_version.parse(__version__)
+def pytest_configure(config):
+    # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
+    hyp.settings.register_profile(
+        "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
+    )
+    hyp.settings.load_profile("slow")
