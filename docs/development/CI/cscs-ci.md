@@ -1,5 +1,7 @@
 # CSCS-CI Configuration
 
+CSCS provides a way of running CI on it's machines. This is currently only available via gitlab, however there is a system in place that automatically sets up a GitLab mirror for this through a few simple steps. On Github the whole pipeline will show up as a single job, with a link to the GitLab pipeline. All the pipelines can be seen on the [pipeline page](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/4455690602105886/4525297225819146/-/pipelines) of the mirror.
+
 ## Initial Setup
 
 Follow the steps in the [CSCS-CI documentation](https://gitlab.com/cscs-ci/ci-testing/containerised_ci_doc). As mentioned in the documentation, you will require the help of someone who can register the project to be allowed to run CI on CSCS machines.
@@ -36,4 +38,4 @@ If you intend to make additional changes that require testing, consider creating
 
 ## Caveats Of CSCS-CI
 
-The gitlab pipeline is **not** triggered via a push event. This means any gitlab-ci features that rely on comparing files to the previous commit (like [`only:changes`](https://docs.gitlab.com/ee/ci/yaml/#onlychanges--exceptchanges)) will not work.
+The GitLab pipeline is **not** triggered via a push event. This means any gitlab-ci features that rely on comparing files to the previous commit (like [`only:changes`](https://docs.gitlab.com/ee/ci/yaml/#onlychanges--exceptchanges)) will not work.

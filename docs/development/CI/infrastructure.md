@@ -36,21 +36,21 @@ flowchart LR
     pkg_cfg[package config files changed] --> eve
     pkg_cfg --> sto
 
-    style always fill:White,stroke:black;
-    style src_eve fill:Plum,stroke:MediumOrchid;
-    style src_car fill:Gold,stroke:Brown;
-    style src_cab fill:Gold,stroke:Brown;
-    style src_sto fill:Aquamarine,stroke:DarkCyan;
-    style src_nxt fill:APPLICATION,stroke:CornFlowerBlue;
-    style cfg_wfl fill:Coral,stroke:Tomato;
-    style other fill:PaleGreen,stroke:ForestGreen;
-    style pkg_cfg fill:PaleGreen,stroke:ForestGreen;
+    style always fill:White,stroke:black,text:black;
+    style src_eve fill:Plum,stroke:MediumOrchid,text:black;
+    style src_car fill:Gold,stroke:Brown,text:black;
+    style src_cab fill:Gold,stroke:Brown,text:black;
+    style src_sto fill:Aquamarine,stroke:DarkCyan,text:black;
+    style src_nxt fill:APPLICATION,stroke:CornFlowerBlue,text:black;
+    style cfg_wfl fill:Coral,stroke:Tomato,text:black;
+    style other fill:PaleGreen,stroke:ForestGreen,text:black;
+    style pkg_cfg fill:PaleGreen,stroke:ForestGreen,text:black;
 
-    style qua fill:White,stroke:black;
-    style eve fill:Plum,stroke:MediumOrchid;
-    style car fill:Gold,stroke:Brown;
-    style sto fill:Aquamarine,stroke:DarkCyan;
-    style nxt fill:APPLICATION,stroke:CornFlowerBlue;
+    style qua fill:White,stroke:black,text:black;
+    style eve fill:Plum,stroke:MediumOrchid,text:black;
+    style car fill:Gold,stroke:Brown,text:black;
+    style sto fill:Aquamarine,stroke:DarkCyan,text:black;
+    style nxt fill:APPLICATION,stroke:CornFlowerBlue,text:black;
     
     linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
