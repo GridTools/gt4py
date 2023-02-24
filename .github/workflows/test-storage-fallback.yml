@@ -1,14 +1,18 @@
-name: "Skipped: Test / Storage (CPU)"
+name: "Fallback: Test Storage (CPU)"
 
 on:
   pull_request:
     branches:
     - main
-    paths-ignore: # inverse of corresponding workflow
+    paths-ignore:  # Inverse of corresponding workflow
     - "src/gt4py/storage/**"
-    - "src/gt4py/cartesian/backend/**"
+    - "src/gt4py/cartesian/backend/**"   # For DaCe storages
     - "tests/storage_tests/**"
     - "workflows/**"
+    - "*.cfg"
+    - "*.ini"
+    - "*.toml"
+    - "*.yml"
 
 jobs:
   test-storage:

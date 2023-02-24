@@ -1,4 +1,4 @@
-name: "Test / Eve"
+name: "Test Eve"
 
 on:
   push:
@@ -7,10 +7,14 @@ on:
   pull_request:
     branches:
     - main
-    paths: # Run only when gt4py.eve sources or tests have changed.
+    paths:  # Run when gt4py.eve files (or package settings) are changed
     - "src/gt4py/eve/**"
     - "tests/eve_tests/**"
     - "workflows/**"
+    - "*.cfg"
+    - "*.ini"
+    - "*.toml"
+    - "*.yml"
 
 jobs:
   test-eve:
@@ -27,16 +31,22 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: |
+          **/setup.cfg
+          **/constraints.txt
+          **/requirements-dev.txt
     - name: Install python dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel tox
+        python -m pip install -c ./constraints.txt pip setuptools wheel
+        python -m pip install -r ./requirements-dev.txt
     - name: Run tox tests
       env:
         NUM_PROCESSES: auto
       shell: bash
       run: |
-        pyversion_no_dot="${{ matrix.python-version }}"
-        pyversion_no_dot="${pyversion_no_dot/./}"
+        pyversion=${{ matrix.python-version }}
+        pyversion_no_dot=${pyversion//./}
         tox run -e eve-py${pyversion_no_dot}
     #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
     # - name: Upload coverage.json artifact

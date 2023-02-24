@@ -281,7 +281,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_TupleTargetAssign(
         self, node: foast.TupleTargetAssign, **kwargs
     ) -> foast.TupleTargetAssign:
-
         TargetType = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 

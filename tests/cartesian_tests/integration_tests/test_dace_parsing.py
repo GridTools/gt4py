@@ -199,7 +199,6 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
 def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
-
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
@@ -243,7 +242,6 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
 
 
 def test_optional_arg_noprovide():
-
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)

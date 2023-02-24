@@ -104,7 +104,6 @@ class AccessCollector(gt4py.eve.NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
-
         self.visit(node.mask, is_write=False, **kwargs)
         self.visit(node.body, **kwargs)
 

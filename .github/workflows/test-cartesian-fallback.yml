@@ -1,12 +1,15 @@
-name: "Skipped: Test / Cartesian (CPU)"
+name: "Fallback: Test Cartesian (CPU)"
 
 on:
   pull_request:
     branches:
     - main
-    paths: # inverse of corresponding workflow
+    paths:  # Inverse of corresponding workflow
     - "src/gt4py/next/**"
     - "tests/next_tests/**"
+    - "examples/**"
+    - "*.md"
+    - "*.rst"
 
 jobs:
   test-cartesian:
