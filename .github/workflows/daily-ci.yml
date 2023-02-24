@@ -73,7 +73,7 @@ jobs:
         channel-id: ${{ vars.SLACK_BOT_CHANNEL }}
         payload: |
           {
-            "text": "TEXTTTT",
+            "text": "TEXT",
             "blocks": [
               {
                 "type": "section",
@@ -85,8 +85,8 @@ jobs:
               {
                 "type": "section",
                 "text": {
-                  "type": "plain_text",
-                  "text": "${{ steps.update-requirements.outputs.REQS_DIFF }}"
+                  "type": "mrkdwn",
+                  "text": "@channel: AA/${{ steps.update-requirements.outputs.REQS_DIFF }}/BB"
                 }
               }
             ]
