@@ -271,10 +271,10 @@ def test_broadcast_shifted(fieldview_backend):
 
 
 def test_conditional(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out = np_as_located_field(IDim)(np.zeros((size,), dtype=np.float64))
+    mask = np_as_located_field(IDim)(np.random.randn(size) > 0)
 
     @field_operator(backend=fieldview_backend)
     def conditional(
@@ -282,9 +282,9 @@ def test_conditional(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return where(mask, a, b)
 
-    conditional(mask, a_I_float, b_I_float, out=out_I_float, offset_provider={})
+    conditional(mask, a, b, out=out, offset_provider={})
 
-    assert np.allclose(np.where(mask, a_I_float, b_I_float), out_I_float)
+    assert np.allclose(np.where(mask, a, b), out)
 
 
 def test_conditional_promotion(fieldview_backend):
