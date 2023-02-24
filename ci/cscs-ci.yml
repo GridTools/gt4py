@@ -127,7 +127,8 @@ test py310:
       VARIANT: [-nomesh, -atlas]
 
 combined coverage:
-  image: python:latest
+  extends: .container-runner-daint
+  image: $CSCS_REGISTRY_PATH/gt4py/gt4py-ci:$CI_COMMIT_SHA-$PYVERSION
   variables:
     <<: *py310
   stage: coverage
