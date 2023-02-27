@@ -55,7 +55,6 @@ def register(backend_cls: Type["Backend"]) -> None:
 
 
 class Backend(abc.ABC):
-
     #: Backend name
     name: ClassVar[str]
 
@@ -228,7 +227,6 @@ class CLIBackendMixin(Backend):
 
 
 class BaseBackend(Backend):
-
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
 
     def load(self) -> Optional[Type["StencilObject"]]:

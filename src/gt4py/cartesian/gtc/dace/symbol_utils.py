@@ -55,7 +55,6 @@ def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
 
 
 def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
-
     if axis_bound1 <= axis_bound2:
         axis_bound1, axis_bound2 = axis_bound2, axis_bound1
         sign = "-"
