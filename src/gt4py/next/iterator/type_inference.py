@@ -353,6 +353,15 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             kind=Value(), dtype=ValueList(dtype=T0, max_length=T2, has_skip_values=T3), size=T1
         ),
     ),
+    "list_get": FunctionType(
+        args=Tuple.from_elems(
+            Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
+            Val(
+                kind=Value(), dtype=ValueList(dtype=T0, max_length=T2, has_skip_values=T3), size=T1
+            ),
+        ),
+        ret=Val_T0_T1,
+    ),
     "scan": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -527,31 +536,6 @@ class _TypeInferrer(eve.NodeTranslator):
                     has_skip_values=TypeVar.fresh(),
                 )
                 return Val(kind=Value(), dtype=lst, size=TypeVar.fresh())
-            if node.fun.id == "list_get":
-                # TODO remove code duplication with tuple_get
-                # Calls to list_get are handled as being part of the grammar,
-                # not as function calls
-                if len(node.args) != 2:
-                    raise TypeError("list_get requires exactly two arguments")
-                if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-                    raise TypeError("The first argument to list_get must be a literal int")
-                idx = int(node.args[0].value)
-                lst = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
-                kind = TypeVar.fresh()
-                elem = TypeVar.fresh()
-                vlst = ValueList(
-                    dtype=elem, max_length=TypeVar.fresh(), has_skip_values=TypeVar.fresh()
-                )
-                size = TypeVar.fresh()
-
-                val_list = Val(
-                    kind=Value(),
-                    dtype=vlst,
-                    size=size,
-                )
-                constraints.add((lst, val_list))
-
-                return Val(kind=kind, dtype=elem, size=size)
             if node.fun.id == "neighbors":
                 if len(node.args) != 2:
                     raise TypeError("neighbors requires exactly two arguments")

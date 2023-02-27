@@ -16,6 +16,7 @@ import enum
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
+from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
@@ -110,6 +111,8 @@ def apply_common_transforms(
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
+    ir = CollapseListGet().visit(ir)
+
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)

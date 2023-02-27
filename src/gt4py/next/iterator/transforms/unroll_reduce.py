@@ -43,13 +43,9 @@ def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
 
 
 def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        _is_neighbors(arg)
-        or _is_shifted(arg)
-        or (
-            _is_applied_lift(arg)
-            and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
-        )
+    return _is_neighbors(arg) or (
+        _is_applied_lift(arg)
+        and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
     )
 
 
@@ -65,13 +61,7 @@ def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
 
 
 def _get_partial_offset_tag(arg: itir.FunCall) -> str:
-    if _is_shifted(arg):
-        assert isinstance(arg.fun, itir.FunCall)
-        offset = arg.fun.args[-1]
-        assert isinstance(offset, itir.OffsetLiteral)
-        assert isinstance(offset.value, str)
-        return offset.value
-    elif _is_neighbors(arg):
+    if _is_neighbors(arg):
         offset = arg.args[0]
         assert isinstance(offset, itir.OffsetLiteral)
         assert isinstance(offset.value, str)
@@ -136,12 +126,14 @@ def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
     )
 
 
-def _make_deref_shift(expr: itir.Expr, offset) -> itir.Expr:
-    if isinstance(expr, itir.FunCall) and expr.fun == itir.SymRef(id="make_const_list"):
-        return expr.args[0]
-    if isinstance(expr, itir.FunCall) and expr.fun == itir.SymRef(id="deref"):
-        return _make_deref(_make_shift([offset], expr.args[0]))
-    return _make_deref(_make_shift([offset], expr))
+def _to_full_shifted_and_derefed(expr: itir.Expr, offset) -> itir.Expr:
+    if _is_neighbors(expr):
+        return _make_deref(_make_shift([expr.args[0], offset], expr.args[1]))
+    return _make_list_get(offset, expr)  # expr is external sparse field or `make_const_list`
+
+
+def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.Expr:
+    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -168,11 +160,12 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        derefed_shifted_args = [_make_deref_shift(arg, offset) for arg in node.args]
+        derefed_shifted_args = [_to_full_shifted_and_derefed(arg, offset) for arg in node.args]
         step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
-            can_deref = _make_can_deref(_make_shift([offset], check_arg))
+            offset_tag, it = check_arg.args
+            can_deref = _make_can_deref(_make_shift([offset_tag, offset], it))
             step_fun = _make_if(can_deref, step_fun, acc)
         step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
         expr = init
@@ -186,16 +179,6 @@ class UnrollReduce(NodeTranslator):
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node, **kwargs)
-        if isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="list_get"):
-            assert isinstance(node.args[1], itir.FunCall) and node.args[1].fun == itir.SymRef(
-                id="deref"
-            )
-            return _make_deref(_make_shift([node.args[0]], node.args[1].args[0]))
         if _is_reduce(node):
             return self._visit_reduce(node, **kwargs)
-        if _is_neighbors(node):
-            return itir.FunCall(
-                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=[node.args[0]]),
-                args=[node.args[1]],
-            )
         return node
