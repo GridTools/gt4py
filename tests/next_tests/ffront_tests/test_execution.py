@@ -333,7 +333,6 @@ def test_astype_float(fieldview_backend):
 
 
 def test_offset_field(fieldview_backend):
-
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
     a_I_float_1 = np_as_located_field(IDim, KDim)(
