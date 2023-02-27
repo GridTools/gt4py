@@ -12,17 +12,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Sequence, Mapping
 
 import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
-from gt4py.next.iterator.transforms import apply_common_transforms
+from gt4py.next.iterator.transforms import apply_common_transforms, inline_lambdas
 from gt4py.next.program_processors.processor_interface import program_executor
-from gt4py.next.type_system import type_specifications as ts, type_translation
-from .utility import connectivity_identifier
+from gt4py.next.type_system import type_translation
+from .utility import connectivity_identifier, filter_neighbor_tables
 
 from .itir_to_sdfg import ItirToSDFG
 
@@ -33,50 +33,49 @@ def convert_arg(arg: Any):
     return arg
 
 
-@program_executor
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    offset_provider = kwargs["offset_provider"]
-    arg_types = [type_translation.from_value(arg) for arg in args]
-
+def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
     program = apply_common_transforms(
         program, offset_provider=offset_provider, force_inline_lift=True
     )
-    sdfg_gen = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
-    from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
+    program = inline_lambdas.InlineLambdas.apply(program, opcount_preserving=False, force_inline_lift=True)
+    return program
 
-    program = InlineLambdas.apply(program, opcount_preserving=False, force_inline_lift=True)
-    sdfg = sdfg_gen.visit(program)
 
-    regular_args = {name.id: convert_arg(arg) for name, arg in zip(program.params, args)}
+def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
+    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
-    neighbor_tables = [
-        (offset, table)
-        for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
-    ]
 
-    connectivity_args = {
-        connectivity_identifier(offset): table.table for offset, table in neighbor_tables
-    }
-    connectivity_shape_args = {
+def get_connectivity_args(neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]) -> dict[str, Any]:
+    return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
+
+
+def get_shape_args(arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]) -> dict[str, Any]:
+    return {
         str(sym): size
-        for offset, _ in neighbor_tables
+        for name, value in args.items()
         for sym, size in zip(
-            sdfg.arrays[connectivity_identifier(offset)].shape, offset_provider[offset].table.shape
+            arrays[name].shape, value.shape
         )
     }
 
-    array_params = [
-        param for param, type_ in zip(program.params, arg_types) if isinstance(type_, ts.FieldType)
-    ]
-    array_args = [arg for arg in args if isinstance(arg, LocatedField)]
-    shape_args = {
-        str(sym): size
-        for param, arg in zip(array_params, array_args)
-        for sym, size in zip(sdfg.arrays[str(param.id)].shape, np.asarray(arg).shape)
-    }
+
+@program_executor
+def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    offset_provider = kwargs["offset_provider"]
+    neighbor_tables = filter_neighbor_tables(offset_provider)
+
+    program = preprocess_program(program, offset_provider)
+    arg_types = [type_translation.from_value(arg) for arg in args]
+    sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
+    sdfg = sdfg_genenerator.visit(program)
+
+    call_args = get_args(program.params, args)
+    call_conn_args = get_connectivity_args(neighbor_tables)
+    call_shapes = get_shape_args(sdfg.arrays, {n: v for n, v in call_args.items() if hasattr(v, "shape")})
+    call_conn_shapes = get_shape_args(sdfg.arrays, call_conn_args)
+
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "build_type", value="Debug")
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(**regular_args, **shape_args, **connectivity_args, **connectivity_shape_args)
+        sdfg(**call_args, **call_conn_args, **call_shapes, **call_conn_shapes)
