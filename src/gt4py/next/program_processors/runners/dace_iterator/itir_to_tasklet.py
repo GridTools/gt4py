@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from collections.abc import Sequence
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import dace
 import numpy as np
@@ -85,9 +85,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     entry_state: Optional[dace.SDFGState]
     offset_provider: dict[str, Any]
     domain: dict[str, str]
-    input_args: Sequence[dace.Memlet]
-    output_args: Sequence[dace.Memlet]
-    connectivity_args: Sequence[dace.Memlet]
+    input_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]]
+    output_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]]
+    conn_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]]
     params: list[str]
     results: list[str]
 
@@ -95,9 +95,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self,
         offset_provider: dict[str, Any],
         domain: dict[str, str],
-        input_args: Sequence[dace.Memlet],
-        output_args: Sequence[dace.Memlet],
-        connectivity_args: Sequence[dace.Memlet],
+        input_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
+        output_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
+        conn_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
     ):
         self.sdfg = None
         self.entry_state = None
@@ -105,78 +105,56 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.domain = domain
         self.input_args = input_args
         self.output_args = output_args
-        self.connectivity_args = connectivity_args
+        self.conn_args = conn_args
 
     def visit_FunctionDefinition(self, node: itir.FunctionDefinition, **kwargs):
-        assert not self.sdfg
-        self.sdfg = dace.SDFG(node.id)
-        raise ValueError("Can only lower expressions, not whole functions.")
+        raise NotImplementedError()
 
     def visit_Lambda(self, node: itir.Lambda, **kwargs):
         assert not self.sdfg
 
-        params = [str(p.id) for p in node.params]
-        results = [f"__result_{str(i)}" for i in range(len(self.output_args))]
-        connectivities = [conn.data for conn in self.connectivity_args]
+        func_name = f"lambda_{abs(hash(node)):x}"
+        param_names = [str(p.id) for p in node.params]
+        result_names = [f"__result_{str(i)}" for i in range(len(self.output_args))]
+        conn_names = [conn[0].data for conn in self.conn_args]
 
-        name = f"lambda_{abs(hash(node)):x}"
-        self.sdfg = dace.SDFG(name)
-        self.entry_state = self.sdfg.add_state(f"{name}_entry", True)
-        self.params = params
-        self.results = results
+        self.params = param_names
+        self.results = result_names
 
-        for name, memlet in zip(params, self.input_args):
-            dtype = dace.float64  # TODO: use proper type
-            shape = (
-                memlet.subset.size()
-            )  # TODO: try using free parameters, maybe no need to take the memlet's size
-            self.sdfg.add_array(name, shape=shape, dtype=dtype)
+        # Create the SDFG for the function's body
+        self.sdfg = dace.SDFG(func_name)
+        self.entry_state = self.sdfg.add_state(f"{func_name}_entry", True)
 
-        for name, memlet in zip(results, self.output_args):
-            dtype = dace.float64  # TODO: use proper type
+        # Add input and output parameters as arrays
+        array_names = [*param_names, *result_names, *conn_names]
+        args = [*self.input_args, *self.output_args, *self.conn_args]
+        for name, (memlet, dtype) in zip(array_names, args):
             shape = memlet.subset.size()
             self.sdfg.add_array(name, shape=shape, dtype=dtype)
 
-        for name, memlet in zip(connectivities, self.connectivity_args):
-            dtype = dace.int64  # TODO: use proper type (connectivity might be any integer)
-            shape = memlet.subset.size()
-            self.sdfg.add_array(name, shape=shape, dtype=dtype)
-
-        output_accesses = [self.entry_state.add_access(name) for name in results]
-
-        result_access: dace.nodes.AccessNode = self.visit(node.expr)
-        main_tasklet = self.entry_state.add_tasklet(
-            name="write",
-            inputs={f"{result_access.data}_internal"},
-            outputs={f"{result}_internal" for result in results},
-            code=f"{results[0]}_internal = {result_access.data}_internal",
+        # Translate the function's body
+        function_result: dace.nodes.AccessNode = self.visit(node.expr)
+        forwarding_tasklet = self.entry_state.add_tasklet(
+            name="forwarding",
+            inputs={f"{function_result.data}_internal"},
+            outputs={f"{result}_internal" for result in result_names},
+            code=f"{result_names[0]}_internal = {function_result.data}_internal",
             language=dace.dtypes.Language.Python,
         )
+        function_result_memlet = create_memlet_full(function_result.data, self.sdfg.arrays[function_result.data])
+        self.entry_state.add_edge(function_result, None, forwarding_tasklet, f"{function_result.data}_internal", function_result_memlet)
 
-        self.entry_state.add_memlet_path(
-            result_access,
-            main_tasklet,
-            memlet=create_memlet_full(result_access.data, self.sdfg.arrays[result_access.data]),
-            src_conn=None,
-            dst_conn=f"{result_access.data}_internal",
-        )
-
+        output_accesses: list[dace.nodes.AccessNode] = [self.entry_state.add_access(name) for name in result_names]
         for access in output_accesses:
-            access = cast(dace.nodes.AccessNode, access)
             name = access.data
             ndim = len(self.sdfg.arrays[access.data].shape)
-            self.entry_state.add_memlet_path(
-                main_tasklet,
-                access,
-                memlet=create_memlet_at(name, tuple(["0"] * ndim)),
-                src_conn=f"{name}_internal",
-                dst_conn=None,
-            )
+            memlet = create_memlet_at(name, tuple(["0"] * ndim))
+            self.entry_state.add_edge(forwarding_tasklet, f"{name}_internal", access, None, memlet)
 
     def visit_SymRef(
         self, node: itir.SymRef, *, hack_is_iterator=False, **kwargs
     ) -> dace.nodes.AccessNode | tuple[dace.nodes.AccessNode, dict[str, dace.nodes.AccessNode]]:
-        assert self.entry_state
+        assert self.entry_state is not None
         access_node = self.entry_state.add_access(str(node.id))
         if hack_is_iterator:
             index = {
@@ -276,7 +254,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         shifted_dim = table.origin_axis.value
         target_dim = table.neighbor_axis.value
 
-        assert self.entry_state
+        assert self.entry_state is not None
         conn = self.entry_state.add_access(connectivity_identifier(offset))
 
         args = [conn, index[shifted_dim], element]
@@ -305,8 +283,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _add_expr_tasklet(
         self, args: list[tuple[dace.nodes.AccessNode, str]], expr: str, result_type: Any, name: str
     ) -> dace.nodes.AccessNode:
-        assert self.entry_state
-        assert self.sdfg
+        assert self.entry_state is not None
+        assert self.sdfg is not None
         result_name = self.sdfg.temp_data_name() + "_tl"
         self.sdfg.add_scalar(result_name, result_type, transient=True)
         result_access = self.entry_state.add_access(result_name)
@@ -339,9 +317,9 @@ def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
     domain: dict[str, str],
-    input_args: Sequence[dace.Memlet],
-    output_args: Sequence[dace.Memlet],
-    connectivity_args: Sequence[dace.Memlet],
+    input_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
+    output_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
+    connectivity_args: Sequence[tuple[dace.Memlet, dace.dtypes.typeclass]],
 ) -> tuple[dace.SDFG, list[str], list[str]]:
     translator = PythonTaskletCodegen(
         offset_provider, domain, input_args, output_args, connectivity_args
