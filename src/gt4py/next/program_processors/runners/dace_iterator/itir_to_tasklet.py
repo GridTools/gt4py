@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -141,10 +141,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             code=f"{result_names[0]}_internal = {function_result.data}_internal",
             language=dace.dtypes.Language.Python,
         )
-        function_result_memlet = create_memlet_full(function_result.data, self.sdfg.arrays[function_result.data])
-        self.entry_state.add_edge(function_result, None, forwarding_tasklet, f"{function_result.data}_internal", function_result_memlet)
+        function_result_memlet = create_memlet_full(
+            function_result.data, self.sdfg.arrays[function_result.data]
+        )
+        self.entry_state.add_edge(
+            function_result,
+            None,
+            forwarding_tasklet,
+            f"{function_result.data}_internal",
+            function_result_memlet,
+        )
 
-        output_accesses: list[dace.nodes.AccessNode] = [self.entry_state.add_access(name) for name in result_names]
+        output_accesses: list[dace.nodes.AccessNode] = [
+            self.entry_state.add_access(name) for name in result_names
+        ]
         for access in output_accesses:
             name = access.data
             ndim = len(self.sdfg.arrays[access.data].shape)
