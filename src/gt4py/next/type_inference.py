@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -93,24 +93,50 @@ class _TypeVarReindexer(eve.NodeTranslator):
         return node.__class__(**new_values)
 
 
-def freshen(dtype: T) -> T:
+@typing.overload
+def freshen(dtypes: list[T]) -> list[T]:
+    ...
+
+
+@typing.overload
+def freshen(dtypes: T) -> T:
+    ...
+
+
+def freshen(dtypes: list[T] | T) -> list[T] | T:
     """Re-instantiate `dtype` with fresh type variables."""
+    if not isinstance(dtypes, list):
+        assert isinstance(dtypes, Type)
+        return freshen([dtypes])[0]
 
     def indexer(index_map: dict[int, int]) -> int:
         return TypeVar.fresh_index()
 
     index_map = dict[int, int]()
-    return _TypeVarReindexer(indexer).visit(dtype, index_map=index_map)
+    return [_TypeVarReindexer(indexer).visit(dtype, index_map=index_map) for dtype in dtypes]
 
 
-def reindex_vars(dtype: T) -> T:
+@typing.overload
+def reindex_vars(dtypes: list[T]) -> list[T]:
+    ...
+
+
+@typing.overload
+def reindex_vars(dtypes: T) -> T:
+    ...
+
+
+def reindex_vars(dtypes: list[T] | T) -> list[T] | T:
     """Reindex all type variables, to have nice indices starting at zero."""
+    if not isinstance(dtypes, list):
+        assert isinstance(dtypes, Type)
+        return reindex_vars([dtypes])[0]
 
     def indexer(index_map: dict[int, int]) -> int:
         return len(index_map)
 
     index_map = dict[int, int]()
-    return _TypeVarReindexer(indexer).visit(dtype, index_map=index_map)
+    return [_TypeVarReindexer(indexer).visit(dtype, index_map=index_map) for dtype in dtypes]
 
 
 class _FreeVariables(eve.NodeVisitor):
@@ -129,11 +155,13 @@ def _free_variables(x: Type) -> set[TypeVar]:
 
 
 class _Dedup(eve.NodeTranslator):
-    """Deduplicate nodes that have the same value but a different `id`."""
+    """Deduplicate type nodes that have the same value but a different `id`."""
 
-    def visit(self, node: T, *, memo: dict[T, T]) -> T:  # type: ignore[override]
-        node = super().visit(node, memo=memo)
-        return memo.setdefault(node, node)
+    def visit(self, node, *, memo: dict[T, T]) -> typing.Any:  # type: ignore[override]
+        if isinstance(node, Type):
+            node = super().visit(node, memo=memo)
+            return memo.setdefault(node, node)
+        return node
 
 
 class _Renamer:
@@ -194,15 +222,9 @@ class _Renamer:
         except KeyError:
             return
 
-        follow_up_renames = list[tuple[Type, Type]]()
         for node, field in nodes:
             # Default case: just update a field value of the node
             self._update_node(node, field, replacement)
-
-        # Handle follow-up renames
-        for s, d in follow_up_renames:
-            self.register(d)
-            self.rename(s, d)
 
 
 class _Box(Type):
@@ -221,20 +243,21 @@ class _Unifier:
     type variable renaming.
     """
 
-    def __init__(self, dtype: Type, constraints: set[tuple[Type, Type]]) -> None:
+    def __init__(self, dtypes: list[Type], constraints: set[tuple[Type, Type]]) -> None:
         # Wrap the original `dtype` and all `constraints` to make sure they have a parent node and
         # thus the root nodes are correctly handled by the renamer
-        self._dtype = _Box(value=dtype)
+        self._dtypes = [_Box(value=dtype) for dtype in dtypes]
         self._constraints = [(_Box(value=s), _Box(value=t)) for s, t in constraints]
 
         # Create a renamer and register `dtype` and all `constraints` types
         self._renamer = _Renamer()
-        self._renamer.register(self._dtype)
+        for dtype in self._dtypes:
+            self._renamer.register(dtype)
         for s, t in self._constraints:
             self._renamer.register(s)
             self._renamer.register(t)
 
-    def unify(self) -> Type:
+    def unify(self) -> list[Type]:
         """Run the unification."""
         while self._constraints:
             constraint = self._constraints.pop()
@@ -247,7 +270,7 @@ class _Unifier:
                     f"Can not satisfy constraint: {constraint[0].value} ≡ {constraint[1].value}"
                 )
 
-        return self._dtype.value
+        return [dtype.value for dtype in self._dtypes]  # unbox
 
     def _rename(self, x: Type, y: Type) -> None:
         """Type renaming/replacement."""
@@ -297,13 +320,26 @@ class _Unifier:
         return False
 
 
-def unify(dtype: Type, constraints: set[tuple[Type, Type]]) -> Type:
+@typing.overload
+def unify(dtypes: list[Type], constraints: set[tuple[Type, Type]]) -> list[Type]:
+    ...
+
+
+@typing.overload
+def unify(dtypes: Type, constraints: set[tuple[Type, Type]]) -> Type:
+    ...
+
+
+def unify(dtypes: list[Type] | Type, constraints: set[tuple[Type, Type]]) -> list[Type] | Type:
     """Unify all given constraints."""
-    # Deduplicate nodes, this can speed up later things a bit
-    memo = dict[T, T]()
-    dtype = _Dedup().visit(dtype, memo=memo)
+    if isinstance(dtypes, Type):
+        return unify([dtypes], constraints)[0]
+
+    # Deduplicate type nodes, this can speed up later things a bit
+    memo = dict[Type, Type]()
+    dtypes = [_Dedup().visit(dtype, memo=memo) for dtype in dtypes]
     constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
     del memo
 
-    unifier = _Unifier(dtype, constraints)
+    unifier = _Unifier(dtypes, constraints)
     return unifier.unify()

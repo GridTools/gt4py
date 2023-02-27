@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -264,10 +264,11 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
 
 class GTFNIMCodegen(GTFNCodegen):
-
     Stmt = as_fmt("{lhs} {op} {rhs};")
 
     InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
+
+    EmptyListInitializer = as_mako("{}")
 
     Conditional = as_mako(
         """

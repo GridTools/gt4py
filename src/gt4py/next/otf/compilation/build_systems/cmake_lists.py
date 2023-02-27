@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -83,7 +83,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()})"
             case "gridtools":
-                import gridtools_cpp  # type: ignore
+                import gridtools_cpp
 
                 return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()})"
             case _:

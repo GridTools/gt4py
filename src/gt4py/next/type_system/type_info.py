@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -504,7 +504,6 @@ def function_signature_incompatibilities(
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-
     # check positional arguments
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."

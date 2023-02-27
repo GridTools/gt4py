@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,17 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import common, ffront, iterator, program_processors, type_inference, version
-from .version import __version__, __version_info__
+from . import common, ffront, iterator, program_processors, type_inference
 
 
 __all__ = [
-    "__version__",
-    "__version_info__",
     "common",
-    "program_processors",
     "ffront",
     "iterator",
+    "program_processors",
     "type_inference",
-    "version",
 ]

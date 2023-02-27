@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -35,9 +35,13 @@ class InitStmt(AssignStmt):
     init_type: str = "auto"
 
 
+class EmptyListInitializer(Expr):
+    ...
+
+
 class Conditional(Stmt):
     cond_type: str
-    init_stmt: Stmt
+    init_stmt: InitStmt
     cond: Expr
     if_stmt: AssignStmt
     else_stmt: AssignStmt

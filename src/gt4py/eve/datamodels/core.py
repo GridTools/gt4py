@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,10 +31,10 @@ import attrs
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz  # type: ignore[import]
+    import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # type: ignore[import] # noqa: F401
+    import toolz  # noqa: F401
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -120,14 +120,16 @@ class GenericDataModelTP(DataModelTP, Protocol):
         ...
 
 
+_DM = TypeVar("_DM", bound="DataModel")
+
 GenericDataModelT = TypeVar("GenericDataModelT", bound=GenericDataModelTP)
 
 AttrsValidator = Callable[[Any, Attribute, _T], Any]
-FieldValidator = Callable[["DataModel", Attribute, _T], None]
+FieldValidator = Callable[[_DM, Attribute, _T], None]
 BoundFieldValidator = Callable[[Attribute, _T], None]
 
-RootValidator = Callable[[Type["DataModel"], "DataModel"], None]
-BoundRootValidator = Callable[["DataModel"], None]
+RootValidator = Callable[[Type[_DM], _DM], None]
+BoundRootValidator = Callable[[_DM], None]
 
 FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
 
@@ -157,9 +159,9 @@ Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
 
 
 if sys.version_info >= (3, 10):
-    _dataclass_opts: Final = {"slots": True}
+    _dataclass_opts: Final[dict[str, Any]] = {"slots": True}
 else:
-    _dataclass_opts: Final = {}
+    _dataclass_opts: Final[Dict[str, Any]] = {}
 
 
 @dataclasses.dataclass(**_dataclass_opts)
@@ -431,7 +433,6 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
-
     # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
@@ -622,7 +623,10 @@ def validator(name: str) -> Callable[[FieldValidator], FieldValidator]:
     return _field_validator_maker
 
 
-def root_validator(func: RootValidator, /) -> classmethod:
+_RV = TypeVar("_RV", bound=RootValidator)
+
+
+def root_validator(cls_method: _RV, /) -> _RV:
     """Define a custom root validator (decorator function).
 
     The decorated functions should have the following signature:
@@ -630,7 +634,6 @@ def root_validator(func: RootValidator, /) -> classmethod:
     where ``cls`` will be the class of the model and ``instance`` the
     actual instance being validated.
     """
-    cls_method = classmethod(func)
     setattr(cls_method, _ROOT_VALIDATOR_TAG, None)
     return cls_method
 
@@ -944,9 +947,9 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModel], None]:
     return __attrs_post_init__
 
 
-def _make_devtools_pretty() -> Callable[
-    [DataModel, Callable[[Any], Any]], Generator[Any, None, None]
-]:
+def _make_devtools_pretty() -> (
+    Callable[[DataModel, Callable[[Any], Any]], Generator[Any, None, None]]
+):
     def __pretty__(
         self: DataModel, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:

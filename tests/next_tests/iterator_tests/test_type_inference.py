@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -144,6 +144,16 @@ def test_and():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
+
+
+def test_cast():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="cast_"), args=[ir.Literal(value="1.", type="float"), ir.SymRef(id="int")]
+    )
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int⁰"
 
 
 def test_lift():
@@ -551,9 +561,8 @@ def test_partial_shift_with_unstructured_offset_provider():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunctionDefinitionType(
-        name="f",
-        fun=ti.FunctionType(
+    expected = ti.LetPolymorphic(
+        dtype=ti.FunctionType(
             args=ti.Tuple.from_elems(
                 ti.TypeVar(idx=0),
             ),
@@ -562,7 +571,7 @@ def test_function_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "f :: (T₀) → T₀"
+    assert ti.pformat(inferred.dtype) == "(T₀) → T₀"
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
