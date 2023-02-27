@@ -79,7 +79,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ):
-
         if is_target:
             memlets = kwargs["write_memlets"]
         else:

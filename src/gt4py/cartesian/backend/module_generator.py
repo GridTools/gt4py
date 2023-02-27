@@ -113,7 +113,6 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 
 
 class BaseModuleGenerator(abc.ABC):
-
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
     DOMAIN_ARG_NAME = "_domain_"

@@ -335,7 +335,6 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, **kwargs: Any
     ) -> oir.VerticalLoopSection:
-
         last_vls = None
         next_vls = node
         applied = True

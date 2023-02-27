@@ -264,7 +264,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
 
 class GTFNIMCodegen(GTFNCodegen):
-
     Stmt = as_fmt("{lhs} {op} {rhs};")
 
     InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")

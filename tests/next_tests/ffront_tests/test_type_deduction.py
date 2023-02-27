@@ -312,9 +312,9 @@ def test_unpack_assign():
     )
 
 
-def dimension_promotion_cases() -> list[
-    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
-]:
+def dimension_promotion_cases() -> (
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([["I", "J"], ["I"]], ["I", "J"], None),
