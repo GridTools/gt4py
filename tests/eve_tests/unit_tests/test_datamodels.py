@@ -821,7 +821,6 @@ class ChildModelWithValidators(ModelWithValidators):
 @typing.no_type_check
 @pytest.mark.parametrize("model_class", [ModelWithValidators, ChildModelWithValidators])
 def test_field_validators(model_class: Type[Union[ModelWithValidators, ChildModelWithValidators]]):
-
     with pytest.raises(ValueError, match="int_value"):
         model_class(int_value=-1)
 
@@ -997,7 +996,7 @@ def test_field_metadata():
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
-        import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
+        import attr  # Missing library stubs for Python 3.10)
 
         @datamodels.datamodel(frozen=True)
         class FrozenModel:

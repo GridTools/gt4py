@@ -58,7 +58,6 @@ def contains_cast_node(cast_node, expr):
 
 
 def upcast_and_validate(expr, expected_cast_nodes):
-
     assert isinstance(expected_cast_nodes, List)
     assert all([isinstance(cast, Cast) for cast in expected_cast_nodes])
     assert all([not contains_cast_node(cast, expr) for cast in expected_cast_nodes])
