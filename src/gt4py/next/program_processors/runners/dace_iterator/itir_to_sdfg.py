@@ -20,7 +20,7 @@ import sympy
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import closure_to_tasklet_sdfg
 from .utility import (
@@ -65,7 +65,10 @@ class ItirToSDFG(eve.NodeVisitor):
         # Add DaCe arrays for inputs, output and connectivities to closure SDFG.
         for name in [*input_names, *conn_names, *output_names]:
             closure_sdfg.add_array(
-                name, shape=array_table[name].shape, dtype=array_table[name].dtype
+                name,
+                shape=array_table[name].shape,
+                strides=array_table[name].strides,
+                dtype=array_table[name].dtype,
             )
 
         # Get output domain of the closure
@@ -85,9 +88,18 @@ class ItirToSDFG(eve.NodeVisitor):
             node,
             self.offset_provider,
             index_domain,
-            [(arg, closure_sdfg.arrays[arg.data].dtype) for arg in input_args],
-            [(arg, closure_sdfg.arrays[arg.data].dtype) for arg in output_args],
-            [(arg, closure_sdfg.arrays[arg.data].dtype) for arg in conn_args],
+            [
+                (arg, closure_sdfg.arrays[arg.data].strides, closure_sdfg.arrays[arg.data].dtype)
+                for arg in input_args
+            ],
+            [
+                (arg, closure_sdfg.arrays[arg.data].strides, closure_sdfg.arrays[arg.data].dtype)
+                for arg in output_args
+            ],
+            [
+                (arg, closure_sdfg.arrays[arg.data].strides, closure_sdfg.arrays[arg.data].dtype)
+                for arg in conn_args
+            ],
         )
 
         # Map SDFG tasklet arguments to parameters
@@ -117,18 +129,26 @@ class ItirToSDFG(eve.NodeVisitor):
         # Add program parameters as SDFG arrays and symbols.
         for param, type_ in zip(node.params, self.param_types):
             if isinstance(type_, ts.FieldType):
-                shape = (dace.symbol(program_sdfg.temp_data_name()) for _ in range(len(type_.dims)))
+                shape = [dace.symbol(program_sdfg.temp_data_name()) for _ in range(len(type_.dims))]
+                strides = [
+                    dace.symbol(program_sdfg.temp_data_name()) for _ in range(len(type_.dims))
+                ]
                 dtype = type_spec_to_dtype(type_.dtype)
-                program_sdfg.add_array(str(param.id), shape=shape, dtype=dtype)
+                program_sdfg.add_array(str(param.id), shape=shape, strides=strides, dtype=dtype)
             elif isinstance(type_, ts.ScalarType):
                 program_sdfg.add_symbol(param.id, type_spec_to_dtype(type_))
             else:
                 raise NotImplementedError()
 
         # Add connectivities as SDFG arrays.
-        for offset, _ in neighbor_tables:
-            shape = (dace.symbol(program_sdfg.temp_data_name()) for _ in range(2))
-            program_sdfg.add_array(connectivity_identifier(offset), shape=shape, dtype=dace.int64)
+        for offset, table in neighbor_tables:
+            scalar_kind = type_translation.get_scalar_kind(table.table.dtype)
+            shape = [dace.symbol(program_sdfg.temp_data_name()) for _ in range(2)]
+            strides = [dace.symbol(program_sdfg.temp_data_name()) for _ in range(2)]
+            dtype = type_spec_to_dtype(ts.ScalarType(scalar_kind))
+            program_sdfg.add_array(
+                connectivity_identifier(offset), shape=shape, strides=strides, dtype=dtype
+            )
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
