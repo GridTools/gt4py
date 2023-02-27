@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Sequence, Mapping
+from typing import Any, Mapping, Sequence
 
 import dace
 import numpy as np
@@ -22,9 +22,9 @@ from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvid
 from gt4py.next.iterator.transforms import apply_common_transforms, inline_lambdas
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
-from .utility import connectivity_identifier, filter_neighbor_tables
 
 from .itir_to_sdfg import ItirToSDFG
+from .utility import connectivity_identifier, filter_neighbor_tables
 
 
 def convert_arg(arg: Any):
@@ -37,7 +37,9 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     program = apply_common_transforms(
         program, offset_provider=offset_provider, force_inline_lift=True
     )
-    program = inline_lambdas.InlineLambdas.apply(program, opcount_preserving=False, force_inline_lift=True)
+    program = inline_lambdas.InlineLambdas.apply(
+        program, opcount_preserving=False, force_inline_lift=True
+    )
     return program
 
 
@@ -45,17 +47,19 @@ def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
     return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
 
-def get_connectivity_args(neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]) -> dict[str, Any]:
+def get_connectivity_args(
+    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]
+) -> dict[str, Any]:
     return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
 
 
-def get_shape_args(arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]) -> dict[str, Any]:
+def get_shape_args(
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
+) -> dict[str, Any]:
     return {
         str(sym): size
         for name, value in args.items()
-        for sym, size in zip(
-            arrays[name].shape, value.shape
-        )
+        for sym, size in zip(arrays[name].shape, value.shape)
     }
 
 
@@ -71,7 +75,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     call_args = get_args(program.params, args)
     call_conn_args = get_connectivity_args(neighbor_tables)
-    call_shapes = get_shape_args(sdfg.arrays, {n: v for n, v in call_args.items() if hasattr(v, "shape")})
+    call_shapes = get_shape_args(
+        sdfg.arrays, {n: v for n, v in call_args.items() if hasattr(v, "shape")}
+    )
     call_conn_shapes = get_shape_args(sdfg.arrays, call_conn_args)
 
     with dace.config.temporary_config():

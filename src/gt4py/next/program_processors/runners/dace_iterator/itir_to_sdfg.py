@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -64,7 +64,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add DaCe arrays for inputs, output and connectivities to closure SDFG.
         for name in [*input_names, *conn_names, *output_names]:
-            closure_sdfg.add_array(name, shape=array_table[name].shape, dtype=array_table[name].dtype)
+            closure_sdfg.add_array(
+                name, shape=array_table[name].shape, dtype=array_table[name].dtype
+            )
 
         # Get output domain of the closure
         closure_domain = self._visit_domain(node.domain)
@@ -73,7 +75,9 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         input_args = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names]
         conn_args = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
-        output_args = [create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names]
+        output_args = [
+            create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names
+        ]
 
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
@@ -128,6 +132,8 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
+            assert isinstance(closure.output, itir.SymRef)
+
             input_names = [str(inp.id) for inp in closure.inputs]
             output_names = [str(closure.output.id)]
 
@@ -170,7 +176,8 @@ class ItirToSDFG(eve.NodeVisitor):
     def _add_mapped_nested_sdfg(
         self,
         state: dace.SDFGState,
-        map_ranges: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
+        map_ranges: dict[str, str | dace.subsets.Subset]
+        | list[tuple[str, str | dace.subsets.Subset]],
         inputs: dict[str, dace.Memlet],
         sdfg: dace.SDFG,
         outputs: dict[str, dace.Memlet],
@@ -226,7 +233,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
         return nsdfg_node, map_entry, map_exit
 
-    def _visit_domain(self, node: itir.FunCall) -> tuple[tuple[str, tuple[sympy.Basic, sympy.Basic]]]:
+    def _visit_domain(
+        self, node: itir.FunCall
+    ) -> tuple[tuple[str, tuple[sympy.Basic, sympy.Basic]], ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 
