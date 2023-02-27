@@ -17,24 +17,20 @@
 from functools import reduce
 
 import numpy as np
-import pytest as pytest
+import pytest
 
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
-    FieldOffset,
     astype,
     broadcast,
     float64,
     int32,
     int64,
-    max_over,
     maximum,
-    min_over,
     minimum,
     neighbor_sum,
-    sqrt,
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
