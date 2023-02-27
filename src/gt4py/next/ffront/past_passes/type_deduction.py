@@ -67,10 +67,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     if not isinstance(
         new_func.type,
-        (
-            ts_ffront.FieldOperatorType,
-            ts_ffront.ScanOperatorType,
-        ),
+        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType, ts.FunctionType),
     ):
         raise GTTypeError(
             f"Only calls `FieldOperator`s and `ScanOperators` "
@@ -202,8 +199,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            if new_func.id in fbuiltins.FUN_BUILTIN_NAMES:
-                return _apply_builtin_action(new_func, new_args)
+            if new_func.id in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
+                return past.Call(
+                    func=new_func,
+                    args=new_args,
+                    kwargs=new_kwargs,
+                    type=new_args[0].type,
+                    location=node.location,
+                )
             _validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {

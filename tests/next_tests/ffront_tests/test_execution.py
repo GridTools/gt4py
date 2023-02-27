@@ -34,6 +34,7 @@ from gt4py.next.ffront.fbuiltins import (
     min_over,
     minimum,
     neighbor_sum,
+    sqrt,
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
