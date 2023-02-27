@@ -106,7 +106,6 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> DialectRootT:
-
         source, filename, starting_line = source_definition
         try:
             line_offset = starting_line - 1

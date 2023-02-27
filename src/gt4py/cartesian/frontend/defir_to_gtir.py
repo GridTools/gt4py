@@ -276,7 +276,6 @@ class UnrollVectorExpressions(IRNodeMapper):
 
 
 class DefIRToGTIR(IRNodeVisitor):
-
     GT4PY_ITERATIONORDER_TO_GTIR_LOOPORDER = {
         IterationOrder.BACKWARD: common.LoopOrder.BACKWARD,
         IterationOrder.PARALLEL: common.LoopOrder.PARALLEL,

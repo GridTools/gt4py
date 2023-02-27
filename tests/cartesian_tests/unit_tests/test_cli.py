@@ -105,7 +105,6 @@ BACKEND_ROW_PATTERN_BY_NAME = {
 
 @pytest.fixture
 def list_backends_line_pattern(backend_name):
-
     yield BACKEND_ROW_PATTERN_BY_NAME[backend_name]
 
 

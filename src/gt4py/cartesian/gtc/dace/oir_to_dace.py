@@ -146,7 +146,6 @@ class OirSDFGBuilder(eve.NodeVisitor):
         return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-
         ctx = OirSDFGBuilder.SDFGContext(
             stencil=node,
         )
