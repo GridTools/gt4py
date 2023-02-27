@@ -29,7 +29,10 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 def convert_arg(arg: Any):
     if isinstance(arg, LocatedField):
-        return np.asarray(arg)
+        sorted_dims = sorted(enumerate(arg.axes), key=lambda v: v[1].value)
+        ndim = len(sorted_dims)
+        dim_indices = [dim[0] for dim in sorted_dims]
+        return np.moveaxis(np.asarray(arg), range(ndim), dim_indices)
     return arg
 
 
@@ -63,6 +66,16 @@ def get_shape_args(
     }
 
 
+def get_stride_args(
+    arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
+) -> dict[str, Any]:
+    return {
+        str(sym): size / value.itemsize
+        for name, value in args.items()
+        for sym, size in zip(arrays[name].strides, value.strides)
+    }
+
+
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     offset_provider = kwargs["offset_provider"]
@@ -73,15 +86,27 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
     sdfg = sdfg_genenerator.visit(program)
 
-    call_args = get_args(program.params, args)
-    call_conn_args = get_connectivity_args(neighbor_tables)
-    call_shapes = get_shape_args(
-        sdfg.arrays, {n: v for n, v in call_args.items() if hasattr(v, "shape")}
+    dace_args = get_args(program.params, args)
+    dace_conn_args = get_connectivity_args(neighbor_tables)
+    dace_shapes = get_shape_args(
+        sdfg.arrays, {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
     )
-    call_conn_shapes = get_shape_args(sdfg.arrays, call_conn_args)
+    dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
+    dace_strides = get_stride_args(
+        sdfg.arrays, {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
+    )
+    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
     with dace.config.temporary_config():
+        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("compiler", "build_type", value="Debug")
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(**call_args, **call_conn_args, **call_shapes, **call_conn_shapes)
+        sdfg(
+            **dace_args,
+            **dace_conn_args,
+            **dace_shapes,
+            **dace_conn_shapes,
+            **dace_strides,
+            **dace_conn_stirdes,
+        )
