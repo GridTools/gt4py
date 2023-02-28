@@ -26,7 +26,7 @@ from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from .utility import connectivity_identifier, create_memlet_at, create_memlet_full
 
 
-_BUILTINS_MAPPING = {
+_MATH_BUILTINS_MAPPING = {
     "abs": "abs({})",
     "sin": "math.sin({})",
     "cos": "math.cos({})",
@@ -77,6 +77,12 @@ _BUILTINS_MAPPING = {
     "xor_": "({} ^ {})",
     "mod": "({} % {})",
     "not_": "~{}",
+}
+
+_GENERAL_BUILTIN_MAPPING = {
+    "make_tuple": lambda args: f"({', '.join(args)},)",
+    "tuple_get": lambda args: "{1}[{0}]".format(*args),
+    "if_": lambda args: "({1} if {0} else {2})".format(*args),
 }
 
 
@@ -200,8 +206,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             else:
                 return self._visit_indirect_addressing(node)
         elif isinstance(node.fun, itir.SymRef):
-            if str(node.fun.id) in _BUILTINS_MAPPING:
+            if str(node.fun.id) in _MATH_BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)
+            elif str(node.fun.id) in _GENERAL_BUILTIN_MAPPING:
+                return self._visit_general_builtin(node)
             else:
                 raise NotImplementedError()
         else:
@@ -282,12 +290,22 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
     def _visit_numeric_builtin(self, node: itir.FunCall, **kwargs) -> dace.nodes.AccessNode:
         assert isinstance(node.fun, itir.SymRef)
-        fmt = _BUILTINS_MAPPING[str(node.fun.id)]
+        fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
         args: list[dace.nodes.AccessNode] = self.visit(node.args)
         internals = [f"{arg.data}_v" for arg in args]
         expr = fmt.format(*internals)
         return self._add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.float64, "numeric"
+        )
+
+    def _visit_general_builtin(self, node: itir.FunCall, **kwargs) -> dace.nodes.AccessNode:
+        assert isinstance(node.fun, itir.SymRef)
+        expr_func = _GENERAL_BUILTIN_MAPPING[str(node.fun.id)]
+        args: list[dace.nodes.AccessNode] = self.visit(node.args)
+        internals = [f"{arg.data}_v" for arg in args]
+        expr = expr_func(internals)
+        return self._add_expr_tasklet(
+            list(zip(args, internals)), expr, dace.dtypes.float64, "builtin"
         )
 
     def _add_expr_tasklet(
