@@ -481,5 +481,5 @@ def test_collect_tmps_info():
             Temporary(id="_gtmp_1", domain=tmp_domain, dtype=3),
         ],
     )
-    actual = collect_tmps_info(testee)
+    actual = collect_tmps_info(testee, offset_provider={})
     assert actual == expected
