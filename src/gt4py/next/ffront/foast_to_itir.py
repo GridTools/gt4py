@@ -76,7 +76,9 @@ def iterator_type_kind(
 
 
 def to_iterator(node: foast.Symbol | foast.Expr):
-    if iterator_type_kind(node.type) is ITIRTypeKind.VALUE:
+    if (
+        not hasattr(node, "type") or iterator_type_kind(node.type) is ITIRTypeKind.VALUE
+    ):  # TODO ugly hack for cast
         return lambda x: im.lift_(im.lambda__()(x))()
     return lambda x: x
 
@@ -232,10 +234,7 @@ class FieldOperatorLowering(NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
-        def op(it1, it2):
-            return im.call_("if_")(self.visit(node.condition, **kwargs), it1, it2)
-
-        return self._map(op, node.true_expr, node.false_expr)
+        return self._map("if_", node.condition, node.true_expr, node.false_expr)
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -291,10 +290,10 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, dtype = node.args[0], node.args[1].id
-        return self._map(lambda val: im.call_("cast_")(val, dtype), obj)
+        return self._map("cast_", obj, dtype)
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self._map(im.call_("if_"), *node.args)
+        return self._map("if_", *node.args)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return to_iterator(node.args[0])(self.visit(node.args[0], **kwargs))
@@ -374,23 +373,24 @@ class FieldOperatorLowering(NodeTranslator):
         return self._make_literal(node.value, node.type)
 
     def _map(self, op, *args, **kwargs):
-        if isinstance(op, (str, itir.SymRef)):
-            op = im.call_(op)
+        def _get_type(arg):  # TODO ugly hack for cast
+            if hasattr(arg, "type"):
+                return arg.type
+            else:
+                return ITIRTypeKind.VALUE
 
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if any(iterator_type_kind(arg.type) is ITIRTypeKind.ITERATOR for arg in args):
-            if any(is_local_type_kind(arg.type) for arg in args):
+        if any(iterator_type_kind(_get_type(arg)) is ITIRTypeKind.ITERATOR for arg in args):
+            if any(is_local_type_kind(_get_type(arg)) for arg in args):
                 lowered_args = [to_value(arg)(larg) for arg, larg in zip(args, lowered_args)]
                 lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-                res = im.as_lifted_lambda_from_values(
-                    im.map__(op.fun), *lowered_args
-                )  # TODO dont' call op above
+                res = im.as_lifted_lambda_from_values(im.map__(op), *lowered_args)
                 return res
             else:
                 lowered_args = [to_iterator(arg)(larg) for arg, larg in zip(args, lowered_args)]
-                return im.as_lifted_lambda(op, *lowered_args)
+                return im.as_lifted_lambda(im.call_(op), *lowered_args)
         elif all(iterator_type_kind(arg.type) is ITIRTypeKind.VALUE for arg in args):
-            return op(*lowered_args)
+            return im.call_(op)(*lowered_args)
         raise AssertionError()
 
 
