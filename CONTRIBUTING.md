@@ -169,7 +169,7 @@ Before submitting a pull request, check that it meets the following criteria:
 4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the pull request is approved (check point **6.** below).
 5. If the pull request contains code authored by first-time contributors, check they are covered by a contributor agreement and they have been added to [AUTHORS.md](AUTHORS.md) file.
 6. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
-7. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
+7. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `feature`, `style`, `test`_).
 
 ## Releasing Process
 
