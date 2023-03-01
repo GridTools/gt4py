@@ -65,22 +65,10 @@ def sum_edges_to_vertices(in_edges):
     )
 
 
-def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = np.asarray(list(sum(row) for row in v2e_arr))
-
-    run_processor(
-        sum_edges_to_vertices[{Vertex: range(0, 9)}],
-        program_processor,
-        inp,
-        out=out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
-        lift_mode=lift_mode,
-    )
-    if validate:
-        assert np.allclose(out, ref)
+@fundef
+def sum_edges_to_vertices_list_get_neighbors(in_edges):
+    neighs = neighbors(V2E, in_edges)
+    return list_get(0, neighs) + list_get(1, neighs) + list_get(2, neighs) + list_get(3, neighs)
 
 
 @fundef
@@ -88,14 +76,18 @@ def sum_edges_to_vertices_reduce(in_edges):
     return reduce(plus, 0)(neighbors(V2E, in_edges))
 
 
-def test_sum_edges_to_vertices_reduce(program_processor_no_gtfn_exec, lift_mode):
+@pytest.mark.parametrize(
+    "stencil",
+    [sum_edges_to_vertices, sum_edges_to_vertices_list_get_neighbors, sum_edges_to_vertices_reduce],
+)
+def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode, stencil):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
-        sum_edges_to_vertices_reduce[{Vertex: range(0, 9)}],
+        stencil[{Vertex: range(0, 9)}],
         program_processor,
         inp,
         out=out,
@@ -381,27 +373,25 @@ def test_lift(program_processor, lift_mode):
 @fundef
 def sparse_shifted_stencil(inp):
     return list_get(2, list_get(0, neighbors(V2V, inp)))
-    # return deref(shift(0, 2)(shift(V2V)(inp)))
 
 
-# TODO is the example above well-defined? It's list of list
-# def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
-#     program_processor, validate = program_processor_no_gtfn_exec
-#     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-#     out = np_as_located_field(Vertex)(np.zeros([9]))
-#     ref = np.asarray(np.asarray(range(9)))
+def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(np.asarray(range(9)))
 
-#     run_processor(
-#         sparse_shifted_stencil[{Vertex: range(0, 9)}],
-#         program_processor,
-#         inp,
-#         out=out,
-#         offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
-#         lift_mode=lift_mode,
-#     )
+    run_processor(
+        sparse_shifted_stencil[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        lift_mode=lift_mode,
+    )
 
-#     if validate:
-#         assert np.allclose(out, ref)
+    if validate:
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -416,35 +406,36 @@ def shift_sparse_stencil2(inp):
 
 
 # TODO
-# def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
-#     program_processor, validate = program_processor_no_gtfn_exec
-#     inp = index_field(Vertex)
-#     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
-#     out1 = np_as_located_field(Vertex)(np.zeros([9]))
-#     out2 = np_as_located_field(Vertex)(np.zeros([9]))
+def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = index_field(Vertex)
+    inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
+    out1 = np_as_located_field(Vertex)(np.zeros([9]))
+    out2 = np_as_located_field(Vertex)(np.zeros([9]))
 
-#     offset_provider = {
-#         "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
-#         "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
-#     }
+    offset_provider = {
+        "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
+        "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+    }
 
-#     domain = {Vertex: range(0, 9)}
-#     run_processor(
-#         shift_shift_stencil2[domain],
-#         program_processor,
-#         inp,
-#         out=out1,
-#         offset_provider=offset_provider,
-#         lift_mode=lift_mode,
-#     )
-#     run_processor(
-#         shift_sparse_stencil2[domain],
-#         program_processor,
-#         inp_sparse,
-#         out=out2,
-#         offset_provider=offset_provider,
-#         lift_mode=lift_mode,
-#     )
+    domain = {Vertex: range(0, 9)}
+    run_processor(
+        shift_shift_stencil2[domain],
+        program_processor,
+        inp,
+        out=out1,
+        offset_provider=offset_provider,
+        lift_mode=lift_mode,
+    )
+    run_processor(
+        shift_sparse_stencil2[domain],
+        program_processor,
+        inp_sparse,
+        out=out2,
+        offset_provider=offset_provider,
+        lift_mode=lift_mode,
+    )
+
 
 #     if validate:
 #         assert np.allclose(out1, out2)

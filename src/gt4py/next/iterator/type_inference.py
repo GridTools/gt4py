@@ -569,7 +569,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
             raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
-        return TypeVar.fresh()
+        return TypeVar.fresh()  # TODO document when this case (LetPolymorphic?)
 
     def visit_Literal(self, node: ir.Literal, **kwargs) -> Val:
         return Val(kind=Value(), dtype=Primitive(name=node.type))
@@ -658,7 +658,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 )
                 dtype_ = TypeVar.fresh()
                 size = TypeVar.fresh()
-                it = self.visit(node.args[1])
+                it = self.visit(node.args[1], **kwargs)
                 self.constraints.add(
                     (
                         it,
