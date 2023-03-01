@@ -126,12 +126,6 @@ def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
     )
 
 
-def _to_full_shifted_and_derefed(expr: itir.Expr, offset) -> itir.Expr:
-    if _is_neighbors(expr):
-        return _make_deref(_make_shift([expr.args[0], offset], expr.args[1]))
-    return _make_list_get(offset, expr)  # expr is external sparse field or `make_const_list`
-
-
 def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.Expr:
     return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
 
@@ -160,8 +154,8 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        derefed_shifted_args = [_to_full_shifted_and_derefed(arg, offset) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
+        elems = [_make_list_get(offset, arg) for arg in node.args]
+        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + elems)
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args
