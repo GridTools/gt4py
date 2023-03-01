@@ -106,12 +106,12 @@ def apply_common_transforms(
             if unrolled == ir:
                 break
             ir = unrolled
+            ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
             ir = _inline_lifts(ir, lift_mode)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
-    ir = CollapseListGet().visit(ir)
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
