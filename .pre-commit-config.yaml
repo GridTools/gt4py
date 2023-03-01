@@ -93,8 +93,9 @@ repos:
     ##[[[cog
     ## import re
     ## constraints = open("constraints.txt").read()
-    ## for pkg in ["darglint", "flake8-bugbear", "flake8-builtins", "flake8-debugger", "flake8-docstrings", "flake8-eradicate", "flake8-mutable", "pygments"]:
-    ## 	print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
+    ## for pkg in ["darglint", "flake8-bugbear", "flake8-builtins", "flake8-debugger", "flake8-docstrings",
+    ##             "flake8-eradicate", "flake8-mutable", "flake8-pyproject", "pygments"]:
+    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - darglint==1.8.1
     - flake8-bugbear==23.2.13
@@ -103,6 +104,7 @@ repos:
     - flake8-docstrings==1.7.0
     - flake8-eradicate==1.4.0
     - flake8-mutable==1.2.0
+    - flake8-pyproject==1.2.2
     - pygments==2.14.0
     ##[[[end]]]
     # - flake8-rst-docstrings  # Disabled for now due to random false positives
@@ -146,13 +148,12 @@ repos:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
     ##[[[cog
-    ## import configparser, re
+    ## import re, tomli
     ## constraints = open("constraints.txt").read()
-    ## config = configparser.ConfigParser(); config.read('setup.cfg')
-    ## requires = config['options']['install_requires'].splitlines()
-    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in requires if r.strip()]
+    ## project = tomli.loads(open("pyproject.toml").read())
+    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
     ## for pkg in packages:
-    ## 	print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
+    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
     - attrs==22.2.0

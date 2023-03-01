@@ -43,13 +43,14 @@ factory-boy==3.2.1        # via -r requirements-dev.in, pytest-factoryboy
 faker==16.8.1             # via factory-boy
 fastjsonschema==2.16.2    # via nbformat
 filelock==3.9.0           # via tox, virtualenv
-flake8==5.0.4             # via -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-rst-docstrings
+flake8==5.0.4             # via -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
 flake8-bugbear==23.1.20   # via -r requirements-dev.in
 flake8-builtins==2.1.0    # via -r requirements-dev.in
 flake8-debugger==4.1.2    # via -r requirements-dev.in
 flake8-docstrings==1.7.0  # via -r requirements-dev.in
 flake8-eradicate==1.4.0   # via -r requirements-dev.in
 flake8-mutable==1.2.0     # via -r requirements-dev.in
+flake8-pyproject==1.2.2   # via -r requirements-dev.in
 flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
 flask==2.2.2              # via dace
 frozendict==2.3.4         # via gt4py (pyproject.toml)
@@ -130,7 +131,7 @@ sphinxcontrib-serializinghtml==1.1.5  # via sphinx
 sympy==1.9                # via dace, gt4py (pyproject.toml)
 tabulate==0.9.0           # via gt4py (pyproject.toml)
 toml==0.10.2              # via jupytext
-tomli==2.0.1              # via black, build, coverage, mypy, pyproject-api, pyproject-hooks, pytest, tox
+tomli==2.0.1              # via -r requirements-dev.in, black, build, coverage, flake8-pyproject, mypy, pyproject-api, pyproject-hooks, pytest, tox
 toolz==0.12.0             # via cytoolz, gt4py (pyproject.toml)
 tox==4.4.5                # via -r requirements-dev.in
 traitlets==5.9.0          # via jupyter-core, nbformat
