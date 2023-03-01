@@ -2,7 +2,7 @@
 
 ## Description
 
-<!-- 
+<!--
 Delete this comment and add a proper description of the changes contained in this PR. The text here will be used in the commit message since the approved PRs are always squash-merged. The preferred format is:
 
 ---
