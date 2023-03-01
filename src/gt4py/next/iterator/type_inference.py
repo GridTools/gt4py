@@ -185,54 +185,48 @@ class ValListTuple(Type):
 
     All items have
     - the same `kind` and `size`;
-    - `dtype` is `List` with different `list_dtypes`, `max_lengths`, and `has_skip_valuess`.
+    - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
     """
 
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     list_dtypes: Type = eve.field(default_factory=TypeVar.fresh)
-    max_lengths: Type = eve.field(default_factory=TypeVar.fresh)
-    has_skip_valuess: Type = eve.field(default_factory=TypeVar.fresh)
+    max_length: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
 
     def __eq__(self, other: typing.Any) -> bool:
         if (
             isinstance(self.list_dtypes, Tuple)
-            and isinstance(self.max_lengths, Tuple)
-            and isinstance(self.has_skip_valuess, Tuple)
+            and isinstance(self.max_length, Tuple)
+            and isinstance(self.has_skip_values, Tuple)
             and isinstance(other, Tuple)
         ):
             list_dtypes: Type = self.list_dtypes
-            max_lengths: Type = self.max_lengths
-            has_skip_valuess: Type = self.has_skip_valuess
             elems: Type = other
             while (
                 isinstance(list_dtypes, Tuple)
-                and isinstance(max_lengths, Tuple)
-                and isinstance(has_skip_valuess, Tuple)
                 and isinstance(elems, Tuple)
                 and Val(
                     kind=self.kind,
                     dtype=List(
                         list_dtypes.front,
-                        max_length=max_lengths.front,
-                        has_skip_values=has_skip_valuess.front,
+                        max_length=self.max_length,
+                        has_skip_values=self.has_skip_values,
                     ),
                     size=self.size,
                 )
                 == elems.front
             ):
                 list_dtypes = list_dtypes.others
-                max_lengths = max_lengths.others
-                has_skip_valuess = has_skip_valuess.others
                 elems = elems.others
-            return list_dtypes == max_lengths == has_skip_valuess == elems == EmptyTuple()
+            return list_dtypes == elems == EmptyTuple()
 
         return (
             isinstance(other, ValListTuple)
             and self.kind == other.kind
             and self.list_dtypes == other.list_dtypes
-            and self.max_lengths == other.max_lengths
-            and self.has_skip_valuess == other.has_skip_valuess
+            and self.max_length == other.max_length
+            and self.has_skip_values == other.has_skip_values
             and self.size == other.size
         )
 
@@ -241,27 +235,23 @@ class ValListTuple(Type):
     ) -> bool:
         if isinstance(other, Tuple):
             list_dtypes = [TypeVar.fresh() for _ in other]
-            max_lengths = [TypeVar.fresh() for _ in other]
-            has_skip_valuess = [TypeVar.fresh() for _ in other]
+            max_length = TypeVar.fresh()
+            has_skip_values = TypeVar.fresh()
             expanded = [
                 Val(
                     kind=self.kind,
                     dtype=List(dtype=dtype, max_length=max_length, has_skip_values=has_skip_values),
                     size=self.size,
                 )
-                for dtype, max_length, has_skip_values in zip(
-                    list_dtypes, max_lengths, has_skip_valuess
-                )
+                for dtype in list_dtypes
             ]
             add_constraint(self.list_dtypes, Tuple.from_elems(*list_dtypes))
-            add_constraint(self.max_lengths, Tuple.from_elems(*max_lengths))
-            add_constraint(self.has_skip_valuess, Tuple.from_elems(*has_skip_valuess))
+            add_constraint(self.max_length, max_length)
+            add_constraint(self.has_skip_values, has_skip_values)
             add_constraint(Tuple.from_elems(*expanded), other)
             return True
         if isinstance(other, EmptyTuple):
             add_constraint(self.list_dtypes, EmptyTuple())
-            add_constraint(self.max_lengths, EmptyTuple())
-            add_constraint(self.has_skip_valuess, EmptyTuple())
             return True
         return False
 
@@ -441,7 +431,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ),
         ret=FunctionType(
             args=ValListTuple(
-                kind=Value(), list_dtypes=T2, max_lengths=T4, has_skip_valuess=T5, size=T1
+                kind=Value(), list_dtypes=T2, max_length=T4, has_skip_values=T5, size=T1
             ),
             ret=Val_T0_T1,
         ),
@@ -924,6 +914,9 @@ class PrettyPrinter(eve.NodeTranslator):
     def visit_Primitive(self, node: Primitive) -> str:
         return node.name
 
+    def visit_List(self, node: List) -> str:
+        return f"L[{self.visit(node.dtype)}, {self.visit(node.max_length)}, {self.visit(node.has_skip_values)}]"
+
     def visit_FunctionDefinitionType(self, node: FunctionDefinitionType) -> str:
         return node.name + " :: " + self.visit(node.fun)
 
@@ -974,6 +967,39 @@ class PrettyPrinter(eve.NodeTranslator):
                     )
                 )
                 for dtype, defined_loc in zip(node.dtypes, defined_locs)
+            )
+            + ")"
+        )
+
+    def visit_ValListTuple(self, node: ValListTuple) -> str:
+        # print(node)
+        # exit(1)
+        if isinstance(node.list_dtypes, TypeVar):
+            return f"(L[…{self._subscript(node.list_dtypes.idx)}, {self.visit(node.max_length)}, {self.visit(node.has_skip_values)}]{self._fmt_size(node.size)}, …)"
+            # return "(L[T], )" + self._subscript(
+            #     f"[+{node.list_dtypes.idx}, {node.max_length}, {node.has_skip_values}]"
+            # )
+        assert isinstance(node.list_dtypes, (Tuple, EmptyTuple))
+
+        # if isinstance(node.defined_locs, (Tuple, EmptyTuple)):
+        #     defined_locs = node.defined_locs
+        # else:
+        #     defined_locs = Tuple.from_elems(*(Location(name="_") for _ in node.dtypes))
+        return (
+            "("
+            + ", ".join(
+                self.visit(
+                    Val(
+                        kind=Value(),
+                        dtype=List(
+                            dtype=dtype,
+                            max_length=node.max_length,
+                            has_skip_values=node.has_skip_values,
+                        ),
+                        size=node.size,
+                    )
+                )
+                for dtype in node.list_dtypes
             )
             + ")"
         )
