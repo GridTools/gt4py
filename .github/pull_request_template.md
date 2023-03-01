@@ -1,21 +1,28 @@
+<!-- Provide a one-line summary of your changes in the PR 'Title' field -->
+
 ## Description
 
-Describe the content of the PR and links to related issues, bugs of features.
+<!-- 
+Delete this comment and add a proper description of the changes contained in this PR. The text here will be used in the commit message since the approved PRs are always squash-merged. The preferred format is:
+
+---
+<type>[<scope>]: <title>
+
+[description of the main changes with links to appropriate documents/issues/references/...]
+
+Reviewed-by: John Who <github_handle | email>
+---
+
+<type>: fix | feat | build | ci | docs | style | refactor | perf |test
+<scope>: cartesian | next
+-->
 
 ## Requirements
 
-Before submitting this PR, please make sure:
+- [ ] All fixes and/or new features come with corresponding tests.
+- [ ] Important design decisions have been documented in the approriate ADR inside the [docs/development/ADRs/](docs/development/ADRs/Index.md) folder.
 
-- [ ] You have run the code checks, tests and documentation build successfully
-- [ ] All fixes and all new functionality are tested and documentation is up to date
-- [ ] You looked at the [review checklist](https://github.com/GridTools/gt4py/blob/main/REVIEW_CHECKLIST.txt)
+If this PR contains code authored by new contributors please make sure:
 
-Additionally, if this PR contains code authored by new contributors:
-
-- [ ] All the authors are covered by a valid contributor assignment agreement,
-signed by the employer if needed, provided to ETH Zurich
-- [ ] The names of all the new contributors have been added to an updated
-version of the AUTHORS.rst file included in the PR
- 
-
-
+- [ ] All the authors are covered by a valid contributor assignment agreement provided to ETH Zurich and signed by the employer if needed.
+- [ ] The PR contains an updated version of the `AUTHORS.md` file adding the names of all the new contributors.

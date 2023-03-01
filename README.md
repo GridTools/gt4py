@@ -120,4 +120,4 @@ pip install -e .
 
 ## ⚖️ License
 
-GT4Py is licensed under the terms of the `GPLv3 <https://github.com/GridTools/gt4py/blob/main/LICENSE.txt>`\_\_.
+GT4Py is licensed under the terms of the [GPLv3](https://github.com/GridTools/gt4py/blob/main/LICENSE.txt).

@@ -143,17 +143,21 @@ pytest -v -l -s tests/
 
 Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
 
-We recommended you to use `tox` to run the complete test suite in different environments:
+We recommended you to use `tox` for most development-related tasks, like running the complete test suite in different environments. `tox` runs the package installation script in properly isolated environments to run tests (or other tasks) in a reproducible way. A simple way to start with tox could be:
 
 ```bash
-# List all the available test environments
-tox -a
+# List all the available task environments
+tox list
 
-# Run test suite in a specific environment
-tox -e py310-base
+# Run a specific task environment
+tox run -e cartesian-py38-internal-cpu
 ```
 
-`tox` runs the package installation script and tests reliably by using properly isolated environments. Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end.
+Check `tox` documentation (`tox --help`) for the complete reference.
+
+<!--
+TODO: add test coverage instructions
+Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end. -->
 
 ## Pull Requests (PRs) and Merge Guidelines
 
