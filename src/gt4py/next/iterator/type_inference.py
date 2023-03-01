@@ -972,19 +972,9 @@ class PrettyPrinter(eve.NodeTranslator):
         )
 
     def visit_ValListTuple(self, node: ValListTuple) -> str:
-        # print(node)
-        # exit(1)
         if isinstance(node.list_dtypes, TypeVar):
             return f"(L[…{self._subscript(node.list_dtypes.idx)}, {self.visit(node.max_length)}, {self.visit(node.has_skip_values)}]{self._fmt_size(node.size)}, …)"
-            # return "(L[T], )" + self._subscript(
-            #     f"[+{node.list_dtypes.idx}, {node.max_length}, {node.has_skip_values}]"
-            # )
         assert isinstance(node.list_dtypes, (Tuple, EmptyTuple))
-
-        # if isinstance(node.defined_locs, (Tuple, EmptyTuple)):
-        #     defined_locs = node.defined_locs
-        # else:
-        #     defined_locs = Tuple.from_elems(*(Location(name="_") for _ in node.dtypes))
         return (
             "("
             + ", ".join(
