@@ -115,7 +115,7 @@ test py310:
   - mv .coverage .coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   - ls -la
   artifacts:
-    paths: [.coverage-*]
+    paths: [".coverage-*"]
   variables:
     <<: *py310
   parallel:
