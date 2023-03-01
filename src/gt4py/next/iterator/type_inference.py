@@ -179,6 +179,93 @@ class ValTuple(Type):
         return False
 
 
+class ValListTuple(Type):
+    """
+    A tuple of `Val` that contains `List`s.
+
+    All items have
+    - the same `kind` and `size`;
+    - `dtype` is `List` with different `list_dtypes`, `max_lengths`, and `has_skip_valuess`.
+    """
+
+    kind: Type = eve.field(default_factory=TypeVar.fresh)
+    list_dtypes: Type = eve.field(default_factory=TypeVar.fresh)
+    max_lengths: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_valuess: Type = eve.field(default_factory=TypeVar.fresh)
+    size: Type = eve.field(default_factory=TypeVar.fresh)
+
+    def __eq__(self, other: typing.Any) -> bool:
+        if (
+            isinstance(self.list_dtypes, Tuple)
+            and isinstance(self.max_lengths, Tuple)
+            and isinstance(self.has_skip_valuess, Tuple)
+            and isinstance(other, Tuple)
+        ):
+            list_dtypes: Type = self.list_dtypes
+            max_lengths: Type = self.max_lengths
+            has_skip_valuess: Type = self.has_skip_valuess
+            elems: Type = other
+            while (
+                isinstance(list_dtypes, Tuple)
+                and isinstance(max_lengths, Tuple)
+                and isinstance(has_skip_valuess, Tuple)
+                and isinstance(elems, Tuple)
+                and Val(
+                    kind=self.kind,
+                    dtype=List(
+                        list_dtypes.front,
+                        max_length=max_lengths.front,
+                        has_skip_values=has_skip_valuess.front,
+                    ),
+                    size=self.size,
+                )
+                == elems.front
+            ):
+                list_dtypes = list_dtypes.others
+                max_lengths = max_lengths.others
+                has_skip_valuess = has_skip_valuess.others
+                elems = elems.others
+            return list_dtypes == max_lengths == has_skip_valuess == elems == EmptyTuple()
+
+        return (
+            isinstance(other, ValListTuple)
+            and self.kind == other.kind
+            and self.list_dtypes == other.list_dtypes
+            and self.max_lengths == other.max_lengths
+            and self.has_skip_valuess == other.has_skip_valuess
+            and self.size == other.size
+        )
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if isinstance(other, Tuple):
+            list_dtypes = [TypeVar.fresh() for _ in other]
+            max_lengths = [TypeVar.fresh() for _ in other]
+            has_skip_valuess = [TypeVar.fresh() for _ in other]
+            expanded = [
+                Val(
+                    kind=self.kind,
+                    dtype=List(dtype=dtype, max_length=max_length, has_skip_values=has_skip_values),
+                    size=self.size,
+                )
+                for dtype, max_length, has_skip_values in zip(
+                    list_dtypes, max_lengths, has_skip_valuess
+                )
+            ]
+            add_constraint(self.list_dtypes, Tuple.from_elems(*list_dtypes))
+            add_constraint(self.max_lengths, Tuple.from_elems(*max_lengths))
+            add_constraint(self.has_skip_valuess, Tuple.from_elems(*has_skip_valuess))
+            add_constraint(Tuple.from_elems(*expanded), other)
+            return True
+        if isinstance(other, EmptyTuple):
+            add_constraint(self.list_dtypes, EmptyTuple())
+            add_constraint(self.max_lengths, EmptyTuple())
+            add_constraint(self.has_skip_valuess, EmptyTuple())
+            return True
+        return False
+
+
 class Column(Type):
     """Marker for column-sized values/iterators."""
 
@@ -229,7 +316,7 @@ class BoolType(Type):
     value: bool
 
 
-class ValueList(Type):
+class List(Type):
     dtype: Type = eve.field(default_factory=TypeVar.fresh)
     max_length: Type = eve.field(default_factory=TypeVar.fresh)
     has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
@@ -340,10 +427,8 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ),
         ),
         ret=FunctionType(
-            args=ValTuple(kind=Value(), dtypes=T3, size=T1),
-            ret=Val(
-                kind=Value(), dtype=ValueList(dtype=T0, max_length=T4, has_skip_values=T5), size=T1
-            ),  # underconstrained
+            args=ValListTuple(kind=Value(), list_dtypes=T2, size=T1),
+            ret=Val(kind=Value(), dtype=List(dtype=T0, max_length=T4, has_skip_values=T5), size=T1),
         ),
     ),
     "reduce": FunctionType(
@@ -355,22 +440,20 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             Val_T0_T1,
         ),
         ret=FunctionType(
-            args=ValTuple(kind=Value(), dtypes=T3, size=T1),  # underconstrained
+            args=ValListTuple(
+                kind=Value(), list_dtypes=T2, max_lengths=T4, has_skip_valuess=T5, size=T1
+            ),
             ret=Val_T0_T1,
         ),
     ),
     "make_const_list": FunctionType(
         args=Tuple.from_elems(Val_T0_T1),
-        ret=Val(
-            kind=Value(), dtype=ValueList(dtype=T0, max_length=T2, has_skip_values=T3), size=T1
-        ),
+        ret=Val(kind=Value(), dtype=List(dtype=T0, max_length=T2, has_skip_values=T3), size=T1),
     ),
     "list_get": FunctionType(
         args=Tuple.from_elems(
             Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
-            Val(
-                kind=Value(), dtype=ValueList(dtype=T0, max_length=T2, has_skip_values=T3), size=T1
-            ),
+            Val(kind=Value(), dtype=List(dtype=T0, max_length=T2, has_skip_values=T3), size=T1),
         ),
         ret=Val_T0_T1,
     ),
@@ -506,7 +589,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         ret = self.visit(node.expr, **kwargs)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
-    def visit_FunCall(
+    def visit_FunCall(  # noqa: C901 #TODO
         self,
         node: ir.FunCall,
         **kwargs,
@@ -549,7 +632,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             if node.fun.id == "make_list":
                 elems = list(self.visit(arg) for arg in node.args)
                 # TODO constraints between dtypes of args
-                lst = ValueList(
+                lst = List(
                     dtype=elems[0].dtype,
                     max_length=Length(length=len(elems)),
                     has_skip_values=TypeVar.fresh(),
@@ -584,11 +667,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                             dtype=dtype_,
                             size=size,
                             current_loc=current_loc_in,
-                            defined_loc=current_loc_out,  # TODO is this correct? since we are derefing in neighbors it has to?
+                            defined_loc=current_loc_out,
                         ),
                     )
                 )
-                lst = ValueList(
+                lst = List(
                     dtype=dtype_,
                     max_length=max_length,
                     has_skip_values=has_skip_values,
