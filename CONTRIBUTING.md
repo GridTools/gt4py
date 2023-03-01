@@ -2,7 +2,6 @@
 
 Contributions to GT4Py are welcome and greatly appreciated. Proper credit will be given to contributors by adding their names to the [AUTHORS.md](AUTHORS.md) file. Note that [ETH Zurich](https://ethz.ch/en.html) is the owner of the GridTools project and the GT4Py library, therefore external contributors must sign a contributor assignment agreement.
 
-
 ## Types of Contributions
 
 ### Report Bugs
@@ -39,10 +38,9 @@ If you are proposing a feature:
 - Remember that this is an open-source project and that contributions
   are welcome :)
 
+## Getting Started
 
-## Getting Started 
-
-Ready to start contributing? Follow these steps:
+Ready to start contributing? We use a [fork and pull request](https://www.atlassian.com/git/tutorials/comparing-workflows/forking-workflow) workflow for contributions. Pull requests need to pass all the automated checks as well as a review before they can be merged. To set up properly your local development environment follow these steps:
 
 1. Fork the [GT4Py](https://github.com/gridtools/gt4py) repo on GitHub.
 
@@ -87,7 +85,6 @@ Ready to start contributing? Follow these steps:
    ```
 
 7. Submit a pull request (PR) on [GT4Py's GitHub page](https://github.com/gridtools/gt4py).
-
 
 ## Testing
 
@@ -158,7 +155,6 @@ tox -e py310-base
 
 `tox` runs the package installation script and tests reliably by using properly isolated environments. Additionally, `tox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end.
 
-
 ## Pull Requests (PRs) and Merge Guidelines
 
 Before submitting a pull request, check that it meets the following criteria:
@@ -167,9 +163,9 @@ Before submitting a pull request, check that it meets the following criteria:
 2. If the pull request adds functionality, it should be documented both in the code docstrings and in the official documentation.
 3. If the pull request contains important design changes, it should contain a new ADR documenting the rationale behind the final decision.
 4. The pull request should have a proper description of its intent and the main changes in the code. In general this description should be used as commit message if the pull request is approved (check point **6.** below).
-5. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
-6. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
-
+5. If the pull request contains code authored by first-time contributors, check they are covered by a contributor agreement and they have been added to [AUTHORS.md](AUTHORS.md) file.
+6. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
+7. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `fix`, `feat`, `build`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`_).
 
 ## Releasing Process
 
@@ -185,7 +181,7 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
    $ bump2version minor # or patch
    ```
 
-3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automated if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines). 
+3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automated if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines).
 
 4. Commit the changes with the following commit message:
 
@@ -202,29 +198,27 @@ Currently, GT4Py releases are published as commit tags in the main GitHub reposi
 6. Push the new commit and tag directly to the upstream repo:
 
    ```bash
-   $ git push upstream 
+   $ git push upstream
    $ git push upstream v0.{M}.{m}.{p}
    ```
 
 7. Go to the GitHub website and verify that the new tag has been successfully created.
 
-
 ## Tools
 
 As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:
 
-   - [Black][black] for autoformatting source code.
-   - [isort][isort] for autoformatting import statements.
-   - [Flake8][flake8] for style enforcement and code linting.
-   - [pre-commit][pre-commit] for automating the execution of QA tools.
-   - [pytest][pytest] for writing readable tests, extended with:
-      + [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
-      + [pytest-xdist][pytest-xdist] for running tests in parallel.
-   - [tox][tox] for testing automating with different environments.
-   - [sphinx][sphinx] for generating documentation, extended with:
-      + [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
-      + [jupytext][jupytext] for writing user documentation with code examples.
-
+- [Black][black] for autoformatting source code.
+- [isort][isort] for autoformatting import statements.
+- [Flake8][flake8] for style enforcement and code linting.
+- [pre-commit][pre-commit] for automating the execution of QA tools.
+- [pytest][pytest] for writing readable tests, extended with:
+  - [Coverage.py][coverage] and [pytest-cov][pytest-cov] for test coverage reports.
+  - [pytest-xdist][pytest-xdist] for running tests in parallel.
+- [tox][tox] for testing and task automation with different environments.
+- [sphinx][sphinx] for generating documentation, extended with:
+  - [sphinx-autodoc][sphinx-autodoc] and [sphinx-napoleon][sphinx-napoleon] for extracting API documentation from docstrings.
+  - [jupytext][jupytext] for writing new user documentation with code examples.
 
 <!-- Reference links -->
 
@@ -246,4 +240,3 @@ As mentioned above, we use several tools to help us write high-quality code. New
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
 [tox]: https://tox.wiki/en/latest/#
-
