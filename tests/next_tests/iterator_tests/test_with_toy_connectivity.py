@@ -311,31 +311,31 @@ def test_shift_sliced_sparse(program_processor_no_gtfn_exec, lift_mode):
         assert np.allclose(out, ref)
 
 
-# @fundef
-# def slice_shifted_sparse_stencil(sparse):
-#     return deref(shift(1)(shift(V2V, 0)(sparse)))
+@fundef
+def slice_shifted_sparse_stencil(sparse):
+    return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-# def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
-#     program_processor, validate = program_processor_no_gtfn_exec
-#     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-#     out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
 
-#     ref = v2v_arr[:, 1][v2v_arr][:, 0]
+    ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
-#     run_processor(
-#         slice_shifted_sparse_stencil[{Vertex: range(0, 9)}],
-#         program_processor,
-#         inp,
-#         out=out,
-#         offset_provider={
-#             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-#         },
-#         lift_mode=lift_mode,
-#     )
+    run_processor(
+        slice_shifted_sparse_stencil[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+        },
+        lift_mode=lift_mode,
+    )
 
-#     if validate:
-#         assert np.allclose(out, ref)
+    if validate:
+        assert np.allclose(out, ref)
 
 
 @fundef
@@ -398,10 +398,8 @@ def shift_shift_stencil2(inp):
 @fundef
 def shift_sparse_stencil2(inp):
     return list_get(1, list_get(3, neighbors(V2E, inp)))
-    # return deref(shift(3, 1)(shift(V2E)(inp)))
 
 
-# TODO
 def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Vertex)
@@ -432,9 +430,8 @@ def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
         lift_mode=lift_mode,
     )
 
-
-#     if validate:
-#         assert np.allclose(out1, out2)
+    if validate:
+        assert np.allclose(out1, out2)
 
 
 @fundef
@@ -442,7 +439,6 @@ def sparse_shifted_stencil_reduce(inp):
     def sum_(a, b):
         return a + b
 
-    # return deref(shift(V2V, 0)(lift(deref)(shift(0)(inp))))
     return reduce(sum_, 0)(neighbors(V2V, lift(lambda x: reduce(sum_, 0)(deref(x)))(inp)))
 
 
