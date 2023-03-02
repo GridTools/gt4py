@@ -41,139 +41,83 @@ Cell = Dimension("Cell")
 V2EDim = Dimension("V2E", DimensionKind.LOCAL)
 V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TOff = FieldOffset("TOff", source=TDim, target=(TDim,))
 
 
-def debug_itir(tree):
-    """Compare tree snippets while debugging."""
-    from devtools import debug
+def lowering_test(ref, *, id=None):
+    def impl(fun):
+        def wrapper():
+            parsed = FieldOperatorParser.apply_to_function(fun)
+            lowered = FieldOperatorLowering.apply(parsed)
+            if id is not None:
+                assert lowered.id == id
+            assert lowered.expr == ref, f"expected='{ref}', actual='{lowered.expr}'"
 
-    from gt4py.eve.codegen import format_python_source
-    from gt4py.next.program_processors import EmbeddedDSL
+        wrapper.__name__ = fun.__name__
+        return wrapper
 
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
-
-
-def test_copy():
-    def copy_field(inp: Field[[TDim], float64]):
-        return inp
-
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(copy_field)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    assert lowered.id == "copy_field"
-    assert lowered.expr == im.ref("inp")
+    return impl
 
 
-def test_scalar_arg():
-    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
-        return alpha * bar
-
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
-
-    assert lowered.expr == reference
+@lowering_test(im.ref("inp"), id="test_copy_field")
+def test_copy_field(inp: Field[[TDim], float64]):
+    return inp
 
 
-def test_multicopy():
-    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        return inp1, inp2
-
-    parsed = FieldOperatorParser.apply_to_function(multicopy)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.lift_(
-        im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
-    )("inp1", "inp2")
-
-    assert lowered.expr == reference
+@lowering_test(im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar"))
+def test_scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+    return alpha * bar
 
 
-def test_arithmetic():
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
-        return inp1 + inp2
-
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(arithmetic)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.lift_(
-        im.lambda__("inp1", "inp2")(im.plus_(im.deref_("inp1"), im.deref_("inp2")))
-    )("inp1", "inp2")
-
-    assert lowered.expr == reference
-
-
-def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-
-    def shift_by_one(inp: Field[[IDim], float64]):
-        return inp(Ioff[1])
-
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(shift_by_one)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.shift_("Ioff", 1)("inp")
-
-    assert lowered.expr == reference
-
-
-def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-
-    def shift_by_one(inp: Field[[IDim], float64]):
-        return inp(Ioff[-1])
-
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(shift_by_one)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.shift_("Ioff", -1)("inp")
-
-    assert lowered.expr == reference
-
-
-def test_temp_assignment():
-    def copy_field(inp: Field[[TDim], float64]):
-        tmp = inp
-        inp = tmp
-        tmp2 = inp
-        return tmp2
-
-    parsed = FieldOperatorParser.apply_to_function(copy_field)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.let("tmp__0", "inp")(
-        im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")("tmp2__0"))
+@lowering_test(
+    im.lift_(im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2"))))(
+        "inp1", "inp2"
     )
+)
+def test_multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    return inp1, inp2
 
-    assert lowered.expr == reference
 
-
-def test_unary_ops():
-    def unary(inp: Field[[TDim], float64]):
-        tmp = +inp
-        tmp = -tmp
-        return tmp
-
-    parsed = FieldOperatorParser.apply_to_function(unary)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.let(
-        "tmp__0",
-        im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),
-    )(
-        im.let(
-            "tmp__1",
-            im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
-        )("tmp__1")
+@lowering_test(
+    im.lift_(im.lambda__("inp1", "inp2")(im.plus_(im.deref_("inp1"), im.deref_("inp2"))))(
+        "inp1", "inp2"
     )
+)
+def test_arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    return inp1 + inp2
 
-    assert lowered.expr == reference
+
+@lowering_test(im.shift_("TOff", 1)("inp"))
+def test_shift_by_one(inp: Field[[TDim], float64]):
+    return inp(TOff[1])
+
+
+@lowering_test(im.shift_("TOff", -1)("inp"))
+def test_negative_shift(inp: Field[[TDim], float64]):
+    return inp(TOff[-1])
+
+
+print(eval('im.shift_("TOff", -1)("inp")'))
+
+
+@lowering_test(
+    im.let("tmp__0", "inp")(im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")("tmp2__0")))
+)
+def test_temp_assignment(inp: Field[[TDim], float64]):
+    tmp = inp
+    inp = tmp
+    tmp2 = inp
+    return tmp2
+
+
+@lowering_test(im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"))
+def test_unary_plus(inp: Field[[TDim], float64]):
+    return +inp
+
+
+@lowering_test(im.lift_(im.lambda__("inp")(im.minus_(0, im.deref_("inp"))))("inp"))
+def test_unary_minus(inp: Field[[TDim], float64]):
+    return -inp
 
 
 def test_unpacking():
@@ -204,41 +148,27 @@ def test_unpacking():
     assert lowered.expr == reference
 
 
-def test_annotated_assignment():
-    pytest.skip("Annotated assignments are not properly supported at the moment.")
-
-    def copy_field(inp: Field[[TDim], float64]):
-        tmp: Field[[TDim], float64] = inp
-        return tmp
-
-    parsed = FieldOperatorParser.apply_to_function(copy_field)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.let("tmp__0", "inp")("tmp__0")
-
-    assert lowered.expr == reference
+@pytest.mark.skip("Annotated assignments are not properly supported at the moment.")
+@lowering_test(im.let("tmp__0", "inp")("tmp__0"))
+def test_annotated_assignment(inp: Field[[TDim], float64]):
+    tmp: Field[[TDim], float64] = inp
+    return tmp
 
 
-def test_call():
-    # create something that appears to the lowering like a field operator.
-    #  we could also create an actual field operator, but we want to avoid
-    #  using such heavy constructs for testing the lowering.
-    field_type = type_translation.from_type_hint(Field[[TDim], float64])
-    identity = SimpleNamespace(
-        __gt_type__=lambda: ts_ffront.FieldOperatorType(
-            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
-        )
+# create something that appears to the lowering like a field operator.
+#  we could also create an actual field operator, but we want to avoid
+#  using such heavy constructs for testing the lowering.
+field_type = type_translation.from_type_hint(Field[[TDim], float64])
+identity = SimpleNamespace(
+    __gt_type__=lambda: ts_ffront.FieldOperatorType(
+        definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
     )
+)
 
-    def call(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
-        return identity(inp)
 
-    parsed = FieldOperatorParser.apply_to_function(call)
-    lowered = FieldOperatorLowering.apply(parsed)
-
-    reference = im.lift_(im.lambda__("inp")(im.call_("identity")("inp")))("inp")
-
-    assert lowered.expr == reference
+@lowering_test(im.lift_(im.lambda__("inp")(im.call_("identity")("inp")))("inp"))
+def test_call(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
+    return identity(inp)
 
 
 def test_temp_tuple():
