@@ -55,6 +55,14 @@ from gt4py.next.program_processors.runners import gtfn_cpu
 from .conftest import run_processor
 
 
+def edge_index_field():  # TODO replace by index_field once supported in bindings
+    return np_as_located_field(Edge)(np.arange(e2v_arr.shape[0]))
+
+
+def vertex_index_field():  # TODO replace by index_field once supported in bindings
+    return np_as_located_field(Vertex)(np.arange(v2e_arr.shape[0]))
+
+
 @fundef
 def sum_edges_to_vertices(in_edges):
     return (
@@ -80,9 +88,9 @@ def sum_edges_to_vertices_reduce(in_edges):
     "stencil",
     [sum_edges_to_vertices, sum_edges_to_vertices_list_get_neighbors, sum_edges_to_vertices_reduce],
 )
-def test_sum_edges_to_vertices(program_processor_no_gtfn_exec, lift_mode, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Edge)
+def test_sum_edges_to_vertices(program_processor, lift_mode, stencil):
+    program_processor, validate = program_processor
+    inp = edge_index_field()
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
@@ -122,17 +130,11 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
 
 
 @fundef
-def map_make_list(in_edges):
-    return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_list(2, 2, 2, 2)))
-
-
-@fundef
 def map_make_const_list(in_edges):
     return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
 
 
 @pytest.mark.parametrize("stencil", [map_make_const_list])
-# @pytest.mark.parametrize("stencil", [map_make_list, map_make_const_list])
 def test_map_make_list(program_processor_no_gtfn_exec, lift_mode, stencil):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
@@ -156,11 +158,9 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
-def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(
-    program_processor_no_gtfn_exec, lift_mode
-):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Vertex)
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    inp = vertex_index_field()
     out = np_as_located_field(Cell)(np.zeros([9]))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
@@ -350,11 +350,7 @@ def lift_stencil(inp):
 
 def test_lift(program_processor, lift_mode):
     program_processor, validate = program_processor
-    inp = index_field(Vertex)
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        # TODO(tehrengruber): only a temporary solution until index fields are supported in the
-        #  gtfn backend.
-        inp = np_as_located_field(Vertex)(np.array([inp.field_getitem(i) for i in range(0, 9)]))
+    inp = vertex_index_field()
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
