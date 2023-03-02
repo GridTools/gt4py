@@ -23,12 +23,6 @@ from gt4py.next.iterator.transforms.cse import (
 )
 
 
-def test_bla():
-    expr = im.lambda__("a")(im.lambda__("b")(im.plus_(im.plus_("a", "b"), im.plus_("c", 1))))
-    blub = CollectSubexpressions.apply(expr)
-    bla = 1 + 1
-
-
 def test_trivial():
     common = ir.FunCall(fun=ir.SymRef(id="plus"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")])
     testee = ir.FunCall(fun=ir.SymRef(id="plus"), args=[common, common])

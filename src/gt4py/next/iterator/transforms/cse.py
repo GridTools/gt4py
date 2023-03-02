@@ -37,19 +37,19 @@ class _NodeReplacer(NodeTranslator):
         #  (λ(_cs_1) → _cs_1+_cs_1)(outer_expr)
         # This allows identifying more common subexpressions later on
         if isinstance(node, ir.FunCall) and isinstance(node.fun, ir.Lambda):
-            eligable_params = []
+            eligible_params = []
             for arg in node.args:
-                eligable_params.append(isinstance(arg, ir.SymRef) and arg.id.startswith("_cs"))
-            if any(eligable_params):
+                eligible_params.append(isinstance(arg, ir.SymRef) and arg.id.startswith("_cs"))
+            if any(eligible_params):
                 # note: the inline is opcount preserving anyway so avoid the additional
                 # effort in the inliner by disabling opcount preservation.
                 return inline_lambda(
-                    node, opcount_preserving=False, eligible_params=eligable_params
+                    node, opcount_preserving=False, eligible_params=eligible_params
                 )
         return node
 
 
-def is_collectable_expr(node: ir.Node):
+def _is_collectable_expr(node: ir.Node):
     if isinstance(node, ir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
@@ -81,7 +81,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         return {k: v for k, v in reversed(obj.subexprs.items()) if k is not node}
 
     def visit(self, node, **kwargs):
-        if not isinstance(node, SymbolTableTrait) and not is_collectable_expr(node):
+        if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 
         parents_collected_child_node_ids = kwargs.pop("collected_child_node_ids")
@@ -101,7 +101,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
 
         # if no symbols are used that are defined in the root node, i.e. the node given to `apply`,
         # we collect the subexpression
-        if not used_symbol_ids and is_collectable_expr(node):
+        if not used_symbol_ids and _is_collectable_expr(node):
             self.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
 
             # propagate to parent that we have collected its child
@@ -190,6 +190,9 @@ class CommonSubexpressionElimination(NodeTranslator):
             fun=ir.Lambda(params=params, expr=_NodeReplacer(expr_map).visit(node)),
             args=args,
         )
+        # TODO(tehrengruber): Instead of revisiting we might be able to replace subexpressions
+        #  inside of subexpressions directly. This would require a different order of replacement
+        #  (from lower to higher level).
         if revisit_node:
             return self.visit(result)
 
