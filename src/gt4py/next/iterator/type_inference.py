@@ -579,149 +579,163 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         ret = self.visit(node.expr, **kwargs)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
-    def visit_FunCall(  # noqa: C901 #TODO
+    def _visit_make_tuple(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to make_tuple are handled as being part of the grammar,
+        # not as function calls
+        argtypes = self.visit(node.args, **kwargs)
+        kind = (
+            TypeVar.fresh()
+        )  # `kind == Iterator()` means zipping iterators into an iterator of tuples
+        size = TypeVar.fresh()
+        dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
+        for d, a in zip(dtype, argtypes):
+            self.constraints.add((Val(kind=kind, dtype=d, size=size), a))
+        return Val(kind=kind, dtype=dtype, size=size)
+
+    def _visit_tuple_get(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to tuple_get are handled as being part of the grammar,
+        # not as function calls
+        if len(node.args) != 2:
+            raise TypeError("tuple_get requires exactly two arguments")
+        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
+            raise TypeError("The first argument to tuple_get must be a literal int")
+        idx = int(node.args[0].value)
+        tup = self.visit(node.args[1], **kwargs)
+        kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
+        elem = TypeVar.fresh()
+        size = TypeVar.fresh()
+
+        dtype = Tuple(front=elem, others=TypeVar.fresh())
+        for _ in range(idx):
+            dtype = Tuple(front=TypeVar.fresh(), others=dtype)
+
+        val = Val(
+            kind=kind,
+            dtype=dtype,
+            size=size,
+        )
+        self.constraints.add((tup, val))
+        return Val(kind=kind, dtype=elem, size=size)
+
+    def _visit_neighbors(self, node: ir.FunCall, **kwargs) -> Type:
+        if len(node.args) != 2:
+            raise TypeError("neighbors requires exactly two arguments")
+        if not isinstance(node.args[0], ir.OffsetLiteral):
+            raise TypeError("The first argument to neighbors must be an OffsetLiteral.")
+        if not isinstance(node.args[0].value, str):
+            raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
+
+        max_length: Type = TypeVar.fresh()
+        has_skip_values: Type = TypeVar.fresh()
+        if self.offset_provider:
+            connectivity = self.offset_provider[node.args[0].value]
+            assert isinstance(connectivity, Connectivity)
+            max_length = Length(length=connectivity.max_neighbors)
+            has_skip_values = BoolType(value=connectivity.has_skip_values)
+        current_loc_in, current_loc_out = _infer_shift_location_types(
+            [node.args[0]], self.offset_provider, self.constraints
+        )
+        dtype_ = TypeVar.fresh()
+        size = TypeVar.fresh()
+        it = self.visit(node.args[1], **kwargs)
+        self.constraints.add(
+            (
+                it,
+                Val(
+                    kind=Iterator(),
+                    dtype=dtype_,
+                    size=size,
+                    current_loc=current_loc_in,
+                    defined_loc=current_loc_out,
+                ),
+            )
+        )
+        lst = List(
+            dtype=dtype_,
+            max_length=max_length,
+            has_skip_values=has_skip_values,
+        )
+        return Val(kind=Value(), dtype=lst, size=size)
+
+    def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
+        if len(node.args) != 2:
+            raise TypeError("cast_ requires exactly two arguments.")
+        val_arg_type = self.visit(node.args[0], **kwargs)
+        type_arg = node.args[1]
+        if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
+            raise TypeError("The second argument to `cast_` must be a type literal.")
+
+        size = TypeVar.fresh()
+
+        self.constraints.add(
+            (
+                val_arg_type,
+                Val(
+                    kind=Value(),
+                    dtype=TypeVar.fresh(),
+                    size=size,
+                ),
+            )
+        )
+
+        return Val(
+            kind=Value(),
+            dtype=Primitive(name=type_arg.id),
+            size=size,
+        )
+
+    def _visit_shift(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to shift are handled as being part of the grammar, not
+        # as function calls, as the type depends on the offset provider
+        current_loc_in, current_loc_out = _infer_shift_location_types(
+            node.args, self.offset_provider, self.constraints
+        )
+        defined_loc = TypeVar.fresh()
+        dtype_ = TypeVar.fresh()
+        size = TypeVar.fresh()
+        return FunctionType(
+            args=Tuple.from_elems(
+                Val(
+                    kind=Iterator(),
+                    dtype=dtype_,
+                    size=size,
+                    current_loc=current_loc_in,
+                    defined_loc=defined_loc,
+                ),
+            ),
+            ret=Val(
+                kind=Iterator(),
+                dtype=dtype_,
+                size=size,
+                current_loc=current_loc_out,
+                defined_loc=defined_loc,
+            ),
+        )
+
+    def _visit_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        for arg in node.args:
+            self.constraints.add(
+                (
+                    Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+                    self.visit(arg, **kwargs),
+                )
+            )
+        return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
+
+    def _visit_cartesian_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        return self._visit_domain(node, **kwargs)
+
+    def _visit_unstructured_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        return self._visit_domain(node, **kwargs)
+
+    def visit_FunCall(
         self,
         node: ir.FunCall,
         **kwargs,
     ) -> Type:
-        if isinstance(node.fun, ir.SymRef):
-            if node.fun.id == "make_tuple":
-                # Calls to make_tuple are handled as being part of the grammar,
-                # not as function calls
-                argtypes = self.visit(node.args, **kwargs)
-                kind = (
-                    TypeVar.fresh()
-                )  # `kind == Iterator()` means zipping iterators into an iterator of tuples
-                size = TypeVar.fresh()
-                dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
-                for d, a in zip(dtype, argtypes):
-                    self.constraints.add((Val(kind=kind, dtype=d, size=size), a))
-                return Val(kind=kind, dtype=dtype, size=size)
-            if node.fun.id == "tuple_get":
-                # Calls to tuple_get are handled as being part of the grammar,
-                # not as function calls
-                if len(node.args) != 2:
-                    raise TypeError("tuple_get requires exactly two arguments")
-                if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-                    raise TypeError("The first argument to tuple_get must be a literal int")
-                idx = int(node.args[0].value)
-                tup = self.visit(node.args[1], **kwargs)
-                kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
-                elem = TypeVar.fresh()
-                size = TypeVar.fresh()
-
-                dtype = Tuple(front=elem, others=TypeVar.fresh())
-                for _ in range(idx):
-                    dtype = Tuple(front=TypeVar.fresh(), others=dtype)
-
-                val = Val(
-                    kind=kind,
-                    dtype=dtype,
-                    size=size,
-                )
-                self.constraints.add((tup, val))
-                return Val(kind=kind, dtype=elem, size=size)
-            if node.fun.id == "neighbors":
-                if len(node.args) != 2:
-                    raise TypeError("neighbors requires exactly two arguments")
-                if not isinstance(node.args[0], ir.OffsetLiteral):
-                    raise TypeError("The first argument to neighbors must be an OffsetLiteral.")
-                if not isinstance(node.args[0].value, str):
-                    raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
-
-                max_length: Type = TypeVar.fresh()
-                has_skip_values: Type = TypeVar.fresh()
-                if self.offset_provider:
-                    connectivity = self.offset_provider[node.args[0].value]
-                    assert isinstance(connectivity, Connectivity)
-                    max_length = Length(length=connectivity.max_neighbors)
-                    has_skip_values = BoolType(value=connectivity.has_skip_values)
-                current_loc_in, current_loc_out = _infer_shift_location_types(
-                    [node.args[0]], self.offset_provider, self.constraints
-                )
-                dtype_ = TypeVar.fresh()
-                size = TypeVar.fresh()
-                it = self.visit(node.args[1], **kwargs)
-                self.constraints.add(
-                    (
-                        it,
-                        Val(
-                            kind=Iterator(),
-                            dtype=dtype_,
-                            size=size,
-                            current_loc=current_loc_in,
-                            defined_loc=current_loc_out,
-                        ),
-                    )
-                )
-                lst = List(
-                    dtype=dtype_,
-                    max_length=max_length,
-                    has_skip_values=has_skip_values,
-                )
-                return Val(kind=Value(), dtype=lst, size=size)
-            if node.fun.id == "cast_":
-                if len(node.args) != 2:
-                    raise TypeError("cast_ requires exactly two arguments.")
-                val_arg_type = self.visit(node.args[0], **kwargs)
-                type_arg = node.args[1]
-                if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
-                    raise TypeError("The second argument to `cast_` must be a type literal.")
-
-                size = TypeVar.fresh()
-
-                self.constraints.add(
-                    (
-                        val_arg_type,
-                        Val(
-                            kind=Value(),
-                            dtype=TypeVar.fresh(),
-                            size=size,
-                        ),
-                    )
-                )
-
-                return Val(
-                    kind=Value(),
-                    dtype=Primitive(name=type_arg.id),
-                    size=size,
-                )
-            if node.fun.id == "shift":
-                # Calls to shift are handled as being part of the grammar, not
-                # as function calls, as the type depends on the offset provider
-                current_loc_in, current_loc_out = _infer_shift_location_types(
-                    node.args, self.offset_provider, self.constraints
-                )
-                defined_loc = TypeVar.fresh()
-                dtype_ = TypeVar.fresh()
-                size = TypeVar.fresh()
-                return FunctionType(
-                    args=Tuple.from_elems(
-                        Val(
-                            kind=Iterator(),
-                            dtype=dtype_,
-                            size=size,
-                            current_loc=current_loc_in,
-                            defined_loc=defined_loc,
-                        ),
-                    ),
-                    ret=Val(
-                        kind=Iterator(),
-                        dtype=dtype_,
-                        size=size,
-                        current_loc=current_loc_out,
-                        defined_loc=defined_loc,
-                    ),
-                )
-            if node.fun.id.endswith("domain"):
-                for arg in node.args:
-                    self.constraints.add(
-                        (
-                            Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-                            self.visit(arg, **kwargs),
-                        )
-                    )
-                return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
+        if isinstance(node.fun, ir.SymRef) and hasattr(self, f"_visit_{node.fun.id}"):
+            # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
+            return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
 
         fun = self.visit(node.fun, **kwargs)
         args = Tuple.from_elems(*self.visit(node.args, **kwargs))
