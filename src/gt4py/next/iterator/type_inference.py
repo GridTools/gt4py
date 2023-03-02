@@ -589,7 +589,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 # Calls to make_tuple are handled as being part of the grammar,
                 # not as function calls
                 argtypes = self.visit(node.args, **kwargs)
-                kind = TypeVar.fresh()
+                kind = (
+                    TypeVar.fresh()
+                )  # `kind == Iterator()` means zipping iterators into an iterator of tuples
                 size = TypeVar.fresh()
                 dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
                 for d, a in zip(dtype, argtypes):
@@ -604,7 +606,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                     raise TypeError("The first argument to tuple_get must be a literal int")
                 idx = int(node.args[0].value)
                 tup = self.visit(node.args[1], **kwargs)
-                kind = TypeVar.fresh()  # TODO can be Value() as we cannot have tuple of iterator?
+                kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
                 elem = TypeVar.fresh()
                 size = TypeVar.fresh()
 
@@ -619,15 +621,6 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 )
                 self.constraints.add((tup, val))
                 return Val(kind=kind, dtype=elem, size=size)
-            if node.fun.id == "make_list":
-                elems = list(self.visit(arg) for arg in node.args)
-                # TODO constraints between dtypes of args
-                lst = List(
-                    dtype=elems[0].dtype,
-                    max_length=Length(length=len(elems)),
-                    has_skip_values=TypeVar.fresh(),
-                )
-                return Val(kind=Value(), dtype=lst, size=TypeVar.fresh())
             if node.fun.id == "neighbors":
                 if len(node.args) != 2:
                     raise TypeError("neighbors requires exactly two arguments")

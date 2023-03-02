@@ -1147,11 +1147,6 @@ def make_const_list(value):
     return _ConstList(value)
 
 
-@builtins.make_list.register(EMBEDDED)
-def make_list(*args):
-    return _List(args)
-
-
 @builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*lists):

@@ -35,7 +35,6 @@ from gt4py.next.iterator.builtins import (
     lift,
     list_get,
     make_const_list,
-    make_list,
     map_,
     multiplies,
     neighbors,
@@ -134,15 +133,14 @@ def map_make_const_list(in_edges):
     return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
 
 
-@pytest.mark.parametrize("stencil", [map_make_const_list])
-def test_map_make_list(program_processor_no_gtfn_exec, lift_mode, stencil):
+def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
 
     run_processor(
-        stencil[{Vertex: range(0, 9)}],
+        map_make_const_list[{Vertex: range(0, 9)}],
         program_processor,
         inp,
         out=out,
