@@ -308,6 +308,7 @@ class FieldOperatorLowering(NodeTranslator):
         init_expr: int | itir.Literal,
         **kwargs,
     ):
+        # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
         val = im.call_(im.call_("reduce")(op, init_expr))(im.deref_("it"))
