@@ -112,11 +112,11 @@ test py310:
   - cd /gt4py.src
   - python -c "import cupy"
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT -- --cov
-  - mv .coverage coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - mv .coverage $CI_PROJECT_DIR/coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   - ls -la
   artifacts:
     paths:
-      - coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+      - coverage-*
   variables:
     <<: *py310
   parallel:
