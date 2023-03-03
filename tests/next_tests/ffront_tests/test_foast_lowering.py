@@ -89,20 +89,14 @@ def test_multicopy():
     assert lowered.expr == reference
 
 
-@lowering_test
-def test_arithmetic(lowered):
+def test_arithmetic():
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1 + inp2
 
-    assert lowered(arithmetic) == im.as_lifted_lambda(
-        im.ref("plus"), im.ref("inp1"), im.ref("inp2")
-    )
+    parsed = FieldOperatorParser.apply_to_function(arithmetic)
+    lowered = FieldOperatorLowering.apply(parsed)
 
-    # parsed = FieldOperatorParser.apply_to_function(arithmetic)
-    # lowered = FieldOperatorLowering.apply(parsed)
-
-    # reference =
-    # print(lowered.expr)
+    reference = im.as_lifted_lambda(im.ref("plus"), im.ref("inp1"), im.ref("inp2"))
 
     assert lowered.expr == reference
 
