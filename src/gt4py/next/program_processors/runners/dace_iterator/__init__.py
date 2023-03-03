@@ -84,17 +84,14 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     program = preprocess_program(program, offset_provider)
     arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
-    sdfg = sdfg_genenerator.visit(program)
+    sdfg: dace.SDFG = sdfg_genenerator.visit(program)
 
     dace_args = get_args(program.params, args)
+    dace_field_args = {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
     dace_conn_args = get_connectivity_args(neighbor_tables)
-    dace_shapes = get_shape_args(
-        sdfg.arrays, {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
-    )
+    dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
-    dace_strides = get_stride_args(
-        sdfg.arrays, {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
-    )
+    dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
     with dace.config.temporary_config():

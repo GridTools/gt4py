@@ -27,10 +27,17 @@ from gt4py.next.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
+@pytest.fixture(
+    params=[
+        roundtrip.executor,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]
+)
 def fieldview_backend(request):
     yield request.param
 
