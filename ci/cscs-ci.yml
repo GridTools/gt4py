@@ -112,10 +112,10 @@ test py310:
   - cd /gt4py.src
   - python -c "import cupy"
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT -- --cov
-  - mv .coverage $CI_PROJECT_DIR/coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - mv .coverage coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
   artifacts:
     paths:
-      - coverage-*
+    - gt4py.src/coverage-*
   variables:
     <<: *py310
   parallel:
@@ -136,6 +136,7 @@ combined coverage:
     <<: *py310
   stage: coverage
   script:
+  - cd /gt4py.src
   - pip install --upgrade pip coverage
   - coverage combine coverage-*
   - coverage json
