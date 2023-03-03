@@ -8,9 +8,7 @@ Delete this comment and add a proper description of the changes contained in thi
 ---
 <type>[<scope>]: <one-line-summary>
 
-[description of the main changes with links to appropriate documents/issues/references/...]
-
-Reviewed-by: John Who <github_handle | email>
+[description of the main changes with links to appropriate issues/documents/references/...]
 ---
 
 <type>:
@@ -24,7 +22,8 @@ Reviewed-by: John Who <github_handle | email>
     - style: Changes that do not affect the meaning of the code
     - test: Adding missing tests or correcting existing tests
 
-<scope>: cartesian | next
+# only add scope if changes are limited to a specific subsytem
+<scope>: cartesian | eve | next | storage
 -->
 
 ## Requirements
