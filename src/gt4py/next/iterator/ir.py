@@ -144,16 +144,16 @@ BINARY_MATH_NUMBER_BUILTINS = {
 TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 
 BUILTINS = {
-    "cartesian_domain", # +
-    "unstructured_domain", # +
-    "named_range", # +
-    "lift", # +
+    "cartesian_domain",
+    "unstructured_domain",
+    "named_range",
+    "lift",
     "make_tuple",
     "tuple_get",
     "reduce",
-    "deref", # +
+    "deref",
     "can_deref",
-    "shift", # +
+    "shift",
     "scan",
     "if_",
     "cast_",
