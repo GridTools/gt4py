@@ -177,9 +177,9 @@ BUILTINS = {
     "make_tuple",
     "tuple_get",
     "reduce",
-    "deref", # +
+    "deref",
     "can_deref",
-    "shift", # +
+    "shift",
     "scan",
     "if_",
     "cast_",
