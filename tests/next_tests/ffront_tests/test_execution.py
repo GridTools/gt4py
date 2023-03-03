@@ -41,12 +41,14 @@ from gt4py.next.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
 
 from .ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
@@ -64,6 +66,8 @@ def test_copy(fieldview_backend):
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -146,6 +150,8 @@ def test_tuples(fieldview_backend):
 
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("Tuples are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
 
     @field_operator
     def tuples(
@@ -168,6 +174,9 @@ def test_tuples(fieldview_backend):
 
 def test_scalar_arg(fieldview_backend):
     """Test scalar argument being turned into 0-dim field."""
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support broadcast")
+
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -182,6 +191,8 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support broadcast")
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -202,6 +213,8 @@ def test_nested_scalar_arg(fieldview_backend):
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support index fields and constant fields")
 
     inp = index_field(Edge, dtype=float64)
     factor = 3.0
@@ -230,6 +243,8 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
         )
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support broadcast")
 
     size = 10
     out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
@@ -248,6 +263,8 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
 
 
 def test_scalar_scan():
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support scan")
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -268,6 +285,8 @@ def test_scalar_scan():
 
 
 def test_tuple_scalar_scan():
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support scan")
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -291,6 +310,8 @@ def test_tuple_scalar_scan():
 
 
 def test_astype_int(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support cast: TODO how to cast in DaCe?")
     size = 10
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
@@ -306,6 +327,8 @@ def test_astype_int(fieldview_backend):
 
 
 def test_astype_bool(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support cast: TODO how to cast in DaCe?")
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
     c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
@@ -320,6 +343,8 @@ def test_astype_bool(fieldview_backend):
 
 
 def test_astype_float(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support cast: TODO how to cast in DaCe?")
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
     c_int32 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int32))
     out_int_32 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int32))
@@ -334,6 +359,8 @@ def test_astype_float(fieldview_backend):
 
 
 def test_nested_tuple_return():
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -355,6 +382,8 @@ def test_nested_tuple_return():
 
 
 def test_tuple_return_2(reduction_setup):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -382,6 +411,8 @@ def test_tuple_return_2(reduction_setup):
 
 @pytest.mark.xfail(raises=NotImplementedError)
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -420,6 +451,8 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
 
 
 def test_tuple_arg(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -442,6 +475,8 @@ def test_tuple_arg(fieldview_backend):
 def test_fieldop_from_scan(fieldview_backend, forward):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
@@ -464,6 +499,8 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 def test_solve_triag(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
 
     shape = (3, 7, 5)
     rng = np.random.default_rng()
@@ -535,6 +572,8 @@ def test_ternary_operator():
 
 
 def test_ternary_operator_tuple():
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -612,6 +651,8 @@ def test_ternary_scan():
 def test_scan_nested_tuple_output(fieldview_backend, forward):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support scan or tuples")
 
     init = (1.0, (2.0, 3.0))
     out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
@@ -636,6 +677,8 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
 def test_scan_nested_tuple_input(fieldview_backend, forward):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support scan or tuples")
 
     init = 1.0
     inp1 = np_as_located_field(KDim)(np.ones(size))
@@ -790,6 +833,8 @@ def test_domain_tuple(fieldview_backend):
 def test_where_k_offset(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support index fields")
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
@@ -819,6 +864,8 @@ def test_undefined_symbols():
 def test_zero_dims_fields(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Implicit broadcast are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support broadcast")
 
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
@@ -834,6 +881,8 @@ def test_zero_dims_fields(fieldview_backend):
 def test_implicit_broadcast_mixed_dims(fieldview_backend):
     if fieldview_backend == gtfn_cpu.run_gtfn:
         pytest.skip("Implicit broadcast are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support broadcast")
 
     input1 = np_as_located_field(IDim)(np.ones((10,)))
     inp = np_as_located_field()(np.array(1.0))
@@ -855,6 +904,8 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
 
 def test_tuple_unpacking(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out1 = np_as_located_field(IDim)(np.ones((size)))
@@ -885,6 +936,8 @@ def test_tuple_unpacking(fieldview_backend):
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
@@ -921,6 +974,8 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
@@ -933,6 +988,8 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("DaCe backend doesn't support tuples")
     with pytest.raises(
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
