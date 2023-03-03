@@ -49,7 +49,7 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
    ```bash
    $ git clone git@github.com:your_name_here/gt4py.git
    $ cd gt4py
-   $ git checkout functional
+   $ git checkout main
    ```
 
 3. Follow instructions in the [README.md](README.md) file to set up an environment for local development. For example:
