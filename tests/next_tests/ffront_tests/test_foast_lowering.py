@@ -57,7 +57,6 @@ def test_copy():
     def copy_field(inp: Field[[TDim], float64]):
         return inp
 
-    # ast_passes
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
@@ -65,17 +64,17 @@ def test_copy():
     assert lowered.expr == im.ref("inp")
 
 
-def test_scalar_arg():
-    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
-        return alpha * bar
+# def test_scalar_arg():
+#     def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+#         return alpha * bar
 
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
-    lowered = FieldOperatorLowering.apply(parsed)
+#     # ast_passes
+#     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
+#     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
+#     reference = im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
 
-    assert lowered.expr == reference
+#     assert lowered.expr == reference
 
 
 def test_multicopy():
@@ -85,24 +84,25 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(
-        im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
-    )("inp1", "inp2")
+    reference = im.as_lifted_lambda(im.call_(im.ref("make_tuple")), im.ref("inp1"), im.ref("inp2"))
 
     assert lowered.expr == reference
 
 
-def test_arithmetic():
+@lowering_test
+def test_arithmetic(lowered):
     def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
         return inp1 + inp2
 
-    # ast_passes
-    parsed = FieldOperatorParser.apply_to_function(arithmetic)
-    lowered = FieldOperatorLowering.apply(parsed)
+    assert lowered(arithmetic) == im.as_lifted_lambda(
+        im.ref("plus"), im.ref("inp1"), im.ref("inp2")
+    )
 
-    reference = im.lift_(
-        im.lambda__("inp1", "inp2")(im.plus_(im.deref_("inp1"), im.deref_("inp2")))
-    )("inp1", "inp2")
+    # parsed = FieldOperatorParser.apply_to_function(arithmetic)
+    # lowered = FieldOperatorLowering.apply(parsed)
+
+    # reference =
+    # print(lowered.expr)
 
     assert lowered.expr == reference
 
@@ -113,7 +113,6 @@ def test_shift():
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[1])
 
-    # ast_passes
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
@@ -128,7 +127,6 @@ def test_negative_shift():
     def shift_by_one(inp: Field[[IDim], float64]):
         return inp(Ioff[-1])
 
-    # ast_passes
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 

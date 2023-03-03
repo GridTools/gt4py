@@ -242,9 +242,7 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                return im.lift_(
-                    im.lambda__("it")(im.deref_(im.shift_(offset_name, offset_index)("it")))
-                )(self.visit(node.func, **kwargs))
+                return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
             case foast.Name(id=offset_name):
                 return im.lift_(
                     im.lambda__("it")(im.neighbors_(im.ensure_offset(str(offset_name)), "it"))
