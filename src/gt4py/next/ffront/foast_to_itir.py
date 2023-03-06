@@ -12,9 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, SupportsFloat, SupportsInt
-
-import numpy as np
+from typing import Any
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.common import DimensionKind
@@ -175,11 +173,12 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
+        dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             # TODO: invert only for bool right now
             return self._map("not_", node.operand)
 
-        return self._map(node.op.value, im.as_lifted_capture(im.literal_("0", "int")), node.operand)
+        return self._map(node.op.value, self._make_literal("0", dtype), node.operand)
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -268,41 +267,19 @@ class FieldOperatorLowering(NodeTranslator):
         return im.as_lifted_lambda(val, it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        return self._make_reduction_expr(
-            node, "plus", self._make_literal(0, node.type.dtype), **kwargs
-        )
+        dtype = type_info.extract_dtype(node.type)
+        return self._make_reduction_expr(node, "plus", self._make_literal("0", dtype), **kwargs)
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        np_type = getattr(np, node.type.dtype.kind.name.lower())
-        min_value: SupportsInt | SupportsFloat
-        if type_info.is_integral(node.type):
-            min_value = np.iinfo(np.int32).min  # not sure why int64 min is converted into an int128
-        elif type_info.is_floating_point(node.type):
-            min_value = np.finfo(np_type).min
-        else:
-            raise AssertionError(
-                "`max_over` is only defined for integral or floating point types."
-                " This error should have been catched in type deduction aready."
-            )
-        init_expr = self._make_literal(min_value, node.type.dtype)
+        dtype = type_info.extract_dtype(node.type)
+        min_value, _ = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        np_type = getattr(np, node.type.dtype.kind.name.lower())
-        max_value: SupportsInt | SupportsFloat
-        if type_info.is_integral(node.type):
-            max_value = np.iinfo(np.int32).max
-        elif type_info.is_floating_point(node.type):
-            max_value = np.finfo(np_type).max
-        else:
-            raise AssertionError(
-                "`min_over` is only defined for integral or floating point types."
-                " This error should have been catched in type deduction aready."
-            )
-        init_expr = self._make_literal(max_value, node.type.dtype)
+        dtype = type_info.extract_dtype(node.type)
+        _, max_value = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
@@ -349,8 +326,6 @@ class FieldOperatorLowering(NodeTranslator):
             op = im.call_("map_")(op)
 
         return im.as_lifted_lambda(im.call_(op), *lowered_args)
-
-        raise AssertionError()
 
 
 class FieldOperatorLoweringError(Exception):

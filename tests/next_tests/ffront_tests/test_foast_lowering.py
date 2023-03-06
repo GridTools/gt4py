@@ -155,8 +155,16 @@ def test_unary_ops():
     parsed = FieldOperatorParser.apply_to_function(unary)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp__0", im.as_lifted_lambda("plus", im.as_lifted_capture(0), "inp"))(
-        im.let("tmp__1", im.as_lifted_lambda("minus", im.as_lifted_capture(0), "tmp__0"))("tmp__1")
+    reference = im.let(
+        "tmp__0",
+        im.as_lifted_lambda("plus", im.as_lifted_capture(im.literal_("0", "float64")), "inp"),
+    )(
+        im.let(
+            "tmp__1",
+            im.as_lifted_lambda(
+                "minus", im.as_lifted_capture(im.literal_("0", "float64")), "tmp__0"
+            ),
+        )("tmp__1")
     )
 
     assert lowered.expr == reference
