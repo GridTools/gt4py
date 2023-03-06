@@ -35,7 +35,7 @@ dependencies = [
   "devtools>=0.6",
   "frozendict>=2.3",
   "gridtools-cpp>=2.2.3,==2.*",
-  "importlib_resources>=5.0;python_version<'3.9'",
+  "importlib-resources>=5.0;python_version<'3.9'",
   "jinja2>=2.10",
   "lark>=1.1.2",
   "mako>=1.1",

@@ -34,15 +34,15 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 
   ```python
   # Correct use of `...` as the empty body of an abstract method
-  class AbstractEventLoop:
+  class AbstractFoo:
      @abstractmethod
-     def run(self, ...):
+     def bar(self) -> Bar:
         ...
 
   # Correct use of `pass` when mixed with other statements
   try:
-     client.get(id=42)
-  except ApiException:
+     resource.load(id=42)
+  except ResourceException:
      pass
   ```
 
