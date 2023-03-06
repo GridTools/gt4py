@@ -259,8 +259,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f"Expected {dim}, but got {keys_dims_types} "
             )
 
-        return_vals = [self.visit(elts_i) for elts_i in node_domain.values_[dim_i].elts]
-        return return_vals
+        return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
