@@ -105,7 +105,7 @@ class FieldOperatorLowering(NodeTranslator):
         # note: we don't need the axis here as this is handled by the program
         #  decorator
 
-        # TODO a lowering hack, there are valid itir expressions, but in a place where no iterators are allowed..
+        # TODO a lowering hack, they are valid itir expressions, but in a place where no iterators are allowed..
         # Could we fixed by running inline lift locally here and we would get a pure value expression.
         # TODO there are more places like this, e.g. init of reduce
         forward = im.deref_(self.visit(node.forward, **kwargs))
