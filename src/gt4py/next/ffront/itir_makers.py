@@ -280,22 +280,15 @@ def literal_(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
 
 
+def as_lifted_capture(expr: str | itir.Expr):
+    return lift_(lambda__()(expr))()
+
+
 def as_lifted_lambda(op: str | Callable, *its):
     if isinstance(op, (str, itir.SymRef)):
         op = call_(op)
     args = [f"__arg{i}" for i in range(len(its))]
     return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)
-
-
-def as_lifted_lambda_from_values(op: str | Callable, *its):
-    if isinstance(op, (str, itir.SymRef)):
-        op = call_(op)
-    args = [f"__arg{i}" for i in range(len(its))]
-    return lift_(lambda__(*args)(op(*[arg for arg in args])))(*its)
-
-
-def make_const_list_(val):
-    return call_("make_const_list")(val)
 
 
 def map__(op):
