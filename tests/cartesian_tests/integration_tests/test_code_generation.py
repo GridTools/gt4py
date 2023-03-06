@@ -353,7 +353,7 @@ def test_input_order(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
         in_field: gtscript.Field[np.float64],
-        parameter: np.float,
+        parameter: np.float64,
         out_field: gtscript.Field[np.float64],
     ):
         with computation(PARALLEL), interval(...):
