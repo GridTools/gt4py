@@ -75,7 +75,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     return literal_or_expr
 
 
-def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetLiteral:
+def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
     """
     Convert Python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
 
@@ -87,7 +87,7 @@ def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetL
     >>> ensure_offset(itir.OffsetLiteral(value="J"))
     OffsetLiteral(value='J')
     """
-    if isinstance(str_or_offset, str):
+    if isinstance(str_or_offset, (str, int)):
         return itir.OffsetLiteral(value=str_or_offset)
     return str_or_offset
 
@@ -266,7 +266,7 @@ def shift_(offset, value=None):
     offset = ensure_offset(offset)
     args = [offset]
     if value is not None:
-        value = ensure_expr(value)
+        value = ensure_offset(value)
         args.append(value)
     return call_(call_("shift")(*args))
 
