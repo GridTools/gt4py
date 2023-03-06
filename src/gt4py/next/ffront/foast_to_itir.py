@@ -162,6 +162,7 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
+        # TODO double-check that this works with `itir.map_`ed stuff
         return im.as_lifted_lambda(
             lambda tuple_: im.tuple_get_(node.index, tuple_), self.visit(node.value, **kwargs)
         )
