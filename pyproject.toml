@@ -324,7 +324,7 @@ zip-safe = false
 version = {attr = "gt4py.__about__.__version__"}
 
 [tool.setuptools.package-data]
-gt4py = ["py.typed", "*.in", "*.md", "*.rst", "*.toml", "*.txt"]
+"*" = ["py.typed", "*.in", "*.md", "*.rst", "*.toml", "*.txt"]
 
 [tool.setuptools.packages]
 find = {namespaces = false, where = ["src"]}

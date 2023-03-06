@@ -26,6 +26,26 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 - According to subsection [_2.19 Power Features_](https://google.github.io/styleguide/pyguide.html#219-power-features), direct use of _power features_ (e.g. custom metaclasses, import hacks, reflection) should be avoided, but standard library classes that internally use these power features are accepted. Following the same spirit, we allow the use of power features in infrastructure code with similar functionality and scope as the Python standard library.
 - According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing), symbols from `typing` and `collections.abc` modules used in type annotations _"can be imported directly to keep common annotations concise and match standard typing practices"_. Following the same spirit, we allow symbols to be imported directly from third-party or internal modules when they only contain a collection of frequently used typying definitions.
 
+### Common questions
+
+- `pass` vs `...` (`Ellipsis`)
+
+  `pass` is the _no-op_ statement in Python and `...` is a literal value (called _Ellipsis_) introduced for slicing collections of unknown number of dimensions. Although they are very different in nature, both of them are used in places where a statement is required purely for syntatic reasons, and there is not yet a clear standard practice in the community about when to use one or the other. We decided to align with the common pattern of using `...` in the body of empty function definitions working as placeholders for actual implementations defined somewhere else (e.g. type stubs, abstract methods and methods appearing in `Protocol` classes) and `pass` in any other place where its usage is mixed with actual statements.
+
+  ```python
+  # Correct use of `...` as the empty body of an abstract method
+  class AbstractEventLoop:
+     @abstractmethod
+     def run(self, ...):
+        ...
+
+  # Correct use of `pass` when mixed with other statements
+  try:
+     client.get(id=42)
+  except ApiException:
+     pass
+  ```
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] and some extensions such as [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).
