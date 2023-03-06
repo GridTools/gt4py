@@ -14,10 +14,10 @@
 
 import abc
 import numbers
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
 
+import importlib_resources
 import jinja2
 import numpy
 
@@ -119,7 +119,7 @@ class BaseModuleGenerator(abc.ABC):
     ORIGIN_ARG_NAME = "_origin_"
     SPLITTERS_NAME = "_splitters_"
 
-    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
+    TEMPLATE_RESOURCE = "stencil_module.py.in"
 
     _builder: Optional["StencilBuilder"]
     args_data: ModuleData
@@ -128,8 +128,11 @@ class BaseModuleGenerator(abc.ABC):
     def __init__(self, builder: Optional["StencilBuilder"] = None):
         self._builder = builder
         self.args_data = ModuleData()
-        with open(self.TEMPLATE_PATH, "r") as f:
-            self.template = jinja2.Template(f.read())
+        self.template = jinja2.Template(
+            importlib_resources.files("gt4py.cartesian.backend.templates")
+            .joinpath(self.TEMPLATE_RESOURCE)
+            .read_text()
+        )
 
     def __call__(
         self,
