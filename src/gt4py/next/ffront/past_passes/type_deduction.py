@@ -199,7 +199,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            if new_func.id in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
+            if new_func.id in ["maximum", "minimum"]:
                 return past.Call(
                     func=new_func,
                     args=new_args,
