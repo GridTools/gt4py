@@ -384,7 +384,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
 
 
 @pytest.mark.xfail(raises=NotImplementedError)
-def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
+def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -400,7 +400,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduce_tuple_element(
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
@@ -864,7 +864,7 @@ def test_tuple_unpacking(fieldview_backend):
     out3 = np_as_located_field(IDim)(np.ones((size)))
     out4 = np_as_located_field(IDim)(np.ones((size)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> tuple[
@@ -906,7 +906,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         Field[[IDim], float64],
     ]
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> OutType:
@@ -928,7 +928,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -939,7 +939,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
             return a
