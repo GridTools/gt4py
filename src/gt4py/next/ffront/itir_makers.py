@@ -258,7 +258,7 @@ def shift_(offset, value=None):
     Examples
     --------
     >>> shift_("i", 0)("a")
-    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), Literal(value='0', type='int')]), args=[SymRef(id=SymbolRef('a'))])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), OffsetLiteral(value=0)]), args=[SymRef(id=SymbolRef('a'))])
 
     >>> shift_("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
