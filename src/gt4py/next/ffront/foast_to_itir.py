@@ -236,7 +236,7 @@ class FieldOperatorLowering(NodeTranslator):
         obj, dtype = node.args[0], node.args[1].id
 
         # TODO check that we test astype that results in a itir.map_ operation
-        return self._map("cast_", self.visit(obj, **kwargs), im.as_lifted_capture(str(dtype)))
+        return self._map("cast_", obj, im.as_lifted_capture(str(dtype)))
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map("if_", *node.args)
