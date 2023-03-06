@@ -446,7 +446,6 @@ def test_reduction_lowering_simple():
     reference = im.as_lifted_lambda(
         im.call_(
             im.call_("reduce")(
-                # im.as_lifted_lambda("plus_", "acc", "edge_f__0"),
                 "plus",
                 im.deref_(im.as_lifted_capture(im.literal_(value="0", typename="float64"))),
             ),
@@ -465,25 +464,23 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
-        im.lift_(
-            im.call_("reduce")(
-                im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
-                    im.plus_(
-                        "acc",
-                        im.multiplies_(
-                            im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
-                        ),
-                    )
-                ),
-                im.literal_(value="0", typename="float64"),
-            )
-        )("e1_nbh__0", "e2")
+    mapped = im.as_lifted_lambda(
+        im.map__("multiplies"),
+        im.as_lifted_lambda("make_const_list", im.as_lifted_capture(im.literal_("1.1", "float64"))),
+        im.as_lifted_lambda(im.map__("plus"), "e1_nbh__0", "e2"),
     )
-    # TODO last failing test
-    print()
-    print(reference)
-    print(lowered.expr)
+
+    reference = im.let("e1_nbh__0", im.lifted_neighbors("V2E", "e1"))(
+        im.as_lifted_lambda(
+            im.call_(
+                im.call_("reduce")(
+                    "plus",
+                    im.deref_(im.as_lifted_capture(im.literal_(value="0", typename="float64"))),
+                ),
+            ),
+            mapped,
+        )
+    )
 
     assert lowered.expr == reference
 
