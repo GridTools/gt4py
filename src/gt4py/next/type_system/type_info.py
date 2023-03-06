@@ -234,8 +234,8 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType):
     return {
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
-        ts.ScalarKind.INT32: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
-        ts.ScalarKind.INT64: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+        ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+        ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
     }[arithmetic_type.kind]
 
 
