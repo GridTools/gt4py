@@ -17,7 +17,12 @@ import numbers
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
 
-import importlib_resources
+
+try:
+    import importlib.resources as importlib_resources
+except ImportError:
+    import importlib_resources  # type: ignore[no-redef]
+
 import jinja2
 import numpy
 
