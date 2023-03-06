@@ -707,7 +707,7 @@ def test_as_offset_dtype():
     BDim = Dimension("BDim")
     Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
 
-    def as_offset_dtype(a: Field[[ADim, BDim], float], b: Field[[ADim], float]):
+    def as_offset_dtype(a: Field[[ADim, BDim], float], b: Field[[BDim], float]):
         return a(as_offset(Boff, b))
 
     with pytest.raises(
