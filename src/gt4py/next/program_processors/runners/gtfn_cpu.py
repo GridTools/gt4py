@@ -88,7 +88,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
                 #  not hashable. As a workaround we just use content_hash here.
                 content_hash(tuple(from_value(arg) for arg in args)),
                 id(kwargs["offset_provider"]),
-                kwargs["column_axis"],
+                kwargs.get("column_axis", None),
             )
         )
 
