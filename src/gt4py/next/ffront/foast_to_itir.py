@@ -192,13 +192,21 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
+                shift_offset = im.shift_(offset_name, offset_index)
             case foast.Name(id=offset_name):
-                return im.lift_(
+                shift_offset = im.lift_(
                     im.lambda__("it")(im.neighbors_(im.ensure_offset(str(offset_name)), "it"))
-                )(self.visit(node.func, **kwargs))
-
-        raise FieldOperatorLoweringError("Unexpected shift arguments!")
+                )
+            case foast.Call(func=foast.Name(id="as_offset")):
+                func_args = node.args[0]
+                offset_dim = func_args.args[0]
+                assert isinstance(offset_dim, foast.Name)
+                shift_offset = im.shift_(
+                    offset_dim.id, im.deref_(self.visit(func_args.args[1], **kwargs))
+                )
+            case _:
+                raise FieldOperatorLoweringError("Unexpected shift arguments!")
+        return shift_offset(self.visit(node.func, **kwargs))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall | itir.Literal:
         if type_info.type_class(node.func.type) is ts.FieldType:

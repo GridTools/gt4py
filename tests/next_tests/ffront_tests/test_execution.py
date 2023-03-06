@@ -20,22 +20,21 @@ import numpy as np
 import pytest as pytest
 
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
     FieldOffset,
     astype,
     broadcast,
+    float32,
     float64,
     int32,
     int64,
-    max_over,
-    min_over,
     neighbor_sum,
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.builtins import float32
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -334,6 +333,50 @@ def test_astype_float(fieldview_backend):
 
     astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
     assert np.allclose(c_int32.array(), out_int_32)
+
+
+def test_offset_field(fieldview_backend):
+    a_I_arr = np.random.randn(size, size).astype("float64")
+    a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
+    a_I_float_1 = np_as_located_field(IDim, KDim)(
+        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
+    )
+    offset_field_arr = np.asarray(np.ones((size - 1, size - 1)), dtype=int64)
+    offset_field_comp = np.append(
+        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
+    )
+    offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
+    out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+    out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_field_fo(
+        a: Field[[IDim, KDim], float64],
+        offset_field: Field[[IDim, KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        a_i = a(as_offset(Ioff, offset_field))
+        a_i_k = a_i(as_offset(Koff, offset_field))
+        return a_i_k
+
+    offset_index_field_fo(
+        a_I_float,
+        offset_field,
+        out=out_I_float,
+        offset_provider={"Ioff": IDim, "Koff": KDim},
+    )
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_int_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
+        a_i = a(Ioff[1])
+        a_i_k = a_i(Koff[1])
+        return a_i_k
+
+    offset_index_int_fo(
+        a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
+    )
+    assert np.allclose(
+        out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
+    )
 
 
 def test_nested_tuple_return(fieldview_backend):
