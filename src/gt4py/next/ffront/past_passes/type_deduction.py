@@ -54,14 +54,14 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     if not isinstance(
         new_func.type,
-        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType, ts.FunctionType),
+        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
     ):
         raise GTTypeError(
-            f"Only calls `FieldOperator`s and `ScanOperators` "
+            f"Only calls `FieldOperators` and `ScanOperators` "
             f"allowed in `Program`, but got `{new_func.type}`."
         )
 
-    if new_func.id not in ["maximum", "minimum"] and "out" not in new_kwargs:
+    if "out" not in new_kwargs:
         raise GTTypeError("Missing required keyword argument(s) `out`.")
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
@@ -186,7 +186,9 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            _validate_call_params(new_func, new_kwargs)
+            id_in_allowed_funcs = new_func.id in ["maximum", "minimum"]
+            if not id_in_allowed_funcs:
+                _validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type
@@ -204,13 +206,13 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return_type = type_info.return_type(
                 new_func.type, with_args=arg_types, with_kwargs=kwarg_types
             )
-            if new_func.id not in ["maximum", "minimum"] and return_type != new_kwargs["out"].type:
+            if not id_in_allowed_funcs and return_type != new_kwargs["out"].type:
                 raise GTTypeError(
                     f"Expected keyword argument `out` to be of "
                     f"type {return_type}, but got "
                     f"{new_kwargs['out'].type}."
                 )
-            call_type = new_args[0].type if new_func.id in ["maximum", "minimum"] else ts.VoidType()
+            call_type = new_args[0].type if id_in_allowed_funcs else ts.VoidType()
         except GTTypeError as ex:
             raise ProgramTypeError.from_past_node(
                 node, msg=f"Invalid call to `{node.func.id}`."
