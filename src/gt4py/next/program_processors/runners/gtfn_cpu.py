@@ -18,6 +18,7 @@ from typing import Any, Callable, Final, Optional
 import numpy as np
 import numpy.typing as npt
 
+from gt4py.eve.utils import content_hash
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages, workflow
@@ -26,6 +27,7 @@ from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+from gt4py.next.type_system.type_translation import from_value
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -67,6 +69,8 @@ class GTFNExecutor(ppi.ProgramExecutor):
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
 
+    _cache: dict[int, Callable] = dataclasses.field(repr=False, init=False, default_factory=dict)
+
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
         Execute the iterator IR program with the provided arguments.
@@ -77,6 +81,16 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
         See ``ProgramExecutorFunction`` for details.
         """
+        cache_key = hash(
+            (
+                program,
+                # TODO(tehrengruber): as the resulting frontend types contain lists they are
+                #  not hashable. As a workaround we just use content_hash here.
+                content_hash(tuple(from_value(arg) for arg in args)),
+                id(kwargs["offset_provider"]),
+                kwargs["column_axis"],
+            )
+        )
 
         def convert_args(inp: Callable) -> Callable:
             def decorated_program(*args):
@@ -87,22 +101,25 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
             return decorated_program
 
-        otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-            gtfn_module.GTFNTranslationStep(
-                self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
-            )
-            .chain(pybind.bind_source)
-            .chain(
-                compiler.Compiler(
-                    cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
+        if cache_key not in self._cache:
+            otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
+                gtfn_module.GTFNTranslationStep(
+                    self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
                 )
+                .chain(pybind.bind_source)
+                .chain(
+                    compiler.Compiler(
+                        cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
+                    )
+                )
+                .chain(convert_args)
             )
-            .chain(convert_args)
-        )
 
-        otf_closure = stages.ProgramCall(program, args, kwargs)
+            otf_closure = stages.ProgramCall(program, args, kwargs)
 
-        compiled_runner = otf_workflow(otf_closure)
+            compiled_runner = self._cache[cache_key] = otf_workflow(otf_closure)
+        else:
+            compiled_runner = self._cache[cache_key]
 
         compiled_runner(*args)
 
