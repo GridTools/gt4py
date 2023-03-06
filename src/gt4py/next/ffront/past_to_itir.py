@@ -19,7 +19,6 @@ from typing import Optional, cast
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
 from gt4py.next.ffront import program_ast as past
-from gt4py.next.ffront.fbuiltins import BINARY_MATH_NUMBER_BUILTIN_NAMES
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts
 

@@ -18,7 +18,6 @@ from gt4py.eve import NodeTranslator, traits
 from gt4py.next.common import GTTypeError
 from gt4py.next.ffront import (
     dialect_ast_enums,
-    fbuiltins,
     program_ast as past,
     type_specifications as ts_ffront,
 )
@@ -45,18 +44,6 @@ def _is_integral_scalar(expr: past.Expr) -> bool:
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
 
 
-def _apply_builtin_action(new_func: past.Name, new_args: list):
-    if new_func.id == "minimum":
-        computed_arg = new_args[0] if new_args[0].value <= new_args[1].value else new_args[1]
-    elif new_func.id == "maximum":
-        computed_arg = new_args[0] if new_args[0].value >= new_args[1].value else new_args[1]
-    else:
-        raise GTTypeError(f"Only `minimum` and `maximum` builtins allowed, but got {new_func.id}")
-    return past.Constant(
-        value=computed_arg.value, type=computed_arg.type, location=computed_arg.location
-    )
-
-
 def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     Perform checks for domain and output field types.
@@ -74,7 +61,7 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
             f"allowed in `Program`, but got `{new_func.type}`."
         )
 
-    if "out" not in new_kwargs:
+    if new_func.id not in ["maximum", "minimum"] and "out" not in new_kwargs:
         raise GTTypeError("Missing required keyword argument(s) `out`.")
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
@@ -199,14 +186,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            if new_func.id in ["maximum", "minimum"]:
-                return past.Call(
-                    func=new_func,
-                    args=new_args,
-                    kwargs=new_kwargs,
-                    type=new_args[0].type,
-                    location=node.location,
-                )
             _validate_call_params(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
@@ -225,12 +204,13 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return_type = type_info.return_type(
                 new_func.type, with_args=arg_types, with_kwargs=kwarg_types
             )
-            if return_type != new_kwargs["out"].type:
+            if new_func.id not in ["maximum", "minimum"] and return_type != new_kwargs["out"].type:
                 raise GTTypeError(
                     f"Expected keyword argument `out` to be of "
                     f"type {return_type}, but got "
                     f"{new_kwargs['out'].type}."
                 )
+            call_type = new_args[0].type if new_func.id in ["maximum", "minimum"] else ts.VoidType()
         except GTTypeError as ex:
             raise ProgramTypeError.from_past_node(
                 node, msg=f"Invalid call to `{node.func.id}`."
@@ -240,7 +220,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             func=new_func,
             args=new_args,
             kwargs=new_kwargs,
-            type=ts.VoidType(),
+            type=call_type,
             location=node.location,
         )
 
