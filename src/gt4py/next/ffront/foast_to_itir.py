@@ -195,8 +195,8 @@ class FieldOperatorLowering(NodeTranslator):
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
                 shift_offset = im.shift_(offset_name, offset_index)
             case foast.Name(id=offset_name):
-                shift_offset = im.lift_(
-                    im.lambda__("it")(im.neighbors_(im.ensure_offset(str(offset_name)), "it"))
+                return im.lifted_neighbors(
+                    im.ensure_offset(str(offset_name)), self.visit(node.func, **kwargs)
                 )
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
@@ -264,8 +264,8 @@ class FieldOperatorLowering(NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call_(im.call_("reduce")(op, im.deref_(init_expr)))(im.deref_("it"))
-        return im.lift_(im.lambda__("it")(val))(it)
+        val = im.call_(im.call_("reduce")(op, im.deref_(init_expr)))
+        return im.as_lifted_lambda(val, it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert isinstance(node.type, ts.FieldType)

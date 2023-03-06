@@ -276,6 +276,10 @@ def neighbors_(offset, it):
     return call_("neighbors")(offset, it)
 
 
+def lifted_neighbors(offset, it):
+    return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
+
+
 def literal_(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
 
