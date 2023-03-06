@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -154,7 +154,6 @@ def a_stencil(
     from __externals__ import BRANCH
 
     with computation(PARALLEL), interval(...):
-
         if __INLINED(BRANCH):
             arg1 = arg1 * par1 * par2
         else:

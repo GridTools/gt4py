@@ -54,7 +54,7 @@ function(add_fn_codegen_test)
     target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_BACKEND=${BACKEND})
     target_compile_definitions(${ARG_NAME} PRIVATE GENERATED_FILE=\"${STENCIL_IMPL_SOURCE}\")
     if(is_gpu)
-        gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_75) #TODO
+        gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_60) #TODO
     endif()
     add_dependencies(${ARG_NAME} generated_${ARG_NAME})
 

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -354,9 +354,7 @@ class TestRuntimeIfFlat(gt_testing.StencilTestSuite):
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
-
         with computation(PARALLEL), interval(...):
-
             if True:
                 outfield = 1
             else:
@@ -375,7 +373,6 @@ class TestRuntimeIfNested(gt_testing.StencilTestSuite):
     symbols = dict(outfield=gt_testing.field(in_range=(-10, 10), boundary=[(0, 0), (0, 0), (0, 0)]))
 
     def definition(outfield):
-
         with computation(PARALLEL), interval(...):
             if (outfield > 0 and outfield > 0) or (not outfield > 0 and not outfield > 0):
                 if False:
@@ -396,7 +393,6 @@ def add_one(field_in):
 
 
 class Test3FoldNestedIf(gt_testing.StencilTestSuite):
-
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
     backends = ALL_BACKENDS
@@ -417,7 +413,6 @@ class Test3FoldNestedIf(gt_testing.StencilTestSuite):
 
 
 class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
-
     dtypes = (np.float_,)
     domain_range = [(3, 3), (3, 3), (3, 3)]
     backends = ALL_BACKENDS
@@ -444,7 +439,6 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
             field_a = add_one(field_a)
 
     def validation(field_a, field_b, field_c, *, factor, domain, origin, **kwargs):
-
         if factor > 0:
             field_b[...] = np.abs(field_a)
         else:
@@ -453,7 +447,6 @@ class TestRuntimeIfNestedDataDependent(gt_testing.StencilTestSuite):
 
 
 class TestTernaryOp(gt_testing.StencilTestSuite):
-
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
@@ -463,7 +456,6 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
     )
 
     def definition(infield, outfield):
-
         with computation(PARALLEL), interval(...):
             outfield = (  # noqa: F841 # Local name is assigned to but never used
                 infield if infield > 0.0 else -infield[0, 1, 0]
@@ -476,7 +468,6 @@ class TestTernaryOp(gt_testing.StencilTestSuite):
 
 
 class TestThreeWayAnd(gt_testing.StencilTestSuite):
-
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
@@ -488,7 +479,6 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
     )
 
     def definition(outfield, *, a, b, c):
-
         with computation(PARALLEL), interval(...):
             if a > 0 and b > 0 and c > 0:
                 outfield = 1
@@ -500,7 +490,6 @@ class TestThreeWayAnd(gt_testing.StencilTestSuite):
 
 
 class TestThreeWayOr(gt_testing.StencilTestSuite):
-
     dtypes = (np.float_,)
     domain_range = [(1, 15), (2, 15), (1, 15)]
     backends = ALL_BACKENDS
@@ -512,7 +501,6 @@ class TestThreeWayOr(gt_testing.StencilTestSuite):
     )
 
     def definition(outfield, *, a, b, c):
-
         with computation(PARALLEL), interval(...):
             if a > 0 or b > 0 or c > 0:
                 outfield = 1
@@ -539,7 +527,6 @@ class TestOptionalField(gt_testing.StencilTestSuite):
     definition = optional_field
 
     def validation(in_field, out_field, dyn_tend, phys_tend=None, *, dt, domain, origin, **kwargs):
-
         out_field[...] = in_field + dt * dyn_tend
         if PHYS_TEND:  # noqa: F821  # Undefined name
             out_field += dt * phys_tend
@@ -587,7 +574,6 @@ class TestTwoOptionalFields(gt_testing.StencilTestSuite):
         origin,
         **kwargs,
     ):
-
         out_a[...] = in_a + dt * dyn_tend_a
         out_b[...] = in_b + dt * dyn_tend_b
         if PHYS_TEND_A:  # noqa: F821  # Undefined name

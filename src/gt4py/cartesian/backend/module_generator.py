@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -113,7 +113,6 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 
 
 class BaseModuleGenerator(abc.ABC):
-
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
     DOMAIN_ARG_NAME = "_domain_"

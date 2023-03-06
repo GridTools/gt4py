@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -1384,7 +1384,6 @@ class TestAssignmentSyntax:
             gt_frontend.GTScriptSyntaxError,
             match="Assignment to non-zero offsets is not supported.",
         ):
-
             parse_definition(
                 func,
                 externals={"offset": 1},
@@ -1429,7 +1428,6 @@ class TestAssignmentSyntax:
             )
 
     def test_slice(self):
-
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
             def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):

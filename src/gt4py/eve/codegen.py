@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +31,7 @@ import types
 
 import black
 import jinja2
-from mako import template as mako_tpl  # type: ignore[import]
+from mako import template as mako_tpl
 
 from . import exceptions, utils
 from .concepts import CollectionNode, LeafNode, Node, RootNode

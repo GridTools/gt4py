@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -669,9 +669,10 @@ def scan_operator(
     forward: bool = True,
     init: Scalar = 0.0,
     backend=None,
-) -> FieldOperator[foast.ScanOperator] | Callable[
-    [types.FunctionType], FieldOperator[foast.ScanOperator]
-]:
+) -> (
+    FieldOperator[foast.ScanOperator]
+    | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
+):
     """
     Generate an implementation of the scan operator from a Python function object.
 

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -55,7 +55,6 @@ def get_axis_bound_dace_symbol(axis_bound: "dcir.AxisBound"):
 
 
 def get_axis_bound_diff_str(axis_bound1, axis_bound2, var_name: str):
-
     if axis_bound1 <= axis_bound2:
         axis_bound1, axis_bound2 = axis_bound2, axis_bound1
         sign = "-"

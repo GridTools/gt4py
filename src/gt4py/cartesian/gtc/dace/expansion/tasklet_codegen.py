@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -79,7 +79,6 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         symtable: ChainMap[eve.SymbolRef, dcir.Decl],
         **kwargs,
     ):
-
         if is_target:
             memlets = kwargs["write_memlets"]
         else:

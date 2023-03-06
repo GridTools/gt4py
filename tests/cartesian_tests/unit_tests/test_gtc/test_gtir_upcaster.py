@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -58,7 +58,6 @@ def contains_cast_node(cast_node, expr):
 
 
 def upcast_and_validate(expr, expected_cast_nodes):
-
     assert isinstance(expected_cast_nodes, List)
     assert all([isinstance(cast, Cast) for cast in expected_cast_nodes])
     assert all([not contains_cast_node(cast, expr) for cast in expected_cast_nodes])

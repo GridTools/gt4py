@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -1610,7 +1610,6 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
 
 
 class GTScriptParser(ast.NodeVisitor):
-
     CONST_VALUE_TYPES = (
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,

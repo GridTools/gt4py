@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -117,7 +117,6 @@ def get_expansion_order_index(expansion_order, axis):
 
 
 def _is_expansion_order_implemented(expansion_specification):
-
     for item in expansion_specification:
         if isinstance(item, Sections):
             break

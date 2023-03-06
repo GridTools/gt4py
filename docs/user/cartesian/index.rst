@@ -76,6 +76,4 @@ GT4Py Features:
    indices
    license
 
-   GDPs/gdp-index
-
 .. commented_out gtscript

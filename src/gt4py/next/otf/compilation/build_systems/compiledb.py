@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import pathlib
+import re
 import subprocess
 from typing import Optional
 
@@ -188,7 +189,7 @@ def _cc_prototype_program_name(
 ) -> str:
     base_name = "compile_commands_cache"
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
-    flags_str = "_".join(flags)
+    flags_str = "_".join(re.sub(r"\W+", "", f) for f in flags)
     return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
 
 

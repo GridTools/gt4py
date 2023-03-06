@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +31,6 @@ from gt4py.eve.concepts import LeafNode
 
 
 class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
-
     LocalScalar = as_fmt("{dtype} {name};")
 
     FieldDecl = as_fmt("{name}")
@@ -303,7 +302,6 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
-
         fields = {
             name: data_dims
             for name, data_dims in node.walk_values()

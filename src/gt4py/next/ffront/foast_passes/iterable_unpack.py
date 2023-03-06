@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -69,7 +69,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     foast.Assign(target=tuple_symbol, value=stmt.value, location=stmt.location)
                 )
 
-                for (index, subtarget) in zip(indices, targets):
+                for index, subtarget in zip(indices, targets):
                     el_type = subtarget.type
                     tuple_name = foast.Name(
                         id=tuple_symbol.id, type=el_type, location=tuple_symbol.location

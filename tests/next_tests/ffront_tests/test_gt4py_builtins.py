@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -50,7 +50,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn or fieldview_backend, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -113,9 +113,6 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("IndexFields are not supported yet.")
-
     rs = reduction_setup
     Edge = rs.Edge
     Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
@@ -156,7 +153,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("IndexFields are not supported yet.")
+        pytest.skip("Has a bug.")
 
     rs = reduction_setup
     Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
@@ -178,14 +175,16 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out.array())
 
 
-def test_conditional_nested_tuple():
+def test_conditional_nested_tuple(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple outputs not supported in gtfn backends")
     a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float_1 = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def conditional_nested_tuple(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[
@@ -271,10 +270,10 @@ def test_broadcast_shifted(fieldview_backend):
 
 
 def test_conditional(fieldview_backend):
-    a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    mask = array_as_located_field(IDim)(np.zeros((size,), dtype=bool))
+    a = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out = array_as_located_field(IDim)(np.zeros((size,), dtype=np.float64))
+    mask = array_as_located_field(IDim)(np.random.randn(size) > 0)
 
     @field_operator(backend=fieldview_backend)
     def conditional(
@@ -282,9 +281,9 @@ def test_conditional(fieldview_backend):
     ) -> Field[[IDim], float64]:
         return where(mask, a, b)
 
-    conditional(mask, a_I_float, b_I_float, out=out_I_float, offset_provider={})
+    conditional(mask, a, b, out=out, offset_provider={})
 
-    assert np.allclose(np.where(mask, a_I_float, b_I_float), out_I_float)
+    assert np.allclose(np.where(mask, a, b), out)
 
 
 def test_conditional_promotion(fieldview_backend):

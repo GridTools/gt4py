@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -340,7 +340,6 @@ class TestNormalizeStorageSpec:
             normalize_storage_spec(aligned_index, (10, 10), dtype, ())
 
     def test_dtype(self):
-
         aligned_index = (0, 0, 0)
         shape = (10, 10, 10)
         dtype = np.float64
@@ -406,7 +405,6 @@ def test_gpu_constructor(alloc_fun, backend):
 @pytest.mark.requires_gpu
 @hyp.given(param_dict=dimensions_strategy())
 def test_masked_storage_gpu(param_dict):
-
     dimensions = param_dict["dimensions"]
     aligned_index = param_dict["aligned_index"]
     shape = param_dict["shape"]
@@ -458,7 +456,6 @@ def test_non_existing_backend():
 class TestDescriptor:
     @staticmethod
     def ravel_with_padding(array):
-
         if hasattr(array, "__cuda_array_interface__"):
             interface = dict(array.__cuda_array_interface__)
         else:
