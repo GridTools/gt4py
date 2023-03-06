@@ -27,7 +27,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -249,6 +249,27 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
+        if isinstance(node.type, ts.FieldType):
+            if node.type.dtype.kind == ts.ScalarKind.FLOAT64:
+                dtype = "float64"
+            elif node.type.dtype.kind == ts.ScalarKind.FLOAT32:
+                dtype = "float32"
+            elif node.type.dtype.kind == ts.ScalarKind.INT64:
+                dtype = "int64"
+            elif node.type.dtype.kind == ts.ScalarKind.INT32:
+                dtype = "int32"
+            elif node.type.dtype.kind == ts.ScalarKind.BOOL:
+                dtype = "bool"
+            else:
+                raise NotImplementedError()
+            type_ = type_inference.Val(
+                kind=type_inference.Iterator(),
+                dtype=type_inference.Primitive(name=dtype),
+                size=type_inference.TypeVar.fresh(),
+                current_loc=type_inference.TypeVar.fresh(),
+                defined_loc=type_inference.TypeVar.fresh(),
+            )
+            return itir.Sym(id=node.id, type_=type_)
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:

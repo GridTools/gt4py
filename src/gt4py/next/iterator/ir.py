@@ -12,12 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Union
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next import type_inference
 
 
 @noninstantiable
@@ -38,6 +39,7 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
+    type_: Optional[type_inference.Type] = None
 
 
 @noninstantiable

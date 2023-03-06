@@ -415,6 +415,8 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return result
 
     def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
+        if node.type_:
+            return node.type_
         return TypeVar.fresh()
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
