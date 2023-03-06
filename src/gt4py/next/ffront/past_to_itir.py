@@ -358,12 +358,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
-        if node.func.id in BINARY_MATH_NUMBER_BUILTIN_NAMES and len(node.args) == 2:
+        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
             )
         else:
-            raise NotImplementedError(
+            raise AssertionError(
                 "Only `minimum` and `maximum` builtins supported supported currently."
             )
