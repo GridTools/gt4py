@@ -105,9 +105,9 @@ class FieldOperatorLowering(NodeTranslator):
         # note: we don't need the axis here as this is handled by the program
         #  decorator
 
-        # TODO a lowering hack, they are valid itir expressions, but in a place where no iterators are allowed..
-        # Could we fixed by running inline lift locally here and we would get a pure value expression.
-        # TODO there are more places like this, e.g. init of reduce
+        # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
+        # In iterator IR we didn't properly specify if this is legal,
+        # however after lift-inlining the expressions are transformed back to literals.
         forward = im.deref_(self.visit(node.forward, **kwargs))
         init = im.deref_(self.visit(node.init, **kwargs))
 
@@ -116,6 +116,7 @@ class FieldOperatorLowering(NodeTranslator):
         new_body = func_definition.expr
 
         # promote carry to iterator
+        # (this is the only place in the lowering were a variable is captured in a lifted lambda)
         new_body = im.let(
             func_definition.params[0].id,
             im.lift_(im.lambda__()(func_definition.params[0].id))(),
@@ -216,10 +217,7 @@ class FieldOperatorLowering(NodeTranslator):
                 ts_ffront.ScanOperatorType,
             ),
         ):
-            # operators are lowered into stencils and only accept iterator
-            #  arguments. As such transform all value arguments, e.g. scalars
-            #  and tuples thereof, into iterators. See ADR-0002 for more
-            #  details.
+            # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
             lowered_args = [self.visit(arg, **kwargs) for arg in node.args]
             args = [f"__arg{i}" for i in range(len(lowered_args))]
