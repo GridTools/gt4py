@@ -113,9 +113,11 @@ test py310:
   - python -c "import cupy"
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT -- --cov
   - mv .coverage $CI_PROJECT_DIR/coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
+  - cp .tox $CI_PROJECT_DIR
   artifacts:
     paths:
     - coverage-*
+    - .tox/**
   variables:
     <<: *py310
   parallel:
@@ -138,9 +140,16 @@ combined coverage:
   script:
   - cd /gt4py.src
   - mv $CI_PROJECT_DIR/coverage-* .
+  - mv $CI_PROJECT_DIR/.tox .
   - pip install --upgrade pip coverage
   - coverage combine coverage-*
-  - coverage json
+  - coverage xml
+  - mv coverage.xml $CI_PROJECT_DIR
   - curl -Os https://uploader.codecov.io/latest/linux/codecov
   - chmod +x codecov
-  - ./codecov
+  - ./codecov -t $CODECOV_TOKEN
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
