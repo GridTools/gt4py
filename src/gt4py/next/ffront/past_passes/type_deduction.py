@@ -193,7 +193,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             kwarg_types = {
                 name: expr.type
                 for name, expr in new_kwargs.items()
-                if name != "out" and name != "domain"
+                if name != "out" and name != "domain" and id_in_allowed_funcs
             }
 
             type_info.accepts_args(
@@ -206,7 +206,10 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return_type = type_info.return_type(
                 new_func.type, with_args=arg_types, with_kwargs=kwarg_types
             )
-            if not id_in_allowed_funcs and return_type != new_kwargs["out"].type:
+            if (
+                isinstance(new_func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
+                and return_type != new_kwargs["out"].type
+            ):
                 raise GTTypeError(
                     f"Expected keyword argument `out` to be of "
                     f"type {return_type}, but got "
