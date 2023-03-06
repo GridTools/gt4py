@@ -378,8 +378,8 @@ def test_offset_field(fieldview_backend):
         out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
     )
 
-def test_nested_tuple_return(fieldview_backend):
 
+def test_nested_tuple_return(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
