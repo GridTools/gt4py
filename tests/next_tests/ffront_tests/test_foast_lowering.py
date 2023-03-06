@@ -165,11 +165,15 @@ def test_unary_ops():
 
     reference = im.let(
         "tmp__0",
-        im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),
+        im.lift_(im.lambda__("inp")(im.plus_(im.literal_("0", "float64"), im.deref_("inp"))))(
+            "inp"
+        ),
     )(
         im.let(
             "tmp__1",
-            im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
+            im.lift_(
+                im.lambda__("tmp__0")(im.minus_(im.literal_("0", "float64"), im.deref_("tmp__0")))
+            )("tmp__0"),
         )("tmp__1")
     )
 
