@@ -113,7 +113,7 @@ test py310:
   - python -c "import cupy"
   - tox run -e $SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT -- --cov
   - mv .coverage $CI_PROJECT_DIR/coverage-$SUBPACKAGE-$PYVERSION_PREFIX$VARIANT$SUBVARIANT
-  - cp .tox $CI_PROJECT_DIR
+  - cp -r .tox $CI_PROJECT_DIR
   artifacts:
     paths:
     - coverage-*
