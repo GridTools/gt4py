@@ -1,30 +1,28 @@
-<!-- Use the first line of the commit description as the title for the PR -->
-
-## Description
-
 <!--
 Delete this comment and add a proper description of the changes contained in this PR. The text here will be used in the commit message since the approved PRs are always squash-merged. The preferred format is:
 
----
-<type>[<scope>]: <one-line-summary>
+- PR Title: <type>[<scope>]: <one-line-summary>
 
-[description of the main changes with links to appropriate issues/documents/references/...]
----
+    <type>:
+        - build: Changes that affect the build system or external dependencies
+        - ci: Changes to our CI configuration files and scripts
+        - docs: Documentation only changes
+        - feat: A new feature
+        - fix: A bug fix
+        - perf: A code change that improves performance
+        - refactor: A code change that neither fixes a bug nor adds a feature
+        - style: Changes that do not affect the meaning of the code
+        - test: Adding missing tests or correcting existing tests
 
-<type>:
-    - build: Changes that affect the build system or external dependencies
-    - ci: Changes to our CI configuration files and scripts
-    - docs: Documentation only changes
-    - feat: A new feature
-    - fix: A bug fix
-    - perf: A code change that improves performance
-    - refactor: A code change that neither fixes a bug nor adds a feature
-    - style: Changes that do not affect the meaning of the code
-    - test: Adding missing tests or correcting existing tests
+    <scope>: cartesian | eve | next | storage
+    # ONLY if changes are limited to a specific subsytem
 
-# only add scope if changes are limited to a specific subsytem
-<scope>: cartesian | eve | next | storage
+- PR Description:
+
+    Description of the main changes with links to appropriate issues/documents/references/...
 -->
+
+## Description
 
 ## Requirements
 
