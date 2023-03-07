@@ -23,7 +23,7 @@ class CollapseListGet(eve.NodeTranslator):
     """Simplifies expressions containing `list_get`.
 
     Examples
-      - `list_get(i, neighbors(o, it))` -> `deref(shift(o,i)(it))`
+      - `list_get(i, neighbors(o, it))` -> `deref(shift(o, i)(it))`
       - `list_get(i, make_const_list(e))` -> `e`
     """
 
