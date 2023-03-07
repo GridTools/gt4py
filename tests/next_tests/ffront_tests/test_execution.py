@@ -550,7 +550,7 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
-def test_ternary_operator():
+def test_ternary_operator(fieldview_backend):
     a_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = array_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = array_as_located_field(IDim)(np.zeros((size), dtype=float64))
