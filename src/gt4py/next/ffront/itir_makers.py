@@ -75,7 +75,7 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     return literal_or_expr
 
 
-def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetLiteral:
+def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
     """
     Convert Python literals into an OffsetLiteral and let OffsetLiterals pass unchanged.
 
@@ -87,7 +87,7 @@ def ensure_offset(str_or_offset: Union[str, itir.OffsetLiteral]) -> itir.OffsetL
     >>> ensure_offset(itir.OffsetLiteral(value="J"))
     OffsetLiteral(value='J')
     """
-    if isinstance(str_or_offset, str):
+    if isinstance(str_or_offset, (str, int)):
         return itir.OffsetLiteral(value=str_or_offset)
     return str_or_offset
 
@@ -258,7 +258,7 @@ def shift_(offset, value=None):
     Examples
     --------
     >>> shift_("i", 0)("a")
-    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), Literal(value='0', type='int')]), args=[SymRef(id=SymbolRef('a'))])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), OffsetLiteral(value=0)]), args=[SymRef(id=SymbolRef('a'))])
 
     >>> shift_("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
@@ -266,7 +266,7 @@ def shift_(offset, value=None):
     offset = ensure_offset(offset)
     args = [offset]
     if value is not None:
-        value = ensure_expr(value)
+        value = ensure_offset(value)
         args.append(value)
     return call_(call_("shift")(*args))
 
@@ -274,6 +274,10 @@ def shift_(offset, value=None):
 def neighbors_(offset, it):
     offset = ensure_offset(offset)  # TODO this function should not exist?
     return call_("neighbors")(offset, it)
+
+
+def lifted_neighbors(offset, it):
+    return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
 
 
 def literal_(value: str, typename: str):

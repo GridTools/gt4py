@@ -12,9 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, SupportsFloat, SupportsInt
-
-import numpy as np
+from typing import Any
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.common import DimensionKind
@@ -111,9 +109,9 @@ class FieldOperatorLowering(NodeTranslator):
         # note: we don't need the axis here as this is handled by the program
         #  decorator
 
-        # TODO a lowering hack, they are valid itir expressions, but in a place where no iterators are allowed..
-        # Could we fixed by running inline lift locally here and we would get a pure value expression.
-        # TODO there are more places like this, e.g. init of reduce
+        # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
+        # In iterator IR we didn't properly specify if this is legal,
+        # however after lift-inlining the expressions are transformed back to literals.
         forward = im.deref_(self.visit(node.forward, **kwargs))
         init = im.deref_(self.visit(node.init, **kwargs))
 
@@ -122,6 +120,7 @@ class FieldOperatorLowering(NodeTranslator):
         new_body = func_definition.expr
 
         # promote carry to iterator
+        # (this is the only place in the lowering were a variable is captured in a lifted lambda)
         new_body = im.let(
             func_definition.params[0].id,
             im.lift_(im.lambda__()(func_definition.params[0].id))(),
@@ -167,6 +166,7 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
+        # TODO double-check that this works with `itir.map_`ed stuff
         return im.as_lifted_lambda(
             lambda tuple_: im.tuple_get_(node.index, tuple_), self.visit(node.value, **kwargs)
         )
@@ -179,11 +179,12 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.FunCall:
         # TODO(tehrengruber): extend iterator ir to support unary operators
+        dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             # TODO: invert only for bool right now
             return self._map("not_", node.operand)
 
-        return self._map(node.op.value, im.as_lifted_capture(im.literal_("0", "int")), node.operand)
+        return self._map(node.op.value, self._make_literal("0", dtype), node.operand)
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -197,13 +198,21 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
+                shift_offset = im.shift_(offset_name, offset_index)
             case foast.Name(id=offset_name):
-                return im.lift_(
-                    im.lambda__("it")(im.neighbors_(im.ensure_offset(str(offset_name)), "it"))
-                )(self.visit(node.func, **kwargs))
-
-        raise FieldOperatorLoweringError("Unexpected shift arguments!")
+                return im.lifted_neighbors(
+                    im.ensure_offset(str(offset_name)), self.visit(node.func, **kwargs)
+                )
+            case foast.Call(func=foast.Name(id="as_offset")):
+                func_args = node.args[0]
+                offset_dim = func_args.args[0]
+                assert isinstance(offset_dim, foast.Name)
+                shift_offset = im.shift_(
+                    offset_dim.id, im.deref_(self.visit(func_args.args[1], **kwargs))
+                )
+            case _:
+                raise FieldOperatorLoweringError("Unexpected shift arguments!")
+        return shift_offset(self.visit(node.func, **kwargs))
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.FunCall | itir.Literal:
         if type_info.type_class(node.func.type) is ts.FieldType:
@@ -222,10 +231,7 @@ class FieldOperatorLowering(NodeTranslator):
                 ts_ffront.ScanOperatorType,
             ),
         ):
-            # operators are lowered into stencils and only accept iterator
-            #  arguments. As such transform all value arguments, e.g. scalars
-            #  and tuples thereof, into iterators. See ADR-0002 for more
-            #  details.
+            # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
             lowered_args = [self.visit(arg, **kwargs) for arg in node.args]
             args = [f"__arg{i}" for i in range(len(lowered_args))]
@@ -267,45 +273,23 @@ class FieldOperatorLowering(NodeTranslator):
         for _ in range(local_kind_level(node.args[0].type) - 1):
             op = im.call_("map_")(op)
             init = im.call_("make_const_list")(init)
-        val = im.call_(im.call_("reduce")(op, init))(im.deref_("it"))
-        return im.lift_(im.lambda__("it")(val))(it)
+        val = im.call_(im.call_("reduce")(op, init))
+        return im.as_lifted_lambda(val, it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        return self._make_reduction_expr(
-            node, "plus", self._make_literal(0, node.type.dtype), **kwargs
-        )
+        dtype = type_info.extract_dtype(node.type)
+        return self._make_reduction_expr(node, "plus", self._make_literal("0", dtype), **kwargs)
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        np_type = getattr(np, node.type.dtype.kind.name.lower())
-        min_value: SupportsInt | SupportsFloat
-        if type_info.is_integral(node.type):
-            min_value = np.iinfo(np.int32).min  # not sure why int64 min is converted into an int128
-        elif type_info.is_floating_point(node.type):
-            min_value = np.finfo(np_type).min
-        else:
-            raise AssertionError(
-                "`max_over` is only defined for integral or floating point types."
-                " This error should have been catched in type deduction aready."
-            )
-        init_expr = self._make_literal(min_value, node.type.dtype)
+        dtype = type_info.extract_dtype(node.type)
+        min_value, _ = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        assert isinstance(node.type, ts.FieldType)
-        np_type = getattr(np, node.type.dtype.kind.name.lower())
-        max_value: SupportsInt | SupportsFloat
-        if type_info.is_integral(node.type):
-            max_value = np.iinfo(np.int32).max
-        elif type_info.is_floating_point(node.type):
-            max_value = np.finfo(np_type).max
-        else:
-            raise AssertionError(
-                "`min_over` is only defined for integral or floating point types."
-                " This error should have been catched in type deduction aready."
-            )
-        init_expr = self._make_literal(max_value, node.type.dtype)
+        dtype = type_info.extract_dtype(node.type)
+        _, max_value = type_info.arithmetic_bounds(dtype)
+        init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Literal:
@@ -356,8 +340,6 @@ class FieldOperatorLowering(NodeTranslator):
                 print("map_")
 
         return im.as_lifted_lambda(im.call_(op), *lowered_args)
-
-        raise AssertionError()
 
 
 class FieldOperatorLoweringError(Exception):

@@ -84,7 +84,7 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_lifted_lambda(im.call_(im.ref("make_tuple")), im.ref("inp1"), im.ref("inp2"))
+    reference = im.as_lifted_lambda("make_tuple", "inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -96,7 +96,7 @@ def test_arithmetic():
     parsed = FieldOperatorParser.apply_to_function(arithmetic)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_lifted_lambda(im.ref("plus"), im.ref("inp1"), im.ref("inp2"))
+    reference = im.as_lifted_lambda("plus", "inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -157,11 +157,13 @@ def test_unary_ops():
 
     reference = im.let(
         "tmp__0",
-        im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),
+        im.as_lifted_lambda("plus", im.as_lifted_capture(im.literal_("0", "float64")), "inp"),
     )(
         im.let(
             "tmp__1",
-            im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
+            im.as_lifted_lambda(
+                "minus", im.as_lifted_capture(im.literal_("0", "float64")), "tmp__0"
+            ),
         )("tmp__1")
     )
 
@@ -180,19 +182,14 @@ def test_unpacking():
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.lift_(
-        im.lambda__("inp1", "inp2")(im.make_tuple_(im.deref_("inp1"), im.deref_("inp2")))
-    )("inp1", "inp2")
-    tuple_access_0 = im.lift_(
-        im.lambda__("__tuple_tmp_0")(im.tuple_get_(0, im.deref_("__tuple_tmp_0")))
-    )("__tuple_tmp_0")
-    tuple_access_1 = im.lift_(
-        im.lambda__("__tuple_tmp_0")(im.tuple_get_(1, im.deref_("__tuple_tmp_0")))
-    )("__tuple_tmp_0")
+    tuple_expr = im.as_lifted_lambda("make_tuple", "inp1", "inp2")
+    tuple_access_0 = im.as_lifted_lambda(lambda x: im.tuple_get_(0, x), "__tuple_tmp_0")
+    tuple_access_1 = im.as_lifted_lambda(lambda x: im.tuple_get_(1, x), "__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)("tmp1__0"))
     )
+
     assert lowered.expr == reference
 
 
@@ -228,7 +225,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("inp")(im.call_("identity")("inp")))("inp")
+    reference = im.lift_(im.lambda__("__arg0")(im.call_("identity")("__arg0")))("inp")
 
     assert lowered.expr == reference
 
@@ -243,9 +240,7 @@ def test_temp_tuple():
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.lift_(im.lambda__("a", "b")(im.make_tuple_(im.deref_("a"), im.deref_("b"))))(
-        "a", "b"
-    )
+    tuple_expr = im.as_lifted_lambda("make_tuple", "a", "b")
     reference = im.let("tmp__0", tuple_expr)("tmp__0")
 
     assert lowered.expr == reference
@@ -258,7 +253,7 @@ def test_unary_not():
     parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("cond")(im.not__(im.deref_("cond"))))("cond")
+    reference = im.as_lifted_lambda("not_", "cond")
 
     assert lowered.expr == reference
 
@@ -270,7 +265,7 @@ def test_binary_plus():
     parsed = FieldOperatorParser.apply_to_function(plus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.plus_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("plus", "a", "b")
 
     assert lowered.expr == reference
 
@@ -282,8 +277,8 @@ def test_add_scalar_literal_to_field():
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a")(im.plus_(im.literal_("2.0", "float64"), im.deref_("a"))))(
-        "a"
+    reference = im.as_lifted_lambda(
+        "plus", im.as_lifted_capture(im.literal_("2.0", "float64")), "a"
     )
 
     assert lowered.expr == reference
@@ -299,11 +294,12 @@ def test_add_scalar_literals():
 
     reference = im.let(
         "tmp__0",
-        im.plus_(
-            im.literal_("1", "int32"),
-            im.literal_("1", "int32"),
+        im.as_lifted_lambda(
+            "plus",
+            im.as_lifted_capture(im.literal_("1", "int32")),
+            im.as_lifted_capture(im.literal_("1", "int32")),
         ),
-    )(im.lift_(im.lambda__("a")(im.plus_(im.deref_("a"), "tmp__0")))("a"))
+    )(im.as_lifted_lambda("plus", "a", "tmp__0"))
 
     assert lowered.expr == reference
 
@@ -315,9 +311,7 @@ def test_binary_mult():
     parsed = FieldOperatorParser.apply_to_function(mult)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.multiplies_(im.deref_("a"), im.deref_("b"))))(
-        "a", "b"
-    )
+    reference = im.as_lifted_lambda("multiplies", "a", "b")
 
     assert lowered.expr == reference
 
@@ -329,7 +323,7 @@ def test_binary_minus():
     parsed = FieldOperatorParser.apply_to_function(minus)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.minus_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("minus", "a", "b")
 
     assert lowered.expr == reference
 
@@ -341,9 +335,7 @@ def test_binary_div():
     parsed = FieldOperatorParser.apply_to_function(division)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.divides_(im.deref_("a"), im.deref_("b"))))(
-        "a", "b"
-    )
+    reference = im.as_lifted_lambda("divides", "a", "b")
 
     assert lowered.expr == reference
 
@@ -355,7 +347,7 @@ def test_binary_and():
     parsed = FieldOperatorParser.apply_to_function(bit_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.and__(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("and_", "a", "b")
 
     assert lowered.expr == reference
 
@@ -367,9 +359,7 @@ def test_scalar_and():
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a")(im.and__(im.deref_("a"), im.literal_("False", "bool"))))(
-        "a"
-    )
+    reference = im.as_lifted_lambda("and_", "a", im.as_lifted_capture(im.literal_("False", "bool")))
 
     assert lowered.expr == reference
 
@@ -381,7 +371,7 @@ def test_binary_or():
     parsed = FieldOperatorParser.apply_to_function(bit_or)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.or__(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("or_", "a", "b")
 
     assert lowered.expr == reference
 
@@ -393,7 +383,11 @@ def test_compare_scalars():
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.greater_(im.literal_("3", "int64"), im.literal_("4", "int64"))
+    reference = im.as_lifted_lambda(
+        "greater",
+        im.as_lifted_capture(im.literal_("3", "int64")),
+        im.as_lifted_capture(im.literal_("4", "int64")),
+    )
 
     assert lowered.expr == reference
 
@@ -405,9 +399,7 @@ def test_compare_gt():
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b"))))(
-        "a", "b"
-    )
+    reference = im.as_lifted_lambda("greater", "a", "b")
 
     assert lowered.expr == reference
 
@@ -419,7 +411,7 @@ def test_compare_lt():
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.less_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("less", "a", "b")
 
     assert lowered.expr == reference
 
@@ -431,7 +423,7 @@ def test_compare_eq():
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("a", "b")(im.eq_(im.deref_("a"), im.deref_("b"))))("a", "b")
+    reference = im.as_lifted_lambda("eq", "a", "b")
 
     assert lowered.expr == reference
 
@@ -445,22 +437,9 @@ def test_compare_chain():
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(
-        im.lambda__("a", "b", "c")(
-            im.and__(
-                im.deref_(
-                    im.lift_(im.lambda__("a", "b")(im.greater_(im.deref_("a"), im.deref_("b"))))(
-                        "a", "b"
-                    )
-                ),
-                im.deref_(
-                    im.lift_(im.lambda__("b", "c")(im.greater_(im.deref_("b"), im.deref_("c"))))(
-                        "b", "c"
-                    )
-                ),
-            )
-        )
-    )("a", "b", "c")
+    reference = im.as_lifted_lambda(
+        "and_", im.as_lifted_lambda("greater", "a", "b"), im.as_lifted_lambda("greater", "b", "c")
+    )
 
     assert lowered.expr == reference
 
@@ -472,12 +451,15 @@ def test_reduction_lowering_simple():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(
-        im.call_("reduce")(
-            im.lambda__("acc", "edge_f__0")(im.plus_("acc", "edge_f__0")),
-            im.literal_(value="0", typename="float64"),
-        )
-    )(im.shift_("V2E")("edge_f"))
+    reference = im.as_lifted_lambda(
+        im.call_(
+            im.call_("reduce")(
+                "plus",
+                im.deref_(im.as_lifted_capture(im.literal_(value="0", typename="float64"))),
+            ),
+        ),
+        im.lifted_neighbors("V2E", "edge_f"),
+    )
 
     assert lowered.expr == reference
 
@@ -490,20 +472,22 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("e1_nbh__0", im.shift_("V2E")("e1"))(
-        im.lift_(
-            im.call_("reduce")(
-                im.lambda__("acc", "e1_nbh__0__0", "e2__1")(
-                    im.plus_(
-                        "acc",
-                        im.multiplies_(
-                            im.literal_("1.1", "float64"), im.plus_("e1_nbh__0__0", "e2__1")
-                        ),
-                    )
+    mapped = im.as_lifted_lambda(
+        im.map__("multiplies"),
+        im.as_lifted_lambda("make_const_list", im.as_lifted_capture(im.literal_("1.1", "float64"))),
+        im.as_lifted_lambda(im.map__("plus"), "e1_nbh__0", "e2"),
+    )
+
+    reference = im.let("e1_nbh__0", im.lifted_neighbors("V2E", "e1"))(
+        im.as_lifted_lambda(
+            im.call_(
+                im.call_("reduce")(
+                    "plus",
+                    im.deref_(im.as_lifted_capture(im.literal_(value="0", typename="float64"))),
                 ),
-                im.literal_(value="0", typename="float64"),
-            )
-        )("e1_nbh__0", "e2")
+            ),
+            mapped,
+        )
     )
 
     assert lowered.expr == reference
@@ -526,14 +510,15 @@ def test_builtin_int_constructors():
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.make_tuple_(
-        im.literal_("1", "int64"),
-        im.literal_("1", "int64"),
-        im.literal_("1", "int32"),
-        im.literal_("1", "int64"),
-        im.literal_("1", "int64"),
-        im.literal_("1", "int32"),
-        im.literal_("1", "int64"),
+    reference = im.as_lifted_lambda(
+        "make_tuple",
+        im.as_lifted_capture(im.literal_("1", "int64")),
+        im.as_lifted_capture(im.literal_("1", "int64")),
+        im.as_lifted_capture(im.literal_("1", "int32")),
+        im.as_lifted_capture(im.literal_("1", "int64")),
+        im.as_lifted_capture(im.literal_("1", "int64")),
+        im.as_lifted_capture(im.literal_("1", "int32")),
+        im.as_lifted_capture(im.literal_("1", "int64")),
     )
 
     assert lowered.expr == reference
@@ -564,14 +549,15 @@ def test_builtin_float_constructors():
     parsed = FieldOperatorParser.apply_to_function(float_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.make_tuple_(
-        im.literal_("0.1", "float64"),
-        im.literal_("0.1", "float64"),
-        im.literal_("0.1", "float32"),
-        im.literal_("0.1", "float64"),
-        im.literal_(".1", "float64"),
-        im.literal_(".1", "float32"),
-        im.literal_(".1", "float64"),
+    reference = im.as_lifted_lambda(
+        "make_tuple",
+        im.as_lifted_capture(im.literal_("0.1", "float64")),
+        im.as_lifted_capture(im.literal_("0.1", "float64")),
+        im.as_lifted_capture(im.literal_("0.1", "float32")),
+        im.as_lifted_capture(im.literal_("0.1", "float64")),
+        im.as_lifted_capture(im.literal_(".1", "float64")),
+        im.as_lifted_capture(im.literal_(".1", "float32")),
+        im.as_lifted_capture(im.literal_(".1", "float64")),
     )
 
     assert lowered.expr == reference
@@ -584,15 +570,16 @@ def test_builtin_bool_constructors():
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.make_tuple_(
-        im.literal_(str(True), "bool"),
-        im.literal_(str(False), "bool"),
-        im.literal_(str(True), "bool"),
-        im.literal_(str(False), "bool"),
-        im.literal_(str(bool(0)), "bool"),
-        im.literal_(str(bool(5)), "bool"),
-        im.literal_(str(bool("True")), "bool"),
-        im.literal_(str(bool("False")), "bool"),
+    reference = im.as_lifted_lambda(
+        "make_tuple",
+        im.as_lifted_capture(im.literal_(str(True), "bool")),
+        im.as_lifted_capture(im.literal_(str(False), "bool")),
+        im.as_lifted_capture(im.literal_(str(True), "bool")),
+        im.as_lifted_capture(im.literal_(str(False), "bool")),
+        im.as_lifted_capture(im.literal_(str(bool(0)), "bool")),
+        im.as_lifted_capture(im.literal_(str(bool(5)), "bool")),
+        im.as_lifted_capture(im.literal_(str(bool("True")), "bool")),
+        im.as_lifted_capture(im.literal_(str(bool("False")), "bool")),
     )
 
     assert lowered.expr == reference
