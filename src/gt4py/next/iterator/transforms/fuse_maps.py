@@ -48,19 +48,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Example:
         map(λ(x, y)->f(x, y))(a, map(λ(z, w)->g(z, w))(b, c))
     to
-        TODOmap(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
-
-
-    map(λ(x, b,c)->f(x, (λ(z, w)->g(z, w))(b,c)))(a, map(λ(z, w)->g(z, w))(b, c))
-
-    λ(x, b, c)->(λ(x, y)->f(x, y))(x, λ(z, w)->g(z, w))(b,c)
-
-
-    Algorithm:
-      - example: map(λ(x, y)->f(x, y))(a, map(λ(z, w)->g(z, w))(b, c))
-      - the arguments to the mapped operation are either `SymRef`s or calls to `neighbor` or calls to `deref`
-      - the new op is a lambda where the to-inline argument is replaced by the
-      - create a new op from
+        map(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
     """
 
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
@@ -74,7 +62,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
         )
 
-    # TODO think about clashes
+    # TODO think about clashes of symbol names
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
         if _is_map(node) or _is_reduce(node):

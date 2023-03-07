@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 
@@ -38,26 +39,38 @@ def test_simple():
         _map(ir.SymRef(id="multiplies"), ir.SymRef(id="b"), ir.SymRef(id="c")),
     )
 
-    expected = _map(
-        ir.Lambda(
-            params=[ir.Sym(id="a"), ir.Sym(id="b"), ir.Sym(id="c")],
-            expr=ir.FunCall(
-                fun=ir.SymRef(id="plus"),
-                args=[
-                    ir.SymRef(id="a"),
-                    ir.FunCall(
-                        fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="b"), ir.SymRef(id="c")]
+    expected = P(
+        ir.FunCall,
+        fun=P(
+            ir.FunCall,
+            fun=ir.SymRef(id="map_"),
+            args=[
+                P(
+                    ir.Lambda,
+                    params=[
+                        P(ir.Sym),
+                        P(ir.Sym),
+                        P(ir.Sym),
+                    ],  # TODO: can we express that the Sym id's match the SymRef id later?
+                    expr=P(
+                        ir.FunCall,
+                        fun=ir.SymRef(id="plus"),
+                        args=[
+                            P(ir.SymRef),
+                            P(
+                                ir.FunCall,
+                                fun=ir.SymRef(id="multiplies"),
+                                args=[P(ir.SymRef), P(ir.SymRef)],
+                            ),
+                        ],
                     ),
-                ],
-            ),
+                ),
+            ],
         ),
-        ir.SymRef(id="a"),
-        ir.SymRef(id="b"),
-        ir.SymRef(id="c"),
     )
 
     actual = FuseMaps().visit(testee)
-    # assert expected == actual #TODO pattern match the result
+    assert expected.match(actual)
 
 
 def test_simple_with_lambdas():
