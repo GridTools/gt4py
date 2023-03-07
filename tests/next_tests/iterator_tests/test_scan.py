@@ -18,8 +18,8 @@ from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, scan, shift
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
-    index_field,
     array_as_located_field,
+    index_field,
 )
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
