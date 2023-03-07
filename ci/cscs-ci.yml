@@ -117,7 +117,7 @@ test py310:
   artifacts:
     paths:
     - coverage-*
-    - .tox/**
+    - .tox/**/gt4py/**
   variables:
     <<: *py310
   parallel:
