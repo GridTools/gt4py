@@ -68,6 +68,7 @@ After a cycle, we have a working implementation of the iterator IR to DaCe SDFG 
 #### Tuples
 
 **Problem**: it's not possible and also not practical to generate DaCe tasklets that contain tuple expressions, thus iterator IR tuples are not currently supported.
+
 **Solution**: in ITIR, the sources of tuple values are the `deref`, the `symref`, and the `make_tuple` expressions, each returning a tuple of values. These expressions can be transformed into tasklets that have multiple outputs. The only valid expression on their result is `tuple_get`, which means we can select the result immediately by its index. As long as the tuple is homogeneous, dynamic indexing is valid.
 
 #### Typing
@@ -76,7 +77,7 @@ After a cycle, we have a working implementation of the iterator IR to DaCe SDFG 
 
 **Solution**: The iterator type inference pass should provide the concrete type of all value-expressions.  
 
-#### Only a subset of ITIR supported
+#### Partial suppot for iterator IR grammar
 
 - First order functions: in DaCe SDFG's, first order functions could be represented by associating a nested SDFG (function equivalent in DaCe) with an access node (variable equivalent in DaCe), which is not a thing as far as I know. There is no practical solution to support this in the SDFG lowering, such ITIR will always be rejected and should not be generated from ITIR passes.
 - Lambdas: in DaCe SDFG's, an immediate call to an instantiation of a lambda function can be represented as a nested SDFG. Currently, the DaCe backend does not support this, but the solution should be fairly straightforward. Lambda support is necessary as they are essential for CSE in ITIR. 
@@ -85,19 +86,30 @@ After a cycle, we have a working implementation of the iterator IR to DaCe SDFG 
 
 #### Reductions
 
-Reductions are being reworked, postponed until objectives are clear.
+Reductions are being reworked for ITIR, potentially also for DaCe, so support is postponed until objectives are clear.
 
 #### Scans
 
 **Problem**: DaCe does not have a builtin construct for scans, thus it will have to be implemented using maps, states and tasklets.
+
 **Solution**: Use a DaCe map for the parallel dimensions of the scan, and implement the scan dimension as a nested SDFG with a sequential loop represented by a state machine.
 
 ### Non-feature improvements
 
 #### Temporaries for lifts
 
+**Problem**: the ITIR to DaCe SDFG conversion does not accept ITIR that contains `lifts`. Currently, lifts are eliminated by forced inlining, which sometimes blows up memory accesses.
+
+**Solution**: implement support for conversion of ITIR with temporaries to SDFG. Then, we can enable ITIR heuristics to optimize memory accesses, or we can insert a temporary everywhere to let DaCe do the optimization.
+
 #### Library nodes for indirect indexing
 
-**Problem**: The current method of using tasklets to represent index manipulation by connectivities  
+**Problem**: the current method of using tasklets to represent index manipulation by connectivities introduces additional states into the SDFG which hurts the optimization opportunities.
+
+**Solution**: instead of using inter-state edges, using library nodes specifically for index manipulation could keep the entire stencil closure in a single state, improving optimizations.  The library nodes have to be implemented and added to DaCe.
 
 #### Compile-time strides
+
+**Problem**: currently, all arrays have fully dynamic strides. This is very bad for the CPU binaries, because dynamic strides prevent vectorization. The GPU backends may also suffer, but much less so.
+
+**Solution**: introduce static strides into the type system and use those types within the DaCe backend as appropriate.
