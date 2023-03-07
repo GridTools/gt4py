@@ -20,7 +20,7 @@ import pytest
 from gt4py.next.common import Dimension, DimensionKind, Field
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import FieldOffset
-from gt4py.next.iterator.embedded import np_as_located_field
+from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 from ..ffront_test_utils import fieldview_backend
@@ -191,21 +191,21 @@ def test_setup():
     class setup:
         cell_size = 14
         k_size = 10
-        z_alpha = np_as_located_field(Cell, KDim)(
+        z_alpha = array_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size + 1))
         )
-        z_beta = np_as_located_field(Cell, KDim)(
+        z_beta = array_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q = np_as_located_field(Cell, KDim)(
+        z_q = array_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        w = np_as_located_field(Cell, KDim)(
+        w = array_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
         z_q_ref, w_ref = reference(z_alpha, z_beta, z_q, w)
-        dummy = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
+        dummy = array_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = array_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
 
     return setup()
 
