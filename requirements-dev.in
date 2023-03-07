@@ -1,7 +1,7 @@
 clang-format>=9.0
 cmake>=3.18.1
 cogapp>=3.3
-coverage>=5.0
+coverage[toml]>=5.0
 darglint>=1.6
 devtools>=0.6
 factory-boy>=3.1
@@ -12,6 +12,7 @@ flake8-debugger>=4.0.0
 flake8-docstrings>=1.5.0
 flake8-eradicate>=1.0.0
 flake8-mutable>=1.2.0
+flake8-pyproject>=1.2.2
 flake8-rst-docstrings>=0.0.14
 hypothesis>=4.14
 isort>=5.10
@@ -30,5 +31,6 @@ pytest-xdist[psutil]>=2.4
 setuptools>=40.8.0
 sphinx>=4.4
 sphinx_rtd_theme>=1.0
+tomli>=2.0.1
 tox>=4.2
 types-all

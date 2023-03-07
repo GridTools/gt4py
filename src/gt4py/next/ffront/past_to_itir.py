@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generator, Optional, cast
+from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
@@ -249,16 +249,16 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim_i: int,
         dim: Dimension,
         node_domain: past.Dict,
-    ) -> Generator[Any, None, None]:
+    ) -> list[itir.FunCall]:
+        assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
-        if keys_dims_types == dim:
-            assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
-        else:
+        if keys_dims_types != dim:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
                 f"Expected {dim}, but got {keys_dims_types} "
             )
+
+        return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
@@ -355,3 +355,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
+
+    def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
+        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
+            return itir.FunCall(
+                fun=itir.SymRef(id=node.func.id),
+                args=[self.visit(node.args[0]), self.visit(node.args[1])],
+            )
+        else:
+            raise AssertionError(
+                "Only `minimum` and `maximum` builtins supported supported currently."
+            )

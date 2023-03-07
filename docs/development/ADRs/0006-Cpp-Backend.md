@@ -4,7 +4,7 @@ tags: [backend]
 
 # C++ Backend
 
-- **Status**: valid 
+- **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-02-18
 - **Updated**: 2022-04-22
@@ -16,6 +16,7 @@ Overview of C++ backend decisions.
 The backend will not be able to transform the IR, therefore any patterns that need IR transformations need to happen before C++ code generation.
 
 The following built-ins require to be presented in a canonicalized form
+
 - `scan`
 - `lift` if interpreted as temporary (see below).
 
@@ -27,6 +28,7 @@ The following built-ins require to be presented in a canonicalized form
 
 We introduce an IR which is close to the generated code.
 It is different to Iterator IR in the following:
+
 - no `lift` built-in
 - allows allocation of temporaries
 - Iterator IR built-ins are replaced by the corresponding C++ operator, e.g. `plus(a,b)` -> `a+b`
@@ -45,12 +47,12 @@ Additionally, we decided to unroll the reduction, before generating the backend 
 
 These are reasons why reductions might be introduced in the backend at some point:
 
-1) Performance implications for check for skip values.
+1. Performance implications for check for skip values.
 
    If we use the reduce builtin, we can implement an early exit in the reduction loop, assuming there are no non-skipped values after the first skip value. This assumption might be problematic anyway as we might have to reorder neighbor tables, if the mesh generator does not comply with this assumption.
 
-2) Implementation as runtime loops.
-   
+2. Implementation as runtime loops.
+
    If we would implement the reduction as runtime loops (with compile time bounds), we could leave the decision of unrolling to the C++ compiler. Note that this would require to implement `shift`s with runtime offsets (currently offsets are required to be compile-time).
 
 Note: Originally, we introduced `reduce` to be able to check for skip values only once for all iterators in the reduce. However the single check can be implemented in the unrolled version, too.
@@ -75,6 +77,7 @@ def unrolled_reduce(a,b):
 ## Summary
 
 The IR, when presented to the C++ backend must have the following properties:
+
 - `scan` canonicalized
 - `lift` that are interpreted as temporaries are canonicalized, no other (inline) `lift`s
 - no `reduce`
