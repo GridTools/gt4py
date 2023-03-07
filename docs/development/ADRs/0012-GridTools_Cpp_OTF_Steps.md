@@ -1,5 +1,5 @@
 ---
-tags: [backend,cpp,gridtools,bindings,otf]
+tags: [backend, cpp, gridtools, bindings, otf]
 ---
 
 # GridTools CPP OTF Steps
@@ -51,10 +51,10 @@ When called the `GTFNExecutor` instance composes a workflow from the above steps
 
 In the earlier, Cartesian version of GT4Py backends started out as monoliths with just IR as input and executable program for output.
 
-* Advantages:
+- Advantages:
   - in some cases simpler to write
   - not limited by inter-step interfaces, any information can be available at any step.
-* Disadvantages:
+- Disadvantages:
   - hard to share code between backends
   - more design decisions required for implementing a new backend
   - leads to harder to maintain backends
@@ -64,7 +64,7 @@ In the earlier, Cartesian version of GT4Py backends started out as monoliths wit
 
 The bindings generator and builder steps could have been implemented without consideration for sharing code with future backends.
 
-* Advantages:
+- Advantages:
   - faster to implement
-* Disadvantages:
+- Disadvantages:
   - slows down the next backend implementation

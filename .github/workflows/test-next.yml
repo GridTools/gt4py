@@ -42,7 +42,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
         cache-dependency-path: |
-          **/setup.cfg
+          **/pyproject.toml
           **/constraints.txt
           **/requirements-dev.txt
     - name: Install python dependencies
