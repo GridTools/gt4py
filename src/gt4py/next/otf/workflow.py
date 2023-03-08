@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic, Protocol, TypeVar
+from typing import Any, Callable, Generic, Protocol, TypeVar
 
 
 StartT = TypeVar("StartT")
@@ -128,3 +128,41 @@ class CombinedStep(Generic[StartT, IntermediateT, EndT]):
 
     def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
         return CombinedStep(first=self, second=step)
+
+
+@dataclasses.dataclass(frozen=True)
+class CachedWorkflow(Generic[StartT, EndT]):
+    """
+    Cached workflow of single input callables.
+
+    Examples:
+    ---------
+    >>> def heavy_computation(x: int) -> int:
+    ...    print("This might take a while...")
+    ...    return x
+
+    >>> cached_workflow = CachedWorkflow(heavy_computation)
+
+    >>> cached_workflow(42)
+    This might take a while...
+    42
+
+    The next invocation for the same argument will be cached:
+    >>> cached_workflow(42)
+    42
+
+    >>> cached_workflow(1)
+    This might take a while...
+    1
+    """
+
+    workflow: Workflow[StartT, EndT]
+    hash_function: Callable[[StartT], Any] = dataclasses.field(default=hash)
+
+    _cache: dict[Any, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
+
+    def __call__(self, inp: StartT) -> EndT:
+        hash_ = self.hash_function(inp)
+        if hash_ in self._cache:
+            return self._cache[hash_]
+        return self._cache.setdefault(hash_, self.workflow(inp))
