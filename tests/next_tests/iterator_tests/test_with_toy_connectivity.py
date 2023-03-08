@@ -28,7 +28,6 @@ from next_tests.toy_connectivity import (
     v2v_arr,
 )
 
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import deref, lift, plus, reduce, shift
 from gt4py.next.iterator.embedded import (
@@ -37,7 +36,7 @@ from gt4py.next.iterator.embedded import (
     np_as_located_field,
 )
 from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.formatters import gtfn
+from gt4py.next.program_processors.formatters import gtfn, type_check
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from .conftest import run_processor
@@ -137,6 +136,8 @@ def sparse_stencil(non_sparse, inp):
 
 def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
+    if program_processor == type_check.check:
+        pytest.xfail("Partial shifts not properly supported by type inference.")
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -159,6 +160,9 @@ def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
 
 def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
+    if program_processor == type_check.check:
+        pytest.xfail("Partial shifts not properly supported by type inference.")
+
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
