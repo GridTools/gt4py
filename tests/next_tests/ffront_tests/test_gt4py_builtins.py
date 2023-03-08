@@ -117,7 +117,7 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     Edge = rs.Edge
     Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
@@ -159,7 +159,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
     Edge = rs.Edge
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduce_expr(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
@@ -323,7 +323,7 @@ def test_conditional_shifted(fieldview_backend):
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     mask = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def conditional_shifted(
         mask: Field[[IDim], bool], a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
