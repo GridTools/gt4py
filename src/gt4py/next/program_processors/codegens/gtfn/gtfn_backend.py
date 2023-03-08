@@ -21,6 +21,18 @@ from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
+from gt4py.storage.layout import LayoutInfo, register as register_layout
+
+
+register_layout(
+    "gtfn",
+    LayoutInfo(
+        alignment=1,
+        device="cpu",
+        layout_map=lambda axes: tuple(i for i in range(len(axes))),
+        is_optimal_layout=lambda *_: True,
+    ),
+)
 
 
 def _lower(

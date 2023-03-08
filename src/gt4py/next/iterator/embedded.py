@@ -47,10 +47,18 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.iterator import builtins, runtime, utils
 from gt4py.storage import StorageProtocol
-
+from gt4py.storage.layout import register as register_layout, LayoutInfo
 
 EMBEDDED = "embedded"
-
+register_layout(
+    "gtfn",
+    LayoutInfo(
+        alignment=1,
+        device="cpu",
+        layout_map=lambda axes: tuple(i for i in range(len(axes))),
+        is_optimal_layout=lambda *_: True,
+    ),
+)
 
 # Atoms
 Tag: TypeAlias = str

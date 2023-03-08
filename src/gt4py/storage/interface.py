@@ -46,7 +46,7 @@ def empty(
     shape: Sequence[int],
     dtype: DTypeLike = np.float64,
     *,
-    backend: str,
+    backend: Optional[str],
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
