@@ -25,6 +25,7 @@ from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
+from gt4py.next.otf.workflow import CachedWorkflow
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
@@ -36,6 +37,18 @@ def convert_arg(arg: Any) -> Any:
         return np.asarray(arg)
     else:
         return arg
+
+
+def convert_args(inp: Callable) -> Callable:
+    def decorated_program(
+        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
+    ):
+        return inp(
+            *[convert_arg(arg) for arg in args],
+            *extract_connectivity_args(offset_provider),
+        )
+
+    return decorated_program
 
 
 def extract_connectivity_args(
@@ -60,6 +73,24 @@ def extract_connectivity_args(
     return args
 
 
+# TODO(tehrengruber): We shouldn't do this. See `GTFNExecutor.use_caching` for a comment.
+def compilation_hash(otf_closure: stages.ProgramCall) -> int:
+    """
+    Given closure compute a hash uniquely determining if we need to recompile.
+    """
+    offset_provider = otf_closure.kwargs["offset_provider"]
+    return hash(
+        (
+            otf_closure.program,
+            # TODO(tehrengruber): as the frontend types contain lists they are
+            #  not hashable. As a workaround we just use content_hash here.
+            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+            id(offset_provider) if offset_provider else None,
+            otf_closure.kwargs.get("column_axis", None),
+        )
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(ppi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
@@ -69,7 +100,36 @@ class GTFNExecutor(ppi.ProgramExecutor):
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
 
-    _cache: dict[int, Callable] = dataclasses.field(repr=False, init=False, default_factory=dict)
+    # TODO(tehrengruber): The otf workflow currently takes the entire closure, i.e. the
+    #  fencil and its arguments, instead of the parts it actually needs to compile the program.
+    #  The hash function for the caching currently only uses a subset of the closure and implicitly
+    #  relies on the workflow to only use that information. As this is dangerous the caching is
+    #  disabled by default and should be considered experimental.
+    use_caching: bool = False
+    caching_strategy = cache.Strategy.SESSION
+
+    _otf_workflow: workflow.Workflow[
+        stages.ProgramCall, stages.CompiledProgram
+    ] = dataclasses.field(repr=False, init=False)
+
+    def __post_init__(self):
+        otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram] = (
+            gtfn_module.GTFNTranslationStep(
+                self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
+            )
+            .chain(pybind.bind_source)
+            .chain(
+                compiler.Compiler(
+                    cache_strategy=self.caching_strategy, builder_factory=self.builder_factory
+                )
+            )
+            .chain(convert_args)
+        )
+
+        if self.use_caching:
+            otf_workflow = CachedWorkflow(workflow=otf_workflow, hash_function=compilation_hash)
+
+        super().__setattr__("_otf_workflow", otf_workflow)
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -81,47 +141,9 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
         See ``ProgramExecutorFunction`` for details.
         """
-        cache_key = hash(
-            (
-                program,
-                # TODO(tehrengruber): as the resulting frontend types contain lists they are
-                #  not hashable. As a workaround we just use content_hash here.
-                content_hash(tuple(from_value(arg) for arg in args)),
-                id(kwargs["offset_provider"]),
-                kwargs.get("column_axis", None),
-            )
-        )
+        compiled_runner = self._otf_workflow(stages.ProgramCall(program, args, kwargs))
 
-        def convert_args(inp: Callable) -> Callable:
-            def decorated_program(*args):
-                return inp(
-                    *[convert_arg(arg) for arg in args],
-                    *extract_connectivity_args(kwargs["offset_provider"]),
-                )
-
-            return decorated_program
-
-        if cache_key not in self._cache:
-            otf_workflow: Final[workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]] = (
-                gtfn_module.GTFNTranslationStep(
-                    self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
-                )
-                .chain(pybind.bind_source)
-                .chain(
-                    compiler.Compiler(
-                        cache_strategy=cache.Strategy.SESSION, builder_factory=self.builder_factory
-                    )
-                )
-                .chain(convert_args)
-            )
-
-            otf_closure = stages.ProgramCall(program, args, kwargs)
-
-            compiled_runner = self._cache[cache_key] = otf_workflow(otf_closure)
-        else:
-            compiled_runner = self._cache[cache_key]
-
-        compiled_runner(*args)
+        return compiled_runner(*args, offset_provider=kwargs["offset_provider"])
 
     @property
     def __name__(self) -> str:
