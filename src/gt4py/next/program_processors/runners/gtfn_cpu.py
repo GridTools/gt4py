@@ -75,9 +75,7 @@ def extract_connectivity_args(
 
 # TODO(tehrengruber): We shouldn't do this. See `GTFNExecutor.use_caching` for a comment.
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
-    """
-    Given closure compute a hash uniquely determining if we need to recompile.
-    """
+    """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
     return hash(
         (
