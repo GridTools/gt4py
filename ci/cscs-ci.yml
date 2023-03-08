@@ -147,7 +147,7 @@ combined coverage:
   - mv coverage.xml $CI_PROJECT_DIR
   - curl -Os https://uploader.codecov.io/latest/linux/codecov
   - chmod +x codecov
-  - ./codecov -t $CODECOV_TOKEN
+  - ./codecov -t $CODECOV_TOKEN -r gridtools/gt4py
   artifacts:
     reports:
       coverage_report:
