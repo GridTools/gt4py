@@ -16,9 +16,10 @@ import numpy as np
 import pytest
 
 from gt4py.next.common import Dimension
-from gt4py.next.iterator import embedded, ir as itir
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+from gt4py.storage.located_field import array_as_located_field
 
 
 @pytest.fixture
@@ -57,7 +58,7 @@ def fencil_example():
     )
     IDim = Dimension("I")
     params = [
-        embedded.array_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        array_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
         np.float32(3.14),
     ]
     return fencil, params

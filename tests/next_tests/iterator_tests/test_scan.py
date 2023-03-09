@@ -16,14 +16,11 @@ import numpy as np
 
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, scan, shift
-from gt4py.next.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    array_as_located_field,
-    index_field,
-)
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.storage.located_field import array_as_located_field, index_field
 
 from .conftest import run_processor
 

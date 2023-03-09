@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
-from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.storage.located_field import array_as_located_field
 
 from .conftest import run_processor
 

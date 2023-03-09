@@ -29,13 +29,13 @@ import pytest
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.storage.located_field import array_as_located_field
 
 from .conftest import run_processor
 

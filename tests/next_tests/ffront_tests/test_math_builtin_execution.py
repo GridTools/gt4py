@@ -25,10 +25,8 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.ffront.decorator import FieldOperator
-from gt4py.next.ffront.fbuiltins import Dimension, Field, float64
+from gt4py.next.ffront.fbuiltins import Field, float64
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.iterator.embedded import array_as_located_field
-from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_translation
 
 from ..iterator_tests.math_builtin_test_data import math_builtin_test_data

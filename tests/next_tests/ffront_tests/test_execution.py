@@ -36,12 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    array_as_located_field,
-    index_field,
-)
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.storage.located_field import array_as_located_field, index_field
 
 from .ffront_test_utils import *
 

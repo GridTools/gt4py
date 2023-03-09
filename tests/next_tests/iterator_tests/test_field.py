@@ -16,14 +16,15 @@ import numpy as np
 
 from gt4py.eve.datamodels import field
 from gt4py.next.iterator import embedded
+from gt4py.storage.located_field import array_as_located_field
 
 
 def make_located_field(dtype=np.float64):
-    return embedded.array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
+    return array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
 
 
 def test_located_field_1d():
-    foo = embedded.array_as_located_field("foo")(np.zeros((1,)))
+    foo = array_as_located_field("foo")(np.zeros((1,)))
 
     foo[0] = 42
 
@@ -32,7 +33,7 @@ def test_located_field_1d():
 
 
 def test_located_field_2d():
-    foo = embedded.array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
+    foo = array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
 
     foo[0, 0] = 42
 

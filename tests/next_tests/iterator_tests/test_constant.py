@@ -16,9 +16,9 @@ import numpy as np
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import fundef
 from gt4py.next.program_processors.runners import roundtrip
+from gt4py.storage.located_field import array_as_located_field
 
 
 IDim = Dimension("IDim")

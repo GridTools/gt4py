@@ -19,8 +19,8 @@ import pytest
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import deref
-from gt4py.next.iterator.embedded import array_as_located_field
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
+from gt4py.storage.located_field import array_as_located_field
 
 from .conftest import DummyConnectivity
 

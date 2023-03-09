@@ -22,12 +22,9 @@ import pytest
 
 from gt4py.next.common import DimensionKind
 from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
-from gt4py.next.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    array_as_located_field,
-    index_field,
-)
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.storage.located_field import array_as_located_field
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
