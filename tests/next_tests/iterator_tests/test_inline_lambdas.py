@@ -32,10 +32,10 @@ test_data = [
     ),
     (
         "name_collision",
-        im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "x")),
+        im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "y")),
         {
-            True: im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "x")),  # stays as is
-            False: im.plus_(im.plus_("x", "x"), im.plus_("x", "x")),
+            True: im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "y")),  # stays as is
+            False: im.plus_(im.plus_("x", "y"), im.plus_("x", "y")),
         },
     ),
     (
