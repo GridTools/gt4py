@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++  -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/anton_lap.dir/anton_lap_driver.cpp.o -o anton_lap  libregression_main.a lib/libgmock.a lib/libgtest.a 

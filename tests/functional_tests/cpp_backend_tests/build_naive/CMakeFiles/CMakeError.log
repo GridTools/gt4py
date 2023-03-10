@@ -1,0 +1,29 @@
+Looking for a CUDA compiler failed with the following output:
+CMake Error at /Users/nicolettafarabullini/PycharmProjects/gt4py/.venv/lib/python3.10/site-packages/cmake/data/share/cmake-3.25/Modules/CMakeDetermineCUDACompiler.cmake:180 (message):
+  Failed to find nvcc.
+
+  Compiler requires the CUDA toolkit.  Please set the CUDAToolkit_ROOT
+  variable.
+Call Stack (most recent call first):
+  CMakeLists.txt:2 (project)
+
+
+-- Configuring incomplete, errors occurred!
+See also "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/_deps/gridtools-build/CMakeFiles/CheckCUDA/CMakeFiles/CMakeOutput.log".
+See also "/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/_deps/gridtools-build/CMakeFiles/CheckCUDA/CMakeFiles/CMakeError.log".
+
+The MPI test test_mpi for CXX in mode normal failed to compile with the following output:
+Change Dir: /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-iqJQAD
+
+Run Build Command(s):/usr/bin/make -f Makefile cmTC_5e972/fast && /Library/Developer/CommandLineTools/usr/bin/make  -f CMakeFiles/cmTC_5e972.dir/build.make CMakeFiles/cmTC_5e972.dir/build
+Building CXX object CMakeFiles/cmTC_5e972.dir/test_mpi.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/c++   -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -MD -MT CMakeFiles/cmTC_5e972.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_5e972.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_5e972.dir/test_mpi.cpp.o -c /Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-iqJQAD/test_mpi.cpp
+/Users/nicolettafarabullini/PycharmProjects/gt4py/tests/functional_tests/cpp_backend_tests/build_naive/CMakeFiles/CMakeScratch/TryCompile-iqJQAD/test_mpi.cpp:1:10: fatal error: 'mpi.h' file not found
+#include <mpi.h>
+         ^~~~~~~
+1 error generated.
+make[1]: *** [CMakeFiles/cmTC_5e972.dir/test_mpi.cpp.o] Error 1
+make: *** [cmTC_5e972/fast] Error 2
+
+
+
