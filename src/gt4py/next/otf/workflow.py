@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Callable, Generic, Protocol, TypeVar
+from typing import Callable, Generic, Protocol, TypeVar
 
 
 StartT = TypeVar("StartT")
