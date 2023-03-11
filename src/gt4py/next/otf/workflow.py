@@ -24,6 +24,7 @@ EndT = TypeVar("EndT")
 EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
+HashT = TypeVar("HashT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
@@ -131,7 +132,7 @@ class CombinedStep(Generic[StartT, IntermediateT, EndT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class CachedWorkflow(Generic[StartT, EndT]):
+class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
     """
     Cached workflow of single input callables.
 
@@ -141,25 +142,25 @@ class CachedWorkflow(Generic[StartT, EndT]):
     ...    print("This might take a while...")
     ...    return x
 
-    >>> cached_workflow = CachedWorkflow(heavy_computation)
+    >>> cached_step = CachedStep(heavy_computation)
 
-    >>> cached_workflow(42)
+    >>> cached_step(42)
     This might take a while...
     42
 
     The next invocation for the same argument will be cached:
-    >>> cached_workflow(42)
+    >>> cached_step(42)
     42
 
-    >>> cached_workflow(1)
+    >>> cached_step(1)
     This might take a while...
     1
     """
 
     workflow: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], Any] = dataclasses.field(default=hash)
+    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
 
-    _cache: dict[Any, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
+    _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         hash_ = self.hash_function(inp)
