@@ -185,9 +185,9 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
-_column_range: Optional[
-    range
-] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+# TODO see https://github.com/GridTools/gt4py/pull/1120
+_column_range: Optional[range] = None
+_offset_provider: Optional[OffsetProvider] = None
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
@@ -327,7 +327,6 @@ def lift(stencil):
                 self.args = args
                 self.offsets = offsets or []
                 self.elem = elem
-                self.offset_provider = args[0].offset_provider
 
             # TODO needs to be supported by all iterators that represent tuples
             def __getitem__(self, index):
@@ -342,7 +341,7 @@ def lift(stencil):
                 # TODO cleanup, test edge cases
                 open_offsets = get_open_offsets(*self.incomplete_offsets, *self.offsets)
                 assert open_offsets
-                return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
+                return _get_connectivity(_offset_provider, open_offsets[0]).max_neighbors
 
             @property
             def incomplete_offsets(self):
@@ -796,22 +795,20 @@ class MDIterator:
     field: LocatedField
     pos: MaybePosition
     incomplete_offsets: Sequence[Tag] = dataclasses.field(default_factory=list, kw_only=True)
-    offset_provider: OffsetProvider = dataclasses.field(kw_only=True)
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
         return MDIterator(
             self.field,
-            shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
+            shift_position(self.pos, *complete_offsets, offset_provider=_offset_provider),
             incomplete_offsets=open_offsets,
-            offset_provider=self.offset_provider,
             column_axis=self.column_axis,
         )
 
     def max_neighbors(self) -> int:
         assert self.incomplete_offsets
-        return _get_connectivity(self.offset_provider, self.incomplete_offsets[0]).max_neighbors
+        return _get_connectivity(_offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
@@ -854,7 +851,6 @@ class MDIterator:
 def make_in_iterator(
     inp: LocatedField,
     pos: Position,
-    offset_provider: OffsetProvider,
     *,
     column_axis: Optional[Tag],
 ) -> ItIterator:
@@ -882,7 +878,6 @@ def make_in_iterator(
         inp,
         new_pos,
         incomplete_offsets=[],
-        offset_provider=offset_provider,
         column_axis=column_axis,
     )
     if len(sparse_dimensions) == 1:
@@ -1119,13 +1114,12 @@ class _ConstList(Generic[DT]):
 
 @builtins.neighbors.register(EMBEDDED)
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
-    # TODO offset provider should be part of the iterator interface?
     offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
     return _List(
         builtins.deref(it.shift(offset_str, i))
         if builtins.can_deref(it.shift(offset_str, i))
         else None
-        for i in range(it.offset_provider[offset_str].max_neighbors)  # type: ignore
+        for i in range(_offset_provider[offset_str].max_neighbors)
     )
 
 
@@ -1178,10 +1172,6 @@ class SparseListIterator:
     list_offset: Tag
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
-    @property
-    def offset_provider(self):
-        return self.it.offset_provider
-
     def deref(self) -> Any:
         return _List(
             builtins.deref(builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it))
@@ -1189,16 +1179,14 @@ class SparseListIterator:
                 builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it)
             )
             else None
-            for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
+            for i in range(_offset_provider[self.list_offset].max_neighbors)  # type: ignore
         )
 
-    # TODO can_deref alternative
     def can_deref(self) -> bool:
-        return True
+        return builtins.shift(*self.offsets).can_deref()
 
-    # TODO
     def max_neighbors(self) -> int:
-        return 0
+        return builtins.shift(*self.offsets).max_neighbors()
 
     def shift(self, *offsets: OffsetPart) -> SparseListIterator:
         return SparseListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
@@ -1368,6 +1356,9 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
+    global _offset_provider
+    _offset_provider = kwargs["offset_provider"]
+
     @runtime.closure.register(EMBEDDED)
     def closure(
         domain_: Domain,
@@ -1397,7 +1388,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                 make_in_iterator(
                     inp,
                     pos,
-                    kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
                 for inp in promoted_ins
