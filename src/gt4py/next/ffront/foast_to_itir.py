@@ -194,9 +194,7 @@ class FieldOperatorLowering(NodeTranslator):
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
                 shift_offset = im.shift_(offset_name, offset_index)
             case foast.Name(id=offset_name):
-                return im.lifted_neighbors(
-                    im.ensure_offset(str(offset_name)), self.visit(node.func, **kwargs)
-                )
+                return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
