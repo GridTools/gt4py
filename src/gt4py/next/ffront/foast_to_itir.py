@@ -51,6 +51,9 @@ class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
+    The strategy is to lower every expression to lifted stencils,
+    i.e. taking iterators and returning iterator.
+
     Examples
     --------
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -75,20 +78,6 @@ class FieldOperatorLowering(NodeTranslator):
     def apply(cls, node: foast.LocatedNode) -> itir.Expr:
         return cls().visit(node)
 
-    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
-        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-
-        # The pass works by making every expression a lifted stencil (i.e. takes iterators, returns iterator),
-        # except FieldOperators are lowered to stencils (i.e. takes iterators, returns value) and lifted in calls.
-        # TODO for consistency we could lift here, then deref in the program call.
-        new_body = im.deref_(func_definition.expr)
-
-        return itir.FunctionDefinition(
-            id=func_definition.id,
-            params=func_definition.params,
-            expr=new_body,
-        )
-
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
     ) -> itir.FunctionDefinition:
@@ -97,6 +86,16 @@ class FieldOperatorLowering(NodeTranslator):
             id=node.id,
             params=params,
             expr=self.visit_BlockStmt(node.body, inner_expr=None),
+        )  # `expr` is a lifted stencil
+
+    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
+        func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
+        new_body = im.deref_(func_definition.expr)
+
+        return itir.FunctionDefinition(
+            id=func_definition.id,
+            params=func_definition.params,
+            expr=new_body,
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
@@ -160,7 +159,6 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.FunCall:
-        # TODO double-check that this works with `itir.map_`ed stuff
         return im.as_lifted_lambda(
             lambda tuple_: im.tuple_get_(node.index, tuple_), self.visit(node.value, **kwargs)
         )
@@ -175,7 +173,8 @@ class FieldOperatorLowering(NodeTranslator):
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
-            # TODO: invert only for bool right now
+            if dtype.kind != ts.ScalarKind.BOOL:
+                raise AssertionError(f"{node.op} is only supported on `bool`s.")
             return self._map("not_", node.operand)
 
         return self._map(node.op.value, self._make_literal("0", dtype), node.operand)
