@@ -271,6 +271,11 @@ def shift_(offset, value=None):
     return call_(call_("shift")(*args))
 
 
+def literal_(value: str, typename: str):
+    """Create a `Literal` with `value` and `typename`."""
+    return itir.Literal(value=value, type=typename)
+
+
 def neighbors_(offset, it):
     """Create a neighbors call."""
     offset = ensure_offset(offset)

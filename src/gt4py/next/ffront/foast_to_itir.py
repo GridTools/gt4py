@@ -288,12 +288,10 @@ class FieldOperatorLowering(NodeTranslator):
             target_type = fbuiltins.BUILTINS[node_kind]
             source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
-                return im.as_lifted_capture(  # TODO seems this codepath is not tested
-                    itir.Literal(
-                        value=str(bool(source_type(node.args[0].value))), type=node.func.id
-                    )
+                return im.as_lifted_capture(
+                    im.literal_(str(bool(source_type(node.args[0].value))), "bool")
                 )
-            return im.as_lifted_capture(itir.Literal(value=str(node.args[0].value), type=node_kind))
+            return im.as_lifted_capture(im.literal_(str(node.args[0].value), node_kind))
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Literal:
@@ -309,7 +307,7 @@ class FieldOperatorLowering(NodeTranslator):
             )
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
-            return im.as_lifted_capture(itir.Literal(value=str(val), type=typename))
+            return im.as_lifted_capture(im.literal_(str(val), typename))
         raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Literal:
