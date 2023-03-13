@@ -20,9 +20,9 @@ import pytest
 import gt4py.cartesian.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.cartesian.gtscript import Field, K
+from gt4py.storage import array_as_located_field
 
 from ..definitions import ALL_BACKENDS, CPU_BACKENDS
-from ..utils import DimensionsWrapper, OriginWrapper
 
 
 def base_stencil(
@@ -44,13 +44,13 @@ def test_origin_selection():
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
-    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
+    Awrap = array_as_located_field(*"IJK", origin=(0, 0, 0))(A)
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
-    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
+    Bwrap = array_as_located_field(*"IJK", origin=(2, 2, 2))(B)
     C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
-    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
+    Cwrap = array_as_located_field(*"IJK", origin=(0, 1, 0))(C)
 
     stencil(Awrap, Bwrap, Cwrap, param=3.0, origin=(1, 1, 1), domain=(1, 1, 1))
 
@@ -64,13 +64,13 @@ def test_origin_selection():
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
-    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
+    Awrap = array_as_located_field(*"IJK", origin=(0, 0, 0))(A)
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
-    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
+    Bwrap = array_as_located_field(*"IJK", origin=(2, 2, 2))(B)
     C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
-    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
+    Cwrap = array_as_located_field(*"IJK", origin=(0, 1, 0))(C)
     stencil(
         Awrap,
         Bwrap,
@@ -90,14 +90,14 @@ def test_origin_selection():
     A = gt_storage.ones(
         backend="gt:cpu_ifirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
-    Awrap = OriginWrapper(array=A, origin=(0, 0, 0))
+    Awrap = array_as_located_field(*"IJK", origin=(0, 0, 0))(A)
 
     B = gt_storage.ones(
         backend="gt:cpu_kfirst", dtype=np.float64, shape=(3, 3, 3), aligned_index=(2, 2, 2)
     )
-    Bwrap = OriginWrapper(array=B, origin=(2, 2, 2))
+    Bwrap = array_as_located_field(*"IJK", origin=(2, 2, 2))(B)
     C = gt_storage.ones(backend="numpy", dtype=np.float32, shape=(3, 3, 3), aligned_index=(0, 1, 0))
-    Cwrap = OriginWrapper(array=C, origin=(0, 1, 0))
+    Cwrap = array_as_located_field(*"IJK", origin=(0, 1, 0))(C)
     stencil(Awrap, Bwrap, Cwrap, param=3.0, origin={"field1": (2, 2, 2)}, domain=(1, 1, 1))
 
     assert A[2, 2, 2] == 4
@@ -227,65 +227,67 @@ def test_halo_checks(backend):
     stencil = gtscript.stencil(definition=avg_stencil, backend=backend)
 
     # test default works
-    in_field = OriginWrapper(
-        array=gt_storage.ones(
+    in_field = array_as_located_field(
+        *"IJK",
+        origin=(1, 1, 0),
+    )(
+        gt_storage.ones(
             backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
-        origin=(1, 1, 0),
     )
-    out_field = OriginWrapper(
-        array=gt_storage.zeros(
+    out_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
+        gt_storage.zeros(
             backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
-        ),
-        origin=(1, 1, 0),
+        )
     )
     stencil(in_field=in_field, out_field=out_field)
-    assert (out_field.array[1:-1, 1:-1, :] == 1).all()
+    assert (out_field.array()[1:-1, 1:-1, :] == 1).all()
 
     # test setting arbitrary, small domain works
-    in_field = OriginWrapper(
-        array=gt_storage.ones(
+    in_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
+        gt_storage.ones(
             backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
-        ),
-        origin=(1, 1, 0),
+        )
     )
-    out_field = OriginWrapper(
-        array=gt_storage.zeros(
+    out_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
+        gt_storage.zeros(
             backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
-        origin=(1, 1, 0),
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
-    assert (out_field.array[2:12, 2:12, :] == 1).all()
+    assert (out_field.array()[2:12, 2:12, :] == 1).all()
 
     # test setting domain+origin too large raises
-    in_field = OriginWrapper(
-        array=gt_storage.ones(
-            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
-        ),
+    in_field = array_as_located_field(
+        *"IJK",
         origin=(1, 1, 0),
-    )
-    out_field = OriginWrapper(
-        array=gt_storage.zeros(
+    )(
+        gt_storage.ones(
             backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
-        ),
-        origin=(1, 1, 0),
+        )
     )
+    out_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
+        gt_storage.zeros(
+            backend=backend, shape=(22, 22, 10), aligned_index=(1, 1, 0), dtype=np.float64
+        )
+    )
+
     with pytest.raises(ValueError):
         stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
     # test 2*origin+domain does not raise if still fits (c.f. previous bug in c++ check.)
-    in_field = OriginWrapper(
-        array=gt_storage.ones(
+    in_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
+        gt_storage.ones(
             backend=backend, shape=(23, 23, 10), aligned_index=(1, 1, 0), dtype=np.float64
-        ),
-        origin=(1, 1, 0),
+        )
     )
-    out_field = OriginWrapper(
-        array=gt_storage.zeros(
+    out_field = array_as_located_field(
+        *"IJK",
+        origin=(1, 1, 0),
+    )(
+        gt_storage.zeros(
             backend=backend, shape=(23, 23, 10), aligned_index=(1, 1, 0), dtype=np.float64
         ),
-        origin=(1, 1, 0),
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(20, 20, 10))
 
@@ -372,15 +374,14 @@ class TestAxesMismatch:
             match="Storage for '.*' has dimensions '.*' but the API signature expects '\[I, J\]'",
         ):
             sample_stencil(
-                field_out=DimensionsWrapper(
-                    array=gt_storage.empty(
+                field_out=array_as_located_field(*"IK")(
+                    gt_storage.empty(
                         shape=(3, 3),
                         dimensions=["I", "K"],
                         dtype=np.float64,
                         backend="numpy",
                         aligned_index=(0, 0),
                     ),
-                    dimensions=("I", "K"),
                 )
             )
 
@@ -460,7 +461,7 @@ def test_permute_axes():
         dtype=float,
         dimensions="KJI",
     )
-    outp_wrap = DimensionsWrapper(array=outp, dimensions="KJI")
+    outp_wrap = array_as_located_field(*"KJI")(outp)
 
     inp = gt_storage.from_array(
         data=np.arange(4),

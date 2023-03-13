@@ -19,8 +19,11 @@ from typing import (
     Callable,
     Optional,
     Protocol,
+    Sequence,
+    Tuple,
     TypeAlias,
     TypeGuard,
+    Union,
     overload,
     runtime_checkable,
 )
@@ -30,7 +33,8 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next.iterator import utils
-from gt4py.storage import DimensionIdentifier, StorageProtocol
+
+from .protocol import DimensionIdentifier, StorageProtocol
 
 
 IntIndex: TypeAlias = Integral
@@ -89,12 +93,15 @@ class LocatedFieldImpl(MutableLocatedField):
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: Callable[[], npt.NDArray],
+        origin: Optional[Tuple[IntIndex, ...]] = None,
     ):
         self.getter = getter
         self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
+        if origin is not None:
+            self.__gt_origin__ = origin
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
@@ -112,6 +119,18 @@ class LocatedFieldImpl(MutableLocatedField):
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __array_interface__(self):
+        return self.array().__array_interface__
+
+    def __descriptor__(self):
+        import dace
+
+        res = dace.data.create_datadescriptor(self.array())
+        if hasattr(self, "__gt_origin__"):
+            res.__gt_origin__ = self.__gt_origin__
+        return res
 
     @property
     def shape(self):
@@ -168,32 +187,35 @@ def _shift_field_indices(
 
 
 def array_as_located_field(
-    *axes: DimensionIdentifier, origin: Optional[dict[DimensionIdentifier, int]] = None
+    *axes: DimensionIdentifier,
+    origin: Optional[Union[dict[DimensionIdentifier, int], Sequence[int]]] = None,
 ) -> Callable[[np.ndarray], LocatedFieldImpl]:
+    if origin is not None and not len(axes) == len(origin):
+        raise ValueError(f"axes and origin do not match ({len(axes)}!={len(origin)})")
+    if isinstance(origin, dict):
+        origin = tuple(origin[ax] for ax in axes)
+        # origin = {ax: orig for ax, orig in zip(axes, origin)}
+
     def _maker(a: "ArrayLike") -> LocatedFieldImpl:
-        from gt4py.next.iterator.embedded import get_ordered_indices
+        # from gt4py.next.iterator.embedded import get_ordered_indices
 
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
 
-        if origin is not None:
-            offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
-        else:
-            offsets = None
+        # if origin is not None:
+        #     offsets = get_ordered_indices(axes, {k: v for k, v in origin.items()})
+        # else:
+        #     offsets = None
 
         def setter(indices, value):
             indices = utils.tupelize(indices)
-            a[_shift_field_indices(indices, offsets) if offsets else indices] = value
+            a[_shift_field_indices(indices, origin) if origin else indices] = value
 
         def getter(indices):
-            return a[_shift_field_indices(indices, offsets) if offsets else indices]
+            return a[_shift_field_indices(indices, origin) if origin else indices]
 
         return LocatedFieldImpl(
-            getter,
-            axes,
-            dtype=a.dtype,
-            setter=setter,
-            array=a.__array__,
+            getter, axes, dtype=a.dtype, setter=setter, array=a.__array__, origin=origin
         )
 
     return _maker

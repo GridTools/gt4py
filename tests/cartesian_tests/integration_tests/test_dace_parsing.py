@@ -24,9 +24,7 @@ from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
-from gt4py.storage import utils as storage_utils
-
-from ..utils import OriginWrapper
+from gt4py.storage import array_as_located_field, utils as storage_utils
 
 
 dace = pytest.importorskip("dace")
@@ -78,11 +76,10 @@ def test_basic(decorator, backend):
         with computation(PARALLEL), interval(...):
             outp = par  # noqa F841: local variable 'outp' is assigned to but never used
 
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(*"IJK", origin=(0, 0, 0))(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
 
     inp = 7.0
@@ -111,21 +108,22 @@ def test_origin_offsetting_frozen(domain, outp_origin):
         domain=domain, origin={"inp": (0, 0, 0), "outp": outp_origin}
     )
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(*"IJK", origin=(0, 0, 0))(
+        gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
             dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
 
     @dace.program
@@ -158,21 +156,22 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(*"IJK", origin=(0, 0, 0))(
+        gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
             dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
 
     origin = {"inp": (0, 0, 0), "outp": outp_origin}
@@ -198,7 +197,9 @@ def test_origin_offsetting_nofrozen(domain, outp_origin):
 
 @pytest.mark.parametrize("domain", [(0, 2, 3), (3, 3, 3), (1, 1, 1)])
 @pytest.mark.parametrize("outp_origin", [(0, 0, 0), (7, 7, 7), (2, 2, 0)])
-def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
+def test_origin_offsetting_nofrozen_default_origin(
+    domain, outp_origin: typing.Tuple[int, int, int]
+):
     backend = "dace:cpu"
 
     @gtscript.stencil(backend=backend)
@@ -206,21 +207,25 @@ def test_origin_offsetting_nofrozen_default_origin(domain, outp_origin):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.full(
             fill_value=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=outp_origin,
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=outp_origin, backend=backend
         ),
-        origin=outp_origin,
     )
 
     @dace.program
@@ -259,21 +264,25 @@ def test_optional_arg_noprovide():
         origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
     )
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
             dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
-            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
-        ),
+    outp = array_as_located_field(
+        *"IJK",
         origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
+        )
     )
 
     @dace.program
@@ -300,30 +309,33 @@ def test_optional_arg_provide(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
             dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
-    unused_field = OriginWrapper(
-        array=gt_storage.zeros(
+    unused_field = array_as_located_field(*"IJK", origin=(0, 0, 0))(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
 
-    # @dace.program
+    @dace.program
     def call_stencil():
         stencil(
             inp=inp,
@@ -354,27 +366,33 @@ def test_optional_arg_provide_aot(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.full(
             fill_value=7.0,
             shape=(10, 10, 10),
             dtype=np.float64,
             aligned_index=(0, 0, 0),
             backend=backend,
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
-    unused_field = OriginWrapper(
-        array=gt_storage.zeros(
+    unused_field = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
         ),
-        origin=(0, 0, 0),
     )
 
     @dace.program
@@ -407,24 +425,28 @@ def test_nondace_raises(decorator):
         with computation(PARALLEL), interval(...):
             outp = inp  # noqa F841: local variable 'outp' is assigned to but never used
 
-    inp = OriginWrapper(
-        array=gt_storage.full(
+    inp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.full(
             fill_value=7.0,
             dtype=np.float64,
             shape=(10, 10, 10),
             aligned_index=(0, 0, 0),
             backend="numpy",
         ),
-        origin=(0, 0, 0),
     )
-    outp = OriginWrapper(
-        array=gt_storage.zeros(
+    outp = array_as_located_field(
+        *"IJK",
+        origin=(0, 0, 0),
+    )(
+        gt_storage.zeros(
             dtype=np.float64,
             shape=(10, 10, 10),
             aligned_index=(0, 0, 0),
             backend="numpy",
         ),
-        origin=(0, 0, 0),
     )
 
     @dace.program

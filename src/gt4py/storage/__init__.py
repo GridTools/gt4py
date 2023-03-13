@@ -19,6 +19,7 @@
 from . import interface, layout
 from .interface import empty, from_array, full, ones, zeros  # noqa: F401
 from .layout import from_name, register
+from .located_field import LocatedField, array_as_located_field
 from .protocol import DimensionIdentifier, StorageProtocol
 
 
@@ -40,6 +41,8 @@ __all__ = [
     "register",
     "StorageProtocol",
     "DimensionIdentifier",
+    "array_as_located_field",
+    "LocatedField",
 ]
 
 if "dace_descriptor" in globals():
