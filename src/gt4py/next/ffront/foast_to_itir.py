@@ -40,9 +40,7 @@ def is_local_type_kind(type_):
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr):
-    if not hasattr(node, "type") or not is_local_type_kind(  # TODO hack for cast and unary op
-        node.type
-    ):
+    if not is_local_type_kind(node.type):
         return lambda x: im.as_lifted_lambda("make_const_list", x)
     return lambda x: x
 
@@ -177,7 +175,11 @@ class FieldOperatorLowering(NodeTranslator):
                 raise AssertionError(f"{node.op} is only supported on `bool`s.")
             return self._map("not_", node.operand)
 
-        return self._map(node.op.value, self._make_literal("0", dtype), node.operand)
+        return self._map(
+            node.op.value,
+            foast.Constant(value="0", type=dtype, location=node.location),
+            node.operand,
+        )
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -239,7 +241,10 @@ class FieldOperatorLowering(NodeTranslator):
         obj, dtype = node.args[0], node.args[1].id
 
         # TODO check that we test astype that results in a itir.map_ operation
-        return self._map("cast_", obj, im.as_lifted_capture(str(dtype)))
+        return self._map(
+            im.lambda__("it")(im.call_("cast_")("it", str(dtype))),
+            obj,
+        )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map("if_", *node.args)
@@ -253,7 +258,7 @@ class FieldOperatorLowering(NodeTranslator):
     def _make_reduction_expr(
         self,
         node: foast.Call,
-        op: Any,  # TODO fix
+        op: str | itir.SymRef,
         init_expr: int | itir.Literal,
         **kwargs,
     ):
@@ -292,7 +297,8 @@ class FieldOperatorLowering(NodeTranslator):
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Literal:
-        # TODO(tehrengruber): check constant of this type is supported in iterator ir
+        # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
+        # the following constructs work if they are removed by inlining.
         if isinstance(type_, ts.TupleType):
             return im.as_lifted_capture(
                 im.make_tuple_(
@@ -311,14 +317,8 @@ class FieldOperatorLowering(NodeTranslator):
         return self._make_literal(node.value, node.type)
 
     def _map(self, op, *args, **kwargs):
-        def _get_type(arg):  # TODO ugly hack for cast
-            if hasattr(arg, "type"):
-                return arg.type
-            else:
-                return None
-
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if any(is_local_type_kind(_get_type(arg)) for arg in args):
+        if any(is_local_type_kind(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call_("map_")(op)
 
