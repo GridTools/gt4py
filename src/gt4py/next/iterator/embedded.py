@@ -881,7 +881,7 @@ def make_in_iterator(
     it = MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
+        incomplete_offsets=[],
         offset_provider=offset_provider,
         column_axis=column_axis,
     )
@@ -1184,8 +1184,10 @@ class SparseListIterator:
 
     def deref(self) -> Any:
         return _List(
-            builtins.deref(builtins.shift(*self.offsets, i)(self.it))
-            if builtins.can_deref(builtins.shift(*self.offsets, i)(self.it))
+            builtins.deref(builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it))
+            if builtins.can_deref(
+                builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it)
+            )
             else None
             for i in range(self.it.offset_provider[self.list_offset].max_neighbors)  # type: ignore
         )
