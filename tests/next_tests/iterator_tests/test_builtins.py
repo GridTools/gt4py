@@ -302,8 +302,8 @@ def test_can_deref(program_processor, stencil):
 #         shifted = shift(Neighbor, 0)(inp)
 #         return if_(can_deref(shifted), 1, -1)
 
-#     inp = np_as_located_field(Node)(np.zeros((1,)))
-#     out = np_as_located_field(Node)(np.asarray([0]))
+#     inp = array_as_located_field(Node)(np.zeros((1,)))
+#     out = array_as_located_field(Node)(np.asarray([0]))
 
 #     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](

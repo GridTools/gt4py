@@ -194,18 +194,10 @@ def array_as_located_field(
         raise ValueError(f"axes and origin do not match ({len(axes)}!={len(origin)})")
     if isinstance(origin, dict):
         origin = tuple(origin[ax] for ax in axes)
-        # origin = {ax: orig for ax, orig in zip(axes, origin)}
 
     def _maker(a: "ArrayLike") -> LocatedFieldImpl:
-        # from gt4py.next.iterator.embedded import get_ordered_indices
-
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
-
-        # if origin is not None:
-        #     offsets = get_ordered_indices(axes, {k: v for k, v in origin.items()})
-        # else:
-        #     offsets = None
 
         def setter(indices, value):
             indices = utils.tupelize(indices)
