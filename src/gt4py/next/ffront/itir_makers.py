@@ -291,7 +291,7 @@ def lifted_neighbors(offset, it):
     >>> str(lifted_neighbors("off", "a"))
     '(↑(λ(it) → neighbors(offₒ, it)))(a)'
     """
-    return lift_(lambda__("it")(neighbors_(ensure_offset(offset), "it")))(it)
+    return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
 
 
 def as_lifted_capture(expr: str | itir.Expr):
