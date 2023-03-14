@@ -47,16 +47,8 @@ from .ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -72,16 +64,8 @@ def test_copy(fieldview_backend):
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
     out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
@@ -156,16 +140,8 @@ def test_fold_shifts(fieldview_backend):
 
 
 def test_tuples(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
