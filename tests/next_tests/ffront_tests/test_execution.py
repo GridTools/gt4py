@@ -378,16 +378,8 @@ def test_offset_field(fieldview_backend):
 
 
 def test_nested_tuple_return(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
@@ -472,16 +464,8 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_
 
 
 def test_tuple_arg(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
@@ -565,16 +549,8 @@ def test_solve_triag(fieldview_backend):
 
 
 def test_ternary_operator(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     left = 2.0
@@ -602,16 +578,8 @@ def test_ternary_operator(fieldview_backend):
 def test_ternary_operator_tuple(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
-    b_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
     out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
@@ -713,11 +681,7 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
         pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
 
     init = 1.0
-    inp1 = np_as_located_field(KDim)(
-        np.ones(
-            size,
-        )
-    )
+    inp1 = np_as_located_field(KDim)(np.ones((size,)))
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
     out = np_as_located_field(KDim)(np.zeros((size,)))
 
@@ -725,9 +689,7 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
     expected = np.asarray(
         [
             reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
-            for i in range(
-                size,
-            )
+            for i in range(size)
         ]
     )
 
@@ -741,11 +703,7 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
 
 
 def test_docstring():
-    a_I_float = np_as_located_field(IDim)(
-        np.random.randn(
-            size,
-        ).astype("float64")
-    )
+    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator
     def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -977,15 +935,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size,)))
-    out = tuple(
-        np_as_located_field(IDim)(
-            np.ones(
-                size,
-            )
-            * i
-        )
-        for i in range(3 * 4)
-    )
+    out = tuple(np_as_located_field(IDim)(np.ones((size,)) * i) for i in range(3 * 4))
 
     OutType = tuple[
         Field[[IDim], float64],
