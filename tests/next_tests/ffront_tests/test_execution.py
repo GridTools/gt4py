@@ -47,8 +47,16 @@ from .ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
 
     @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -64,10 +72,18 @@ def test_copy(fieldview_backend):
 
 @pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-    out_I_float_1 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
+    out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator(backend=fieldview_backend)
     def multicopy(
@@ -81,7 +97,7 @@ def test_multicopy(fieldview_backend):
 
 def test_cartesian_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -119,7 +135,7 @@ def test_fold_shifts(fieldview_backend):
     """Shifting the result of an addition should work."""
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
     def auto_lift(
@@ -140,9 +156,17 @@ def test_fold_shifts(fieldview_backend):
 
 
 def test_tuples(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
     def tuples(
@@ -202,7 +226,7 @@ def test_scalar_arg_with_field(fieldview_backend):
 
     inp = index_field(Edge, dtype=float64)
     factor = 3.0
-    out = np_as_located_field(Edge)(np.zeros((size), dtype=np.float64))
+    out = np_as_located_field(Edge)(np.zeros((size,), dtype=np.float64))
 
     @field_operator
     def scalar_and_field_args(
@@ -292,7 +316,7 @@ def test_tuple_scalar_scan(fieldview_backend):
 
 def test_astype_int(fieldview_backend):
     size = 10
-    b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
+    b_float_64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.float64))
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
     out_int_64 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
 
@@ -306,7 +330,7 @@ def test_astype_int(fieldview_backend):
 
 
 def test_astype_bool(fieldview_backend):
-    b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
+    b_float_64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.float64))
     c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
@@ -378,9 +402,17 @@ def test_offset_field(fieldview_backend):
 
 
 def test_nested_tuple_return(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     @field_operator
     def pack_tuple(
@@ -464,9 +496,17 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_
 
 
 def test_tuple_arg(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
@@ -545,13 +585,21 @@ def test_solve_triag(fieldview_backend):
 
     solve_tridiag(a, b, c, d, out=out, offset_provider={})
 
-    np.allclose(expected, out)
+    assert np.allclose(expected, out)
 
 
 def test_ternary_operator(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     left = 2.0
     right = 3.0
@@ -564,7 +612,7 @@ def test_ternary_operator(fieldview_backend):
 
     ternary_field_op(a_I_float, b_I_float, left, right, out=out_I_float, offset_provider={})
     e = np.asarray(a_I_float) if left < right else np.asarray(b_I_float)
-    np.allclose(e, out_I_float)
+    assert np.allclose(e, out_I_float)
 
     @field_operator(backend=fieldview_backend)
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
@@ -572,16 +620,24 @@ def test_ternary_operator(fieldview_backend):
 
     ternary_field_op_scalars(left, right, out=out_I_float, offset_provider={})
     e = np.full(e.shape, 3.0) if left > right else e
-    np.allclose(e, out_I_float)
+    assert np.allclose(e, out_I_float)
 
 
 def test_ternary_operator_tuple(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-    out_I_float_1 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    b_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
+    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
+    out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
     left = 2.0
     right = 3.0
@@ -601,8 +657,8 @@ def test_ternary_operator_tuple(fieldview_backend):
         if left < right
         else (np.asarray(b_I_float), np.asarray(a_I_float))
     )
-    np.allclose(e, out_I_float)
-    np.allclose(f, out_I_float_1)
+    assert np.allclose(e, out_I_float)
+    assert np.allclose(f, out_I_float_1)
 
 
 def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
@@ -681,7 +737,11 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
         pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
 
     init = 1.0
-    inp1 = np_as_located_field(KDim)(np.ones(size))
+    inp1 = np_as_located_field(KDim)(
+        np.ones(
+            size,
+        )
+    )
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
     out = np_as_located_field(KDim)(np.zeros((size,)))
 
@@ -689,7 +749,9 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
     expected = np.asarray(
         [
             reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
-            for i in range(size)
+            for i in range(
+                size,
+            )
         ]
     )
 
@@ -703,7 +765,11 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
 
 
 def test_docstring():
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    a_I_float = np_as_located_field(IDim)(
+        np.random.randn(
+            size,
+        ).astype("float64")
+    )
 
     @field_operator
     def fieldop_with_docstring(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -721,6 +787,9 @@ def test_docstring():
 def test_domain(fieldview_backend):
     a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
 
+    expected = np.array(a_IJ_float)
+    expected[1:9, 4:6] = 1 + 1
+
     @field_operator(backend=fieldview_backend)
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         return a + a
@@ -730,9 +799,6 @@ def test_domain(fieldview_backend):
         fieldop_domain(a, out=a, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
 
     program_domain(a_IJ_float, offset_provider={})
-
-    expected = np.asarray(a_IJ_float)
-    expected[1:9, 4:6] = 1 + 1
 
     assert np.allclose(expected, a_IJ_float)
 
@@ -746,6 +812,9 @@ def test_domain_input_bounds(fieldview_backend):
     upper_i = 9
     lower_j = 4
     upper_j = 6
+
+    expected = np.array(a_IJ_float)
+    expected[lower_i:upper_i, lower_j:upper_j] = 1 + 1
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
@@ -767,9 +836,6 @@ def test_domain_input_bounds(fieldview_backend):
 
     program_domain(a_IJ_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
-    expected = np.asarray(a_IJ_float)
-    expected[1:9, 4:6] = 1 + 1
-
     assert np.allclose(expected, a_IJ_float)
 
 
@@ -780,6 +846,9 @@ def test_domain_input_bounds_1(fieldview_backend):
     upper_i = 9
     lower_j = 4
     upper_j = 6
+
+    expected = np.array(a_IJ_float)
+    expected[lower_i:upper_i, lower_j:upper_j] = 2 * 2
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
@@ -801,15 +870,15 @@ def test_domain_input_bounds_1(fieldview_backend):
 
     program_domain(a_IJ_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
 
-    expected = np.asarray(a_IJ_float)
-    expected[1:9, 4:6] = 2 * 2
-
     assert np.allclose(expected, a_IJ_float)
 
 
 def test_domain_tuple(fieldview_backend):
     a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
     b2d_float = a_IJ_float
+
+    expected = np.array(a_IJ_float)
+    expected[1:9, 4:6] = 1 + 1
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain_tuple(
@@ -823,10 +892,6 @@ def test_domain_tuple(fieldview_backend):
 
     program_domain_tuple(a_IJ_float, b2d_float, offset_provider={})
 
-    expected = np.asarray(a_IJ_float)
-    expected[1:9, 4:6] = 1 + 1
-
-    assert np.allclose(np.asarray(a_IJ_float), a_IJ_float)
     assert np.allclose(expected, b2d_float)
 
 
@@ -902,11 +967,11 @@ def test_tuple_unpacking(fieldview_backend):
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
 
     size = 10
-    inp = np_as_located_field(IDim)(np.ones((size)))
-    out1 = np_as_located_field(IDim)(np.ones((size)))
-    out2 = np_as_located_field(IDim)(np.ones((size)))
-    out3 = np_as_located_field(IDim)(np.ones((size)))
-    out4 = np_as_located_field(IDim)(np.ones((size)))
+    inp = np_as_located_field(IDim)(np.ones((size,)))
+    out1 = np_as_located_field(IDim)(np.ones((size,)))
+    out2 = np_as_located_field(IDim)(np.ones((size,)))
+    out3 = np_as_located_field(IDim)(np.ones((size,)))
+    out4 = np_as_located_field(IDim)(np.ones((size,)))
 
     @field_operator(backend=fieldview_backend)
     def unpack(
@@ -935,8 +1000,16 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
 
     size = 10
-    inp = np_as_located_field(IDim)(np.ones((size)))
-    out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
+    inp = np_as_located_field(IDim)(np.ones((size,)))
+    out = tuple(
+        np_as_located_field(IDim)(
+            np.ones(
+                size,
+            )
+            * i
+        )
+        for i in range(3 * 4)
+    )
 
     OutType = tuple[
         Field[[IDim], float64],
