@@ -14,7 +14,6 @@
 
 import numpy as np
 
-from gt4py.eve.datamodels import field
 from gt4py.next.iterator import embedded
 from gt4py.storage.located_field import array_as_located_field
 

@@ -43,6 +43,14 @@ class LayoutInfo(TypedDict):
     is_optimal_layout: Callable[[Any, Tuple[str, ...]], bool]
 
 
+NaiveLayoutCPU = LayoutInfo(
+    alignment=1,
+    device="cpu",
+    layout_map=lambda axes: tuple(i for i in range(len(axes))),
+    is_optimal_layout=lambda *_: True,
+)
+
+
 REGISTRY: Dict[str, LayoutInfo] = {}
 
 

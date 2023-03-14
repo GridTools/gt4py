@@ -212,6 +212,6 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-@program_executor
+@program_executor("roundtrip")
 def executor(program: itir.FencilDefinition, *args, **kwargs) -> None:
     execute_roundtrip(program, *args, **kwargs)

@@ -19,6 +19,6 @@ from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.program_processors.runners import roundtrip
 
 
-@program_executor
+@program_executor("double_roundtrip")
 def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     roundtrip.executor(program, *args, dispatch_backend=roundtrip.executor, **kwargs)

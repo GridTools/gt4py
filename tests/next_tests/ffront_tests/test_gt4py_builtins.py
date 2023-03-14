@@ -31,10 +31,11 @@ from .ffront_test_utils import *
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
+    rs = reduction_setup
+    fieldview_backend = rs.backend
     if fieldview_backend in [gtfn_cpu.run_gtfn or fieldview_backend, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
-    rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
     inp_field = array_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 

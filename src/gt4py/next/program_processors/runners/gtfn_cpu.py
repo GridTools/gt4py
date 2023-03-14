@@ -26,7 +26,7 @@ from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.storage.layout import LayoutInfo, register as register_layout
+from gt4py.storage.layout import NaiveCPULayout, register as register_layout
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
@@ -63,10 +63,12 @@ def extract_connectivity_args(
 class GTFNExecutor(ppi.ProgramExecutor):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
-
-    name: Optional[str] = None
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
+    name: Optional[str] = None
+
+    def __post_init__(self):
+        register_layout(self.name, NaiveCPULayout)
 
     def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         """
@@ -112,21 +114,10 @@ class GTFNExecutor(ppi.ProgramExecutor):
         return self.name or repr(self)
 
 
-_gtfn_layout_info = LayoutInfo(
-    alignment=1,
-    device="cpu",
-    layout_map=lambda axes: tuple(i for i in range(len(axes))),
-    is_optimal_layout=lambda *_: True,
-)
-
-
 run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
     name="run_gtfn", use_imperative_backend=False
 )
 
-register_layout("gtfn", _gtfn_layout_info)
 run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
     name="run_gtfn_imperative", use_imperative_backend=True
 )
-
-register_layout("gtfn_imperative", _gtfn_layout_info)

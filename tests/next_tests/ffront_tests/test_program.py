@@ -19,6 +19,7 @@ import re
 import numpy as np
 import pytest
 
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.common import Field, GTTypeError
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
@@ -40,7 +41,7 @@ from .past_common_fixtures import (
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
-def fieldview_backend(request):
+def fieldview_backend(request) -> ppi.ProgramExecutor:
     yield request.param
 
 

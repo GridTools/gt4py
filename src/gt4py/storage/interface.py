@@ -43,7 +43,7 @@ def _error_on_invalid_backend(backend):
 
 
 def empty(
-    shape: Sequence[int],
+    shape: Union[Sequence[int], int],
     dtype: DTypeLike = np.float64,
     *,
     backend: Optional[str],
@@ -106,7 +106,7 @@ def empty(
 
 
 def ones(
-    shape: Sequence[int],
+    shape: Union[Sequence[int], int],
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
@@ -158,8 +158,8 @@ def ones(
 
 
 def full(
-    shape: Sequence[int],
-    fill_value: numbers.Number,
+    shape: Union[Sequence[int], int],
+    fill_value: Union[numbers.Number, ArrayLike],
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
@@ -213,7 +213,7 @@ def full(
 
 
 def zeros(
-    shape: Sequence[int],
+    shape: Union[Sequence[int], int],
     dtype: DTypeLike = np.float64,
     *,
     backend: str,
@@ -266,7 +266,7 @@ def zeros(
 
 def from_array(
     data: ArrayLike,
-    dtype: DTypeLike = np.float64,
+    dtype: Optional[DTypeLike] = None,
     *,
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
@@ -336,7 +336,7 @@ def from_array(
 if dace is not None:
 
     def dace_descriptor(
-        shape: Sequence[int],
+        shape: Union[Sequence[int], int],
         dtype: DTypeLike = np.float64,
         *,
         backend: str,

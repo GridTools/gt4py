@@ -26,9 +26,10 @@ For more information refer to
 """
 from __future__ import annotations
 
-from typing import Callable, Protocol, TypeGuard, TypeVar, cast
+from typing import Callable, Optional, Protocol, TypeGuard, TypeVar, cast
 
 from gt4py.next.iterator import ir as itir
+from gt4py.storage.layout import LayoutInfo, NaiveCPULayout, register as register_layout
 
 
 OutputT = TypeVar("OutputT", covariant=True)
@@ -71,12 +72,16 @@ def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
 
 
 class ProgramExecutor(ProgramProcessor[None, "ProgramExecutor"], Protocol):
+    name: str
+
     @property
     def kind(self) -> type[ProgramExecutor]:
         return ProgramExecutor
 
 
-def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
+def program_executor(
+    name: str, layout_info: Optional[LayoutInfo] = None
+) -> Callable[[ProgramProcessorFunction[None]], ProgramExecutor]:
     """
     Turn a function that executes a program into a ``ProgramExecutor``.
 
@@ -89,9 +94,18 @@ def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
 
     >>> ensure_processor_kind(badly_execute, ProgramExecutor)
     """
-    # this operation effectively changes the type of func and that is the intention here
-    func.kind = ProgramExecutor  # type: ignore[attr-defined]
-    return cast(ProgramExecutor, func)
+    if layout_info is None:
+        layout_info = NaiveCPULayout
+
+    def _decorator(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
+        register_layout(name, layout_info)
+
+        # this operation effectively changes the type of func and that is the intention here
+        func.name = name
+        func.kind = ProgramExecutor  # type: ignore[attr-defined]
+        return cast(ProgramExecutor, func)
+
+    return _decorator
 
 
 def is_processor_kind(

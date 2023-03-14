@@ -64,7 +64,7 @@ def dimensions_to_mask(dimensions: Tuple[str, ...]) -> Tuple[bool, ...]:
 
 def normalize_storage_spec(
     aligned_index: Optional[Sequence[int]],
-    shape: Sequence[int],
+    shape: Union[Sequence[int], int],
     dtype: DTypeLike,
     dimensions: Optional[Sequence[str]],
 ) -> Tuple[Sequence[int], Sequence[int], np.dtype, Tuple[str, ...]]:
@@ -80,6 +80,9 @@ def normalize_storage_spec(
             - backend: backend identifier string (numpy, gt:cpu_kfirst, gt:gpu, ...)
             - dimensions: a tuple of dimension identifier strings
     """
+    if isinstance(shape, int):
+        shape = (shape,)
+
     if dimensions is None:
         dimensions = (
             list("IJK"[: len(shape)])
