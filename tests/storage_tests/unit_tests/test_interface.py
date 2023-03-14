@@ -531,3 +531,13 @@ class TestDescriptor:
                 backend_cls.storage_info["alignment"] == 1
                 or stor.ctypes.data % (backend_cls.storage_info["alignment"] * stor.itemsize) != 0
             )
+
+
+class TestDtypeDefaults:
+    def test_full(self):
+        arr = gt4py.storage.full(shape=(3,), fill_value=2, backend="numpy")
+        assert arr.dtype == np.int64
+
+    def test_from_array(self):
+        arr = gt4py.storage.from_array(np.ones((3,), dtype=np.bool_), backend="numpy")
+        assert arr.dtype == np.bool_

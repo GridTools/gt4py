@@ -46,7 +46,7 @@ def empty(
     shape: Union[Sequence[int], int],
     dtype: DTypeLike = np.float64,
     *,
-    backend: Optional[str],
+    backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
 ) -> Union[np.ndarray, "cp.ndarray"]:
@@ -160,7 +160,7 @@ def ones(
 def full(
     shape: Union[Sequence[int], int],
     fill_value: Union[numbers.Number, ArrayLike],
-    dtype: DTypeLike = np.float64,
+    dtype: Optional[DTypeLike] = None,
     *,
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
@@ -201,6 +201,8 @@ def full(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
+    if dtype is None:
+        dtype = np.asarray(fill_value).dtype
     storage = empty(
         shape=shape,
         dtype=dtype,
