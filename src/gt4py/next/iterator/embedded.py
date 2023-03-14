@@ -799,6 +799,7 @@ class MDIterator:
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
+        assert _offset_provider is not None
         return MDIterator(
             self.field,
             shift_position(self.pos, *complete_offsets, offset_provider=_offset_provider),
@@ -808,6 +809,7 @@ class MDIterator:
 
     def max_neighbors(self) -> int:
         assert self.incomplete_offsets
+        assert _offset_provider is not None
         return _get_connectivity(_offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
@@ -848,6 +850,16 @@ class MDIterator:
         )
 
 
+def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
+    return list(
+        filter(
+            lambda x: isinstance(x, runtime.Offset)  # type: ignore # wants the lambda to be more constraint
+            or (isinstance(x, common.Dimension) and x.kind == common.DimensionKind.LOCAL),
+            axes,
+        )
+    )
+
+
 def make_in_iterator(
     inp: LocatedField,
     pos: Position,
@@ -855,20 +867,10 @@ def make_in_iterator(
     column_axis: Optional[Tag],
 ) -> ItIterator:
     axes = _get_axes(inp)
-    sparse_dimensions: list[Tag] = []
-    for axis in axes:
-        if isinstance(axis, runtime.Offset):
-            assert isinstance(axis.value, str)
-            sparse_dimensions.append(axis.value)
-        elif isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL:
-            # we just use the name of the axis to match the offset literal for now
-            sparse_dimensions.append(axis.value)
-
+    sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
-    sparse_dimensions = list(set(sparse_dimensions))
-    assert len(sparse_dimensions) <= 1, sparse_dimensions
-    for sparse_dim in sparse_dimensions:
-        init = [None]  # * sparse_dimensions.count(sparse_dim)
+    for sparse_dim in set(sparse_dimensions):
+        init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
@@ -880,8 +882,13 @@ def make_in_iterator(
         incomplete_offsets=[],
         column_axis=column_axis,
     )
-    if len(sparse_dimensions) == 1:
-        return SparseListIterator(it, next(iter(sparse_dimensions)))
+    if len(sparse_dimensions) >= 1:
+        if len(sparse_dimensions) == 1:
+            return SparseListIterator(it, sparse_dimensions[0])
+        else:
+            raise NotImplementedError(
+                f"More than one local dimension is currently not supported, got {sparse_dimensions}"
+            )
     else:
         return it
 
@@ -1100,7 +1107,7 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-class _List(tuple, Generic[DT]):  # TODO encode size in type?
+class _List(tuple, Generic[DT]):
     ...
 
 
@@ -1115,11 +1122,15 @@ class _ConstList(Generic[DT]):
 @builtins.neighbors.register(EMBEDDED)
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+    assert isinstance(offset_str, str)
+    assert _offset_provider is not None
+    connectivity = _offset_provider[offset_str]
+    assert isinstance(connectivity, common.Connectivity)
     return _List(
         builtins.deref(it.shift(offset_str, i))
         if builtins.can_deref(it.shift(offset_str, i))
         else None
-        for i in range(_offset_provider[offset_str].max_neighbors)
+        for i in range(connectivity.max_neighbors)
     )
 
 
