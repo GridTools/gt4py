@@ -152,7 +152,6 @@ class NodeTranslator(NodeVisitor):
     """
 
     def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
-
         memo = kwargs.get("__memo__", None)
 
         if isinstance(node, concepts.Node):

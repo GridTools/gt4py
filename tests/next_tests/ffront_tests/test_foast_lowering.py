@@ -165,11 +165,15 @@ def test_unary_ops():
 
     reference = im.let(
         "tmp__0",
-        im.lift_(im.lambda__("inp")(im.plus_(0, im.deref_("inp"))))("inp"),
+        im.lift_(im.lambda__("inp")(im.plus_(im.literal_("0", "float64"), im.deref_("inp"))))(
+            "inp"
+        ),
     )(
         im.let(
             "tmp__1",
-            im.lift_(im.lambda__("tmp__0")(im.minus_(0, im.deref_("tmp__0"))))("tmp__0"),
+            im.lift_(
+                im.lambda__("tmp__0")(im.minus_(im.literal_("0", "float64"), im.deref_("tmp__0")))
+            )("tmp__0"),
         )("tmp__1")
     )
 
@@ -518,15 +522,17 @@ def test_reduction_lowering_expr():
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> tuple[
-        int,
-        int,
-        int32,
-        int64,
-        int,
-        int32,
-        int64,
-    ]:
+    def int_constrs() -> (
+        tuple[
+            int,
+            int,
+            int32,
+            int64,
+            int,
+            int32,
+            int64,
+        ]
+    ):
         return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -546,15 +552,17 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> tuple[
-        float,
-        float,
-        float32,
-        float64,
-        float,
-        float32,
-        float64,
-    ]:
+    def float_constrs() -> (
+        tuple[
+            float,
+            float,
+            float32,
+            float64,
+            float,
+            float32,
+            float64,
+        ]
+    ):
         return (
             0.1,
             float(0.1),

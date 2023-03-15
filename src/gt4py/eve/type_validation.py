@@ -195,7 +195,6 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
-
         # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
         #
         if name is None:

@@ -15,6 +15,8 @@
 import functools
 from typing import Callable, Iterator, Type, TypeGuard, cast
 
+import numpy as np
+
 from gt4py.eve.utils import XIterable, xiter
 from gt4py.next.common import Dimension, GTTypeError
 from gt4py.next.type_system import type_specifications as ts
@@ -225,6 +227,16 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     True
     """
     return is_floating_point(symbol_type) or is_integral(symbol_type)
+
+
+def arithmetic_bounds(arithmetic_type: ts.ScalarType):
+    assert is_arithmetic(arithmetic_type)
+    return {
+        ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
+        ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
+        ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
+        ts.ScalarKind.INT64: (np.iinfo(np.int64).min, np.iinfo(np.int64).max),
+    }[arithmetic_type.kind]
 
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:
@@ -504,7 +516,6 @@ def function_signature_incompatibilities(
 def function_signature_incompatibilities_func(
     func_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-
     # check positional arguments
     if len(func_type.args) != len(args):
         yield f"Function takes {len(func_type.args)} argument(s), but {len(args)} were given."

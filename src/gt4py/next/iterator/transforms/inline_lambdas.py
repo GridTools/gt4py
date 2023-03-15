@@ -38,7 +38,7 @@ def inline_lambda(
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
             #  ignore_shift(...)(it_sym)  # noqa: E800
-            if ref_counts[param.id] != 1 and not isinstance(
+            if ref_counts[param.id] > 1 and not isinstance(
                 node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
             ):
                 eligible_params[i] = False

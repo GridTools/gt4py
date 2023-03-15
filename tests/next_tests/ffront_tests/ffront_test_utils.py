@@ -119,7 +119,8 @@ def reduction_setup():
         E2VDim=e2vdim,
         V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
         E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
-        inp=index_field(edge, dtype=np.int64),
+        # inp=index_field(edge, dtype=np.int64), # TODO enable once we support index_fields in bindings
+        inp=np_as_located_field(edge)(np.arange(num_edges, dtype=np.int64)),
         out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
             "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),

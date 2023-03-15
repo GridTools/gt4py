@@ -1,22 +1,105 @@
 # CI infrastructure
 
+Any test job that runs on CI is encoded in automation tools like tox and pre-commit and can be run locally instead.
+
 ## Workflows
 
 The following workflows are currently active:
 
-![workflows](workflows.drawio.svg)
+```mermaid
+%%{
+    init: {
+        'flowchart': { 'curve': 'basis' },
+        'theme': 'neutral'
+    }
+}%%
+flowchart LR
+    always[always] --> qua[Code Quality]
 
-The `Eve / Test` and `Gt4py / Test` workflows run the automated tests for the two packages. These workflows also save the code coverage output as workflow artifacts.
+    src_eve[eve sources changed] --> eve["Test Eve"]
+    src_eve --> car["Test Cartesian (CPU)"]
+    src_eve --> nxt["Test Next (CPU)"]
 
-The `Eve / Coverage` and `Gt4py / Coverage` workflows are triggered by a successful run of the tests. They download the coverage artifacts and publish them to codecov.io.
+    src_car[cartesian sources changed] --> car["Test Cartesian (CPU)"]
 
-The `Documentation` workflow executes the Jupyter nodebook of the quick start guide to make sure it's in sync with the code.
+    src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
+
+    src_sto[storage sources changed] --> sto
+    src_sto --> car
+    src_sto --> nxt
+
+    src_nxt[next sources changed] --> nxt
+
+    cfg_wfl[workflows changed] --> car
+    cfg_wfl --> eve
+    cfg_wfl --> nxt
+    cfg_wfl --> sto
+
+    other["other files changed, excluding examples (the examples folder) and docs (.md and .rst files)"] --> car
+    other --> nxt
+
+    pkg_cfg[package config files changed] --> eve
+    pkg_cfg --> sto
+
+    style always fill:White,stroke:black,text:black;
+    style src_eve fill:Plum,stroke:MediumOrchid,text:black;
+    style src_car fill:Gold,stroke:Brown,text:black;
+    style src_cab fill:Gold,stroke:Brown,text:black;
+    style src_sto fill:Aquamarine,stroke:DarkCyan,text:black;
+    style src_nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
+    style cfg_wfl fill:Coral,stroke:Tomato,text:black;
+    style other fill:PaleGreen,stroke:ForestGreen,text:black;
+    style pkg_cfg fill:PaleGreen,stroke:ForestGreen,text:black;
+
+    style qua fill:White,stroke:black,text:black;
+    style eve fill:Plum,stroke:MediumOrchid,text:black;
+    style car fill:Gold,stroke:Brown,text:black;
+    style sto fill:Aquamarine,stroke:DarkCyan,text:black;
+    style nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
+
+    linkStyle 0 stroke:#999,stroke-width:2px;
+
+    linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
+    linkStyle 3 stroke:MediumOrchid,stroke-width:2px;
+
+    linkStyle 4 stroke:Brown,stroke-width:2px;
+    linkStyle 5 stroke:Brown,stroke-width:2px;
+
+    linkStyle 6 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 7 stroke:DarkCyan,stroke-width:2px;
+    linkStyle 8 stroke:DarkCyan,stroke-width:2px;
+
+    linkStyle 9 stroke:CornFlowerBlue,stroke-width:2px;
+
+    linkStyle 10 stroke:Tomato,stroke-width:2px;
+    linkStyle 11 stroke:Tomato,stroke-width:2px;
+    linkStyle 12 stroke:Tomato,stroke-width:2px;
+    linkStyle 13 stroke:Tomato,stroke-width:2px;
+
+    linkStyle 14 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 15 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 16 stroke:ForestGreen,stroke-width:2px;
+    linkStyle 17 stroke:ForestGreen,stroke-width:2px;
+```
+
+The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
 
 The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like mypy or flake8.
+
+Code coverage workflows are currently disabled.
 
 ### When are workflows triggered
 
 The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, eve tests will not be run when only GT4Py sources are changed.
+
+## CSCS-CI
+
+CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
+
+Since all tests routinely run here, this might be a better match for reintroducing test coverage in the future than github workflows.
+
+Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md](cscs-ci.md)
 
 ## Integration with external tools
 
@@ -32,6 +115,7 @@ The testing workflows already use a matrix strategy to run the automated tests o
 
 ## Future improvements
 
+- Reenable code coverage workflows (potentially on CSCS-CI).
 - Split code quality: it might be better to run code quality tools separate for each project in the monorepo.
 - Split documentation: once there is proper HTML documentation generated for the projects, it might make sense to have that run as one job per project.
-- Template for tests: although there is a reusable workflow for the code coverage uploading, it probably make sense to reuse some of the workflow description for the tests as well.
+- Template for tests: It would probably make sense to reuse some of the workflow descriptions for the tests.

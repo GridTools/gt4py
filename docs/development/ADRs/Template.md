@@ -17,8 +17,8 @@ tags: []
 
 A list of **Concerns**
 
-* [driver 1, e.g., a force, facing concern, ...]
-* [driver 2, e.g., a force, facing concern, ...]
+- [driver 1, e.g., a force, facing concern, ...]
+- [driver 2, e.g., a force, facing concern, ...]
 
 ]
 
@@ -28,13 +28,11 @@ A list of **Concerns**
 
 It has been Chosen option X because "[justification. e.g., only option, which meets k.o. criterion decision driver | which resolves force force | ... | comes out best (see below)]. ]
 
-
 ## Consequences
 
 [ What becomes easier or more difficult to do because of this change?
 
 Describe both the positive (e.g., improvement of quality attribute satisfaction, follow-up decisions required, ...) and negative (e.g., compromising quality attribute, follow-up decisions required, ...)] outcomes of this decision. ]
-
 
 ## Alternatives Considered
 
@@ -42,20 +40,19 @@ Describe both the positive (e.g., improvement of quality attribute satisfaction,
 
 [example | description | pointer to more information | ...] <!-- optional -->
 
-* Good, because [argument a]
-* Bad, because [argument c]
-* ...
+- Good, because [argument a]
+- Bad, because [argument c]
+- ...
 
 ### [option 2]
 
 [example | description | pointer to more information | ...] <!-- optional -->
 
-* Good, because [argument a]
-* Bad, because [argument c]
-* ... 
-
+- Good, because [argument a]
+- Bad, because [argument c]
+- ...
 
 ## References <!-- optional -->
 
 - [Someone - Something](https://someone.com/a-title-about-something)
-- ... 
+- ...

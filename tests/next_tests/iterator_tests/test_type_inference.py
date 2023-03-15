@@ -15,6 +15,7 @@
 import numpy as np
 
 from gt4py.next.common import Dimension
+from gt4py.next.ffront import itir_makers as im
 from gt4py.next.iterator import ir, type_inference as ti
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
@@ -144,6 +145,16 @@ def test_and():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
+
+
+def test_cast():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="cast_"), args=[ir.Literal(value="1.", type="float"), ir.SymRef(id="int")]
+    )
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int⁰"
 
 
 def test_lift():
@@ -551,9 +562,8 @@ def test_partial_shift_with_unstructured_offset_provider():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunctionDefinitionType(
-        name="f",
-        fun=ti.FunctionType(
+    expected = ti.LetPolymorphic(
+        dtype=ti.FunctionType(
             args=ti.Tuple.from_elems(
                 ti.TypeVar(idx=0),
             ),
@@ -562,7 +572,7 @@ def test_function_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "f :: (T₀) → T₀"
+    assert ti.pformat(inferred.dtype) == "(T₀) → T₀"
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
@@ -608,7 +618,7 @@ def test_stencil_closure():
             kind=ti.Iterator(),
             dtype=ti.TypeVar(idx=0),
             size=ti.Column(),
-            current_loc=ti.TypeVar(idx=1),
+            current_loc=ti.ANYWHERE,
             defined_loc=ti.TypeVar(idx=1),
         ),
         inputs=ti.Tuple.from_elems(
@@ -616,14 +626,14 @@ def test_stencil_closure():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=2),
-                defined_loc=ti.TypeVar(idx=2),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=1),
             ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₂, T₂, T₀ᶜ]) ⇒ It[T₁, T₁, T₀ᶜ]"
+    assert ti.pformat(inferred) == "(It[ANYWHERE, T₁, T₀ᶜ]) ⇒ It[ANYWHERE, T₁, T₀ᶜ]"
 
 
 def test_fencil_definition():
@@ -665,29 +675,29 @@ def test_fencil_definition():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=1),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=1),
             ),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=2),
-                defined_loc=ti.TypeVar(idx=2),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=1),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=3),
+                dtype=ti.TypeVar(idx=2),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=4),
-                defined_loc=ti.TypeVar(idx=4),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=3),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=3),
+                dtype=ti.TypeVar(idx=2),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=5),
-                defined_loc=ti.TypeVar(idx=5),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=3),
             ),
         ),
     )
@@ -695,8 +705,69 @@ def test_fencil_definition():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f(intˢ, intˢ, intˢ, It[T₁, T₁, T₀ᶜ], It[T₂, T₂, T₀ᶜ], It[T₄, T₄, T₃ᶜ], It[T₅, T₅, T₃ᶜ])}"
+        == "{f(intˢ, intˢ, intˢ, It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₃, T₂ᶜ], It[ANYWHERE, T₃, T₂ᶜ])}"
     )
+
+
+def test_fencil_definition_same_closure_input():
+    f1 = ir.FunctionDefinition(
+        id="f1", params=[im.sym("vertex_it")], expr=im.deref_(im.shift_("E2V")("vertex_it"))
+    )
+    f2 = ir.FunctionDefinition(id="f2", params=[im.sym("vertex_it")], expr=im.deref_("vertex_it"))
+
+    testee = ir.FencilDefinition(
+        id="fencil",
+        function_definitions=[f1, f2],
+        params=[im.sym("vertex_it"), im.sym("output_edge_it"), im.sym("output_vertex_it")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call_("unstructured_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Edge"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="10", type="int"),
+                    )
+                ),
+                stencil=im.ref("f1"),
+                output=im.ref("output_edge_it"),
+                inputs=[im.ref("vertex_it")],
+            ),
+            ir.StencilClosure(
+                domain=im.call_("unstructured_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Vertex"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="10", type="int"),
+                    )
+                ),
+                stencil=im.ref("f2"),
+                output=im.ref("output_vertex_it"),
+                inputs=[im.ref("vertex_it")],
+            ),
+        ],
+    )
+
+    offset_provider = {
+        "E2V": NeighborTableOffsetProvider(
+            np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
+        )
+    }
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+
+    # validate locations of fencil params
+    fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
+    assert fencil_param_types[0].defined_loc == ti.Location(name="Vertex")
+    assert fencil_param_types[1].defined_loc == ti.Location(name="Edge")
+    assert fencil_param_types[2].defined_loc == ti.Location(name="Vertex")
+
+    # validate locations of stencil params
+    f1_param_type: ti.Val = inferred_all[id(f1.params[0])]
+    assert f1_param_type.current_loc == ti.Location(name="Edge")
+    assert f1_param_type.defined_loc == ti.Location(name="Vertex")
+    #  f2 is polymorphic and there is no shift inside so we only get a TypeVar here
+    f2_param_type: ti.Val = inferred_all[id(f2.params[0])]
+    assert isinstance(f2_param_type.current_loc, ti.TypeVar)
+    assert isinstance(f2_param_type.defined_loc, ti.TypeVar)
 
 
 def test_fencil_definition_with_function_definitions():
@@ -785,43 +856,43 @@ def test_fencil_definition_with_function_definitions():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=4),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=5),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=5),
             ),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=4),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=6),
-                defined_loc=ti.TypeVar(idx=6),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=5),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=7),
+                dtype=ti.TypeVar(idx=6),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=8),
-                defined_loc=ti.TypeVar(idx=8),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=7),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=7),
+                dtype=ti.TypeVar(idx=6),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=9),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=7),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=8),
+                size=ti.Column(),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=9),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=10),
+                dtype=ti.TypeVar(idx=8),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=11),
-                defined_loc=ti.TypeVar(idx=11),
-            ),
-            ti.Val(
-                kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=10),
-                size=ti.Column(),
-                current_loc=ti.TypeVar(idx=12),
-                defined_loc=ti.TypeVar(idx=12),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=9),
             ),
         ),
     )
@@ -829,7 +900,7 @@ def test_fencil_definition_with_function_definitions():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₅, T₅, T₄ᶜ], It[T₆, T₆, T₄ᶜ], It[T₈, T₈, T₇ᶜ], It[T₉, T₉, T₇ᶜ], It[T₁₁, T₁₁, T₁₀ᶜ], It[T₁₂, T₁₂, T₁₀ᶜ])}"
+        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
     )
 
 
