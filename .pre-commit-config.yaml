@@ -1,4 +1,5 @@
-# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
+
+# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/)
 # to keep version numbers in sync with 'constraints.txt'
 
 default_language_version:

@@ -1,0 +1,6 @@
+copy_stencil 1 0.242245
+copy_stencil_field_view 1 0.255257
+anton_lap 1 0.270781
+fvm_nabla 1 0.679614
+tridiagonal_solve 1 0.283794
+---
