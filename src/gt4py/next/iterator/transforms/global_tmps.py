@@ -178,7 +178,7 @@ def split_closures(node: ir.FencilDefinition) -> FencilWithTemporaries:
             function_definitions=node.function_definitions,
             params=node.params
             + [ir.Sym(id=tmp.id) for tmp in tmps]
-            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],
+            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined] # type deduced automatically
             closures=list(reversed(closures)),
         ),
         params=node.params,
@@ -220,10 +220,10 @@ def _offset_limits(
         offset_sum = {k: 0 for k in offset_provider.keys()}
         for k, v in zip(o[0::2], o[1::2]):
             assert isinstance(v, ir.OffsetLiteral) and isinstance(v.value, int)
-            offset_sum[k.value] += v.value
-        for k, v in offset_sum.items():
-            old_min, old_max = offset_limits[k]
-            offset_limits[k] = (min(old_min, v), max(old_max, v))
+            offset_sum[str(k.value)] += v.value
+        for k, v in offset_sum.items():  # type: ignore[assignment] # params types deduced automatically
+            old_min, old_max = int(offset_limits[str(k)])  # type: ignore[call-overload] # tuple type deduced by expression
+            offset_limits[str(k)] = (min(old_min, v), max(old_max, v))
 
     return {v.value: offset_limits[k] for k, v in offset_provider.items()}
 
@@ -288,9 +288,10 @@ def update_cartesian_domains(
     Naive extent analysis, does not handle boundary conditions etc. in a smart way.
     """
     closures = []
-    domains = dict[str, ir.Expr]()
+    domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
+            assert isinstance(closure.output, ir.SymRef)
             domain = domains[closure.output.id]
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
@@ -324,6 +325,8 @@ def _location_type_from_offsets(
     domain: ir.FunCall, offsets: Sequence, offset_provider: Mapping[str, Any]
 ):
     """Derive the location type of an iterator from given offsets relative to an initial domain."""
+    assert isinstance(domain.args[0], ir.FunCall)
+    assert isinstance(domain.args[0].args[0], ir.AxisLiteral)
     location = domain.args[0].args[0].value
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
@@ -399,9 +402,10 @@ def update_unstructured_domains(node: FencilWithTemporaries, offset_provider: Ma
         vertical_ranges.pop(k, None)
 
     closures = []
-    domains = dict[str, ir.Expr]()
+    domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
         if closure.domain == AUTO_DOMAIN:
+            assert isinstance(closure.output, ir.SymRef)
             domain = domains[closure.output.id]
             closure = ir.StencilClosure(
                 domain=domain, stencil=closure.stencil, output=closure.output, inputs=closure.inputs
@@ -441,9 +445,9 @@ def collect_tmps_info(node: FencilWithTemporaries) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {
-        closure.output.id: closure.domain
+        closure.output.id: closure.domain  # type: ignore[union-attr] # type is deduced automatically
         for closure in node.fencil.closures
-        if closure.output.id in tmps
+        if closure.output.id in tmps  # type: ignore
     }
 
     def convert_type(dtype):
