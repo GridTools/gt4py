@@ -12,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Optional, Union
+from typing import ClassVar, List, Literal, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
-from gt4py.next import type_inference
 
 
 @noninstantiable
@@ -39,7 +38,22 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
-    type_: Optional[type_inference.Type] = None
+    # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
+    #   type inference.
+    kind: Optional[Literal["Iterator", "Value"]] = None
+    dtype: Optional[str] = None
+
+    @datamodels.validator("dtype")
+    def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value not in ["Iterator", "Value"]:
+            raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")
+
+    @datamodels.validator("dtype")
+    def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value not in TYPEBUILTINS:
+            raise ValueError(
+                f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
+            )
 
 
 @noninstantiable

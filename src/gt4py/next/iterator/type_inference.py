@@ -415,9 +415,25 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return result
 
     def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
-        if node.type_:
-            return node.type_
-        return TypeVar.fresh()
+        result = TypeVar.fresh()
+        if node.kind:
+            kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
+            self.constraints.add(
+                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
+            )
+        if node.dtype:
+            assert node.dtype in ir.TYPEBUILTINS
+            self.constraints.add(
+                (
+                    Val(
+                        dtype=Primitive(name=node.dtype),
+                        current_loc=TypeVar.fresh(),
+                        defined_loc=TypeVar.fresh(),
+                    ),
+                    result,
+                )
+            )
+        return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
         if node.id in BUILTIN_TYPES:
@@ -581,7 +597,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # their parameters to inherit the constraints of the arguments in a call to them. A simple
         # way to do this is to run the type inference on the function itself and reindex its type
         # vars when referencing the function, i.e. in a `SymRef`.
-        collected_types = _infer_all(fun, offset_provider=self.offset_provider, reindex=False)
+        collected_types = infer_all(fun, offset_provider=self.offset_provider, reindex=False)
         fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
         assert not set(self.collected_types.keys()) & set(collected_types.keys())
         self.collected_types = {**self.collected_types, **collected_types}
@@ -596,7 +612,6 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         domain = self.visit(node.domain, **kwargs)
         stencil = self.visit(node.stencil, **kwargs)
         output = self.visit(node.output, **kwargs)
-        inputs = Tuple.from_elems(*self.visit(node.inputs, **kwargs))
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
         self.constraints.add(
@@ -609,18 +624,40 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                     kind=Iterator(),
                     dtype=output_dtype,
                     size=Column(),
-                    current_loc=output_loc,
                     defined_loc=output_loc,
                 ),
             )
         )
+
+        inputs: list[Type] = self.visit(node.inputs, **kwargs)
+        stencil_params = []
+        for input_ in inputs:
+            stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
+            self.constraints.add(
+                (
+                    input_,
+                    Val(
+                        kind=stencil_param.kind,
+                        dtype=stencil_param.dtype,
+                        size=stencil_param.size,
+                        # closure input and stencil param differ in `current_loc`
+                        current_loc=ANYWHERE,
+                        defined_loc=stencil_param.defined_loc,
+                    ),
+                )
+            )
+            stencil_params.append(stencil_param)
+
         self.constraints.add(
             (
                 stencil,
-                FunctionType(args=inputs, ret=Val(kind=Value(), dtype=output_dtype, size=Column())),
+                FunctionType(
+                    args=Tuple.from_elems(*stencil_params),
+                    ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
+                ),
             )
         )
-        return Closure(output=output, inputs=inputs)
+        return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
     def visit_FencilDefinition(
         self,
@@ -639,13 +676,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         params = [self.visit(p, **kwargs) for p in node.params]
         self.visit(node.closures, **kwargs)
         return FencilDefinitionType(
-            name=node.id,
+            name=str(node.id),
             fundefs=Tuple.from_elems(*ftypes),
             params=Tuple.from_elems(*params),
         )
 
 
-def _infer_all(
+def infer_all(
     node: ir.Node,
     offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
     reindex: bool = True,
@@ -676,7 +713,7 @@ def infer(
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    inferred_types = _infer_all(expr, offset_provider)
+    inferred_types = infer_all(expr, offset_provider)
     return inferred_types[id(expr)]
 
 

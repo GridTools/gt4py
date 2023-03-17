@@ -92,6 +92,26 @@ def test_lambda():
     assert ti.pformat(inferred) == "(T₀) → T₀"
 
 
+def test_typed_lambda():
+    testee = ir.Lambda(
+        params=[ir.Sym(id="x", kind="Iterator", dtype="float")], expr=ir.SymRef(id="x")
+    )
+    expected_val = ti.Val(
+        kind=ti.Iterator(),
+        dtype=ti.Primitive(name="float"),
+        size=ti.TypeVar(idx=0),
+        current_loc=ti.TypeVar(idx=1),
+        defined_loc=ti.TypeVar(idx=2),
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(expected_val),
+        ret=expected_val,
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₁, T₂, float⁰]) → It[T₁, T₂, float⁰]"
+
+
 def test_plus():
     testee = ir.SymRef(id="plus")
     t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))

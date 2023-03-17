@@ -14,12 +14,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Generator, Optional, cast
+from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
 from gt4py.next.ffront import program_ast as past
-from gt4py.next.iterator import ir as itir, type_inference
+from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -249,16 +249,16 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         dim_i: int,
         dim: Dimension,
         node_domain: past.Dict,
-    ) -> Generator[Any, None, None]:
+    ) -> list[itir.FunCall]:
+        assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
-        if keys_dims_types == dim:
-            assert len(node_domain.values_[dim_i].elts) == 2
-            return (self.visit(bound) for bound in node_domain.values_[dim_i].elts)
-        else:
+        if keys_dims_types != dim:
             raise GTTypeError(
                 f"Dimensions in out field and field domain are not equivalent"
                 f"Expected {dim}, but got {keys_dims_types} "
             )
+
+        return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
@@ -348,27 +348,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.SymRef(id=node.id)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
+        # TODO(tehrengruber): extend to more types
         if isinstance(node.type, ts.FieldType):
-            if node.type.dtype.kind == ts.ScalarKind.FLOAT64:
-                dtype = "float64"
-            elif node.type.dtype.kind == ts.ScalarKind.FLOAT32:
-                dtype = "float32"
-            elif node.type.dtype.kind == ts.ScalarKind.INT64:
-                dtype = "int64"
-            elif node.type.dtype.kind == ts.ScalarKind.INT32:
-                dtype = "int32"
-            elif node.type.dtype.kind == ts.ScalarKind.BOOL:
-                dtype = "bool"
-            else:
-                raise NotImplementedError()
-            type_ = type_inference.Val(
-                kind=type_inference.Iterator(),
-                dtype=type_inference.Primitive(name=dtype),
-                size=type_inference.TypeVar.fresh(),
-                current_loc=type_inference.TypeVar.fresh(),
-                defined_loc=type_inference.TypeVar.fresh(),
-            )
-            return itir.Sym(id=node.id, type_=type_)
+            kind = "Iterator"
+            dtype = node.type.dtype.kind.name.lower()
+            return itir.Sym(id=node.id, kind=kind, dtype=dtype)
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
@@ -376,3 +360,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
+
+    def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
+        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
+            return itir.FunCall(
+                fun=itir.SymRef(id=node.func.id),
+                args=[self.visit(node.args[0]), self.visit(node.args[1])],
+            )
+        else:
+            raise AssertionError(
+                "Only `minimum` and `maximum` builtins supported supported currently."
+            )
