@@ -25,7 +25,7 @@ from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.otf.workflow import CachedWorkflow
+from gt4py.next.otf.workflow import CachedStep
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
@@ -73,15 +73,14 @@ def extract_connectivity_args(
     return args
 
 
-# TODO(tehrengruber): We shouldn't do this. See `GTFNExecutor.use_caching` for a comment.
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
     return hash(
         (
             otf_closure.program,
-            # TODO(tehrengruber): as the frontend types contain lists they are
-            #  not hashable. As a workaround we just use content_hash here.
+            # As the frontend types contain lists they are not hashable. As a workaround we just
+            # use content_hash here.
             content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
             id(offset_provider) if offset_provider else None,
             otf_closure.kwargs.get("column_axis", None),
@@ -98,11 +97,10 @@ class GTFNExecutor(ppi.ProgramExecutor):
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
 
-    # TODO(tehrengruber): The otf workflow currently takes the entire closure, i.e. the
-    #  fencil and its arguments, instead of the parts it actually needs to compile the program.
-    #  The hash function for the caching currently only uses a subset of the closure and implicitly
-    #  relies on the workflow to only use that information. As this is dangerous the caching is
-    #  disabled by default and should be considered experimental.
+    # TODO(tehrengruber): Revisit default value. The hash function for the caching currently
+    #  only uses a subset of the closure and implicitly relies on the workflow to only use that
+    #  information. As this is dangerous the caching is disabled by default and should be considered
+    #  experimental.
     use_caching: bool = False
     caching_strategy = cache.Strategy.SESSION
 
@@ -111,6 +109,8 @@ class GTFNExecutor(ppi.ProgramExecutor):
     ] = dataclasses.field(repr=False, init=False)
 
     def __post_init__(self):
+        # TODO(tehrengruber): Restrict arguments of OTF workflow to the parts it actually needs
+        #  to compile the program instead of the entire closure.
         otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram] = (
             gtfn_module.GTFNTranslationStep(
                 self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
@@ -125,7 +125,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
         )
 
         if self.use_caching:
-            otf_workflow = CachedWorkflow(workflow=otf_workflow, hash_function=compilation_hash)
+            otf_workflow = CachedStep(workflow=otf_workflow, hash_function=compilation_hash)
 
         super().__setattr__("_otf_workflow", otf_workflow)
 
