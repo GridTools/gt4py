@@ -1,7 +1,6 @@
-#
-# This file contains 'cog' markers (https://nedbatchelder.com/code/cog/) 
+# This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
 # to keep version numbers in sync with 'constraints.txt'
-#
+
 default_language_version:
   python: python3.10
 repos:
@@ -24,7 +23,7 @@ repos:
   rev: v3.0.0-alpha.4
   hooks:
   - id: prettier
-    types_or: [json]
+    types_or: [markdown, json]
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
   rev: v1.1.9
@@ -93,8 +92,9 @@ repos:
     ##[[[cog
     ## import re
     ## constraints = open("constraints.txt").read()
-    ## for pkg in ["darglint", "flake8-bugbear", "flake8-builtins", "flake8-debugger", "flake8-docstrings", "flake8-eradicate", "flake8-mutable", "pygments"]:
-    ## 	print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
+    ## for pkg in ["darglint", "flake8-bugbear", "flake8-builtins", "flake8-debugger", "flake8-docstrings",
+    ##             "flake8-eradicate", "flake8-mutable", "flake8-pyproject", "pygments"]:
+    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - darglint==1.8.1
     - flake8-bugbear==23.2.13
@@ -103,6 +103,7 @@ repos:
     - flake8-docstrings==1.7.0
     - flake8-eradicate==1.4.0
     - flake8-mutable==1.2.0
+    - flake8-pyproject==1.2.2
     - pygments==2.14.0
     ##[[[end]]]
     # - flake8-rst-docstrings  # Disabled for now due to random false positives
@@ -146,13 +147,12 @@ repos:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
     ##[[[cog
-    ## import configparser, re
+    ## import re, tomli
     ## constraints = open("constraints.txt").read()
-    ## config = configparser.ConfigParser(); config.read('setup.cfg')
-    ## requires = config['options']['install_requires'].splitlines()
-    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in requires if r.strip()]
+    ## project = tomli.loads(open("pyproject.toml").read())
+    ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
     ## for pkg in packages:
-    ## 	print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
+    ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
     - attrs==22.2.0
@@ -166,6 +166,7 @@ repos:
     - devtools==0.10.0
     - frozendict==2.3.5
     - gridtools-cpp==2.2.3
+    - importlib-resources==5.12.0
     - jinja2==3.1.2
     - lark==1.1.5
     - mako==1.2.4
@@ -175,7 +176,7 @@ repos:
     - packaging==23.0
     - pybind11==2.10.3
     - scipy==1.10.1
-    - setuptools==67.2.0
+    - setuptools==67.5.1
     - tabulate==0.9.0
     - toolz==0.12.0
     - typing-extensions==4.5.0

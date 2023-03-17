@@ -7,9 +7,9 @@ Any test job that runs on CI is encoded in automation tools like tox and pre-com
 The following workflows are currently active:
 
 ```mermaid
-%%{ 
+%%{
     init: {
-        'flowchart': { 'curve': 'basis' }, 
+        'flowchart': { 'curve': 'basis' },
         'theme': 'neutral'
     }
 }%%
@@ -25,12 +25,12 @@ flowchart LR
     src_cab[cartesian backend sources changed] --> sto["Test Storage (CPU)"]
 
     src_sto[storage sources changed] --> sto
-    src_sto --> car 
+    src_sto --> car
     src_sto --> nxt
 
     src_nxt[next sources changed] --> nxt
 
-    cfg_wfl[workflows changed] --> car 
+    cfg_wfl[workflows changed] --> car
     cfg_wfl --> eve
     cfg_wfl --> nxt
     cfg_wfl --> sto
@@ -58,7 +58,7 @@ flowchart LR
     style nxt fill:LightBlue,stroke:CornFlowerBlue,text:black;
 
     linkStyle 0 stroke:#999,stroke-width:2px;
-    
+
     linkStyle 1 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 2 stroke:MediumOrchid,stroke-width:2px;
     linkStyle 3 stroke:MediumOrchid,stroke-width:2px;
