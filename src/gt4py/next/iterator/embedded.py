@@ -794,7 +794,9 @@ def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> O
 class MDIterator:
     field: LocatedField
     pos: MaybePosition
-    incomplete_offsets: Sequence[Tag] = dataclasses.field(default_factory=list, kw_only=True)
+    incomplete_offsets: Sequence[Tag] = dataclasses.field(
+        default_factory=list, kw_only=True
+    )  # TODO(havogt): the code should be refactored, such that `incomplete_offsets` is not needed anymore (then `max_neighbors` is not needed anymore)
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
