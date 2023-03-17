@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Literal, Optional, Union
+import typing
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -40,7 +41,7 @@ class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
-    kind: Optional[Literal["Iterator", "Value"]] = None
+    kind: Optional[typing.Literal["Iterator", "Value"]] = None
     dtype: Optional[str] = None
 
     @datamodels.validator("dtype")
