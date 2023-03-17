@@ -151,9 +151,6 @@ class ItIterator(Protocol):
     def shift(self, *offsets: OffsetPart) -> ItIterator:
         ...
 
-    def max_neighbors(self) -> int:
-        ...
-
     def can_deref(self) -> bool:
         ...
 
@@ -336,23 +333,6 @@ def lift(stencil):
                 return _WrappedIterator(
                     self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem
                 )
-
-            def max_neighbors(self):
-                # TODO cleanup, test edge cases
-                open_offsets = get_open_offsets(*self.incomplete_offsets, *self.offsets)
-                assert open_offsets
-                return _get_connectivity(_offset_provider, open_offsets[0]).max_neighbors
-
-            @property
-            def incomplete_offsets(self):
-                incomplete_offsets = []
-                for arg in self.args:
-                    if arg.incomplete_offsets:
-                        assert (
-                            not incomplete_offsets or incomplete_offsets == arg.incomplete_offsets
-                        )
-                        incomplete_offsets = arg.incomplete_offsets
-                return incomplete_offsets
 
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
@@ -588,28 +568,18 @@ def execute_shift(
     raise AssertionError("Unknown object in `offset_provider`")
 
 
-# The following holds for shifts:
-# shift(tag, index)(inp) -> full shift
-# shift(tag)(inp) -> incomplete shift
-# shift(index)(shift(tag)(inp)) -> full shift
-# Therefore the following transformation holds
-# shift(e2v,0)(shift(c2e,2)(cell_field)) #noqa E800
-# = shift(0)(shift(e2v)(shift(2)(shift(c2e)(cell_field))))
-# = shift(c2e, 2, e2v, 0)(cell_field)
-# = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
-# = shift(2,0)(shift(c2e,e2v)(cell_field))
-# for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]]:
-    tag_stack = []
+def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
     complete_offsets = []
+    tag = None
     for offset in offsets:
         if not isinstance(offset, (int, np.integer)):
-            tag_stack.append(offset)
+            tag = offset
         else:
-            assert tag_stack
-            tag = tag_stack.pop()
+            assert tag is not None
             complete_offsets.append((tag, offset))
-    return complete_offsets, tag_stack
+            tag = None
+    assert tag is None
+    return complete_offsets
 
 
 def shift_position(
@@ -626,10 +596,6 @@ def shift_position(
         else:
             return None
     return new_pos
-
-
-def get_open_offsets(*offsets: OffsetPart) -> list[Tag]:
-    return group_offsets(*offsets)[1]
 
 
 class Undefined:
@@ -794,31 +760,21 @@ def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> O
 class MDIterator:
     field: LocatedField
     pos: MaybePosition
-    incomplete_offsets: Sequence[Tag] = dataclasses.field(
-        default_factory=list, kw_only=True
-    )  # TODO(havogt): the code should be refactored, such that `incomplete_offsets` is not needed anymore (then `max_neighbors` is not needed anymore)
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
-        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
+        complete_offsets = group_offsets(*offsets)
         assert _offset_provider is not None
         return MDIterator(
             self.field,
             shift_position(self.pos, *complete_offsets, offset_provider=_offset_provider),
-            incomplete_offsets=open_offsets,
             column_axis=self.column_axis,
         )
-
-    def max_neighbors(self) -> int:
-        assert self.incomplete_offsets
-        assert _offset_provider is not None
-        return _get_connectivity(_offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
 
     def deref(self) -> Any:
-        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -880,7 +836,6 @@ def make_in_iterator(
     it = MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[],
         column_axis=column_axis,
     )
     if len(sparse_dimensions) >= 1:
@@ -1193,9 +1148,6 @@ class SparseListIterator:
 
     def can_deref(self) -> bool:
         return self.it.shift(*self.offsets).can_deref()
-
-    def max_neighbors(self) -> int:
-        return self.it.shift(*self.offsets).max_neighbors()
 
     def shift(self, *offsets: OffsetPart) -> SparseListIterator:
         return SparseListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
