@@ -251,7 +251,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         elif node == common.NativeFunction.POW:
             return "np.power"
         elif node == common.NativeFunction.GAMMA:
-            return "scipy.special.gamma"
+            return "gamma_"
         name = self.generic_visit(node, **kwargs)
         assert isinstance(name, str)
         return f"np.{name}"
@@ -398,7 +398,11 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             from typing import Tuple
 
             import numpy as np
-            import scipy.special
+            try:
+                from scipy.special import gamma as gamma_
+            except ImportError:
+                import math
+                gamma_ = np.vectorize(math.gamma)
 
             {{ data_view_class }}
 

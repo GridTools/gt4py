@@ -20,7 +20,15 @@ import typing
 from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
-import scipy.special
+
+
+try:
+    from scipy.special import gamma as gamma_
+except ImportError:
+    import math
+
+    gamma_ = np.vectorize(math.gamma)
+    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
 
 from gt4py import eve
 from gt4py.cartesian.gtc.utils import dimension_flags_to_names, flatten_list
@@ -870,7 +878,7 @@ def op_to_ufunc(
             NativeFunction.POW: np.power,
             NativeFunction.EXP: np.exp,
             NativeFunction.LOG: np.log,
-            NativeFunction.GAMMA: scipy.special.gamma,
+            NativeFunction.GAMMA: gamma_,
             NativeFunction.CBRT: np.cbrt,
             NativeFunction.ISFINITE: np.isfinite,
             NativeFunction.ISINF: np.isinf,

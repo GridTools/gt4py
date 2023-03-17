@@ -31,7 +31,7 @@ dependencies = [
   "click>=7.1",
   "cmake>=3.22",
   "cytoolz>=0.11",
-  "deepdiff>=5.8",
+  "deepdiff>=5.6",
   "devtools>=0.6",
   "frozendict>=2.3",
   "gridtools-cpp>=2.2.3,==2.*",
@@ -47,7 +47,6 @@ dependencies = [
   "scipy>=1.4",
   "setuptools>=60.6",
   "tabulate>=0.8",
-  "toolz>=0.11",
   "typing-extensions>=4.2",
   "xxhash>=1.4.4,<3.1.0"
 ]
@@ -68,6 +67,12 @@ readme = "README.md"
 requires-python = ">=3.8"
 
 [project.optional-dependencies]
+all_features = [
+  "clang-format>=9.0",
+  "dace>=0.14.2,<0.15",
+  "sympy",
+  "scipy>=1.0"
+]
 cuda = ["cupy"]
 cuda110 = ["cupy-cuda110"]
 cuda111 = ["cupy-cuda111"]
