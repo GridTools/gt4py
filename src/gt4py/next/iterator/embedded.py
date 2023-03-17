@@ -1159,13 +1159,11 @@ def reduce(fun, init):
             if isinstance(cur, _List):
                 lst = cur
                 break
+        # we can check a single argument for length,
+        # because all arguments share the same pattern
         n = len(lst)
         res = init
         for i in range(n):
-            # we can check a single argument
-            # because all arguments share the same pattern
-            if lst[i] is None:
-                break
             res = fun(
                 res,
                 *(lst[i] for lst in lists),
