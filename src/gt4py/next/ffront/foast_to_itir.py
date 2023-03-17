@@ -17,8 +17,6 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-import numpy as np
-
 from gt4py.eve import NodeTranslator
 from gt4py.next.common import DimensionKind
 from gt4py.next.ffront import (
@@ -318,9 +316,12 @@ class FieldOperatorLowering(NodeTranslator):
             return self._lift_if_field(node)(
                 im.call_("not_")(to_value(node.operand)(self.visit(node.operand, **kwargs)))
             )
+
+        dtype = type_info.extract_dtype(node.type)
+        assert type_info.is_arithmetic(dtype)
         return self._lift_if_field(node)(
             im.call_(node.op.value)(
-                im.literal_("0", "int"),
+                im.literal_("0", dtype.kind.name.lower()),
                 to_value(node.operand)(self.visit(node.operand, **kwargs)),
             )
         )
@@ -357,10 +358,19 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.FunCall:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                return im.shift_(offset_name, offset_index)(self.visit(node.func, **kwargs))
+                shift_offset = im.shift_(offset_name, offset_index)
             case foast.Name(id=offset_name):
-                return im.shift_(offset_name)(self.visit(node.func, **kwargs))
-        raise FieldOperatorLoweringError("Unexpected shift arguments!")
+                shift_offset = im.shift_(offset_name)
+            case foast.Call(func=foast.Name(id="as_offset")):
+                func_args = node.args[0]
+                offset_dim = func_args.args[0]
+                assert isinstance(offset_dim, foast.Name)
+                shift_offset = im.shift_(
+                    offset_dim.id, im.deref_(self.visit(func_args.args[1], **kwargs))
+                )
+            case _:
+                raise FieldOperatorLoweringError("Unexpected shift arguments!")
+        return shift_offset(self.visit(node.func, **kwargs))
 
     def _make_reduction_expr(
         self,
@@ -388,20 +398,23 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        # TODO(tehrengruber): replace greater_ with max_ builtin as soon as itir supports it
-        init_expr = itir.Literal(value=str(np.finfo(np.float64).min), type="float64")
+        dtype = type_info.extract_dtype(node.type)
+        min_value, _ = type_info.arithmetic_bounds(dtype)
+        init_expr = itir.Literal(value=str(min_value), type=dtype.kind.name.lower())
         return self._make_reduction_expr(
             node,
-            lambda expr: im.call_("if_")(im.greater_("acc", expr), "acc", expr),
+            lambda expr: im.call_("maximum")("acc", expr),
             init_expr,
             **kwargs,
         )
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        init_expr = itir.Literal(value=str(np.finfo(np.float64).max), type="float64")
+        dtype = type_info.extract_dtype(node.type)
+        _, max_value = type_info.arithmetic_bounds(dtype)
+        init_expr = itir.Literal(value=str(max_value), type=dtype.kind.name.lower())
         return self._make_reduction_expr(
             node,
-            lambda expr: im.call_("if_")(im.less_("acc", expr), "acc", expr),
+            lambda expr: im.call_("minimum")("acc", expr),
             init_expr,
             **kwargs,
         )
@@ -548,7 +561,11 @@ class InsideReductionLowering(FieldOperatorLowering):
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             return im.call_(node.op.value)(self.visit(node.operand, **kwargs))
 
-        return im.call_(node.op.value)(im.literal_("0", "int"), self.visit(node.operand, **kwargs))
+        dtype = type_info.extract_dtype(node.type)
+        assert type_info.is_arithmetic(dtype)
+        return im.call_(node.op.value)(
+            im.literal_("0", dtype.kind.name.lower()), self.visit(node.operand, **kwargs)
+        )
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.SymRef:  # type: ignore[override]
         uid = f"{node.func.id}__{self._sequential_id()}"

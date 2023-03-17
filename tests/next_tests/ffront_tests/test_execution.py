@@ -17,25 +17,25 @@
 from functools import reduce
 
 import numpy as np
-import pytest as pytest
+import pytest
 
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
-    FieldOffset,
     astype,
     broadcast,
+    float32,
     float64,
     int32,
     int64,
-    max_over,
-    min_over,
+    maximum,
+    minimum,
     neighbor_sum,
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.builtins import float32
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -143,9 +143,6 @@ def test_tuples(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("Tuples are not supported yet.")
 
     @field_operator
     def tuples(
@@ -336,6 +333,50 @@ def test_astype_float(fieldview_backend):
     assert np.allclose(c_int32.array(), out_int_32)
 
 
+def test_offset_field(fieldview_backend):
+    a_I_arr = np.random.randn(size, size).astype("float64")
+    a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
+    a_I_float_1 = np_as_located_field(IDim, KDim)(
+        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
+    )
+    offset_field_arr = np.asarray(np.ones((size - 1, size - 1)), dtype=int64)
+    offset_field_comp = np.append(
+        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
+    )
+    offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
+    out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+    out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_field_fo(
+        a: Field[[IDim, KDim], float64],
+        offset_field: Field[[IDim, KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        a_i = a(as_offset(Ioff, offset_field))
+        a_i_k = a_i(as_offset(Koff, offset_field))
+        return a_i_k
+
+    offset_index_field_fo(
+        a_I_float,
+        offset_field,
+        out=out_I_float,
+        offset_provider={"Ioff": IDim, "Koff": KDim},
+    )
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_int_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
+        a_i = a(Ioff[1])
+        a_i_k = a_i(Koff[1])
+        return a_i_k
+
+    offset_index_int_fo(
+        a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
+    )
+    assert np.allclose(
+        out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
+    )
+
+
 def test_nested_tuple_return(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -384,7 +425,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
 
 
 @pytest.mark.xfail(raises=NotImplementedError)
-def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
+def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -400,7 +441,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduce_tuple_element(
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
@@ -686,7 +727,7 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
 
     program_domain(a_IJ_float, offset_provider={})
 
@@ -857,6 +898,9 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
 
 def test_tuple_unpacking(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out1 = np_as_located_field(IDim)(np.ones((size)))
@@ -864,7 +908,7 @@ def test_tuple_unpacking(fieldview_backend):
     out3 = np_as_located_field(IDim)(np.ones((size)))
     out4 = np_as_located_field(IDim)(np.ones((size)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> tuple[
@@ -887,6 +931,9 @@ def test_tuple_unpacking(fieldview_backend):
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
@@ -906,7 +953,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         Field[[IDim], float64],
     ]
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> OutType:
@@ -928,7 +975,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -939,7 +986,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
             return a

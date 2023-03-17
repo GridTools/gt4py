@@ -12,6 +12,7 @@ tags: [frontend]
 ## Updates:
 
 ### 2022-04-08: Added scalar literal support
+
 The rationale that "any FOAST node should be lowered to an ITIR iterator expression" has changed to
 
 > Any non-scalar FOAST Node should be lowered to an ITIR iterator expression. Scalar FOAST nodes should be lowered to an ITIR value expression.
@@ -23,6 +24,7 @@ The lowering of parent nodes now has to deal with two kinds of expressions. In p
 Since the lowering currently does not have a usecase for lifting lowered child nodes if they are value expressions, the corresponding `to_iterator` method has been omitted. It can be introduced at a later time, if a usecase for it is found, it should be analogous to `to_value` and therefore easy to implement (in about four lines).
 
 ### 2022-02-22: Added reduction lowering
+
 Lowering reductions is not completely straightforward (at the time of writing) because expressions inside a reduction in field view may contain fields shifted to neighbor dimensions.
 
 These are lowered to partially shifted iterators which can not be dereferenced directly. The iterator builtin `reduce` therefore takes an expression which works on values after they have been shifted to a concrete neighbor and dereferenced by the system. Everywhere else it remains easier to lower everything to an iterator expression.
@@ -30,9 +32,10 @@ These are lowered to partially shifted iterators which can not be dereferenced d
 This leads to the following solution, likely subject to change when the behaviour of `reduce` or partially shifted iterators change:
 
 The expression inside the reduction is lowered using a separate `NodeTranslator` instance which
-1) collects shifted (and non-shifted) iterators in the course of the lowering
-2) lowers everything under the assumption that everything is a value and
-3) reinserts the (shifted) iterators as arguments to the `reduce` call.
+
+1. collects shifted (and non-shifted) iterators in the course of the lowering
+2. lowers everything under the assumption that everything is a value and
+3. reinserts the (shifted) iterators as arguments to the `reduce` call.
 
 This solution is proposed also because the special rules for `reduce`, which are likely to change are isolated in this separate lowering parser.
 
@@ -49,7 +52,7 @@ def temp(a):
   return tmp
 ```
 
-Would need to be turned into a single expression. While this case is trivial to solve by hand by simply replacing of ``a`` for ``tmp`` (yielding `deref(a)`), we require an algorithm that works in all cases.
+Would need to be turned into a single expression. While this case is trivial to solve by hand by simply replacing of `a` for `tmp` (yielding `deref(a)`), we require an algorithm that works in all cases.
 
 ## Algorithm Choice
 
@@ -57,23 +60,23 @@ Would need to be turned into a single expression. While this case is trivial to 
 
 The choice of algorithm was guided by:
 
-* Yield correct Iterator IR with as little special-casing as possible
-* As simple and readable to code as possible
-* Avoid passing information down into subtree visitors (as long as that does not clash with simplicity and readability)
+- Yield correct Iterator IR with as little special-casing as possible
+- As simple and readable to code as possible
+- Avoid passing information down into subtree visitors (as long as that does not clash with simplicity and readability)
 
 ### Algorithm
 
 We chose the following algorithm:
 
-1. Lower the return value expression into an **iterator expression** and store it in ``current_expression``
+1. Lower the return value expression into an **iterator expression** and store it in `current_expression`
 
 2. For each assign statement in reverse order:
 
-  1. lower the right-hand side of the assign statement into an **iterator expression**
+3. lower the right-hand side of the assign statement into an **iterator expression**
 
-  2. wrap ``current_expression`` in a let-expression (see below) that exposes the lowered right-hand side as the left-hand side.
+4. wrap `current_expression` in a let-expression (see below) that exposes the lowered right-hand side as the left-hand side.
 
-3. dereference the ``current_expression``.
+5. dereference the `current_expression`.
 
 Or in pseudocode:
 
@@ -85,7 +88,7 @@ for assign in reversed(assigns):
 DEREF(current_expression)
 ```
 
-The let expression ``let VAR = INIT_FORM in FORM`` written out in iterator view looks as follows:
+The let expression `let VAR = INIT_FORM in FORM` written out in iterator view looks as follows:
 
 ```python
 (lambda VAR: FORM)(INIT_FORM)
@@ -140,7 +143,7 @@ a + b -> lift(lambda a, b: plus(deref(a), deref(b)))(a, b)
 a + 1 -> lift(lambda a: plus(deref(a), deref(lift(lambda: 1)())))(a)
 ```
 
-One might be tempted to eliminate the ``deref(lift(lambda: 1)())`` as extraneous. However, the same thing could be rewritten as
+One might be tempted to eliminate the `deref(lift(lambda: 1)())` as extraneous. However, the same thing could be rewritten as
 
 ```
 tmp = 1
@@ -148,7 +151,7 @@ a + tmp -> (lambda tmp: lift(lambda a: plus(deref(a), deref(tmp))))((lift lambda
 ```
 
 Where the algorithm makes the assumption that every assignment target (or let variable) is an iterator expression.
-This means, while the ``deref(lift(...))`` could be avoided in some cases, it would require special casing.
+This means, while the `deref(lift(...))` could be avoided in some cases, it would require special casing.
 This would mean complicating the lowering without gaining correctness, and therefore contradicts our guiding principles.
 
 ## Iterator IR helpers
