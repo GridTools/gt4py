@@ -221,9 +221,7 @@ def array_as_located_field(
         def getter(indices):
             return a[_shift_field_indices(indices, origin) if origin else indices]
 
-        return LocatedFieldImpl(
-            getter, axes, dtype=a.dtype, setter=setter, array=a.__array__(), origin=origin
-        )
+        return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a, origin=origin)
 
     return _maker
 
