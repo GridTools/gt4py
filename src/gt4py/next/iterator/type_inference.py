@@ -204,7 +204,7 @@ class ValListTuple(Type):
                 and Val(
                     kind=self.kind,
                     dtype=List(
-                        list_dtypes.front,
+                        dtype=list_dtypes.front,
                         max_length=self.max_length,
                         has_skip_values=self.has_skip_values,
                     ),
