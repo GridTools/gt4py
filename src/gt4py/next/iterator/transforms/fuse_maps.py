@@ -18,7 +18,7 @@ from typing import TypeGuard
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
+from gt4py.next.iterator.transforms import inline_lambdas
 
 
 def _is_map(node: ir.Node) -> TypeGuard[ir.FunCall]:
@@ -90,7 +90,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         assert isinstance(map_call.fun.args[0], (ir.Lambda, ir.SymRef))
                         inner_op = self._as_lambda(map_call.fun.args[0], len(map_call.args))
                         inlined_args.append(
-                            inline_lambda(
+                            inline_lambdas.inline_lambda(
                                 ir.FunCall(
                                     fun=inner_op,
                                     args=[*(ir.SymRef(id=param.id) for param in inner_op.params)],
@@ -104,7 +104,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         new_params.append(outer_op.params[i + first_param])
                         new_args.append(node.args[i])
 
-                new_body = inline_lambda(
+                new_body = inline_lambdas.inline_lambda(
                     ir.FunCall(
                         fun=outer_op,
                         args=inlined_args,
