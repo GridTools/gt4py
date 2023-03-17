@@ -355,7 +355,22 @@ def test_reduce():
             args=[
                 ir.SymRef(id="acc"),
                 ir.FunCall(
-                    fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
+                    fun=ir.SymRef(id="cast_"),  # cast to the type of `init`
+                    args=[
+                        ir.FunCall(
+                            fun=ir.SymRef(id="multiplies"),
+                            args=[
+                                ir.SymRef(id="x"),
+                                ir.FunCall(
+                                    fun=ir.SymRef(
+                                        id="cast_"
+                                    ),  # force `x` to be of type `float64` -> `y` is unconstrained
+                                    args=[ir.SymRef(id="y"), ir.SymRef(id="float64")],
+                                ),
+                            ],
+                        ),
+                        ir.SymRef(id="int"),
+                    ],
                 ),
             ],
         ),
@@ -366,16 +381,16 @@ def test_reduce():
     expected = ti.FunctionType(
         args=ti.ValListTuple(
             kind=ti.Value(),
-            list_dtypes=ti.Tuple.from_elems(ti.Primitive(name="int"), ti.Primitive(name="int")),
-            max_length=ti.TypeVar(idx=0),
-            has_skip_values=ti.TypeVar(idx=1),
-            size=ti.TypeVar(idx=2),
+            list_dtypes=ti.Tuple.from_elems(ti.Primitive(name="float64"), ti.TypeVar(idx=0)),
+            max_length=ti.TypeVar(idx=1),
+            has_skip_values=ti.TypeVar(idx=2),
+            size=ti.TypeVar(idx=3),
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=2)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=3)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(L[int, T₀, T₁]², L[int, T₀, T₁]²) → int²"
+    assert ti.pformat(inferred) == "(L[float64, T₁, T₂]³, L[T₀, T₁, T₂]³) → int³"
 
 
 def test_scan():

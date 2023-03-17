@@ -195,12 +195,7 @@ class ValListTuple(Type):
     size: Type = eve.field(default_factory=TypeVar.fresh)
 
     def __eq__(self, other: typing.Any) -> bool:
-        if (
-            isinstance(self.list_dtypes, Tuple)
-            and isinstance(self.max_length, Tuple)
-            and isinstance(self.has_skip_values, Tuple)
-            and isinstance(other, Tuple)
-        ):
+        if isinstance(self.list_dtypes, Tuple) and isinstance(other, Tuple):
             list_dtypes: Type = self.list_dtypes
             elems: Type = other
             while (
@@ -235,19 +230,19 @@ class ValListTuple(Type):
     ) -> bool:
         if isinstance(other, Tuple):
             list_dtypes = [TypeVar.fresh() for _ in other]
-            max_length = TypeVar.fresh()
-            has_skip_values = TypeVar.fresh()
             expanded = [
                 Val(
                     kind=self.kind,
-                    dtype=List(dtype=dtype, max_length=max_length, has_skip_values=has_skip_values),
+                    dtype=List(
+                        dtype=dtype,
+                        max_length=self.max_length,
+                        has_skip_values=self.has_skip_values,
+                    ),
                     size=self.size,
                 )
                 for dtype in list_dtypes
             ]
             add_constraint(self.list_dtypes, Tuple.from_elems(*list_dtypes))
-            add_constraint(self.max_length, max_length)
-            add_constraint(self.has_skip_values, has_skip_values)
             add_constraint(Tuple.from_elems(*expanded), other)
             return True
         if isinstance(other, EmptyTuple):
@@ -575,7 +570,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 return freshen(res.dtype)
             return res
 
-        return TypeVar.fresh()  # TODO document when this case (LetPolymorphic?)
+        return TypeVar.fresh()
 
     def visit_Literal(self, node: ir.Literal, **kwargs) -> Val:
         return Val(kind=Value(), dtype=Primitive(name=node.type))
