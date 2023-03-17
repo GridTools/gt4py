@@ -92,16 +92,28 @@ class LocatedFieldImpl(MutableLocatedField):
         dtype,
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
-        array: Callable[[], npt.NDArray],
+        array: "ArrayLike",
         origin: Optional[Tuple[IntIndex, ...]] = None,
     ):
-        self.getter = getter
+        self._getter = getter
         self._axes = axes
-        self.setter = setter
-        self.array = array
+        self._setter = setter
+        self._array = array
         self.dtype = dtype
+
         if origin is not None:
             self.__gt_origin__ = origin
+
+    def __getattr__(self, item):
+        return getattr(self._array, item)
+
+    @property
+    def device(self):
+        if hasattr(self, "__cuda_array_interface__"):
+            return "gpu"
+        elif hasattr(self, "__array_interface__"):
+            return "cpu"
+        return None
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
@@ -117,19 +129,22 @@ class LocatedFieldImpl(MutableLocatedField):
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
         self.setter(indices, value)
 
-    def __array__(self) -> np.ndarray:
-        return self.array()
-
     @property
-    def __array_interface__(self):
-        return self.array().__array_interface__
+    def array(self):
+        return self._array
+
+    def __array__(self) -> np.ndarray:
+        return self.array
 
     def __descriptor__(self):
         import dace
 
-        res = dace.data.create_datadescriptor(self.array())
+        res = dace.data.create_datadescriptor(self.array)
         if hasattr(self, "__gt_origin__"):
             res.__gt_origin__ = self.__gt_origin__
+        res.storage = (
+            dace.StorageType.GPU_Global if self.device == "gpu" else dace.StorageType.CPU_Heap
+        )
         return res
 
     @property
@@ -207,7 +222,7 @@ def array_as_located_field(
             return a[_shift_field_indices(indices, origin) if origin else indices]
 
         return LocatedFieldImpl(
-            getter, axes, dtype=a.dtype, setter=setter, array=a.__array__, origin=origin
+            getter, axes, dtype=a.dtype, setter=setter, array=a.__array__(), origin=origin
         )
 
     return _maker
