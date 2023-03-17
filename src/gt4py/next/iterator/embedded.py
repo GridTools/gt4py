@@ -697,7 +697,7 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
-) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of LocatedField
     return (
         _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
     )
@@ -783,7 +783,7 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
+def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> Optional[int]:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
@@ -850,14 +850,13 @@ class MDIterator:
         )
 
 
-def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
-    return list(
-        filter(
-            lambda x: isinstance(x, runtime.Offset)  # type: ignore # wants the lambda to be more constraint
-            or (isinstance(x, common.Dimension) and x.kind == common.DimensionKind.LOCAL),
-            axes,
-        )
-    )
+def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
+    return [
+        axis.value  # type: ignore[misc] # axis.value is always `str`
+        for axis in axes
+        if isinstance(axis, runtime.Offset)
+        or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)
+    ]
 
 
 def make_in_iterator(
@@ -1127,10 +1126,9 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     connectivity = _offset_provider[offset_str]
     assert isinstance(connectivity, common.Connectivity)
     return _List(
-        builtins.deref(it.shift(offset_str, i))
-        if builtins.can_deref(it.shift(offset_str, i))
-        else None
+        shifted.deref()
         for i in range(connectivity.max_neighbors)
+        if (shifted := it.shift(offset_str, i)).can_deref()
     )
 
 
@@ -1155,7 +1153,7 @@ def make_const_list(value):
 @builtins.reduce.register(EMBEDDED)
 def reduce(fun, init):
     def sten(*lists):
-        # TODO: assert check_that_all_iterators_are_compatible(*iters)
+        # TODO: assert check_that_all_lists_are_compatible(*lists)
         lst = None
         for cur in lists:
             if isinstance(cur, _List):
@@ -1184,20 +1182,20 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
+        assert _offset_provider is not None
+        connectivity = _offset_provider[self.list_offset]
+        assert isinstance(connectivity, common.Connectivity)
         return _List(
-            builtins.deref(builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it))
-            if builtins.can_deref(
-                builtins.shift(*self.offsets, SparseTag(self.list_offset), i)(self.it)
-            )
-            else None
-            for i in range(_offset_provider[self.list_offset].max_neighbors)  # type: ignore
+            shifted.deref()
+            for i in range(connectivity.max_neighbors)
+            if (shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)).can_deref()
         )
 
     def can_deref(self) -> bool:
-        return builtins.shift(*self.offsets).can_deref()
+        return self.it.shift(*self.offsets).can_deref()
 
     def max_neighbors(self) -> int:
-        return builtins.shift(*self.offsets).max_neighbors()
+        return self.it.shift(*self.offsets).max_neighbors()
 
     def shift(self, *offsets: OffsetPart) -> SparseListIterator:
         return SparseListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
