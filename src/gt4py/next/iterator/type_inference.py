@@ -381,6 +381,8 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "mod": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "minimum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "maximum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "not_eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
@@ -538,26 +540,40 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return TypeVar.fresh()
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
-        if node.id in BUILTIN_TYPES:
-            return freshen(BUILTIN_TYPES[node.id])
-        if node.id in (
-            "make_tuple",
-            "tuple_get",
-            "shift",
-            "cartesian_domain",
-            "unstructured_domain",
-            "cast_",
-        ):
-            raise TypeError(
-                f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
-            )
-        if node.id in symtable:
-            res = self.collected_types[id(symtable[node.id])]
+        if node.id in ir.BUILTINS:
+            if node.id in BUILTIN_TYPES:
+                return freshen(BUILTIN_TYPES[node.id])
+            elif node.id in (
+                "make_tuple",
+                "tuple_get",
+                "shift",
+                "cartesian_domain",
+                "unstructured_domain",
+                "cast_",
+            ):
+                raise TypeError(
+                    f"Builtin '{node.id}' is only allowed as applied/called function by the type "
+                    f"inference."
+                )
+            elif node.id in ir.TYPEBUILTINS:
+                # TODO(tehrengruber): Implement propagating types of values referring to types, e.g.
+                #   >>> my_int = int64
+                #   ... cast_(expr, my_int)
+                #  One way to support this is by introducing a "type of type" similar to pythons
+                #  `typing.Type`.
+                raise NotImplementedError(
+                    f"Type builtin '{node.id}' is only supported as literal argument by the "
+                    f"type inference."
+                )
+            else:
+                raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
+        elif node.id in symtable:
+            sym_decl = symtable[node.id]
+            assert isinstance(sym_decl, TYPED_IR_NODES)
+            res = self.collected_types[id(sym_decl)]
             if isinstance(res, LetPolymorphic):
                 return freshen(res.dtype)
             return res
-        if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
-            raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()  # TODO document when this case (LetPolymorphic?)
 
@@ -754,7 +770,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # their parameters to inherit the constraints of the arguments in a call to them. A simple
         # way to do this is to run the type inference on the function itself and reindex its type
         # vars when referencing the function, i.e. in a `SymRef`.
-        collected_types = _infer_all(fun, offset_provider=self.offset_provider, reindex=False)
+        collected_types = infer_all(fun, offset_provider=self.offset_provider, reindex=False)
         fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
         assert not set(self.collected_types.keys()) & set(collected_types.keys())
         self.collected_types = {**self.collected_types, **collected_types}
@@ -769,7 +785,6 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         domain = self.visit(node.domain, **kwargs)
         stencil = self.visit(node.stencil, **kwargs)
         output = self.visit(node.output, **kwargs)
-        inputs = Tuple.from_elems(*self.visit(node.inputs, **kwargs))
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
         self.constraints.add(
@@ -782,18 +797,40 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                     kind=Iterator(),
                     dtype=output_dtype,
                     size=Column(),
-                    current_loc=output_loc,
                     defined_loc=output_loc,
                 ),
             )
         )
+
+        inputs: list[Type] = self.visit(node.inputs, **kwargs)
+        stencil_params = []
+        for input_ in inputs:
+            stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
+            self.constraints.add(
+                (
+                    input_,
+                    Val(
+                        kind=stencil_param.kind,
+                        dtype=stencil_param.dtype,
+                        size=stencil_param.size,
+                        # closure input and stencil param differ in `current_loc`
+                        current_loc=ANYWHERE,
+                        defined_loc=stencil_param.defined_loc,
+                    ),
+                )
+            )
+            stencil_params.append(stencil_param)
+
         self.constraints.add(
             (
                 stencil,
-                FunctionType(args=inputs, ret=Val(kind=Value(), dtype=output_dtype, size=Column())),
+                FunctionType(
+                    args=Tuple.from_elems(*stencil_params),
+                    ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
+                ),
             )
         )
-        return Closure(output=output, inputs=inputs)
+        return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
     def visit_FencilDefinition(
         self,
@@ -812,13 +849,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         params = [self.visit(p, **kwargs) for p in node.params]
         self.visit(node.closures, **kwargs)
         return FencilDefinitionType(
-            name=node.id,
+            name=str(node.id),
             fundefs=Tuple.from_elems(*ftypes),
             params=Tuple.from_elems(*params),
         )
 
 
-def _infer_all(
+def infer_all(
     node: ir.Node,
     offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
     reindex: bool = True,
@@ -849,7 +886,7 @@ def infer(
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    inferred_types = _infer_all(expr, offset_provider)
+    inferred_types = infer_all(expr, offset_provider)
     return inferred_types[id(expr)]
 
 
