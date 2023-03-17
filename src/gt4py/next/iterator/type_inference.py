@@ -430,10 +430,20 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 "cartesian_domain",
                 "unstructured_domain",
                 "cast_",
-                ir.TYPEBUILTINS,
             ):
                 raise TypeError(
-                    f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
+                    f"Builtin '{node.id}' is only allowed as applied/called function by the type "
+                    f"inference."
+                )
+            elif node.id in ir.TYPEBUILTINS:
+                # TODO(tehrengruber): Implement propagating types of values referring to types, e.g.
+                #   >>> my_int = int64
+                #   ... cast_(expr, my_int)
+                #  One way to support this is by introducing a "type of type" similar to pythons
+                #  `typing.Type`.
+                raise NotImplementedError(
+                    f"Type builtin '{node.id}' is only supported as literal argument by the "
+                    f"type inference."
                 )
             else:
                 raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
