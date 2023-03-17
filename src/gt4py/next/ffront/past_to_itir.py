@@ -348,6 +348,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return itir.SymRef(id=node.id)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
+        # TODO(tehrengruber): extend to more types
+        if isinstance(node.type, ts.FieldType):
+            kind = "Iterator"
+            dtype = node.type.dtype.kind.name.lower()
+            return itir.Sym(id=node.id, kind=kind, dtype=dtype)
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:

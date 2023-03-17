@@ -249,6 +249,11 @@ class FieldOperatorLowering(NodeTranslator):
         return sym, expr
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
+        # TODO(tehrengruber): extend to more types
+        if isinstance(node.type, ts.FieldType):
+            kind = "Iterator"
+            dtype = node.type.dtype.kind.name.lower()
+            return itir.Sym(id=node.id, kind=kind, dtype=dtype)
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:

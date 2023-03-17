@@ -417,7 +417,25 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return result
 
     def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
-        return TypeVar.fresh()
+        result = TypeVar.fresh()
+        if node.kind:
+            kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
+            self.constraints.add(
+                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
+            )
+        if node.dtype:
+            assert node.dtype in ir.TYPEBUILTINS
+            self.constraints.add(
+                (
+                    Val(
+                        dtype=Primitive(name=node.dtype),
+                        current_loc=TypeVar.fresh(),
+                        defined_loc=TypeVar.fresh(),
+                    ),
+                    result,
+                )
+            )
+        return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
         if node.id in ir.BUILTINS:
