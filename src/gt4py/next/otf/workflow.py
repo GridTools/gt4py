@@ -142,7 +142,7 @@ class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
     ...    print("This might take a while...")
     ...    return x
 
-    >>> cached_step = CachedStep(heavy_computation)
+    >>> cached_step = CachedStep(step=heavy_computation)
 
     >>> cached_step(42)
     This might take a while...
@@ -157,13 +157,14 @@ class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
     1
     """
 
-    workflow: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
 
     _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
         hash_ = self.hash_function(inp)
-        if hash_ in self._cache:
-            return self._cache[hash_]
-        return self._cache.setdefault(hash_, self.workflow(inp))
+        try:
+            result = self._cache[hash_]
+        except KeyError:
+            result = self._cache[hash_] = self.step(inp)
+        return result
