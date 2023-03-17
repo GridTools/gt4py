@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Callable
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.common import DimensionKind
@@ -32,14 +32,16 @@ def is_local_kind(symbol_type: ts.FieldType) -> bool:
     return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
-def is_local_type_kind(type_):
+def is_local_type_kind(type_: ts.TypeSpec) -> bool:
     return any(
         isinstance(t, ts.FieldType) and is_local_kind(t)
         for t in type_info.primitive_constituents(type_)
     )
 
 
-def promote_to_list(node: foast.Symbol | foast.Expr):
+def promote_to_list(
+    node: foast.Symbol | foast.Expr,
+) -> Callable[[itir.Expr], itir.Expr]:
     if not is_local_type_kind(node.type):
         return lambda x: im.as_lifted_lambda("make_const_list", x)
     return lambda x: x
@@ -172,7 +174,7 @@ class FieldOperatorLowering(NodeTranslator):
         dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
-                raise AssertionError(f"{node.op} is only supported on `bool`s.")
+                raise NotImplementedError(f"{node.op} is only supported on `bool`s.")
             return self._map("not_", node.operand)
 
         return self._map(

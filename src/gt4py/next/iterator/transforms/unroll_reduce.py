@@ -137,7 +137,7 @@ class UnrollReduce(NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
-    def apply(cls, node: itir.Node, **kwargs):
+    def apply(cls, node: itir.Node, **kwargs) -> itir.Node:
         return cls().visit(node, **kwargs)
 
     def _visit_reduce(self, node: itir.FunCall, **kwargs) -> itir.Expr:
@@ -171,7 +171,7 @@ class UnrollReduce(NodeTranslator):
 
         return expr
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         node = self.generic_visit(node, **kwargs)
         if _is_reduce(node):
             return self._visit_reduce(node, **kwargs)
