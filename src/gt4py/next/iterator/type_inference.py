@@ -289,6 +289,8 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "mod": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "minimum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "maximum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "not_eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
     "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
@@ -418,26 +420,40 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return TypeVar.fresh()
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
-        if node.id in BUILTIN_TYPES:
-            return freshen(BUILTIN_TYPES[node.id])
-        if node.id in (
-            "make_tuple",
-            "tuple_get",
-            "shift",
-            "cartesian_domain",
-            "unstructured_domain",
-            "cast_",
-        ):
-            raise TypeError(
-                f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
-            )
-        if node.id in symtable:
-            res = self.collected_types[id(symtable[node.id])]
+        if node.id in ir.BUILTINS:
+            if node.id in BUILTIN_TYPES:
+                return freshen(BUILTIN_TYPES[node.id])
+            elif node.id in (
+                "make_tuple",
+                "tuple_get",
+                "shift",
+                "cartesian_domain",
+                "unstructured_domain",
+                "cast_",
+            ):
+                raise TypeError(
+                    f"Builtin '{node.id}' is only allowed as applied/called function by the type "
+                    f"inference."
+                )
+            elif node.id in ir.TYPEBUILTINS:
+                # TODO(tehrengruber): Implement propagating types of values referring to types, e.g.
+                #   >>> my_int = int64
+                #   ... cast_(expr, my_int)
+                #  One way to support this is by introducing a "type of type" similar to pythons
+                #  `typing.Type`.
+                raise NotImplementedError(
+                    f"Type builtin '{node.id}' is only supported as literal argument by the "
+                    f"type inference."
+                )
+            else:
+                raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
+        elif node.id in symtable:
+            sym_decl = symtable[node.id]
+            assert isinstance(sym_decl, TYPED_IR_NODES)
+            res = self.collected_types[id(sym_decl)]
             if isinstance(res, LetPolymorphic):
                 return freshen(res.dtype)
             return res
-        if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
-            raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()
 
