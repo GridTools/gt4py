@@ -139,7 +139,7 @@ class LocatedFieldImpl(MutableLocatedField):
     def shape(self):
         if self.array is None:
             raise TypeError("`shape` not supported for this field")
-        return self.array().shape
+        return self.array.shape
 
 
 @overload
