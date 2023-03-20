@@ -64,17 +64,16 @@ def test_copy():
     assert lowered.expr == im.ref("inp")
 
 
-# def test_scalar_arg():
-#     def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
-#         return alpha * bar
+def test_scalar_arg():
+    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+        return alpha * bar
 
-#     # ast_passes
-#     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
-#     lowered = FieldOperatorLowering.apply(parsed)
+    parsed = FieldOperatorParser.apply_to_function(scalar_arg)
+    lowered = FieldOperatorLowering.apply(parsed)
 
-#     reference = im.lift_(im.lambda__("bar")(im.multiplies_("alpha", im.deref_("bar"))))("bar")
+    reference = im.as_lifted_lambda("multiplies", "alpha", "bar")  # no difference to non-scalar arg
 
-#     assert lowered.expr == reference
+    assert lowered.expr == reference
 
 
 def test_multicopy():

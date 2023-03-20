@@ -11,7 +11,6 @@ tags: [iterator]
 
 What's the return type of a lifted stencil that has tuple return type? Is it tuple of iterator or iterator of tuple?
 
-
 ## Context
 
 Example
@@ -29,6 +28,7 @@ lift(stencil)()
 We return an iterator of tuples.
 
 There are several reasons why this is attractive:
+
 - At least for simple cases, the values returned from a stencil are most likely uniform and need to be treated uniformly, e.g. in a subsequent shift.
 - Implementation-wise, it is not straight-forward to implement tuple of iterators. E.g. on the Python-side the return type (tuple vs scalar) of the function is not known when `lift` is applied, i.e. when a lift-iterator needs to be constructed. The solution could be to execute-once arbitrary input then analyze the result (this would be ok, as our language doesn't have side-effects).
 - In general, transformations that remove unused elements are easier to implement than transformations that try to match things. See the following example.
@@ -60,6 +60,7 @@ def non_uniform(inp0,inp1,inp2):
 In a naive (non-optimized) implementation of the `non_uniform` case we pay for 4 extra shifts (ptr updates) that are not needed.
 
 ### Tuple of Iterators
+
 ```python
 def uniform(inp0, inp1, inp2):
     res = lift(foo)(inp0, inp1, inp2)

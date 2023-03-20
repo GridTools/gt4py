@@ -105,28 +105,28 @@ def _get_connectivity(
     return connectivities[0]
 
 
-def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr):
+def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
         fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets), args=[iterator]
     )
 
 
-def _make_deref(iterator: itir.Expr):
+def _make_deref(iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator])
 
 
-def _make_can_deref(iterator: itir.Expr):
+def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(fun=itir.SymRef(id="can_deref"), args=[iterator])
 
 
-def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
+def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
         fun=itir.SymRef(id="if_"),
         args=[cond, true_expr, false_expr],
     )
 
 
-def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.Expr:
+def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
 
 
@@ -137,7 +137,7 @@ class UnrollReduce(NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
-    def apply(cls, node: itir.Node, **kwargs):
+    def apply(cls, node: itir.Node, **kwargs) -> itir.Node:
         return cls().visit(node, **kwargs)
 
     def _visit_reduce(self, node: itir.FunCall, **kwargs) -> itir.Expr:
@@ -171,7 +171,7 @@ class UnrollReduce(NodeTranslator):
 
         return expr
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         node = self.generic_visit(node, **kwargs)
         if _is_reduce(node):
             return self._visit_reduce(node, **kwargs)

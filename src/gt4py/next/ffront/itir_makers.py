@@ -271,24 +271,50 @@ def shift_(offset, value=None):
     return call_(call_("shift")(*args))
 
 
+def literal_(value: str, typename: str):
+    """Create a `Literal` with `value` and `typename`."""
+    return itir.Literal(value=value, type=typename)
+
+
 def neighbors_(offset, it):
-    offset = ensure_offset(offset)  # TODO this function should not exist?
+    """Create a neighbors call."""
+    offset = ensure_offset(offset)
     return call_("neighbors")(offset, it)
 
 
 def lifted_neighbors(offset, it):
+    """
+    Create a lifted neighbors call.
+
+    Examples
+    --------
+    >>> str(lifted_neighbors("off", "a"))
+    '(↑(λ(it) → neighbors(offₒ, it)))(a)'
+    """
     return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
 
 
-def literal_(value: str, typename: str):
-    return itir.Literal(value=value, type=typename)
-
-
 def as_lifted_capture(expr: str | itir.Expr):
+    """
+    Create a lifted nullary lambda that captures `expr`.
+
+    Examples
+    --------
+    >>> as_lifted_capture("foo")
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('lift')), args=[Lambda(params=[], expr=SymRef(id=SymbolRef('foo')))]), args=[])
+    """
     return lift_(lambda__()(expr))()
 
 
 def as_lifted_lambda(op: str | Callable, *its):
+    """
+    Wrap `op` in a lifted lambda and call it with `*its`.
+
+    Examples
+    --------
+    >>> str(as_lifted_lambda("op", "a", "b"))
+    '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
     if isinstance(op, (str, itir.SymRef)):
         op = call_(op)
     args = [f"__arg{i}" for i in range(len(its))]
@@ -296,4 +322,5 @@ def as_lifted_lambda(op: str | Callable, *its):
 
 
 def map__(op):
+    """Create a `map_` call."""
     return call_(call_("map_")(op))

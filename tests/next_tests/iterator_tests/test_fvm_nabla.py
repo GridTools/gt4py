@@ -82,7 +82,6 @@ def compute_zavgS_fencil(
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
     pnabla_M = library.dot(neighbors(V2E, zavgS), deref(sign))
-    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(neighbors(V2E)(zavgS), deref(sign))
     return pnabla_M / deref(vol)
 
 
@@ -377,7 +376,6 @@ def test_nabla_sign(program_processor, lift_mode):
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
-    # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
     is_pole_edge = np_as_located_field(Edge)(setup.is_pole_edge_field)
     pp = np_as_located_field(Vertex)(setup.input_field)
     S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))

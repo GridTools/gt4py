@@ -352,7 +352,9 @@ def test_higher_dimensional_fields(backend):
 def test_input_order(backend):
     @gtscript.stencil(backend=backend)
     def stencil(
-        in_field: gtscript.Field[np.float], parameter: np.float, out_field: gtscript.Field[np.float]
+        in_field: gtscript.Field[np.float64],
+        parameter: np.float64,
+        out_field: gtscript.Field[np.float64],
     ):
         with computation(PARALLEL), interval(...):
             out_field = in_field * parameter

@@ -29,6 +29,7 @@ pip install git+https://github.com/gridtools/gt4py.git@functional
 ### Key concepts and application structure
 
 This section introduces three concepts for storing and manipulating data:
+
 - [Fields](#Fields),
 - [Field operators](#Field-operators), and
 - [Programs](#Programs).
@@ -52,7 +53,7 @@ from gt4py.next.iterator.embedded import np_as_located_field, NeighborTableOffse
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, *cell* and *K*, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 CellDim = Dimension("Cell")
@@ -68,7 +69,7 @@ a = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_va
 b = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
 ```
 
-*Note: The interface to construct fields is provisional only and will change soon.*
+_Note: The interface to construct fields is provisional only and will change soon._
 
 +++
 
@@ -122,13 +123,13 @@ print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.as
 
 #### Composing field operators and programs
 
-When writing complex applications, you have to decompose it into *field operators*, *programs*, and Python (or other) code that glues it all together. The general advice is to follow best practices and write short and concise field operators that serve a single purpose. To maximise automatic optimization, use external glue code sparingly and group your field operators inside *programs* as much as you can. Consequently, directly calling field operators is primarily used for debugging purposes.
+When writing complex applications, you have to decompose it into _field operators_, _programs_, and Python (or other) code that glues it all together. The general advice is to follow best practices and write short and concise field operators that serve a single purpose. To maximise automatic optimization, use external glue code sparingly and group your field operators inside _programs_ as much as you can. Consequently, directly calling field operators is primarily used for debugging purposes.
 
 +++
 
 ### Operations on unstructured meshes
 
-This section introduces additional APIs through a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. Within the context of this guide, we define the *pseudo-laplacian* for a cell as the sum of the *edge differences* around the cell. For example, the pseudo-laplacian for cell \#1, which is surrounded by edges \#7, \#8 and \#9, is expressed by the formula:
+This section introduces additional APIs through a slightly more elaborate application that performs a laplacian-like operation on an unstructured mesh. Within the context of this guide, we define the _pseudo-laplacian_ for a cell as the sum of the _edge differences_ around the cell. For example, the pseudo-laplacian for cell \#1, which is surrounded by edges \#7, \#8 and \#9, is expressed by the formula:
 
 $$\begin{aligned}\text{pseudolap}(cell_1) =\,& \text{edge_diff}_7 + \text{edge_diff}_8 + \text{edge_diff}_9 \end{aligned}$$.
 
@@ -139,6 +140,7 @@ $$\begin{aligned} \text{edge_diff}_7 =\,& \text{edge_diff}_{0,1} = \text{value_o
 The sign of the edge difference in the sum of the pseudo-laplacian is always such that the neighbor cell is subtracted from the subject cell, not the other way around.
 
 This section approaches the pseudo-laplacian by introducing the required APIs progressively through the following subsections:
+
 - [Defining the mesh and the connectivities (adjacencies) between cells and edges](#Defining-the-mesh-and-its-connectivities)
 - [Using connectivities in field operators](#Using-connectivities-in-field-operators)
 - [Using reductions on connected mesh elements](#Using-reductions-on-connected-mesh-elements)
@@ -151,8 +153,8 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
 
 | ![grid_topo](connectivity_numbered_grid.svg) |
-|:--:| 
-| *The mesh with the indices* |
+| :------------------------------------------: |
+|         _The mesh with the indices_          |
 
 +++
 
@@ -204,15 +206,15 @@ cell_values = np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.
 edge_values = np_as_located_field(EdgeDim)(np.zeros((12,)))
 ```
 
-| ![cell_values](connectivity_cell_field.svg) | 
-|:--:| 
-| *Cell values* |
+| ![cell_values](connectivity_cell_field.svg) |
+| :-----------------------------------------: |
+|                _Cell values_                |
 
 +++
 
-You can transform fields (or tuples of fields) over one domain to another domain by using the call operator of the source field with a *field offset* as argument. This transform uses the connectivity between the source and target domains to find the values of adjacent mesh elements.
+You can transform fields (or tuples of fields) over one domain to another domain by using the call operator of the source field with a _field offset_ as argument. This transform uses the connectivity between the source and target domains to find the values of adjacent mesh elements.
 
-To understand this transform, you can look at the edge-to-cell connectivity table `edge_to_cell_table` listed above. This table has the same shape as the output of the transform, that is, one dimension over the edges and another *local* dimension. The table stores indices into a field over cells, the transform essentially gives you another field where the indices have been replaced with the values in the cell field at the corresponding indices.
+To understand this transform, you can look at the edge-to-cell connectivity table `edge_to_cell_table` listed above. This table has the same shape as the output of the transform, that is, one dimension over the edges and another _local_ dimension. The table stores indices into a field over cells, the transform essentially gives you another field where the indices have been replaced with the values in the cell field at the corresponding indices.
 
 Another way to look at it is that transform uses the edge-to-cell connectivity to look up all the cell neighbors of edges, and associates the values of those neighbor cells with each edge.
 
@@ -223,7 +225,7 @@ E2CDim = Dimension("E2C", kind=DimensionKind.LOCAL)
 E2C = FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 ```
 
-Note that the field offset does not contain the actual connectivity table, that's provided through an *offset provider*:
+Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
 E2C_offset_provider = NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
@@ -250,8 +252,8 @@ print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
 Running the above snippet results in the following edge field:
 
 | ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](connectivity_edge_0th_cell.svg) |
-|:--:| :--: | :--: |
-| *Domain (edges)* |  | *Edge values* |
+| :----------------------------------------------------: | :-------: | :------------------------------------------: |
+|                    _Domain (edges)_                    |           |                _Edge values_                 |
 
 +++
 
@@ -268,7 +270,7 @@ def sum_adjacent_cells(cells : Field[[CellDim], float64]) -> Field[[EdgeDim], fl
 @program
 def run_sum_adjacent_cells(cells : Field[[CellDim], float64], out : Field[[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
-    
+
 run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
 print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
@@ -277,21 +279,22 @@ print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
 | ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](connectivity_edge_cell_sum.svg) |
-|:--:| :--: | :--: |
-| *Domain (edges)* |  | *Edge values* |
+| :----------------------------------------------------: | :-------: | :--------------------------------------------: |
+|                    _Domain (edges)_                    |           |                 _Edge values_                  |
 
-+++ 
++++
 
 #### Using conditionals on fields
 
 Additionally to the `neighbor_sum` function, other builtins have been implemented. One of these is the `where`.
 This function takes 3 input arguments:
- - mask: a field with dtype boolean
- - true branch: a tuple, a field, or a scalar
- - false branch: a tuple, a field, of a scalar
-The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
-The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch. 
-In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
+
+- mask: a field with dtype boolean
+- true branch: a tuple, a field, or a scalar
+- false branch: a tuple, a field, of a scalar
+  The mask can be directly a field of booleans (e.g. `Field[[CellDim], bool]`) or an expression evaluating to this type (e.g. `Field[[CellDim], float64] > 3`).
+  The `where` builtin loops over each entry of the mask and returns values corresponding to the same indexes of either the true or the false branch.
+  In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
 
 ```{code-cell} ipython3
 mask = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
@@ -302,7 +305,7 @@ b = 6.0
 def conditional(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
 ) -> Field[[CellDim, KDim], float64]:
     return where(mask, a, b)
-    
+
 conditional(mask, a, b, out=result_where, offset_provider={})
 print("where return: {}".format(np.asarray(result_where)))
 ```
@@ -319,20 +322,20 @@ result_2 = np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
 def _conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float
 ) -> tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]]:
     return where(mask, (a, b), (b, a))
-    
+
 @program
-def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float, 
+def conditional_tuple(mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: float,
 result_1: Field[[CellDim, KDim], float64], result_2: Field[[CellDim, KDim], float64]
 ):
      _conditional_tuple(mask, a, b, out=(result_1, result_2))
-    
+
 conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
 print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
 ```
 
-The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling: 
+The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling:
 
-```where(mask, ((a, b), (b, a)), ((c, d), (d, c)))``` --> ```where(mask, (a, b), (c, d))``` and ```where(mask, (b, a), (d, c))```
+`where(mask, ((a, b), (b, a)), ((c, d), (d, c)))` --> `where(mask, (a, b), (c, d))` and `where(mask, (b, a), (d, c))`
 
 and then combine results to match the return type:
 
@@ -353,7 +356,7 @@ def _conditional_tuple_nested(
     tuple[Field[[CellDim, KDim], float64], Field[[CellDim, KDim], float64]],
 ]:
     return where(mask, ((a, b), (b, a)), ((c, d), (d, c)))
-    
+
 @program
 def conditional_tuple_nested(
     mask: Field[[CellDim, KDim], bool], a: Field[[CellDim, KDim], float64], b: Field[[CellDim, KDim], float64], c: Field[[CellDim, KDim], float64], d: Field[[CellDim, KDim], float64],
