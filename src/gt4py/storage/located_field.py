@@ -14,18 +14,7 @@
 
 import abc
 from numbers import Integral
-from typing import (
-    Any,
-    Callable,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    TypeGuard,
-    Union,
-    overload,
-    runtime_checkable,
-)
+from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, Union, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -49,11 +38,11 @@ ArrayIndex: xtyping.TypeAlias = slice | IntIndex
 ArrayIndexOrIndices: xtyping.TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 
 
-def is_int_index(p: Any) -> TypeGuard[IntIndex]:
+def is_int_index(p: Any) -> xtyping.TypeGuard[IntIndex]:
     return isinstance(p, Integral)
 
 
-@runtime_checkable
+@xtyping.runtime_checkable
 class LocatedField(StorageProtocol, Protocol):
     """A field with named dimensions providing read access."""
 
