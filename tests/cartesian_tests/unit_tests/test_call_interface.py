@@ -241,7 +241,7 @@ def test_halo_checks(backend):
         )
     )
     stencil(in_field=in_field, out_field=out_field)
-    assert (out_field.array()[1:-1, 1:-1, :] == 1).all()
+    assert (np.asarray(out_field)[1:-1, 1:-1, :] == 1).all()
 
     # test setting arbitrary, small domain works
     in_field = array_as_located_field(*"IJK", origin=(1, 1, 0))(
@@ -255,7 +255,7 @@ def test_halo_checks(backend):
         ),
     )
     stencil(in_field=in_field, out_field=out_field, origin=(2, 2, 0), domain=(10, 10, 10))
-    assert (out_field.array()[2:12, 2:12, :] == 1).all()
+    assert (np.asarray(out_field)[2:12, 2:12, :] == 1).all()
 
     # test setting domain+origin too large raises
     in_field = array_as_located_field(
