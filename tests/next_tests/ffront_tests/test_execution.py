@@ -107,7 +107,7 @@ def test_cartesian_shift(fieldview_backend):
 
     fencil(a, out_I_float, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(out_I_float.array(), np.arange(1, 11))
+    assert np.allclose(out_I_float.array, np.arange(1, 11))
 
 
 def test_unstructured_shift(reduction_setup, fieldview_backend):
@@ -139,7 +139,7 @@ def test_fold_shifts(fieldview_backend):
         storage.from_array(np.arange(size + 1, dtype=np.float64), backend=fieldview_backend.name)
     )
     b = array_as_located_field(IDim)(
-        storage.full((size + 2), fill_value=2, backend=fieldview_backend.name)
+        storage.full((size + 2), fill_value=2, dtype=np.float64, backend=fieldview_backend.name)
     )
     out_I_float = array_as_located_field(IDim)(
         storage.zeros((size), dtype=float64, backend=fieldview_backend.name)
@@ -190,7 +190,7 @@ def test_tuples(fieldview_backend):
 
     fencil(a_I_float, b_I_float, out_I_float, offset_provider={})
 
-    assert np.allclose((a_I_float.array() * 1.3 + b_I_float.array() * 5.0) * 3.4, out_I_float)
+    assert np.allclose((a_I_float.array * 1.3 + b_I_float.array * 5.0) * 3.4, out_I_float)
 
 
 def test_scalar_arg(fieldview_backend):
@@ -205,7 +205,7 @@ def test_scalar_arg(fieldview_backend):
     scalar_arg(inp, out=out, offset_provider={})
 
     ref = np.full([size], 6.0)
-    assert np.allclose(ref, out.array())
+    assert np.allclose(ref, out.array)
 
 
 def test_nested_scalar_arg(fieldview_backend):
@@ -223,7 +223,7 @@ def test_nested_scalar_arg(fieldview_backend):
     scalar_arg(inp, out=out, offset_provider={})
 
     ref = np.full([size], 7.0)
-    assert np.allclose(ref, out.array())
+    assert np.allclose(ref, out.array)
 
 
 def test_scalar_arg_with_field(fieldview_backend):
@@ -250,7 +250,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     fencil(out, inp, factor, offset_provider={"EdgeOffset": Edge})
 
     ref = np.arange(1, size + 1) * factor
-    assert np.allclose(ref, out.array())
+    assert np.allclose(ref, out.array)
 
 
 def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
@@ -275,7 +275,7 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
 
     bar(size, out, offset_provider={})
 
-    assert (out.array() == size).all()
+    assert (out.array == size).all()
 
 
 def test_scalar_scan(fieldview_backend):
@@ -354,7 +354,7 @@ def test_astype_int(fieldview_backend):
         return d
 
     astype_fieldop_int(b_float_64, out=out_int_64, offset_provider={})
-    assert np.allclose(c_int64.array(), out_int_64)
+    assert np.allclose(c_int64.array, out_int_64)
 
 
 def test_astype_bool(fieldview_backend):
@@ -394,7 +394,7 @@ def test_astype_float(fieldview_backend):
         return d
 
     astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
-    assert np.allclose(c_int32.array(), out_int_32)
+    assert np.allclose(c_int32.array, out_int_32)
 
 
 def test_offset_field(fieldview_backend):
@@ -447,7 +447,7 @@ def test_offset_field(fieldview_backend):
         a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
     )
     assert np.allclose(
-        out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
+        out_I_float.array[: size - 1, : size - 1], out_I_float_1.array[: size - 1, : size - 1]
     )
 
 
@@ -475,7 +475,7 @@ def test_nested_tuple_return(fieldview_backend):
 
     combine(a_I_float, b_I_float, out=out_I_float, offset_provider={})
 
-    assert np.allclose(2 * a_I_float.array() + b_I_float.array(), out_I_float)
+    assert np.allclose(2 * a_I_float.array + b_I_float.array, out_I_float)
 
 
 def test_tuple_return_2(reduction_setup, fieldview_backend):
@@ -567,7 +567,7 @@ def test_tuple_arg(fieldview_backend):
 
     unpack_tuple(((a_I_float, b_I_float), a_I_float), out=out_I_float, offset_provider={})
 
-    assert np.allclose(3 * a_I_float.array() + b_I_float.array() + a_I_float.array(), out_I_float)
+    assert np.allclose(3 * a_I_float.array + b_I_float.array + a_I_float.array, out_I_float)
 
 
 @pytest.mark.parametrize("forward", [True, False])
@@ -1050,7 +1050,7 @@ def test_tuple_unpacking(fieldview_backend):
 
     unpack(inp, out=(out1, out2, out3, out4), offset_provider={})
 
-    arr = inp.array()
+    arr = inp.array
 
     assert np.allclose(out1, arr + 2.0)
     assert np.allclose(out2, arr + 3.0)
@@ -1099,7 +1099,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
     unpack(inp, out=out, offset_provider={})
 
     for i in range(3 * 4):
-        assert np.allclose(out[i], inp.array() + i)
+        assert np.allclose(out[i], inp.array + i)
 
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):

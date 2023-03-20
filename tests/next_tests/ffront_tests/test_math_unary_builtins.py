@@ -55,7 +55,7 @@ def test_arithmetic(fieldview_backend):
         return (inp1 + inp2 / 3.0 - inp2) * 2.0
 
     arithmetic(a_I_float, b_I_float, out=out_I_float, offset_provider={})
-    expected = (a_I_float.array() + b_I_float.array() / 3.0 - b_I_float.array()) * 2.0
+    expected = (a_I_float.array + b_I_float.array / 3.0 - b_I_float.array) * 2.0
     assert np.allclose(expected, out_I_float)
 
 
@@ -68,7 +68,7 @@ def test_power(fieldview_backend):
         return inp1**2
 
     pow(a_I_float, out=out_I_float, offset_provider={})
-    assert np.allclose(a_I_float.array() ** 2, out_I_float)
+    assert np.allclose(a_I_float.array**2, out_I_float)
 
 
 def test_floordiv(fieldview_backend):
@@ -83,7 +83,7 @@ def test_floordiv(fieldview_backend):
         return inp1 // 2
 
     floorDiv(a_I_int, out=out_I_int, offset_provider={})
-    assert np.allclose(a_I_int.array() // 2, out_I_int)
+    assert np.allclose(a_I_int.array // 2, out_I_int)
 
 
 def test_mod(fieldview_backend):
@@ -98,7 +98,7 @@ def test_mod(fieldview_backend):
         return inp1 % 2
 
     mod_fieldop(a_I_int, out=out_I_int, offset_provider={})
-    assert np.allclose(a_I_int.array() % 2, out_I_int)
+    assert np.allclose(a_I_int.array % 2, out_I_int)
 
 
 def test_bit_xor(fieldview_backend):
@@ -111,7 +111,7 @@ def test_bit_xor(fieldview_backend):
         return inp1 ^ inp2
 
     binary_xor(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
-    assert np.allclose(a_I_bool.array() ^ b_I_bool.array(), out_I_bool)
+    assert np.allclose(a_I_bool.array ^ b_I_bool.array, out_I_bool)
 
 
 def test_bit_and(fieldview_backend):
@@ -124,7 +124,7 @@ def test_bit_and(fieldview_backend):
         return inp1 & inp2 & True
 
     bit_and(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
-    assert np.allclose(a_I_bool.array() & b_I_bool.array(), out_I_bool)
+    assert np.allclose(a_I_bool.array & b_I_bool.array, out_I_bool)
 
 
 def test_bit_or(fieldview_backend):
@@ -137,7 +137,7 @@ def test_bit_or(fieldview_backend):
         return inp1 | inp2 | True
 
     bit_or(a_I_bool, b_I_bool, out=out_I_bool, offset_provider={})
-    assert np.allclose(a_I_bool.array() | b_I_bool.array(), out_I_bool)
+    assert np.allclose(a_I_bool.array | b_I_bool.array, out_I_bool)
 
 
 # Unary builtins
@@ -152,7 +152,7 @@ def test_unary_neg(fieldview_backend):
         return -inp
 
     uneg(a_I_int, out=out_I_int, offset_provider={})
-    assert np.allclose(-a_I_int.array(), out_I_int)
+    assert np.allclose(-a_I_int.array, out_I_int)
 
 
 def test_unary_invert(fieldview_backend):
@@ -164,7 +164,7 @@ def test_unary_invert(fieldview_backend):
         return ~inp1
 
     tilde_fieldop(a_I_bool, out=out_I_bool, offset_provider={})
-    assert np.allclose(~a_I_bool.array(), out_I_bool)
+    assert np.allclose(~a_I_bool.array, out_I_bool)
 
 
 def test_unary_not(fieldview_backend):
@@ -176,7 +176,7 @@ def test_unary_not(fieldview_backend):
         return not inp1
 
     not_fieldop(a_I_bool, out=out_I_bool, offset_provider={})
-    assert np.allclose(~a_I_bool.array(), out_I_bool)
+    assert np.allclose(~a_I_bool.array, out_I_bool)
 
 
 # Trig builtins

@@ -31,11 +31,10 @@ from .ffront_test_utils import *
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    rs = reduction_setup
-    fieldview_backend = rs.backend
     if fieldview_backend in [gtfn_cpu.run_gtfn or fieldview_backend, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("not yet supported.")
 
+    rs = reduction_setup
     Vertex, V2EDim = rs.Vertex, rs.V2EDim
     inp_field = array_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
@@ -173,7 +172,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
 
     ref = 3 * np.sum(-(rs.v2e_table**2) * 2, axis=1)
-    assert np.allclose(ref, rs.out.array())
+    assert np.allclose(ref, rs.out.array)
 
 
 def test_conditional_nested_tuple(fieldview_backend):
@@ -221,7 +220,7 @@ def test_broadcast_simple(fieldview_backend):
 
     simple_broadcast(a_I_int, out=out_IJ_int, offset_provider={})
 
-    assert np.allclose(a_I_int.array()[:, np.newaxis], out_IJ_int)
+    assert np.allclose(a_I_int.array[:, np.newaxis], out_IJ_int)
 
 
 def test_broadcast_scalar(fieldview_backend):
@@ -251,7 +250,7 @@ def test_broadcast_two_fields(fieldview_backend):
 
     broadcast_two_fields(a_I_int, b_J_int, out=out_IJ_int, offset_provider={})
 
-    expected = a_I_int.array()[:, np.newaxis] + b_J_int.array()[np.newaxis, :]
+    expected = a_I_int.array[:, np.newaxis] + b_J_int.array[np.newaxis, :]
 
     assert np.allclose(expected, out_IJ_int)
 
@@ -267,7 +266,7 @@ def test_broadcast_shifted(fieldview_backend):
 
     simple_broadcast(a_I_int, out=out_IJ_int, offset_provider={"Joff": JDim})
 
-    assert np.allclose(a_I_int.array()[:, np.newaxis], out_IJ_int)
+    assert np.allclose(a_I_int.array[:, np.newaxis], out_IJ_int)
 
 
 def test_conditional(fieldview_backend):
@@ -342,7 +341,7 @@ def test_conditional_shifted(fieldview_backend):
 
     conditional_program(mask, a_I_float, b_I_float, out_I_float, offset_provider={"Ioff": IDim})
 
-    assert np.allclose(np.where(mask, a_I_float, b_I_float)[1:], out_I_float.array()[:-1])
+    assert np.allclose(np.where(mask, a_I_float, b_I_float)[1:], out_I_float.array[:-1])
 
 
 def test_promotion(fieldview_backend):
@@ -359,4 +358,4 @@ def test_promotion(fieldview_backend):
 
     promotion(a, b, out=c, offset_provider={})
 
-    assert np.allclose((a.array() / b.array()), c)
+    assert np.allclose((a.array / b.array), c)
