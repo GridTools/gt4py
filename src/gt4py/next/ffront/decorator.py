@@ -687,10 +687,11 @@ def scan_operator(
     Examples:
         >>> import numpy as np
         >>> from gt4py.next.iterator import embedded
+        >>> from gt4py.storage.located_field import array_as_located_field
         >>> embedded._column_range = 1  # implementation detail
         >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-        >>> inp = embedded.array_as_located_field(KDim)(np.ones((10,)))
-        >>> out = embedded.array_as_located_field(KDim)(np.zeros((10,)))
+        >>> inp = array_as_located_field(KDim)(np.ones((10,)))
+        >>> out = array_as_located_field(KDim)(np.zeros((10,)))
         >>> @scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val

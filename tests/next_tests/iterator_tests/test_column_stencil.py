@@ -164,7 +164,7 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     )
 
     if validate:
-        assert np.allclose(reference, np.asarray(out))
+        assert np.allclose(reference, out.array)
 
 
 @fundef
@@ -202,7 +202,7 @@ def test_ksum_back_scan(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(ref, np.asarray(out))
+        assert np.allclose(ref, out.array)
 
 
 @fundef
@@ -272,7 +272,7 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
 
     if validate:
         for n in reference.dtype.names:
-            assert np.allclose(reference[n], np.asarray(out)[n])
+            assert np.allclose(reference[n], out.array[n])
 
 
 @fundef

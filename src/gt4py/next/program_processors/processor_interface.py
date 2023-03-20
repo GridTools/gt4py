@@ -87,7 +87,7 @@ def program_executor(
 
     Examples:
     ---------
-    >>> @program_executor
+    >>> @program_executor('badly_execute')
     ... def badly_execute(fencil: itir.FencilDefinition, *args, **kwargs) -> None:
     ...     '''A useless and incorrect fencil executor.'''
     ...     pass
