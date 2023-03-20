@@ -104,18 +104,18 @@ class LocatedFieldImpl(MutableLocatedField):
         return None
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
-        return self.array()[indices]
+        return self.array[indices]
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         indices = utils.tupelize(indices)
-        return self.getter(indices)
+        return self._getter(indices)
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
-        self.array()[indices] = value
+        self.array[indices] = value
 
     def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
-        self.setter(indices, value)
+        self._setter(indices, value)
 
     @property
     def array(self):
