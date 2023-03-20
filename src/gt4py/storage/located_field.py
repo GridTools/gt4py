@@ -14,28 +14,28 @@
 
 import abc
 from numbers import Integral
-from typing import Any, Callable, Optional, Protocol, Sequence, Tuple, Union, overload
+from typing import Any, Callable, Dict, Optional, Protocol, Sequence, Tuple, Union, overload
 
 import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next.iterator import utils
 
+from . import utils
 from .protocol import DimensionIdentifier, StorageProtocol
 
 
 IntIndex: xtyping.TypeAlias = Integral
 
-FieldIndex: xtyping.TypeAlias = (
-    range | slice | IntIndex
-)  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
-FieldIndices: xtyping.TypeAlias = tuple[FieldIndex, ...]
-FieldIndexOrIndices: xtyping.TypeAlias = FieldIndex | FieldIndices
+FieldIndex: xtyping.TypeAlias = Union[
+    range, slice, IntIndex
+]  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
+FieldIndices: xtyping.TypeAlias = Tuple[FieldIndex, ...]
+FieldIndexOrIndices: xtyping.TypeAlias = Union[FieldIndex, FieldIndices]
 
 
-ArrayIndex: xtyping.TypeAlias = slice | IntIndex
-ArrayIndexOrIndices: xtyping.TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
+ArrayIndex: xtyping.TypeAlias = Union[slice, IntIndex]
+ArrayIndexOrIndices: xtyping.TypeAlias = Union[ArrayIndex, Tuple[ArrayIndex, ...]]
 
 
 def is_int_index(p: Any) -> xtyping.TypeGuard[IntIndex]:
@@ -48,7 +48,7 @@ class LocatedField(StorageProtocol, Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_dims__(self) -> tuple[DimensionIdentifier, ...]:
+    def __gt_dims__(self) -> Tuple[DimensionIdentifier, ...]:
         ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
@@ -70,13 +70,13 @@ class LocatedFieldImpl(MutableLocatedField):
     """A Field with named dimensions/axes."""
 
     @property
-    def __gt_dims__(self) -> tuple[DimensionIdentifier, ...]:
+    def __gt_dims__(self) -> Tuple[DimensionIdentifier, ...]:
         return self._axes
 
     def __init__(
         self,
         getter: Callable[[FieldIndexOrIndices], Any],
-        axes: tuple[DimensionIdentifier, ...],
+        axes: Tuple[DimensionIdentifier, ...],
         dtype,
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
@@ -152,7 +152,7 @@ def _shift_range(range_or_index: IntIndex, offset: int) -> IntIndex:
     ...
 
 
-def _shift_range(range_or_index: range | IntIndex, offset: int) -> ArrayIndex:
+def _shift_range(range_or_index: Union[range, IntIndex], offset: int) -> ArrayIndex:
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
@@ -172,7 +172,7 @@ def _range2slice(r: IntIndex) -> IntIndex:
     ...
 
 
-def _range2slice(r: range | IntIndex) -> slice | IntIndex:
+def _range2slice(r: Union[range, IntIndex]) -> Union[slice, IntIndex]:
     if isinstance(r, range):
         assert r.start >= 0 and r.stop >= r.start
         return slice(r.start, r.stop)
@@ -180,9 +180,9 @@ def _range2slice(r: range | IntIndex) -> slice | IntIndex:
 
 
 def _shift_field_indices(
-    ranges_or_indices: tuple[range | IntIndex, ...],
-    offsets: tuple[int, ...],
-) -> tuple[ArrayIndex, ...]:
+    ranges_or_indices: Tuple[Union[range, IntIndex], ...],
+    offsets: Tuple[int, ...],
+) -> Tuple[ArrayIndex, ...]:
     return tuple(
         _range2slice(r) if o == 0 else _shift_range(r, o)
         for r, o in zip(ranges_or_indices, offsets)
@@ -191,7 +191,7 @@ def _shift_field_indices(
 
 def array_as_located_field(
     *axes: DimensionIdentifier,
-    origin: Optional[Union[dict[DimensionIdentifier, int], Sequence[int]]] = None,
+    origin: Optional[Union[Dict[DimensionIdentifier, int], Sequence[int]]] = None,
 ) -> Callable[[np.ndarray], LocatedFieldImpl]:
     if origin is not None and not len(axes) == len(origin):
         raise ValueError(f"axes and origin do not match ({len(axes)}!={len(origin)})")
@@ -227,7 +227,7 @@ class IndexField(LocatedField):
             return self.dtype.type(index[0])
 
     @property
-    def __gt_dims__(self) -> tuple[DimensionIdentifier, ...]:
+    def __gt_dims__(self) -> Tuple[DimensionIdentifier, ...]:
         return (self.axis,)
 
 
@@ -244,7 +244,7 @@ class ConstantField(LocatedField):
         return self.dtype(self.value)
 
     @property
-    def __gt_dims__(self) -> tuple[()]:
+    def __gt_dims__(self) -> Tuple[()]:
         return ()
 
 

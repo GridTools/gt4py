@@ -322,3 +322,10 @@ def get_origin(obj: Union[GtDimsInterface, npt.NDArray]) -> Optional[Tuple[int, 
     if origin is None:
         return origin
     return tuple(int(o) for o in origin)
+
+
+def tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
