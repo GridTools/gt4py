@@ -21,7 +21,6 @@ from typing import (
     Protocol,
     Sequence,
     Tuple,
-    TypeAlias,
     TypeGuard,
     Union,
     overload,
@@ -37,17 +36,17 @@ from gt4py.next.iterator import utils
 from .protocol import DimensionIdentifier, StorageProtocol
 
 
-IntIndex: TypeAlias = Integral
+IntIndex: xtyping.TypeAlias = Integral
 
-FieldIndex: TypeAlias = (
+FieldIndex: xtyping.TypeAlias = (
     range | slice | IntIndex
 )  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
-FieldIndices: TypeAlias = tuple[FieldIndex, ...]
-FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
+FieldIndices: xtyping.TypeAlias = tuple[FieldIndex, ...]
+FieldIndexOrIndices: xtyping.TypeAlias = FieldIndex | FieldIndices
 
 
-ArrayIndex: TypeAlias = slice | IntIndex
-ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
+ArrayIndex: xtyping.TypeAlias = slice | IntIndex
+ArrayIndexOrIndices: xtyping.TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
