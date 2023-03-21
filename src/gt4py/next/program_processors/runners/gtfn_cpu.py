@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Any, Callable, Final, Optional
+from typing import Any, Callable, Final
 
 import numpy as np
 import numpy.typing as npt
@@ -91,11 +91,11 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNExecutor(ppi.ProgramExecutor):
+    name: str
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
-    name: Optional[str] = None
 
     # TODO(tehrengruber): Revisit default value. The hash function for the caching currently
     #  only uses a subset of the closure and implicitly relies on the workflow to only use that

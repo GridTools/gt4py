@@ -26,10 +26,10 @@ from .typing import (
     ArrayIndexOrIndices,
     ArrayLike,
     DimensionIdentifier,
+    DTypeLike,
     FieldIndexOrIndices,
     IntIndex,
     LocatedField,
-    MutableLocatedField,
 )
 
 
@@ -37,7 +37,7 @@ def is_int_index(p: Any) -> xtyping.TypeGuard[IntIndex]:
     return isinstance(p, Integral)
 
 
-class LocatedFieldImpl(MutableLocatedField):
+class LocatedFieldImpl:
     """A Field with named dimensions/axes."""
 
     @property
@@ -48,11 +48,11 @@ class LocatedFieldImpl(MutableLocatedField):
         self,
         getter: Callable[[FieldIndexOrIndices], Any],
         axes: Tuple[DimensionIdentifier, ...],
-        dtype,
+        dtype: DTypeLike,
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: ArrayLike,
-        origin: Optional[Tuple[IntIndex, ...]] = None,
+        origin: Optional[Sequence[IntIndex]] = None,
     ):
         self._getter = getter
         self._axes = axes
@@ -61,7 +61,7 @@ class LocatedFieldImpl(MutableLocatedField):
         self.dtype = dtype
 
         if origin is not None:
-            self.__gt_origin__ = origin
+            self.__gt_origin__ = utils.tupelize(origin)
 
     def __getattr__(self, item):
         return getattr(self._array, item)
@@ -82,10 +82,10 @@ class LocatedFieldImpl(MutableLocatedField):
         indices = utils.tupelize(indices)
         return self._getter(indices)
 
-    def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
+    def __setitem__(self, indices: ArrayIndexOrIndices, value: Any) -> None:
         self.array[indices] = value
 
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
+    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         self._setter(indices, value)
 
     @property
@@ -162,25 +162,35 @@ def _shift_field_indices(
 
 def array_as_located_field(
     *axes: DimensionIdentifier,
-    origin: Optional[Union[Dict[DimensionIdentifier, int], Sequence[int]]] = None,
+    origin: Optional[Union[Dict[DimensionIdentifier, IntIndex], Sequence[IntIndex]]] = None,
 ) -> Callable[[np.ndarray], LocatedFieldImpl]:
     if origin is not None and not len(axes) == len(origin):
         raise ValueError(f"axes and origin do not match ({len(axes)}!={len(origin)})")
+    tuple_origin: Optional[Sequence[IntIndex]]
     if isinstance(origin, dict):
-        origin = tuple(origin[ax] for ax in axes)
+        tuple_origin = tuple(origin[ax] for ax in axes)
+    else:
+        tuple_origin = origin
 
     def _maker(a: ArrayLike) -> LocatedFieldImpl:
-        if a.ndim != len(axes):
+        if utils.asndarray(a).ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
 
         def setter(indices, value):
             indices = utils.tupelize(indices)
-            a[_shift_field_indices(indices, origin) if origin else indices] = value
+            a[_shift_field_indices(indices, tuple_origin) if tuple_origin else indices] = value
 
         def getter(indices):
-            return a[_shift_field_indices(indices, origin) if origin else indices]
+            return a[_shift_field_indices(indices, tuple_origin) if tuple_origin else indices]
 
-        return LocatedFieldImpl(getter, axes, dtype=a.dtype, setter=setter, array=a, origin=origin)
+        return LocatedFieldImpl(
+            getter,
+            axes,
+            dtype=utils.asndarray(a).dtype,
+            setter=setter,
+            array=a,
+            origin=tuple_origin,
+        )
 
     return _maker
 
@@ -219,7 +229,8 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> LocatedField:
+def constant_field(value: Any, dtype: Optional[DTypeLike] = None) -> LocatedField:
     if dtype is None:
-        dtype = xtyping.infer_type(value)
+        dtype = xtyping.cast(DTypeLike, xtyping.infer_type(value))
+
     return ConstantField(value, dtype)

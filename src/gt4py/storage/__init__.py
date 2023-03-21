@@ -19,8 +19,8 @@
 from . import interface, layout
 from .interface import empty, from_array, full, ones, zeros  # noqa: F401
 from .layout import from_name, register
-from .located_field import LocatedField, array_as_located_field
-from .protocol import DimensionIdentifier, StorageProtocol
+from .located_field import array_as_located_field
+from .typing import ArrayLike, DimensionIdentifier, DTypeLike, LocatedField, StorageProtocol
 
 
 try:

@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import abc
-from numbers import Integral
 from typing import Any, Protocol, Tuple, Union
 
 import numpy as np
@@ -47,10 +46,7 @@ if cp is not None:
 else:
     NdArray = np.ndarray  # type: ignore[misc]  # assign multiple types in both branches
 
-__all__ = ["ArrayLike", "DTypeLike"]
-
-IntIndex: xtyping.TypeAlias = Integral
-
+IntIndex: xtyping.TypeAlias = Union[int, np.integer]
 FieldIndex: xtyping.TypeAlias = Union[
     range, slice, IntIndex
 ]  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
@@ -60,6 +56,8 @@ FieldIndexOrIndices: xtyping.TypeAlias = Union[FieldIndex, FieldIndices]
 
 ArrayIndex: xtyping.TypeAlias = Union[slice, IntIndex]
 ArrayIndexOrIndices: xtyping.TypeAlias = Union[ArrayIndex, Tuple[ArrayIndex, ...]]
+
+__all__ = ["ArrayLike", "DTypeLike", "LocatedField"]
 
 
 class DimensionIdentifier(Protocol):
@@ -76,23 +74,9 @@ class StorageProtocol(Protocol):
 
 @xtyping.runtime_checkable
 class LocatedField(StorageProtocol, Protocol):
-    """A field with named dimensions providing read access."""
+    """A field with named dimensions."""
 
     @property
     @abc.abstractmethod
     def __gt_dims__(self) -> Tuple[DimensionIdentifier, ...]:
-        ...
-
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        ...
-
-
-class MutableLocatedField(LocatedField, Protocol):
-    """A LocatedField with write access."""
-
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...

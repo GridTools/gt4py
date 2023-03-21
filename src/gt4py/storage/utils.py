@@ -20,6 +20,8 @@ from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Uni
 import numpy as np
 import numpy.typing as npt
 
+from .typing import ArrayLike, NdArray
+
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
@@ -333,3 +335,14 @@ def tupelize(tup):
 
 def is_cupy_array(array):
     return cp is not None and isinstance(array, cp.ndarray)
+
+
+def is_cupy_convertible(array: ArrayLike) -> bool:
+    return hasattr(array, "__cuda_array_interface__")
+
+
+def asndarray(array: ArrayLike) -> NdArray:
+    if is_cupy_convertible(array):
+        return cp.asarray(array)
+    else:
+        return np.asarray(array)

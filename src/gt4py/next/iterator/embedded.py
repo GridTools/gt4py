@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import abc
 import copy
 import dataclasses
 import itertools
@@ -48,10 +49,10 @@ from gt4py.next.iterator import builtins, runtime
 from gt4py.storage.located_field import ConstantField, constant_field
 from gt4py.storage.typing import (
     FieldIndex,
+    FieldIndexOrIndices,
     FieldIndices,
     IntIndex,
     LocatedField,
-    MutableLocatedField,
 )
 
 
@@ -151,6 +152,29 @@ class ItIterator(Protocol):
         ...
 
     def deref(self) -> Any:
+        ...
+
+
+class ReadableLocatedField(LocatedField, Protocol):
+    """A LocatedField with the more concrete dimension types used in gt4py.next and read support."""
+
+    @property
+    @abc.abstractmethod
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+        ...
+
+    # TODO(havogt): define generic Protocol to provide a concrete return type
+    @abc.abstractmethod
+    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+        ...
+
+
+class MutableLocatedField(ReadableLocatedField, Protocol):
+    """A LocatedField with write access."""
+
+    # TODO(havogt): define generic Protocol to provide a concrete return type
+    @abc.abstractmethod
+    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
         ...
 
 
@@ -457,7 +481,9 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = (
+    Scalar | ReadableLocatedField | tuple["CompositeOfScalarOrField", ...]
+)
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -686,8 +712,8 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 
 def _get_axes(
-    field_or_tuple: LocatedField | tuple,
-) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: ReadableLocatedField | tuple,
+) -> tuple[common.Dimension, ...]:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
         return _get_axes(field_or_tuple[0])
     else:
@@ -705,7 +731,9 @@ def _single_vertical_idx(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[
+        tuple | ReadableLocatedField, ...
+    ],  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndices,
     *,
     column_axis: Tag,
@@ -715,7 +743,9 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[
+        tuple | ReadableLocatedField, ...
+    ],  # arbitrary nesting of tuples of LocatedField
     indices: FieldIndices,
     *,
     column_axis: Literal[None] = None,
@@ -724,19 +754,24 @@ def _make_tuple(
 
 
 @overload
-def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+def _make_tuple(
+    field_or_tuple: ReadableLocatedField, indices: FieldIndices, *, column_axis: Tag
+) -> Column:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None] = None
+    field_or_tuple: ReadableLocatedField,
+    indices: FieldIndices,
+    *,
+    column_axis: Literal[None] = None,
 ) -> npt.DTypeLike:
     ...
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
+    field_or_tuple: ReadableLocatedField | tuple[tuple | ReadableLocatedField, ...],
     indices: FieldIndices,
     *,
     column_axis: Optional[Tag] = None,
@@ -783,7 +818,7 @@ def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
 
 @dataclasses.dataclass(frozen=True)
 class MDIterator:
-    field: LocatedField
+    field: ReadableLocatedField
     pos: MaybePosition
     incomplete_offsets: Sequence[Tag] = dataclasses.field(default_factory=list, kw_only=True)
     offset_provider: OffsetProvider = dataclasses.field(kw_only=True)
@@ -842,7 +877,7 @@ class MDIterator:
 
 
 def make_in_iterator(
-    inp: LocatedField,
+    inp: ReadableLocatedField,
     pos: Position,
     offset_provider: OffsetProvider,
     *,
@@ -1092,7 +1127,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         domain_: Domain,
         sten: Callable[..., Any],
         out: MutableLocatedField,
-        ins: list[LocatedField],
+        ins: list[ReadableLocatedField],
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)

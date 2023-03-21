@@ -101,7 +101,7 @@ def program_executor(
         register_layout(name, layout_info)
 
         # this operation effectively changes the type of func and that is the intention here
-        func.name = name
+        func.name = name  # type: ignore[attr-defined]
         func.kind = ProgramExecutor  # type: ignore[attr-defined]
         return cast(ProgramExecutor, func)
 
