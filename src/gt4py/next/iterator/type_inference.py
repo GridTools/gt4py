@@ -591,8 +591,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
     def _visit_make_tuple(self, node: ir.FunCall, **kwargs) -> Type:
-        # Calls to make_tuple are handled as being part of the grammar,
-        # not as function calls
+        # Calls to `make_tuple` are handled as being part of the grammar, not as function calls.
         argtypes = self.visit(node.args, **kwargs)
         kind = (
             TypeVar.fresh()
@@ -604,12 +603,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return Val(kind=kind, dtype=dtype, size=size)
 
     def _visit_tuple_get(self, node: ir.FunCall, **kwargs) -> Type:
-        # Calls to tuple_get are handled as being part of the grammar,
-        # not as function calls
+        # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
-            raise TypeError("tuple_get requires exactly two arguments")
+            raise TypeError("`tuple_get` requires exactly two arguments.")
         if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to tuple_get must be a literal int")
+            raise TypeError("The first argument to `tuple_get` must be a literal int.")
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
