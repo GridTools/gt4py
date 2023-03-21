@@ -810,7 +810,8 @@ class MDIterator:
 
 def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
     return [
-        axis.value  # type: ignore[misc] # axis.value is always `str`
+        cast(Tag, axis.value)  # axis.value is always `str`
+
         for axis in axes
         if isinstance(axis, runtime.Offset)
         or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)
