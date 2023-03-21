@@ -33,19 +33,19 @@ except ImportError:
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import ArrayLike as _NpArrayLike, DTypeLike
 else:
-    _CPUArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
+    _NpArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
     DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
 
 if cp is not None and version.parse(cp.__version__) >= version.parse("11.0.0a2"):
     from cupy.typing import ArrayLike as _CpArrayLike
 
-    ArrayLike = Union[_NpArrayLike, _CpArrayLike]
+    ArrayLike = Union[_NpArrayLike, _CpArrayLike]  # type: ignore[misc]  # assign multiple types in both branches
 else:
-    ArrayLike = _NpArrayLike
+    ArrayLike = _NpArrayLike  # type: ignore[misc]  # assign multiple types in both branches
 if cp is not None:
-    NdArray = Union[np.ndarray, cp.ndarray]
+    NdArray = Union[np.ndarray, cp.ndarray]  # type: ignore[misc]  # assign multiple types in both branches
 else:
-    NdArray = np.ndarray
+    NdArray = np.ndarray  # type: ignore[misc]  # assign multiple types in both branches
 
 __all__ = ["ArrayLike", "DTypeLike"]
 
