@@ -12,9 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import abc
 from numbers import Integral
-from typing import Any, Callable, Dict, Optional, Protocol, Sequence, Tuple, Union, overload
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -22,48 +21,20 @@ import numpy.typing as npt
 from gt4py.eve import extended_typing as xtyping
 
 from . import utils
-from .protocol import DimensionIdentifier, StorageProtocol
-
-
-IntIndex: xtyping.TypeAlias = Integral
-
-FieldIndex: xtyping.TypeAlias = Union[
-    range, slice, IntIndex
-]  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
-FieldIndices: xtyping.TypeAlias = Tuple[FieldIndex, ...]
-FieldIndexOrIndices: xtyping.TypeAlias = Union[FieldIndex, FieldIndices]
-
-
-ArrayIndex: xtyping.TypeAlias = Union[slice, IntIndex]
-ArrayIndexOrIndices: xtyping.TypeAlias = Union[ArrayIndex, Tuple[ArrayIndex, ...]]
+from .typing import (
+    ArrayIndex,
+    ArrayIndexOrIndices,
+    ArrayLike,
+    DimensionIdentifier,
+    FieldIndexOrIndices,
+    IntIndex,
+    LocatedField,
+    MutableLocatedField,
+)
 
 
 def is_int_index(p: Any) -> xtyping.TypeGuard[IntIndex]:
     return isinstance(p, Integral)
-
-
-@xtyping.runtime_checkable
-class LocatedField(StorageProtocol, Protocol):
-    """A field with named dimensions providing read access."""
-
-    @property
-    @abc.abstractmethod
-    def __gt_dims__(self) -> Tuple[DimensionIdentifier, ...]:
-        ...
-
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        ...
-
-
-class MutableLocatedField(LocatedField, Protocol):
-    """A LocatedField with write access."""
-
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
-        ...
 
 
 class LocatedFieldImpl(MutableLocatedField):
@@ -80,7 +51,7 @@ class LocatedFieldImpl(MutableLocatedField):
         dtype,
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
-        array: "ArrayLike",
+        array: ArrayLike,
         origin: Optional[Tuple[IntIndex, ...]] = None,
     ):
         self._getter = getter
@@ -198,7 +169,7 @@ def array_as_located_field(
     if isinstance(origin, dict):
         origin = tuple(origin[ax] for ax in axes)
 
-    def _maker(a: "ArrayLike") -> LocatedFieldImpl:
+    def _maker(a: ArrayLike) -> LocatedFieldImpl:
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
 

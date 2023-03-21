@@ -13,28 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numbers
-from typing import Any, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 
+from . import layout, utils as storage_utils
+from .typing import ArrayLike, DTypeLike, NdArray
+from .utils import is_cupy_array
 
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
 
 try:
     import dace
 except ImportError:
     dace = None
-
-if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
-    from numpy.typing import ArrayLike, DTypeLike
-else:
-    ArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
-    DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
-
-from . import layout, utils as storage_utils
 
 
 def _error_on_invalid_backend(backend):
@@ -49,7 +40,7 @@ def empty(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> NdArray:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
 
     Parameters
@@ -112,7 +103,7 @@ def ones(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> NdArray:
     """Allocate an array with values initialized to 1.0 with performance-optimal strides and alignment.
 
     Parameters
@@ -165,7 +156,7 @@ def full(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> NdArray:
     """Allocate an array with values initialized to `fill_value` with performance-optimal strides and alignment.
 
     Parameters
@@ -221,7 +212,7 @@ def zeros(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> NdArray:
     """Allocate an array with values initialized to 0.0 with performance-optimal strides and alignment.
 
     Parameters
@@ -273,7 +264,7 @@ def from_array(
     backend: str,
     aligned_index: Optional[Sequence[int]] = None,
     dimensions: Optional[Sequence[str]] = None,
-) -> Union[np.ndarray, "cp.ndarray"]:
+) -> NdArray:
     """Allocate an array with values initialized to those of `data` with performance-optimal strides and alignment.
 
     This copies the values from `data` to the resulting buffer.
@@ -309,8 +300,7 @@ def from_array(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
-    is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
-    asarray = storage_utils.as_cupy if is_cupy_array else storage_utils.as_numpy
+    asarray = storage_utils.as_cupy if is_cupy_array(data) else storage_utils.as_numpy
     shape = asarray(data).shape
     if dtype is None:
         dtype = asarray(data).dtype
@@ -327,7 +317,7 @@ def from_array(
         dimensions=dimensions,
     )
 
-    if cp is not None and isinstance(storage, cp.ndarray):
+    if is_cupy_array(storage):
         storage[...] = storage_utils.as_cupy(data)
     else:
         storage[...] = storage_utils.as_numpy(data)

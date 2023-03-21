@@ -45,15 +45,13 @@ import numpy.typing as npt
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.iterator import builtins, runtime
-from gt4py.storage.located_field import (
-    ArrayIndex,
-    ConstantField,
+from gt4py.storage.located_field import ConstantField, constant_field
+from gt4py.storage.typing import (
     FieldIndex,
     FieldIndices,
     IntIndex,
     LocatedField,
     MutableLocatedField,
-    constant_field,
 )
 
 

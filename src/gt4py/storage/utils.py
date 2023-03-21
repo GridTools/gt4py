@@ -329,3 +329,7 @@ def tupelize(tup):
         return tup
     else:
         return (tup,)
+
+
+def is_cupy_array(array):
+    return cp is not None and isinstance(array, cp.ndarray)
