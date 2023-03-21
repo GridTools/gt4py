@@ -272,17 +272,15 @@ def shift_(offset, value=None):
 
 
 def literal_(value: str, typename: str):
-    """Create a `Literal` with `value` and `typename`."""
     return itir.Literal(value=value, type=typename)
 
 
 def neighbors_(offset, it):
-    """Create a neighbors call."""
     offset = ensure_offset(offset)
     return call_("neighbors")(offset, it)
 
 
-def lifted_neighbors(offset, it):
+def lifted_neighbors(offset, it) -> itir.Expr:
     """
     Create a lifted neighbors call.
 
@@ -294,31 +292,40 @@ def lifted_neighbors(offset, it):
     return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
 
 
-def as_lifted_capture(expr: str | itir.Expr):
+def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     """
     Create a lifted nullary lambda that captures `expr`.
 
     Examples
     --------
-    >>> as_lifted_capture("foo")
-    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('lift')), args=[Lambda(params=[], expr=SymRef(id=SymbolRef('foo')))]), args=[])
+    >>> str(promote_to_const_iterator("foo"))
+    '(↑(λ() → foo))()'
     """
     return lift_(lambda__()(expr))()
 
 
-def as_lifted_lambda(op: str | Callable, *its):
+def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[..., itir.Expr]:
     """
-    Wrap `op` in a lifted lambda and call it with `*its`.
+    Promotes a function `op` from values to iterators.
+
+    `op` is a function from values to value.
+
+    Returns:
+        A lifted stencil, a function from iterators to iterator.
 
     Examples
     --------
-    >>> str(as_lifted_lambda("op", "a", "b"))
+    >>> str(promote_to_lifted_stencil("op")("a", "b"))
     '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
     if isinstance(op, (str, itir.SymRef)):
         op = call_(op)
-    args = [f"__arg{i}" for i in range(len(its))]
-    return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)
+
+    def _impl(*its: itir.Expr) -> itir.Expr:
+        args = [f"__arg{i}" for i in range(len(its))]
+        return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)  # type: ignore[operator] # `op` is not `str`
+
+    return _impl
 
 
 def map__(op):
