@@ -570,15 +570,10 @@ def execute_shift(
 
 def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
     complete_offsets = []
-    tag = None
-    for offset in offsets:
-        if not isinstance(offset, (int, np.integer)):
-            tag = offset
-        else:
-            assert tag is not None
-            complete_offsets.append((tag, offset))
-            tag = None
-    assert tag is None
+    while offsets:
+        tag, offset, *offsets = offsets  # type: ignore[assignment] # list vs tuple
+        assert isinstance(tag, Tag) and is_int_index(offset)
+        complete_offsets.append((tag, offset))
     return complete_offsets
 
 
@@ -811,7 +806,6 @@ class MDIterator:
 def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
     return [
         cast(Tag, axis.value)  # axis.value is always `str`
-
         for axis in axes
         if isinstance(axis, runtime.Offset)
         or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)
