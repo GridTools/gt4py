@@ -310,8 +310,6 @@ def test_tuple_scalar_scan():
 
 
 def test_astype_int(fieldview_backend):
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.skip("DaCe backend doesn't support cast: TODO how to cast in DaCe?")
     size = 10
     b_float_64 = np_as_located_field(IDim)(np.ones((size), dtype=np.float64))
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
