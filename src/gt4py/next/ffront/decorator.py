@@ -127,6 +127,8 @@ def _deduce_grid_type(
     is easier to optimize for but only allowed in the absence of unstructured
     dimensions and offsets.
     """
+    # TODO(tehrengruber): fix
+    return GridType.UNSTRUCTURED
 
     def is_cartesian_offset(o: FieldOffset):
         return len(o.target) == 1 and o.source == o.target[0]
