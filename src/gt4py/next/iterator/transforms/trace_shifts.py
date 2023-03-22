@@ -57,7 +57,7 @@ def _deref(x):
 
 
 def _can_deref(x):
-    return
+    return VALUE_TOKEN
 
 
 def _shift(*offsets):
