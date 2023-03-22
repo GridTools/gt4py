@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 from collections.abc import Sequence
 from typing import Any, Callable, Optional
 
@@ -80,6 +81,13 @@ _MATH_BUILTINS_MAPPING = {
 }
 
 
+@dataclasses.dataclass
+class ClosureArg:
+    memlet: dace.Memlet
+    strides: tuple[dace.symbol]
+    dtype: dace.dtypes.typeclass
+
+
 def builtin_if(
     transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]
 ) -> dace.nodes.AccessNode:
@@ -116,14 +124,25 @@ _GENERAL_BUILTIN_MAPPING: dict[
 }
 
 
+@dataclasses.dataclass
+class ValueExpr:
+    value: dace.nodes.AccessNode
+
+
+@dataclasses.dataclass
+class IteratorExpr:
+    field: dace.nodes.AccessNode
+    indices: dict[str, dace.nodes.AccessNode]
+
+
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     sdfg: Optional[dace.SDFG]
     entry_state: Optional[dace.SDFGState]
     offset_provider: dict[str, Any]
     domain: dict[str, str]
-    input_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]]
-    output_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]]
-    conn_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]]
+    input_args: Sequence[ClosureArg]
+    output_args: Sequence[ClosureArg]
+    conn_args: Sequence[ClosureArg]
     params: list[str]
     results: list[str]
 
@@ -131,9 +150,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self,
         offset_provider: dict[str, Any],
         domain: dict[str, str],
-        input_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
-        output_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
-        conn_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
+        input_args: Sequence[ClosureArg],
+        output_args: Sequence[ClosureArg],
+        conn_args: Sequence[ClosureArg],
     ):
         self.sdfg = None
         self.entry_state = None
@@ -152,7 +171,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         func_name = f"lambda_{abs(hash(node)):x}"
         param_names = [str(p.id) for p in node.params]
         result_names = [f"__result_{str(i)}" for i in range(len(self.output_args))]
-        conn_names = [conn[0].data for conn in self.conn_args]
+        conn_names = [conn.memlet.data for conn in self.conn_args]
 
         self.params = param_names
         self.results = result_names
@@ -161,30 +180,30 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.sdfg = dace.SDFG(func_name)
         self.entry_state = self.sdfg.add_state(f"{func_name}_entry", True)
 
-        # Add input and output parameters as arrays
+        # Add input, connectivity, and output parameters as arrays
         array_names = [*param_names, *result_names, *conn_names]
         args = [*self.input_args, *self.output_args, *self.conn_args]
-        for name, (memlet, strides, dtype) in zip(array_names, args):
-            shape = memlet.subset.size()
-            self.sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
+        for name, arg in zip(array_names, args):
+            shape = arg.memlet.subset.size()
+            self.sdfg.add_array(name, shape=shape, strides=arg.strides, dtype=arg.dtype)
 
         # Translate the function's body
-        function_result: dace.nodes.AccessNode = self.visit(node.expr)
+        function_result: ValueExpr = self.visit(node.expr)
         forwarding_tasklet = self.entry_state.add_tasklet(
             name="forwarding",
-            inputs={f"{function_result.data}_internal"},
+            inputs={f"{function_result.value.data}_internal"},
             outputs={f"{result}_internal" for result in result_names},
-            code=f"{result_names[0]}_internal = {function_result.data}_internal",
+            code=f"{result_names[0]}_internal = {function_result.value.data}_internal",
             language=dace.dtypes.Language.Python,
         )
         function_result_memlet = create_memlet_full(
-            function_result.data, self.sdfg.arrays[function_result.data]
+            function_result.value.data, self.sdfg.arrays[function_result.value.data]
         )
         self.entry_state.add_edge(
-            function_result,
+            function_result.value,
             None,
             forwarding_tasklet,
-            f"{function_result.data}_internal",
+            f"{function_result.value.data}_internal",
             function_result_memlet,
         )
 
@@ -199,18 +218,18 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
     def visit_SymRef(
         self, node: itir.SymRef, *, hack_is_iterator=False, **kwargs
-    ) -> dace.nodes.AccessNode | tuple[dace.nodes.AccessNode, dict[str, dace.nodes.AccessNode]]:
+    ) -> ValueExpr | IteratorExpr:
         assert self.entry_state is not None
         access_node = self.entry_state.add_access(str(node.id))
         if hack_is_iterator:
             index = {
-                dim: self.add_expr_tasklet([], idx, dace.dtypes.int64, idx)
+                dim: self.add_expr_tasklet([], idx, dace.dtypes.int64, idx).value
                 for dim, idx in self.domain.items()
             }
-            return access_node, index
-        return access_node
+            return IteratorExpr(access_node, index)
+        return ValueExpr(access_node)
 
-    def visit_Literal(self, node: itir.Literal, **kwargs) -> dace.nodes.AccessNode:
+    def visit_Literal(self, node: itir.Literal, **kwargs) -> ValueExpr:
         value = node.value
         expr = str(value)
         dtype = dace.dtypes.float64 if np.dtype(type(value)).kind == "f" else dace.dtypes.int64
@@ -247,15 +266,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         args = ", ".join(self.visit(node.args))
         return f"{function}({args})"
 
-    def _visit_deref(self, node: itir.FunCall, **kwargs) -> dace.nodes.AccessNode:
-        iterator = node.args[0]
-        sym, index = self.visit(iterator, hack_is_iterator=True)
-        flat_index = index.items()
+    def _visit_deref(self, node: itir.FunCall, **kwargs) -> ValueExpr:
+        iterator = self.visit(node.args[0], hack_is_iterator=True)
+        flat_index = iterator.indices.items()
         flat_index = sorted(flat_index, key=lambda x: x[0])
-        flat_index = [x[1] for x in flat_index]
+        flat_index = [ValueExpr(x[1]) for x in flat_index]
 
-        args: list[dace.nodes.AccessNode] = [sym, *flat_index]
-        internals = [f"{arg.data}_v" for arg in args]
+        args: list[ValueExpr] = [ValueExpr(iterator.field), *flat_index]
+        internals = [f"{arg.value.data}_v" for arg in args]
         expr = f"{internals[0]}[{', '.join(internals[1:])}]"
         return self.add_expr_tasklet(list(zip(args, internals)), expr, dace.dtypes.float64, "deref")
 
@@ -275,19 +293,16 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=rest), args=[iterator]
         )
 
-    def _visit_direct_addressing(
-        self, node: itir.FunCall, **kwargs
-    ) -> tuple[dace.nodes.AccessNode, dict[str, dace.nodes.AccessNode]]:
+    def _visit_direct_addressing(self, node: itir.FunCall, **kwargs) -> IteratorExpr:
         assert isinstance(node.fun, itir.FunCall)
-        iterator = node.args[0]
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
 
         head, rest = self._split_shift_args(shift.args)
         if rest:
-            sym, index = self.visit(self._make_shift_for_rest(rest, iterator))
+            iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
         else:
-            sym, index = self.visit(iterator, hack_is_iterator=True)
+            iterator = self.visit(node.args[0], hack_is_iterator=True)
 
         assert isinstance(head[0], itir.OffsetLiteral)
         offset = head[0].value
@@ -296,29 +311,26 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         shift_amount = self.visit(head[1])
 
-        args = [index[shifted_dim], shift_amount]
-        internals = [f"{arg.data}_v" for arg in args]
+        args = [ValueExpr(iterator.indices[shifted_dim]), shift_amount]
+        internals = [f"{arg.value.data}_v" for arg in args]
         expr = f"{internals[0]} + {internals[1]}"
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "dir_addr"
-        )
+        ).value
 
-        shifted_index = {dim: value for dim, value in index.items()}
+        shifted_index = {dim: value for dim, value in iterator.indices.items()}
         shifted_index[shifted_dim] = shifted_value
 
-        return sym, shifted_index
+        return IteratorExpr(iterator.field, shifted_index)
 
-    def _visit_indirect_addressing(
-        self, node: itir.FunCall, **kwargs
-    ) -> tuple[dace.nodes.AccessNode, dict[str, str]]:
-        iterator = node.args[0]
+    def _visit_indirect_addressing(self, node: itir.FunCall, **kwargs) -> IteratorExpr:
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
         head, rest = self._split_shift_args(shift.args)
         if rest:
-            sym, index = self.visit(self._make_shift_for_rest(rest, iterator))
+            iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
         else:
-            sym, index = self.visit(iterator, hack_is_iterator=True)
+            iterator = self.visit(node.args[0], hack_is_iterator=True)
 
         if len(head) < 2:
             raise NotImplementedError("reductions are not supported")
@@ -334,37 +346,37 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert self.entry_state is not None
         conn = self.entry_state.add_access(connectivity_identifier(offset))
 
-        args = [conn, index[shifted_dim], element]
-        internals = [f"{arg.data}_v" for arg in args]
+        args = [ValueExpr(conn), ValueExpr(iterator.indices[shifted_dim]), element]
+        internals = [f"{arg.value.data}_v" for arg in args]
         expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"
-        )
+        ).value
 
-        shifted_index = {dim: value for dim, value in index.items()}
+        shifted_index = {dim: value for dim, value in iterator.indices.items()}
         del shifted_index[shifted_dim]
         shifted_index[target_dim] = shifted_value
 
-        return sym, shifted_index
+        return IteratorExpr(iterator.field, shifted_index)
 
-    def _visit_numeric_builtin(self, node: itir.FunCall, **kwargs) -> dace.nodes.AccessNode:
+    def _visit_numeric_builtin(self, node: itir.FunCall, **kwargs) -> ValueExpr:
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args: list[dace.nodes.AccessNode] = self.visit(node.args)
-        internals = [f"{arg.data}_v" for arg in args]
+        args: list[ValueExpr] = self.visit(node.args)
+        internals = [f"{arg.value.data}_v" for arg in args]
         expr = fmt.format(*internals)
         return self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.float64, "numeric"
         )
 
-    def _visit_general_builtin(self, node: itir.FunCall, **kwargs) -> dace.nodes.AccessNode:
+    def _visit_general_builtin(self, node: itir.FunCall, **kwargs) -> ValueExpr:
         assert isinstance(node.fun, itir.SymRef)
         expr_func = _GENERAL_BUILTIN_MAPPING[str(node.fun.id)]
         return expr_func(self, node.args)
 
     def add_expr_tasklet(
-        self, args: list[tuple[dace.nodes.AccessNode, str]], expr: str, result_type: Any, name: str
-    ) -> dace.nodes.AccessNode:
+        self, args: list[tuple[ValueExpr, str]], expr: str, result_type: Any, name: str
+    ) -> ValueExpr:
         assert self.entry_state is not None
         assert self.sdfg is not None
         result_name = self.sdfg.temp_data_name() + "_tl"
@@ -378,10 +390,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             code=f"__result = {expr}",
         )
 
-        for access, internal in args:
-            memlet = create_memlet_full(access.data, self.sdfg.arrays[access.data])
+        for arg, internal in args:
+            memlet = create_memlet_full(arg.value.data, self.sdfg.arrays[arg.value.data])
             self.entry_state.add_memlet_path(
-                access, expr_tasklet, memlet=memlet, src_conn=None, dst_conn=internal
+                arg.value, expr_tasklet, memlet=memlet, src_conn=None, dst_conn=internal
             )
 
         self.entry_state.add_memlet_path(
@@ -392,16 +404,16 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             dst_conn=None,
         )
 
-        return result_access
+        return ValueExpr(result_access)
 
 
 def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
     domain: dict[str, str],
-    input_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
-    output_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
-    connectivity_args: Sequence[tuple[dace.Memlet, tuple, dace.dtypes.typeclass]],
+    input_args: Sequence[ClosureArg],
+    output_args: Sequence[ClosureArg],
+    connectivity_args: Sequence[ClosureArg],
 ) -> tuple[dace.SDFG, list[str], list[str]]:
     translator = PythonTaskletCodegen(
         offset_provider, domain, input_args, output_args, connectivity_args
