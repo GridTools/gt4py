@@ -101,7 +101,7 @@ def builtin_cast(
     transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]
 ) -> dace.nodes.AccessNode:
     args: list[dace.nodes.AccessNode] = [transformer.visit(node_args[0])]
-    internals = [f"{arg.data}_v" for arg in args]
+    internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
     assert isinstance(target_type, itir.SymRef)
     expr = _MATH_BUILTINS_MAPPING[target_type.id].format(*internals)
