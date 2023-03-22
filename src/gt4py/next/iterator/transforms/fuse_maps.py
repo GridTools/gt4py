@@ -50,6 +50,10 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         map(λ(x, y)->f(x, y))(a, map(λ(z, w)->g(z, w))(b, c))
     to
         map(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
+
+        reduce(λ(x, y) → f(x, y), init)(map_(g(z, w))(a, b))
+    to
+        reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
 
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
