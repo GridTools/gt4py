@@ -44,6 +44,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     Preconditions:
       - `FunctionDefinitions` are inlined
+      - Pass must be only constructed once (and `_fuse_mapsX` are reserved symbols)
 
     Example:
         map(λ(x, y)->f(x, y))(a, map(λ(z, w)->g(z, w))(b, c))
@@ -56,7 +57,9 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
         if isinstance(fun, ir.Lambda):
             return fun
-        params = [ir.Sym(id=self.uids.sequential_id(prefix="sym")) for _ in range(param_count)]
+        params = [
+            ir.Sym(id=self.uids.sequential_id(prefix="_fuse_maps")) for _ in range(param_count)
+        ]
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
@@ -93,7 +96,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                             inline_lambdas.inline_lambda(
                                 ir.FunCall(
                                     fun=inner_op,
-                                    args=[*(ir.SymRef(id=param.id) for param in inner_op.params)],
+                                    args=[ir.SymRef(id=param.id) for param in inner_op.params],
                                 )
                             )
                         )
@@ -119,10 +122,9 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
                         args=new_args,
                     )
-                elif _is_reduce(node):
+                else:  # _is_reduce(node)
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
                         args=new_args,
                     )
-                raise AssertionError("unreachable")
         return node
