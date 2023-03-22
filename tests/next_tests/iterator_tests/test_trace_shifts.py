@@ -141,7 +141,6 @@ def test_shifted_literal():
 
 
 def test_tuple_get_on_closure_input():
-    "Test shifting an applied lift of a stencil returning a constant / literal works."
     testee = ir.StencilClosure(
         # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
         stencil=im.lambda__("x")(im.tuple_get_(0, im.deref_(im.shift_("I", 1)("x")))),
