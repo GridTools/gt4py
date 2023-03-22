@@ -55,8 +55,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
-        if isinstance(fun, ir.Lambda):
-            return fun
+        # if fun is already a Lambda we still wrap it to get unique symbol names to avoid symbol clashes
         params = [
             ir.Sym(id=self.uids.sequential_id(prefix="_fuse_maps")) for _ in range(param_count)
         ]
@@ -106,13 +105,11 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         inlined_args.append(ir.SymRef(id=outer_op.params[i + first_param].id))
                         new_params.append(outer_op.params[i + first_param])
                         new_args.append(node.args[i])
-
-                new_body = inline_lambdas.inline_lambda(
-                    ir.FunCall(
-                        fun=outer_op,
-                        args=inlined_args,
-                    )
+                new_body = ir.FunCall(
+                    fun=outer_op,
+                    args=inlined_args,
                 )
+                new_body = inline_lambdas.InlineLambdas.apply(new_body)
                 new_op = ir.Lambda(
                     params=new_params,
                     expr=new_body,
