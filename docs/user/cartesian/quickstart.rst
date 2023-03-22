@@ -214,6 +214,10 @@ behavior is as follows:
    the lowest index where a value is written. The explicit ``origin`` keyword when calling a stencil takes priority over
    this.
 
+We provide the ``array_as_located_field`` utility to wrap arrays in a class implementing those interfaces.
+E.g. to denote a 2d array ``array`` as a ``"J", "I"`` array with origin ``(1, 2)``, call
+``array_as_located_field("J", "I", origin=(1, 2))(array)``. The first call will return a function that is configured to
+wrap ``array`` with the specified ``__gt_dims__`` and ``origin``
 
 .. _Computations and Intervals:
 
