@@ -568,12 +568,21 @@ def execute_shift(
     raise AssertionError("Unknown object in `offset_provider`")
 
 
+def _is_list_of_complete_offsets(
+    complete_offsets: list[tuple[Any, Any]]
+) -> TypeGuard[list[CompleteOffset]]:
+    return all(
+        isinstance(tag, Tag) and isinstance(offset, (int, np.integer))
+        for tag, offset in complete_offsets
+    )
+
+
 def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
-    complete_offsets = []
-    while offsets:
-        tag, offset, *offsets = offsets  # type: ignore[assignment] # list vs tuple
-        assert isinstance(tag, Tag) and is_int_index(offset)
-        complete_offsets.append((tag, offset))
+    assert len(offsets) % 2 == 0
+    complete_offsets = [*zip(offsets[::2], offsets[1::2])]
+    assert _is_list_of_complete_offsets(
+        complete_offsets
+    ), f"Invalid sequence of offset parts: {offsets}"
     return complete_offsets
 
 
