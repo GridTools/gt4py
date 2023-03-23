@@ -31,9 +31,9 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
     if scalar_type.kind == ts.ScalarKind.BOOL:
         return "bool"
     elif scalar_type.kind == ts.ScalarKind.INT32:
-        return "int32_t"
+        return "std::int32_t"
     elif scalar_type.kind == ts.ScalarKind.INT64:
-        return "int64_t"
+        return "std::int64_t"
     elif scalar_type.kind == ts.ScalarKind.FLOAT32:
         return "float"
     elif scalar_type.kind == ts.ScalarKind.FLOAT64:
