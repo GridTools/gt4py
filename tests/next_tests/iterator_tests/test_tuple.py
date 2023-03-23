@@ -49,8 +49,8 @@ def tuple_output2(inp1, inp2):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_tuple_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_tuple_output(program_processor, stencil):
+    program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

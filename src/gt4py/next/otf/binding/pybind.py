@@ -80,6 +80,17 @@ class BindingFile(eve.Node):
     binding_module: BindingModule
 
 
+def _type_string(type_: ts.TypeSpec) -> str:
+    if isinstance(type_, ts.TupleType):
+        return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
+    elif isinstance(type_, ts.FieldType):
+        return "pybind11::buffer"
+    elif isinstance(type_, ts.ScalarType):
+        return cpp_interface.render_scalar_type(type_)
+    else:
+        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+
+
 class BindingCodeGenerator(TemplatedGenerator):
     BindingFile = as_jinja(
         """\
@@ -107,13 +118,7 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     def visit_FunctionParameter(self, param: FunctionParameter):
-        if isinstance(param.type_, ts.FieldType):
-            type_str = "pybind11::buffer"
-        elif isinstance(param.type_, ts.ScalarType):
-            type_str = cpp_interface.render_scalar_type(param.type_)
-        else:
-            raise ValueError(f"Type '{param.type_}' is not supported in pybind11 interfaces.")
-        return f"{type_str} {param.name}"
+        return f"{_type_string(param.type_)} {param.name}"
 
     ReturnStmt = as_jinja("""return {{expr}};""")
 
@@ -163,6 +168,9 @@ def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
             scalar_type=param.type_.dtype,
             dim_config=index,
         )
+    if isinstance(param.type_, ts.TupleType):
+        # TODO
+        return "TODO"
     else:
         return param.name
 
