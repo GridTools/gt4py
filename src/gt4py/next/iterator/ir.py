@@ -164,6 +164,7 @@ BUILTINS = {
     "scan",
     "if_",
     "cast_",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
