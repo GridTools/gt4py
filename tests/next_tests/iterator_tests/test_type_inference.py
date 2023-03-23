@@ -351,6 +351,22 @@ def test_tuple_get_in_lambda():
     assert ti.pformat(inferred) == "(ItOrVal₀[(T₁, T₂):T₃⁴]) → ItOrVal₀[T₂⁴]"
 
 
+def test_neighbors():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="neighbors"), args=[ir.OffsetLiteral(value="V2E"), ir.SymRef(id="it")]
+    )
+    expected = ti.Val(
+        kind=ti.Value(),
+        dtype=ti.List(
+            dtype=ti.TypeVar(idx=0), max_length=ti.TypeVar(idx=1), has_skip_values=ti.TypeVar(idx=2)
+        ),
+        size=ti.TypeVar(idx=3),
+    )
+    inferred = ti.infer(testee)
+    assert expected == inferred
+    assert ti.pformat(inferred) == "L[T₀, T₁, T₂]³"
+
+
 def test_reduce():
     reduction_f = ir.Lambda(
         params=[ir.Sym(id="acc"), ir.Sym(id="x"), ir.Sym(id="y")],
@@ -359,7 +375,22 @@ def test_reduce():
             args=[
                 ir.SymRef(id="acc"),
                 ir.FunCall(
-                    fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
+                    fun=ir.SymRef(id="cast_"),  # cast to the type of `init`
+                    args=[
+                        ir.FunCall(
+                            fun=ir.SymRef(id="multiplies"),
+                            args=[
+                                ir.SymRef(id="x"),
+                                ir.FunCall(
+                                    fun=ir.SymRef(
+                                        id="cast_"
+                                    ),  # force `x` to be of type `float64` -> `y` is unconstrained
+                                    args=[ir.SymRef(id="y"), ir.SymRef(id="float64")],
+                                ),
+                            ],
+                        ),
+                        ir.SymRef(id="int"),
+                    ],
                 ),
             ],
         ),
@@ -368,18 +399,18 @@ def test_reduce():
         fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
     )
     expected = ti.FunctionType(
-        args=ti.ValTuple(
-            kind=ti.Iterator(),
-            dtypes=ti.Tuple.from_elems(ti.Primitive(name="int"), ti.Primitive(name="int")),
-            size=ti.TypeVar(idx=0),
-            current_loc=ti.TypeVar(idx=1),
-            defined_locs=ti.TypeVar(idx=2),
+        args=ti.ValListTuple(
+            kind=ti.Value(),
+            list_dtypes=ti.Tuple.from_elems(ti.Primitive(name="float64"), ti.TypeVar(idx=0)),
+            max_length=ti.TypeVar(idx=1),
+            has_skip_values=ti.TypeVar(idx=2),
+            size=ti.TypeVar(idx=3),
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=3)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₁, _, int⁰], It[T₁, _, int⁰]) → int⁰"
+    assert ti.pformat(inferred) == "(L[float64, T₁, T₂]³, L[T₀, T₁, T₂]³) → int³"
 
 
 def test_scan():
@@ -925,7 +956,7 @@ def test_fencil_definition_with_function_definitions():
 
 
 def test_pformat():
-    vs = [ti.TypeVar(idx=i) for i in range(4)]
+    vs = [ti.TypeVar(idx=i) for i in range(5)]
     assert ti.pformat(vs[0]) == "T₀"
     assert ti.pformat(ti.Tuple.from_elems(*vs[:2])) == "(T₀, T₁)"
     assert (
@@ -947,6 +978,23 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
     assert ti.pformat(ti.ValTuple(kind=vs[0], dtypes=vs[1], size=vs[2])) == "(ItOrVal₀[T²], …)₁"
+    assert (
+        ti.pformat(
+            ti.ValListTuple(
+                list_dtypes=ti.Tuple.from_elems(vs[0], vs[1]),
+                max_length=vs[2],
+                has_skip_values=vs[3],
+                size=vs[4],
+            )
+        )
+        == "(L[T₀, T₂, T₃]⁴, L[T₁, T₂, T₃]⁴)"
+    )
+    assert (
+        ti.pformat(
+            ti.ValListTuple(list_dtypes=vs[0], max_length=vs[1], has_skip_values=vs[2], size=vs[3])
+        )
+        == "(L[…₀, T₁, T₂]³, …)"
+    )
     assert ti.pformat(ti.Primitive(name="foo")) == "foo"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
     assert (

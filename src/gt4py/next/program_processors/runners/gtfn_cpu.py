@@ -125,7 +125,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
         )
 
         if self.use_caching:
-            otf_workflow = CachedStep(workflow=otf_workflow, hash_function=compilation_hash)
+            otf_workflow = CachedStep(step=otf_workflow, hash_function=compilation_hash)
 
         super().__setattr__("_otf_workflow", otf_workflow)
 
