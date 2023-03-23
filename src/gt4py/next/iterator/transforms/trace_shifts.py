@@ -72,10 +72,6 @@ class AppliedLift:
     stencil: Callable
     its: tuple[Union[InputTracer, "AppliedLift"]]
 
-    def __post_init__(self):
-        for it in self.its:
-            assert isinstance(it, (InputTracer, AppliedLift))
-
     def shift(self, offsets):
         return AppliedLift(self.stencil, tuple(_shift(it) for it in self.its))
 
