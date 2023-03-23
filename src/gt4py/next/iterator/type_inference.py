@@ -358,7 +358,53 @@ Val_T0_T1 = Val(kind=Value(), dtype=T0, size=T1)
 Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
 Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
 
-BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
+BUILTIN_CATEGORY_MAPPING = (
+    (
+        ir.UNARY_MATH_FP_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0)),
+            ret=Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0),
+        ),
+    ),
+    (
+        ir.UNARY_MATH_NUMBER_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val_T0_T1),
+            ret=Val_T0_T1,
+        ),
+    ),
+    (
+        ir.BINARY_MATH_NUMBER_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    ),
+    (
+        ir.UNARY_MATH_FP_PREDICATE_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0)),
+            ret=Val(kind=Value(), dtype=BOOL_DTYPE, size=T0),
+        ),
+    ),
+    (
+        ir.BINARY_MATH_COMPARISON_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    ),
+    (
+        ir.BINARY_LOGICAL_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
+    ),
+    (
+        ir.UNARY_LOGICAL_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(
+                Val_BOOL_T1,
+            ),
+            ret=Val_BOOL_T1,
+        ),
+    ),
+)
+
+BUILTIN_TYPES: dict[str, Type] = {
+    **{builtin: type_ for category, type_ in BUILTIN_CATEGORY_MAPPING for builtin in category},
     "deref": FunctionType(
         args=Tuple.from_elems(
             Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T2, defined_loc=T2)
@@ -368,28 +414,6 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
     "can_deref": FunctionType(
         args=Tuple.from_elems(
             Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T2, defined_loc=T3)
-        ),
-        ret=Val_BOOL_T1,
-    ),
-    "plus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "minus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "mod": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "minimum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "maximum": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "not_eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "less_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "greater": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "greater_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "and_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "or_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "xor_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "not_": FunctionType(
-        args=Tuple.from_elems(
-            Val_BOOL_T1,
         ),
         ret=Val_BOOL_T1,
     ),
@@ -474,6 +498,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
     ),
 }
+
 
 del T0, T1, T2, T3, T4, T5, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
 
