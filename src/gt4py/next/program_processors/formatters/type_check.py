@@ -19,7 +19,7 @@ from gt4py.next.program_processors.processor_interface import program_formatter
 
 @program_formatter
 def check(program: itir.FencilDefinition, *args, **kwargs) -> str:
-    type_inference.pprint(type_inference.infer(program))
+    type_inference.pprint(type_inference.infer(program, offset_provider=kwargs["offset_provider"]))
     transformed = apply_common_transforms(
         program, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
     )

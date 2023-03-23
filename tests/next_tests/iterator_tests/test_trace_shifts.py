@@ -91,6 +91,33 @@ def test_lift():
     assert actual == expected
 
 
+def test_neighbors():
+    testee = ir.StencilClosure(
+        stencil=ir.Lambda(
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="O"), ir.SymRef(id="x")],
+            ),
+            params=[ir.Sym(id="x")],
+        ),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {
+        "inp": [
+            (
+                ir.OffsetLiteral(value="O"),
+                ALL_NEIGHBORS,
+            )
+        ]
+    }
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
 def test_reduce():
     testee = ir.StencilClosure(
         stencil=ir.FunCall(
@@ -101,7 +128,7 @@ def test_reduce():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [(ALL_NEIGHBORS,)]}
+    expected = dict()
 
     actual = dict()
     TraceShifts().visit(testee, shifts=actual)
