@@ -629,10 +629,8 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     def _visit_neighbors(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
             raise TypeError("`neighbors` requires exactly two arguments.")
-        if not isinstance(node.args[0], ir.OffsetLiteral):
-            raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral`.")
-        if not isinstance(node.args[0].value, str):
-            raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
+        if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
+            raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
 
         max_length: Type = TypeVar.fresh()
         has_skip_values: Type = TypeVar.fresh()

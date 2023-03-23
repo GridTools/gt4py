@@ -113,7 +113,7 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = 2*np.sum(v2e_arr.table, axis=1)
+    ref = 2 * np.sum(v2e_arr, axis=1)
 
     run_processor(
         map_neighbors[{Vertex: range(0, 9)}],
@@ -136,7 +136,7 @@ def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = 2*np.sum(v2e_arr.table, axis=1)
+    ref = 2 * np.sum(v2e_arr, axis=1)
 
     run_processor(
         map_make_const_list[{Vertex: range(0, 9)}],
@@ -265,25 +265,26 @@ def slice_twice_sparse_stencil(sparse):
     return deref(shift(2)(shift(1)(sparse)))
 
 
-# def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
-#     program_processor, validate = program_processor_no_gtfn_exec
-#     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
-#     out = np_as_located_field(Vertex)(np.zeros([9]))
+@pytest.mark.xfail(reason="Field with more than one sparse dimension is not implemented.")
+def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
+    inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
+    out = np_as_located_field(Vertex)(np.zeros([9]))
 
-#     ref = v2v_arr[v2v_arr][:, 2, 1]
-#     run_processor(
-#         slice_twice_sparse_stencil[{Vertex: range(0, 9)}],
-#         program_processor,
-#         inp,
-#         out=out,
-#         offset_provider={
-#             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-#         },
-#         lift_mode=lift_mode,
-#     )
+    ref = v2v_arr[v2v_arr][:, 2, 1]
+    run_processor(
+        slice_twice_sparse_stencil[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+        },
+        lift_mode=lift_mode,
+    )
 
-#     if validate:
-#         assert np.allclose(np.asarray(out), ref)
+    if validate:
+        assert np.allclose(np.asarray(out), ref)
 
 
 @fundef
