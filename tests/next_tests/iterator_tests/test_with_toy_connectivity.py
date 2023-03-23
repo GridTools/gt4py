@@ -113,7 +113,7 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
+    ref = 2*np.sum(v2e_arr.table, axis=1)
 
     run_processor(
         map_neighbors[{Vertex: range(0, 9)}],
@@ -136,7 +136,7 @@ def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
     out = np_as_located_field(Vertex)(np.zeros([9]))
-    ref = np.asarray(list(sum(row) for row in v2e_arr)) * 2.0
+    ref = 2*np.sum(v2e_arr.table, axis=1)
 
     run_processor(
         map_make_const_list[{Vertex: range(0, 9)}],

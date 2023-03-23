@@ -183,9 +183,9 @@ class ValListTuple(Type):
     """
     A tuple of `Val` that contains `List`s.
 
-    All items have
-    - the same `kind` and `size`;
-    - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
+    All items have:
+      - the same `kind` and `size`;
+      - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
     """
 
     kind: Type = eve.field(default_factory=TypeVar.fresh)
