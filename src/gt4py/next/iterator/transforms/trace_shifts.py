@@ -93,12 +93,11 @@ def _lift(f):
 
 
 def _reduce(f, init):
-    def apply(*args):
-        for arg in args:
-            _deref(_shift(ALL_NEIGHBORS)(arg))
-        return VALUE_TOKEN
+    return _combine
 
-    return apply
+
+def _neighbors(o, x):
+    return _deref(_shift(o, ALL_NEIGHBORS)(x))
 
 
 def _scan(f, forward, init):
@@ -113,8 +112,9 @@ _START_CTX: Final = {
     "can_deref": _can_deref,
     "shift": _shift,
     "lift": _lift,
-    "reduce": _reduce,
     "scan": _scan,
+    "reduce": _reduce,
+    "neighbors": _neighbors,
 }
 
 
