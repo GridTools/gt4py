@@ -127,8 +127,8 @@ def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec):
         assert np.allclose(inp4, out_np2[:]["f1"])
 
 
-def test_tuple_of_tuple_of_field_output(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_tuple_of_tuple_of_field_output(program_processor):
+    program_processor, validate = program_processor
 
     @fundef
     def stencil(inp1, inp2, inp3, inp4):
@@ -353,8 +353,8 @@ def tuple_input(inp):
     return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
 
 
-def test_tuple_field_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_tuple_field_input(program_processor):
+    program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -471,8 +471,8 @@ def test_tuple_of_field_of_tuple_input(program_processor_no_gtfn_exec):
         assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
 
 
-def test_tuple_of_tuple_of_field_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_tuple_of_tuple_of_field_input(program_processor):
+    program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

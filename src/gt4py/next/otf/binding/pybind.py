@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Sequence, Union
 
 import gt4py.eve as eve
 import gt4py.next.type_system.type_specifications as ts
@@ -42,7 +42,7 @@ class BufferSID(Expr):
 
 
 class CompositeSID(Expr):
-    elems: Sequence[BufferSID]
+    elems: Sequence[Union[BufferSID, CompositeSID]]
 
 
 class FunctionCall(Expr):
@@ -156,6 +156,8 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     def visit_CompositeSID(self, node: CompositeSID, **kwargs):
+        if "ids" in kwargs:
+            kwargs.pop("ids")
         return self.generic_visit(
             node,
             ids=(f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))),
