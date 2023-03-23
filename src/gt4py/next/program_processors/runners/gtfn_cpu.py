@@ -83,7 +83,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
         """
         cache_key = hash(
             (
-                program,
+                id(program),
                 # TODO(tehrengruber): as the resulting frontend types contain lists they are
                 #  not hashable. As a workaround we just use content_hash here.
                 content_hash(tuple(from_value(arg) for arg in args)),
