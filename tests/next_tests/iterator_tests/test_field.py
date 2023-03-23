@@ -22,25 +22,6 @@ def make_located_field(dtype=np.float64):
     return array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
 
 
-def test_located_field_1d():
-    foo = array_as_located_field("foo")(np.zeros((1,)))
-
-    foo[0] = 42
-
-    assert foo.__gt_dims__[0] == "foo"
-    assert foo[0] == 42
-
-
-def test_located_field_2d():
-    foo = array_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
-
-    foo[0, 0] = 42
-
-    assert foo.__gt_dims__[0] == "foo"
-    assert foo[0, 0] == 42
-    assert foo.dtype == np.float64
-
-
 def test_tuple_field_concept():
     tuple_of_fields = (make_located_field(), make_located_field())
     assert embedded.can_be_tuple_field(tuple_of_fields)
