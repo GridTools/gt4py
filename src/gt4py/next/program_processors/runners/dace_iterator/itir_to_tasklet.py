@@ -88,18 +88,25 @@ class ClosureArg:
     dtype: dace.dtypes.typeclass
 
 
-def builtin_if(
-    transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]
-) -> dace.nodes.AccessNode:
+@dataclasses.dataclass
+class ValueExpr:
+    value: dace.nodes.AccessNode
+
+
+@dataclasses.dataclass
+class IteratorExpr:
+    field: dace.nodes.AccessNode
+    indices: dict[str, dace.nodes.AccessNode]
+
+
+def builtin_if(transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]) -> ValueExpr:
     args: list[dace.nodes.AccessNode] = transformer.visit(node_args)
     internals = [f"{arg.data}_v" for arg in args]
     expr = "({1} if {0} else {2})".format(*internals)
     return transformer.add_expr_tasklet(list(zip(args, internals)), expr, dace.dtypes.float64, "if")
 
 
-def builtin_cast(
-    transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]
-) -> dace.nodes.AccessNode:
+def builtin_cast(transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]) -> ValueExpr:
     args: list[dace.nodes.AccessNode] = [transformer.visit(node_args[0])]
     internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
@@ -122,17 +129,6 @@ _GENERAL_BUILTIN_MAPPING: dict[
     "if_": builtin_if,
     "cast_": builtin_cast,
 }
-
-
-@dataclasses.dataclass
-class ValueExpr:
-    value: dace.nodes.AccessNode
-
-
-@dataclasses.dataclass
-class IteratorExpr:
-    field: dace.nodes.AccessNode
-    indices: dict[str, dace.nodes.AccessNode]
 
 
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
