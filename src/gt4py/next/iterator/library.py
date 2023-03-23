@@ -23,4 +23,4 @@ def sum_(fun=None):
 
 
 def dot(a, b):
-    return reduce(lambda acc, a_n, c_n: acc + a_n * c_n, 0.0)(a, b)
+    return reduce(lambda acc, a_n, b_n: acc + a_n * b_n, 0.0)(a, b)
