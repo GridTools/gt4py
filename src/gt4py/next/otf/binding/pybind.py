@@ -41,6 +41,10 @@ class BufferSID(Expr):
     dim_config: int
 
 
+class CompositeSID(Expr):
+    elems: Sequence[BufferSID]
+
+
 class FunctionCall(Expr):
     target: interface.Function
     args: Sequence[Any]
@@ -137,7 +141,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_BufferSID(self, sid: BufferSID):
+    def visit_BufferSID(self, sid: BufferSID, **kwargs):
         return self.generic_visit(
             sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
         )
@@ -151,6 +155,17 @@ class BindingCodeGenerator(TemplatedGenerator):
             )"""
     )
 
+    def visit_CompositeSID(self, node: CompositeSID, **kwargs):
+        return self.generic_visit(
+            node,
+            ids=(f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))),
+            **kwargs,
+        )
+
+    CompositeSID = as_jinja(
+        "gridtools::sid::composite::keys<{{','.join(ids)}}>::make_values({{','.join(elems)}})"
+    )
+
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
@@ -160,19 +175,27 @@ def make_parameter(
     return FunctionParameter(name=parameter.name, type_=parameter.type_)
 
 
-def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
-    if isinstance(param.type_, ts.FieldType):
+def _tuple_get(index: int, var: str) -> str:
+    return f"gridtools::tuple_util::get<{index}>({var})"
+
+
+def make_argument(index: int, name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
+    if isinstance(type_, ts.FieldType):
         return BufferSID(
-            source_buffer=param.name,
-            dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
-            scalar_type=param.type_.dtype,
+            source_buffer=name,
+            dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
+            scalar_type=type_.dtype,
             dim_config=index,
         )
-    if isinstance(param.type_, ts.TupleType):
-        # TODO
-        return "TODO"
+    if isinstance(type_, ts.TupleType):
+        return CompositeSID(
+            elems=[
+                make_argument(index * 1000 + i, _tuple_get(i, name), t)
+                for i, t in enumerate(type_.types)
+            ]
+        )
     else:
-        return param.name
+        return name
 
 
 def create_bindings(
@@ -198,8 +221,10 @@ def create_bindings(
             "pybind11/pybind11.h",
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "gridtools/sid/composite.hpp",
             "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
+            "gridtools/common/tuple_util.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
             "gridtools/fn/backend/naive.hpp",
@@ -211,7 +236,7 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(index, param)
+                        make_argument(index, param.name, param.type_)
                         for index, param in enumerate(program_source.entry_point.parameters)
                     ],
                 )
