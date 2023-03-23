@@ -668,7 +668,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
-            raise TypeError("cast_ requires exactly two arguments.")
+            raise TypeError("`cast_` requires exactly two arguments.")
         val_arg_type = self.visit(node.args[0], **kwargs)
         type_arg = node.args[1]
         if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
