@@ -68,7 +68,6 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
         )
 
-    # TODO think about clashes of symbol names
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
         if _is_map(node) or _is_reduce(node):
@@ -113,7 +112,9 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     fun=outer_op,
                     args=inlined_args,
                 )
-                new_body = inline_lambdas.InlineLambdas.apply(new_body)
+                new_body = inline_lambdas.inline_lambda(
+                    new_body
+                )  # removes one level of nesting (the recursive inliner could simplify more, however this can also be done on the full tree later)
                 new_op = ir.Lambda(
                     params=new_params,
                     expr=new_body,

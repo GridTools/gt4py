@@ -14,7 +14,7 @@
 
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
+from gt4py.next.iterator.transforms import fuse_maps, inline_lambdas
 
 
 def _map(op: ir.Expr, *args: ir.Expr) -> ir.FunCall:
@@ -46,6 +46,14 @@ _p_sym = P(ir.Sym)
 _p_symref = P(ir.SymRef)
 
 
+def _apply_fuse_maps(ir: ir.Node) -> ir.Node:
+    result = fuse_maps.FuseMaps().visit(ir)
+    result = inline_lambdas.InlineLambdas.apply(
+        result
+    )  # FuseMaps does not inline everything which makes the expected result harder to test
+    return result
+
+
 def test_simple():
     testee = _map(
         ir.SymRef(id="plus"),
@@ -56,8 +64,7 @@ def test_simple():
     expected = _map_p(
         P(
             ir.Lambda,
-            params=[_p_sym]
-            * 3,  # TODO: can we express that the Sym id's match the SymRef id later?
+            params=[_p_sym] * 3,
             expr=P(
                 ir.FunCall,
                 fun=ir.SymRef(id="plus"),
@@ -76,7 +83,7 @@ def test_simple():
         ir.SymRef(id="c"),
     )
 
-    actual = FuseMaps().visit(testee)
+    actual = _apply_fuse_maps(testee)
     assert expected.match(actual)
 
 
@@ -109,7 +116,7 @@ def test_simple_with_lambdas():
         ir.SymRef(id="c"),
     )
 
-    actual = FuseMaps().visit(testee)
+    actual = _apply_fuse_maps(testee)
     assert expected.match(actual)
 
 
@@ -142,7 +149,7 @@ def test_simple_reduce():
         ir.SymRef(id="b"),
     )
 
-    actual = FuseMaps().visit(testee)
+    actual = _apply_fuse_maps(testee)
     assert expected.match(actual)
 
 
@@ -191,7 +198,7 @@ def test_nested():
         ir.SymRef(id="d"),
     )
 
-    actual = FuseMaps().visit(testee)
+    actual = _apply_fuse_maps(testee)
     assert expected.match(actual)
 
 
@@ -237,5 +244,5 @@ def test_multiple_maps_with_colliding_symbol_names():
         ir.SymRef(id="d"),
     )
 
-    actual = FuseMaps().visit(testee)
+    actual = _apply_fuse_maps(testee)
     assert expected.match(actual)
