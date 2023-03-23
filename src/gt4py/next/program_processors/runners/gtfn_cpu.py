@@ -117,7 +117,7 @@ class GTFNExecutor(ppi.ProgramExecutor):
 
             otf_closure = stages.ProgramCall(program, args, kwargs)
 
-            compiled_runner = otf_workflow(otf_closure)
+            compiled_runner = self._cache[cache_key] = otf_workflow(otf_closure)
         else:
             compiled_runner = self._cache[cache_key]
 
