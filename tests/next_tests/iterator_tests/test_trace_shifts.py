@@ -59,21 +59,6 @@ def test_shift():
     assert actual == expected
 
 
-def test_shift_cast():
-    testee = ir.StencilClosure(
-        # λ(x) → ·⟪Iₒ, 1ₒ⟫(cast_(x, float32))
-        stencil=im.lambda__("x")(im.deref_(im.shift_("I", 1)(im.call_("cast_")("x", "float32")))),
-        inputs=[ir.SymRef(id="inp")],
-        output=ir.SymRef(id="out"),
-        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-    )
-    expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
-
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
-    assert actual == expected
-
-
 def test_lift():
     testee = ir.StencilClosure(
         stencil=ir.Lambda(

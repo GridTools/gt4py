@@ -15,7 +15,7 @@
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, List, Union
+from typing import Any, Final, Union
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
@@ -70,22 +70,24 @@ def _shift(*offsets):
 @dataclass(frozen=True)
 class AppliedLift:
     stencil: Callable
-    its: List[Union[InputTracer, "AppliedLift"]]
+    its: tuple[Union[InputTracer, "AppliedLift"]]
 
     def __post_init__(self):
         for it in self.its:
             assert isinstance(it, (InputTracer, AppliedLift))
 
     def shift(self, offsets):
-        return AppliedLift(self.stencil, [_shift(it) for it in self.its])
+        return AppliedLift(self.stencil, tuple(_shift(it) for it in self.its))
 
     def deref(self):
         return self.stencil(*self.its)
 
 
 def _lift(f):
-    def apply(*args):
-        return AppliedLift(f, list(args))
+    def apply(*its):
+        if not all(isinstance(it, (InputTracer, AppliedLift)) for it in its):
+            raise AssertionError("All arguments must be iterators.")
+        return AppliedLift(f, its)
 
     return apply
 
@@ -106,10 +108,6 @@ def _scan(f, forward, init):
     return apply
 
 
-def _cast(it, dtype):
-    return it
-
-
 _START_CTX: Final = {
     "deref": _deref,
     "can_deref": _can_deref,
@@ -117,7 +115,6 @@ _START_CTX: Final = {
     "lift": _lift,
     "reduce": _reduce,
     "scan": _scan,
-    "cast_": _cast,
 }
 
 
