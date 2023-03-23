@@ -44,7 +44,7 @@ class CMakeFactory(
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
-    cmake_build_type: BuildType = BuildType.DEBUG
+    cmake_build_type: BuildType = BuildType.RELEASE
     cmake_extra_flags: Optional[list[str]] = None
 
     def __call__(
