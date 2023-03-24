@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension
+from gt4py.next import common
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import cpp_interface, interface, pybind
 from gt4py.next.otf.compilation import cache
@@ -32,7 +32,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
             interface.Parameter(
                 name="buf",
                 type_=ts.FieldType(
-                    dims=[Dimension("I"), Dimension("J")],
+                    dims=[common.Dimension("I"), common.Dimension("J")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                 ),
             ),

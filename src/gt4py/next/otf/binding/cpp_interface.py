@@ -44,7 +44,9 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
         case ts.ScalarKind.DIMENSION:
             raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
         case _:
-            raise AssertionError(f"Scalar kind '{scalar_type}' is not implemented when it should be.")
+            raise AssertionError(
+                f"Scalar kind '{scalar_type}' is not implemented when it should be."
+            )
 
 
 def _render_function_param(param: interface.Parameter, index: int) -> str:
