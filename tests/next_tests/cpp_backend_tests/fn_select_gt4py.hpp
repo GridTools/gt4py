@@ -65,7 +65,7 @@ inline char const *backend_name(naive_with_threadpool<ThreadPool> const &) {
   return "naive";
 }
 } // namespace naive_impl_
-    
+
 namespace gpu_impl_ {
 template <class> struct gpu;
 template <class BlockSizes>
