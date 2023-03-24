@@ -28,22 +28,23 @@ CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
 
 
 def render_scalar_type(scalar_type: ts.ScalarType) -> str:
-    if scalar_type.kind == ts.ScalarKind.BOOL:
-        return "bool"
-    elif scalar_type.kind == ts.ScalarKind.INT32:
-        return "std::int32_t"
-    elif scalar_type.kind == ts.ScalarKind.INT64:
-        return "std::int64_t"
-    elif scalar_type.kind == ts.ScalarKind.FLOAT32:
-        return "float"
-    elif scalar_type.kind == ts.ScalarKind.FLOAT64:
-        return "double"
-    elif scalar_type.kind == ts.ScalarKind.STRING:
-        return "std::string"
-    elif scalar_type.kind == ts.ScalarKind.DIMENSION:
-        raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
-    else:
-        raise AssertionError(f"Scalar kind '{scalar_type}' is not implemented when it should be.")
+    match scalar_type.kind:
+        case ts.ScalarKind.BOOL:
+            return "bool"
+        case ts.ScalarKind.INT32:
+            return "std::int32_t"
+        case ts.ScalarKind.INT64:
+            return "std::int64_t"
+        case ts.ScalarKind.FLOAT32:
+            return "float"
+        case ts.ScalarKind.FLOAT64:
+            return "double"
+        case ts.ScalarKind.STRING:
+            return "std::string"
+        case ts.ScalarKind.DIMENSION:
+            raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
+        case _:
+            raise AssertionError(f"Scalar kind '{scalar_type}' is not implemented when it should be.")
 
 
 def _render_function_param(param: interface.Parameter, index: int) -> str:
