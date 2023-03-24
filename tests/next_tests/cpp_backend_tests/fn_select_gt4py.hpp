@@ -54,12 +54,18 @@ template <class... dims> struct block_sizes_t {
 } // namespace
 namespace gridtools::fn::backend {
 namespace naive_impl_ {
-struct naive;
-storage::cpu_kfirst backend_storage_traits(naive);
-timer_dummy backend_timer_impl(naive);
-inline char const *backend_name(naive const &) { return "naive"; }
+template <class ThreadPool>
+struct naive_with_threadpool;
+template <class ThreadPool>
+storage::cpu_kfirst backend_storage_traits(naive_with_threadpool<ThreadPool>);
+template <class ThreadPool>
+timer_dummy backend_timer_impl(naive_with_threadpool<ThreadPool>);
+template <class ThreadPool>
+inline char const *backend_name(naive_with_threadpool<ThreadPool> const &) {
+  return "naive";
+}
 } // namespace naive_impl_
-
+    
 namespace gpu_impl_ {
 template <class> struct gpu;
 template <class BlockSizes>
