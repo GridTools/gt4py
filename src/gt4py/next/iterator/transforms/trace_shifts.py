@@ -46,7 +46,8 @@ class InputTracer:
 
 
 def _combine(*values):
-    if not all(val is VALUE_TOKEN for val in values):
+    # `OffsetLiteral`s may occur in `list_get` calls
+    if not all(val is VALUE_TOKEN or isinstance(val, ir.OffsetLiteral) for val in values):
         raise AssertionError("All arguments must be values.")
     return VALUE_TOKEN
 
