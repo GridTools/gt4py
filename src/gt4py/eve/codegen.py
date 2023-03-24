@@ -112,7 +112,7 @@ def format_python_source(
 ) -> str:
     """Format Python source code using black formatter."""
     python_versions = python_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)
+    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)  # type: ignore[attr-defined]  # .TargetVersion implicitly exported
 
     formatted_source = black.format_str(
         source,

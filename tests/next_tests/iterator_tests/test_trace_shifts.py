@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.next.ffront import itir_makers as im
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.trace_shifts import ALL_NEIGHBORS, TraceShifts
 
@@ -91,17 +92,81 @@ def test_lift():
     assert actual == expected
 
 
-def test_reduce():
+def test_neighbors():
     testee = ir.StencilClosure(
-        stencil=ir.FunCall(
-            fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="plus"), ir.SymRef(id="init")],
+        stencil=ir.Lambda(
+            expr=ir.FunCall(
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="O"), ir.SymRef(id="x")],
+            ),
+            params=[ir.Sym(id="x")],
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [(ALL_NEIGHBORS,)]}
+    expected = {
+        "inp": [
+            (
+                ir.OffsetLiteral(value="O"),
+                ALL_NEIGHBORS,
+            )
+        ]
+    }
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
+def test_reduce():
+    testee = ir.StencilClosure(
+        # λ(inp) → reduce(plus, init)(·inp)
+        stencil=ir.Lambda(
+            params=[ir.Sym(id="inp")],
+            expr=ir.FunCall(
+                fun=ir.FunCall(
+                    fun=ir.SymRef(id="reduce"), args=[ir.SymRef(id="plus"), ir.SymRef(id="init")]
+                ),
+                args=[ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])],
+            ),
+        ),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp": [()]}
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
+def test_shifted_literal():
+    "Test shifting an applied lift of a stencil returning a constant / literal works."
+    testee = ir.StencilClosure(
+        # λ(x) → ·⟪Iₒ, 1ₒ⟫((↑(λ() → 1))())
+        stencil=im.lambda__("x")(im.deref_(im.shift_("I", 1)(im.lift_(im.lambda__()(1))()))),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp": []}
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
+def test_tuple_get_on_closure_input():
+    testee = ir.StencilClosure(
+        # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
+        stencil=im.lambda__("x")(im.tuple_get_(0, im.deref_(im.shift_("I", 1)("x")))),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
 
     actual = dict()
     TraceShifts().visit(testee, shifts=actual)

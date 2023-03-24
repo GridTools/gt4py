@@ -21,7 +21,21 @@ pytest.importorskip("atlas4py")
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import library
 from gt4py.next.iterator.atlas_utils import AtlasTable
-from gt4py.next.iterator.builtins import *
+from gt4py.next.iterator.builtins import (
+    deref,
+    eq,
+    if_,
+    lift,
+    list_get,
+    make_tuple,
+    named_range,
+    neighbors,
+    or_,
+    reduce,
+    shift,
+    tuple_get,
+    unstructured_domain,
+)
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -44,9 +58,8 @@ E2V = offset("E2V")
 
 @fundef
 def compute_zavgS(pp, S_M):
-    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
-    # zavg = 0.5 * reduce(lambda a, b: a + b, 0.0)(shift(E2V)(pp))
-    # zavg = 0.5 * library.sum()(shift(E2V)(pp))
+    pp_neighs = neighbors(E2V, pp)
+    zavg = 0.5 * (list_get(0, pp_neighs) + list_get(1, pp_neighs))
     return deref(S_M) * zavg
 
 
@@ -68,9 +81,7 @@ def compute_zavgS_fencil(
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0.0)(shift(V2E)(zavgS), sign)
-    # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
-    pnabla_M = library.dot(shift(V2E)(zavgS), sign)
+    pnabla_M = library.dot(neighbors(V2E, zavgS), deref(sign))
     return pnabla_M / deref(vol)
 
 
@@ -81,7 +92,8 @@ def pnabla(pp, S_MXX, S_MYY, sign, vol):
 
 @fundef
 def compute_zavgS2(pp, S_M):
-    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+    pp_neighs = neighbors(E2V, pp)
+    zavg = 0.5 * (list_get(0, pp_neighs) + list_get(1, pp_neighs))
     s = deref(S_M)
     return make_tuple(tuple_get(0, s) * zavg, tuple_get(1, s) * zavg)
 
@@ -102,7 +114,7 @@ def tuple_dot(a, b):
 @fundef
 def compute_pnabla2(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS2)(pp, S_M)
-    pnabla_M = tuple_dot(shift(V2E)(zavgS), sign)
+    pnabla_M = tuple_dot(neighbors(V2E, zavgS), deref(sign))
     return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 
@@ -223,7 +235,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: gtfn bindings don't support tuples")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
@@ -278,9 +290,9 @@ def nabla2(
 
 
 def test_nabla2(program_processor, lift_mode):
+    program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
-    program_processor, validate = program_processor
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -319,18 +331,21 @@ def test_nabla2(program_processor, lift_mode):
 def sign(node_indices, is_pole_edge):
     def impl(node_indices2, is_pole_edge):
         return if_(
-            or_(deref(is_pole_edge), eq(deref(node_indices), deref(shift(E2V, 0)(node_indices2)))),
+            or_(
+                deref(is_pole_edge),
+                eq(deref(node_indices), list_get(0, neighbors(E2V, node_indices2))),
+            ),
             1.0,
             -1.0,
         )
 
-    return shift(V2E)(lift(impl)(node_indices, is_pole_edge))
+    return neighbors(V2E, lift(impl)(node_indices, is_pole_edge))
 
 
 @fundef
 def compute_pnabla_sign(pp, S_M, vol, node_index, is_pole_edge):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    pnabla_M = library.dot(shift(V2E)(zavgS), sign(node_index, is_pole_edge))
+    pnabla_M = library.dot(neighbors(V2E, zavgS), sign(node_index, is_pole_edge))
 
     return pnabla_M / deref(vol)
 
@@ -361,7 +376,6 @@ def test_nabla_sign(program_processor, lift_mode):
         pytest.xfail("TODO: gtfn bindings don't support unstructured")
     setup = nabla_setup()
 
-    # sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
     is_pole_edge = np_as_located_field(Edge)(setup.is_pole_edge_field)
     pp = np_as_located_field(Vertex)(setup.input_field)
     S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
