@@ -47,7 +47,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         args: tuple[Any, ...],
-    ):
+    ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
@@ -86,7 +86,7 @@ class GTFNTranslationStep(
     def _process_connectivity_args(
         self,
         offset_provider: dict[str, Connectivity | Dimension],
-    ):
+    ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
@@ -148,7 +148,7 @@ class GTFNTranslationStep(
         )
 
         # combine into a format that is aligned with what the backend expects
-        parameters: list[interface.Parameter] = [*regular_parameters, *connectivity_parameters]
+        parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))

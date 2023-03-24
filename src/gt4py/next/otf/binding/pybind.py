@@ -171,12 +171,6 @@ class BindingCodeGenerator(TemplatedGenerator):
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_parameter(
-    parameter: interface.Parameter,
-) -> FunctionParameter:
-    return FunctionParameter(name=parameter.name, type_=parameter.type_)
-
-
 def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
@@ -233,7 +227,10 @@ def create_bindings(
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=[make_parameter(param) for param in program_source.entry_point.parameters],
+            parameters=[
+                FunctionParameter(name=param.name, type_=param.type_)
+                for param in program_source.entry_point.parameters
+            ],
             body=ReturnStmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,
