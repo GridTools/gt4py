@@ -49,7 +49,9 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
 def _render_function_param(param: interface.Parameter, index: int) -> str:
     if isinstance(param.type_, ts.ScalarType):
         return f"{render_scalar_type(param.type_)} {param.name}"
-    elif isinstance(param.type_, (ts.FieldType, ts.TupleType)):  # TODO support scalar tuples
+    elif isinstance(
+        param.type_, (ts.FieldType, ts.TupleType)
+    ):  # TODO(havogt) add support for scalar tuples
         return f"BufferT{index}&& {param.name}"
     else:
         raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
@@ -65,7 +67,9 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param.type_, (ts.FieldType, ts.TupleType))  # TODO scalar tuples
+        if isinstance(
+            param.type_, (ts.FieldType, ts.TupleType)
+        )  # TODO(havogt) add support for scalar tuples
     ]
     if template_params:
         return f"""
