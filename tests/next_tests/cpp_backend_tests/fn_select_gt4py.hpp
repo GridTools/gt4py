@@ -54,8 +54,7 @@ template <class... dims> struct block_sizes_t {
 } // namespace
 namespace gridtools::fn::backend {
 namespace naive_impl_ {
-template <class ThreadPool>
-struct naive_with_threadpool;
+template <class ThreadPool> struct naive_with_threadpool;
 template <class ThreadPool>
 storage::cpu_kfirst backend_storage_traits(naive_with_threadpool<ThreadPool>);
 template <class ThreadPool>
