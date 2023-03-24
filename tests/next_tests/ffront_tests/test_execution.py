@@ -487,7 +487,7 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
     V2E = rs.V2E
     E2V = rs.E2V
 
-    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+    out = array_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
 
     @field_operator(backend=fieldview_backend)
     def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:
@@ -510,7 +510,7 @@ def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
     V2E = rs.V2E
     E2V = rs.E2V
 
-    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+    out = array_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
 
     @field_operator(backend=fieldview_backend)
     def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:

@@ -132,7 +132,7 @@ def map_make_const_list(in_edges):
 def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    out = array_as_located_field(Vertex)(np.zeros([9]))
     ref = 2 * np.sum(v2e_arr, axis=1)
 
     run_processor(
