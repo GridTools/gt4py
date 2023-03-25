@@ -23,6 +23,7 @@ from gt4py.next.iterator.transforms.collect_shifts import ALL_NEIGHBORS
 
 
 VALUE_TOKEN = types.new_class("VALUE_TOKEN")
+TYPE_TOKEN = types.new_class("TYPE_TOKEN")
 
 
 @dataclass(frozen=True)
@@ -47,8 +48,10 @@ class InputTracer:
 
 def _combine(*values):
     # `OffsetLiteral`s may occur in `list_get` calls
-    if not all(val is VALUE_TOKEN or isinstance(val, ir.OffsetLiteral) for val in values):
-        raise AssertionError("All arguments must be values.")
+    if not all(
+        val in [VALUE_TOKEN, TYPE_TOKEN] or isinstance(val, ir.OffsetLiteral) for val in values
+    ):
+        raise AssertionError("All arguments must be values or types.")
     return VALUE_TOKEN
 
 
@@ -93,6 +96,10 @@ def _reduce(f, init):
     return _combine
 
 
+def _map(f):
+    return _combine
+
+
 def _neighbors(o, x):
     return _deref(_shift(o, ALL_NEIGHBORS)(x))
 
@@ -112,6 +119,7 @@ _START_CTX: Final = {
     "scan": _scan,
     "reduce": _reduce,
     "neighbors": _neighbors,
+    "map_": _map,
 }
 
 
@@ -122,6 +130,8 @@ class TraceShifts(NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
+        elif node.id in ir.TYPEBUILTINS:
+            return TYPE_TOKEN
         return _combine
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
