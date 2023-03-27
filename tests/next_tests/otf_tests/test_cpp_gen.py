@@ -16,13 +16,10 @@ import numpy as np
 import pytest
 
 import gt4py.next.otf.binding.cpp_interface as cpp
+import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import format_source
+from gt4py.next.common import Dimension
 from gt4py.next.otf.binding import interface
-
-
-def test_render_types():
-    rendered = cpp.render_python_type(float)
-    assert rendered == "double"
 
 
 @pytest.fixture
@@ -30,8 +27,8 @@ def function_scalar_example():
     return interface.Function(
         name="example",
         parameters=[
-            interface.ScalarParameter("a", np.dtype(float)),
-            interface.ScalarParameter("b", np.dtype(int)),
+            interface.Parameter(name="a", type_=ts.ScalarType(ts.ScalarKind.FLOAT64)),
+            interface.Parameter(name="b", type_=ts.ScalarType(ts.ScalarKind.INT64)),
         ],
     )
 
@@ -43,7 +40,7 @@ def test_render_function_declaration_scalar(function_scalar_example):
     expected = format_source(
         "cpp",
         """\
-    decltype(auto) example(double a, long b) {
+    decltype(auto) example(double a, std::int64_t b) {
         return;
     }\
     """,
@@ -67,8 +64,20 @@ def function_buffer_example():
     return interface.Function(
         name="example",
         parameters=[
-            interface.BufferParameter("a_buf", 2, float),
-            interface.BufferParameter("b_buf", 1, int),
+            interface.Parameter(
+                name="a_buf",
+                type_=ts.FieldType(
+                    dims=[Dimension("foo"), Dimension("bar")],
+                    dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
+                ),
+            ),
+            interface.Parameter(
+                name="b_buf",
+                type_=ts.FieldType(
+                    dims=[Dimension("foo")],
+                    dtype=ts.ScalarType(ts.ScalarKind.INT64),
+                ),
+            ),
         ],
     )
 
