@@ -23,6 +23,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 T = TypeVar("T")
@@ -30,14 +31,8 @@ T = TypeVar("T")
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 
-def get_param_description(
-    name: str, obj: Any
-) -> interface.ScalarParameter | interface.BufferParameter:
-    view: np.ndarray = np.asarray(obj)
-    if view.ndim > 0:
-        return interface.BufferParameter(name, tuple(dim.value for dim in obj.axes), view.dtype)
-    else:
-        return interface.ScalarParameter(name, view.dtype)
+def get_param_description(name: str, obj: Any) -> interface.Parameter:
+    return interface.Parameter(name, type_translation.from_value(obj))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -52,8 +47,8 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         args: tuple[Any, ...],
-    ):
-        parameters: list[interface.ScalarParameter | interface.BufferParameter] = []
+    ) -> tuple[list[interface.Parameter], list[str]]:
+        parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
         # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
@@ -78,7 +73,7 @@ class GTFNTranslationStep(
 
             # argument conversion expression
             if (
-                isinstance(parameter, interface.ScalarParameter)
+                isinstance(parameter.type_, ts.ScalarType)
                 and parameter.name in closure_scalar_parameters
             ):
                 # convert into sid
@@ -91,8 +86,8 @@ class GTFNTranslationStep(
     def _process_connectivity_args(
         self,
         offset_provider: dict[str, Connectivity | Dimension],
-    ):
-        parameters: list[interface.ConnectivityParameter] = []
+    ) -> tuple[list[interface.Parameter], list[str]]:
+        parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
         for name, connectivity in offset_provider.items():
@@ -104,11 +99,14 @@ class GTFNTranslationStep(
 
                 # parameter
                 parameters.append(
-                    interface.ConnectivityParameter(
-                        GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
-                        connectivity.origin_axis.value,
-                        name,
-                        connectivity.index_type,  # type: ignore[arg-type]
+                    interface.Parameter(
+                        name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
+                        type_=ts.FieldType(
+                            dims=[connectivity.origin_axis, Dimension(name)],
+                            dtype=ts.ScalarType(
+                                type_translation.get_scalar_kind(connectivity.index_type)
+                            ),
+                        ),
                     )
                 )
 
@@ -150,9 +148,7 @@ class GTFNTranslationStep(
         )
 
         # combine into a format that is aligned with what the backend expects
-        parameters: list[
-            interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter
-        ] = [*regular_parameters, *connectivity_parameters]
+        parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
