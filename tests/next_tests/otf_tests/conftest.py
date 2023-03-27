@@ -41,11 +41,11 @@ def make_program_source(name: str) -> stages.ProgramSource:
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[Dimension("I"), Dimension("J")],
+                            dims=[common.Dimension("I"), common.Dimension("J")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                         ts.FieldType(
-                            dims=[Dimension("I"), Dimension("J")],
+                            dims=[common.Dimension("I"), common.Dimension("J")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                     ]
