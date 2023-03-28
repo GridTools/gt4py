@@ -141,8 +141,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
-                                  gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{source_buffer}})
+                                  gridtools::sid::unknown_kind>({{source_buffer}})
             )"""
     )
 
