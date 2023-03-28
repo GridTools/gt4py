@@ -183,6 +183,7 @@ def create_bindings(
             "pybind11/pybind11.h",
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
             "gridtools/fn/unstructured.hpp",
