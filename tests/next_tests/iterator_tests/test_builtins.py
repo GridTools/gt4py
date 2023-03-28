@@ -190,7 +190,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 
     gtfn_without_transforms = dataclasses.replace(
         run_gtfn,
-        workflow=workflow.replace(
+        otf_workflow=workflow.replace(
             translation=workflow.replace(
                 GTFN_DEFAULT_TRANSLATION_STEP, enable_itir_transforms=False
             ),
