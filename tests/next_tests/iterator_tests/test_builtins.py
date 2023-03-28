@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import math
 from typing import Callable, Iterable
 
@@ -51,12 +52,8 @@ from gt4py.next.iterator.builtins import (
 )
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from gt4py.next.program_processors.formatters import type_check
-from gt4py.next.program_processors.runners.gtfn_cpu import (
-    GTFNExecutor,
-    run_gtfn,
-    run_gtfn_imperative,
-)
+from gt4py.next.otf import workflow
+from gt4py.next.program_processors.runners.gtfn_cpu import GTFN_DEFAULT_TRANSLATION_STEP, run_gtfn
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
@@ -191,15 +188,15 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
-    gtfn_without_transforms = GTFNExecutor(
-        name="run_gtfn", enable_itir_transforms=False
+    gtfn_without_transforms = dataclasses.replace(
+        run_gtfn,
+        workflow=workflow.replace(
+            translation=workflow.replace(
+                GTFN_DEFAULT_TRANSLATION_STEP, enable_itir_transforms=False
+            ),
+        ),
     )  # avoid inlining the function
-    fencil(
-        builtin,
-        out,
-        *inps,
-        processor=GTFNExecutor(name="run_gtfn", enable_itir_transforms=False),
-    )
+    fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
     assert np.allclose(np.asarray(out), expected)
 
