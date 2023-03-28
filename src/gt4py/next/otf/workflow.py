@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Generic, Protocol, TypeVar
+from typing import Any, Callable, ClassVar, Generic, Protocol, TypeVar
 
 
 StartT = TypeVar("StartT")
@@ -60,6 +60,14 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
         ...
 
 
+WFT = TypeVar("WFT", bound=Workflow)
+
+
+def replace(workflow: WFT, **kwargs: Any) -> WFT:
+    """Make a copy of the workflow with changed configuration or subworkflows."""
+    return dataclasses.replace(workflow, **kwargs)
+
+
 @dataclasses.dataclass(frozen=True)
 class Step(Generic[StartT, EndT]):
     """
@@ -91,7 +99,64 @@ class Step(Generic[StartT, EndT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class CombinedStep(Generic[StartT, IntermediateT, EndT]):
+class NamedStepSequence(Generic[StartT, EndT]):
+    """
+    Workflow with linear succession of named steps.
+
+    Examples:
+    ---------
+    >>> import dataclasses
+
+    >>> def parse(x: str) -> int:
+    ...    return int(x)
+
+    >>> def plus_half(x: int) -> float:
+    ...    return x + 0.5
+
+    >>> def stringify(x: float) -> str:
+    ...    return str(x)
+
+    >>> @dataclasses.dataclass(frozen=True)
+    ... class ParseOpPrint(NamedStepSequence[str, str]):
+    ...    parse: Workflow[str, int]
+    ...    op: Workflow[int, float]
+    ...    print: Workflow[float, str]
+    ...    step_order = ["parse", "op", "print"]
+
+    >>> pop = ParseOpPrint(
+    ...    parse=parse,
+    ...    op=plus_half,
+    ...    print=stringify
+    ... )
+
+    >>> pop(73)
+    '73.5'
+
+    >>> def plus_tenth(x: int) -> float:
+    ...   return x + 0.1
+
+    >>> pop.replace(op=plus_tenth)(73)
+    '73.1'
+    """
+
+    step_order: ClassVar[list[str]]
+
+    def __call__(self, inp: StartT) -> EndT:
+        """Compose the steps in the order defined in the `.step_order` class attribute."""
+        step_result: Any = inp
+        for step in [getattr(self, s) for s in self.step_order]:
+            step_result = step(step_result)
+        return step_result
+
+    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
+        return CombinedStep(first=self, second=step)
+
+    def replace(self, **kwargs: Any) -> NamedStepSequence[StartT, EndT]:
+        return dataclasses.replace(self, **kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class CombinedStep(NamedStepSequence, Generic[StartT, IntermediateT, EndT]):
     """
     Composable workflow of single input callables.
 
@@ -123,12 +188,7 @@ class CombinedStep(Generic[StartT, IntermediateT, EndT]):
 
     first: Workflow[StartT, IntermediateT]
     second: Workflow[IntermediateT, EndT]
-
-    def __call__(self, inp: StartT) -> EndT:
-        return self.second(self.first(inp))
-
-    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
-        return CombinedStep(first=self, second=step)
+    step_order = ["first", "second"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -162,6 +222,7 @@ class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
     _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
 
     def __call__(self, inp: StartT) -> EndT:
+        """Run the step only if the input is not cached, else return from cache."""
         hash_ = self.hash_function(inp)
         try:
             result = self._cache[hash_]
