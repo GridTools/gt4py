@@ -14,10 +14,9 @@
 import numpy as np
 
 from gt4py.next import common
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import int32
+from gt4py.next.ffront import decorator, fbuiltins
 from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 
 IDim = common.Dimension("IDim")
@@ -40,8 +39,10 @@ def test_different_buffer_sizes():
     inp = np_as_located_field(IDim, JDim)(np.reshape(np.arange(nx * ny, dtype=np.int32), (nx, ny)))
     out = np_as_located_field(IDim, JDim)(np.zeros((out_nx, out_ny), dtype=np.int32))
 
-    @field_operator(backend=run_gtfn)
-    def copy(inp: common.Field[[IDim, JDim], int32]) -> common.Field[[IDim, JDim], int32]:
+    @decorator.field_operator(backend=gtfn_cpu.run_gtfn)
+    def copy(
+        inp: common.Field[[IDim, JDim], fbuiltins.int32]
+    ) -> common.Field[[IDim, JDim], fbuiltins.int32]:
         return inp
 
     copy(inp, out=out, offset_provider={})

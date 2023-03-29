@@ -39,6 +39,7 @@ class BufferSID(Expr):
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
     # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
+    # unit_stride_dim: int # TODO(havogt): we can fix the dimension with unity stride once we have the "frozen stencil" mechanism
 
 
 class CompositeSID(Expr):
