@@ -568,17 +568,21 @@ def execute_shift(
     raise AssertionError("Unknown object in `offset_provider`")
 
 
+def _is_list_of_complete_offsets(
+    complete_offsets: list[tuple[Any, Any]]
+) -> TypeGuard[list[CompleteOffset]]:
+    return all(
+        isinstance(tag, Tag) and isinstance(offset, (int, np.integer))
+        for tag, offset in complete_offsets
+    )
+
+
 def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
-    complete_offsets = []
-    tag = None
-    for offset in offsets:
-        if not isinstance(offset, (int, np.integer)):
-            tag = offset
-        else:
-            assert tag is not None
-            complete_offsets.append((tag, offset))
-            tag = None
-    assert tag is None
+    assert len(offsets) % 2 == 0
+    complete_offsets = [*zip(offsets[::2], offsets[1::2])]
+    assert _is_list_of_complete_offsets(
+        complete_offsets
+    ), f"Invalid sequence of offset parts: {offsets}"
     return complete_offsets
 
 
@@ -810,7 +814,7 @@ class MDIterator:
 
 def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
     return [
-        axis.value  # type: ignore[misc] # axis.value is always `str`
+        cast(Tag, axis.value)  # axis.value is always `str`
         for axis in axes
         if isinstance(axis, runtime.Offset)
         or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)

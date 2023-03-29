@@ -44,25 +44,30 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     Preconditions:
       - `FunctionDefinitions` are inlined
+      - Pass must be only constructed once (and `_fuse_mapsX` are reserved symbols)
 
     Example:
         map(λ(x, y)->f(x, y))(a, map(λ(z, w)->g(z, w))(b, c))
     to
         map(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
+
+        reduce(λ(x, y) → f(x, y), init)(map_(g(z, w))(a, b))
+    to
+        reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
 
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
-        if isinstance(fun, ir.Lambda):
-            return fun
-        params = [ir.Sym(id=self.uids.sequential_id(prefix="sym")) for _ in range(param_count)]
+        # if fun is already a Lambda we still wrap it to get unique symbol names to avoid symbol clashes
+        params = [
+            ir.Sym(id=self.uids.sequential_id(prefix="_fuse_maps")) for _ in range(param_count)
+        ]
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
         )
 
-    # TODO think about clashes of symbol names
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         node = self.generic_visit(node)
         if _is_map(node) or _is_reduce(node):
@@ -93,7 +98,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                             inline_lambdas.inline_lambda(
                                 ir.FunCall(
                                     fun=inner_op,
-                                    args=[*(ir.SymRef(id=param.id) for param in inner_op.params)],
+                                    args=[ir.SymRef(id=param.id) for param in inner_op.params],
                                 )
                             )
                         )
@@ -103,13 +108,13 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         inlined_args.append(ir.SymRef(id=outer_op.params[i + first_param].id))
                         new_params.append(outer_op.params[i + first_param])
                         new_args.append(node.args[i])
-
-                new_body = inline_lambdas.inline_lambda(
-                    ir.FunCall(
-                        fun=outer_op,
-                        args=inlined_args,
-                    )
+                new_body = ir.FunCall(
+                    fun=outer_op,
+                    args=inlined_args,
                 )
+                new_body = inline_lambdas.inline_lambda(
+                    new_body
+                )  # removes one level of nesting (the recursive inliner could simplify more, however this can also be done on the full tree later)
                 new_op = ir.Lambda(
                     params=new_params,
                     expr=new_body,
@@ -119,10 +124,9 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
                         args=new_args,
                     )
-                elif _is_reduce(node):
+                else:  # _is_reduce(node)
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
                         args=new_args,
                     )
-                raise AssertionError("unreachable")
         return node

@@ -183,9 +183,9 @@ class ValListTuple(Type):
     """
     A tuple of `Val` that contains `List`s.
 
-    All items have
-    - the same `kind` and `size`;
-    - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
+    All items have:
+      - the same `kind` and `size`;
+      - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
     """
 
     kind: Type = eve.field(default_factory=TypeVar.fresh)
@@ -591,8 +591,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
     def _visit_make_tuple(self, node: ir.FunCall, **kwargs) -> Type:
-        # Calls to make_tuple are handled as being part of the grammar,
-        # not as function calls
+        # Calls to `make_tuple` are handled as being part of the grammar, not as function calls.
         argtypes = self.visit(node.args, **kwargs)
         kind = (
             TypeVar.fresh()
@@ -604,12 +603,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return Val(kind=kind, dtype=dtype, size=size)
 
     def _visit_tuple_get(self, node: ir.FunCall, **kwargs) -> Type:
-        # Calls to tuple_get are handled as being part of the grammar,
-        # not as function calls
+        # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
-            raise TypeError("tuple_get requires exactly two arguments")
+            raise TypeError("`tuple_get` requires exactly two arguments.")
         if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to tuple_get must be a literal int")
+            raise TypeError("The first argument to `tuple_get` must be a literal int.")
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
@@ -630,11 +628,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_neighbors(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
-            raise TypeError("neighbors requires exactly two arguments")
-        if not isinstance(node.args[0], ir.OffsetLiteral):
-            raise TypeError("The first argument to neighbors must be an OffsetLiteral.")
-        if not isinstance(node.args[0].value, str):
-            raise TypeError("The first argument to neighbors must be an OffsetLiteral tag.")
+            raise TypeError("`neighbors` requires exactly two arguments.")
+        if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
+            raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
 
         max_length: Type = TypeVar.fresh()
         has_skip_values: Type = TypeVar.fresh()
@@ -670,7 +666,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
-            raise TypeError("cast_ requires exactly two arguments.")
+            raise TypeError("`cast_` requires exactly two arguments.")
         val_arg_type = self.visit(node.args[0], **kwargs)
         type_arg = node.args[1]
         if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:

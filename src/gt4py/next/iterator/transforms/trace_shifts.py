@@ -125,10 +125,7 @@ def _lift(f):
 
 
 def _reduce(f, init):
-    def apply(*args):
-        return _combine(*args)
-
-    return apply
+    return _combine
 
 
 def _neighbors(o, x):

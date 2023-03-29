@@ -4,12 +4,17 @@ tags: [frontend]
 
 # Field View Lowering
 
-- **Status** valid
+- **Status** deprecated
 - **Authors** Rico Häuselmann (@dropd), Till Ehrengruber (@tehrengruber)
 - **Created** 2022-02-09
-- **Updated** 2022-02-22
+- **Updated** 2023-03-22
 
 ## Updates:
+
+### 2023-03-22:
+
+The lowering was significantly simplified after the introduction of neighbor lists in Iterator IR.
+The new lowering strategy is described in the lowering module.
 
 ### 2022-04-08: Added scalar literal support
 
