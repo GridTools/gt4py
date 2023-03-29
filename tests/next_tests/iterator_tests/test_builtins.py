@@ -53,7 +53,7 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.otf import workflow
-from gt4py.next.program_processors.runners.gtfn_cpu import GTFN_DEFAULT_TRANSLATION_STEP, run_gtfn
+from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
 from .conftest import run_processor
 from .math_builtin_test_data import math_builtin_test_data
@@ -191,8 +191,9 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     gtfn_without_transforms = dataclasses.replace(
         run_gtfn,
         otf_workflow=workflow.replace(
+            run_gtfn.otf_workflow,
             translation=workflow.replace(
-                GTFN_DEFAULT_TRANSLATION_STEP, enable_itir_transforms=False
+                run_gtfn.otf_workflow.translation, enable_itir_transforms=False
             ),
         ),
     )  # avoid inlining the function

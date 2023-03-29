@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Final
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -23,7 +23,7 @@ from gt4py.next.otf import languages, recipes, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import otf_compile_executor, processor_interface as ppi
+from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
@@ -102,17 +102,11 @@ GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
 )
 
 
-run_gtfn: Final[
-    ppi.ProgramProcessor[None, ppi.ProgramExecutor]
-] = otf_compile_executor.OTFCompileExecutor[
+run_gtfn = otf_compile_executor.OTFCompileExecutor[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
-](
-    name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
-)
+](name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW)
 
-run_gtfn_imperative: Final[
-    ppi.ProgramProcessor[None, ppi.ProgramExecutor]
-] = otf_compile_executor.OTFCompileExecutor[
+run_gtfn_imperative = otf_compile_executor.OTFCompileExecutor[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
 ](
     name="run_gtfn_imperative",
