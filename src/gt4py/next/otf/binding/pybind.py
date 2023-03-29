@@ -38,7 +38,7 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    dim_config: int
+    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
 
 
 class FunctionCall(Expr):
@@ -154,7 +154,6 @@ def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
             source_buffer=param.name,
             dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
             scalar_type=param.type_.dtype,
-            dim_config=index,
         )
     else:
         return param.name
