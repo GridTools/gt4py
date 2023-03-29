@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,12 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import ctypes
-import types
-from typing import Final, Sequence, Type
+from typing import Final, Sequence
 
-import numpy as np
-
+import gt4py.next.type_system.type_specifications as ts
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
 
@@ -29,63 +26,36 @@ CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
     header_extension="cpp.inc",
 )
 
-_TYPE_MAPPING: Final = types.MappingProxyType(
-    {
-        bool: "bool",
-        int: "long",
-        float: "double",
-        complex: "std::complex<double>",
-        np.bool_: "bool",
-        np.byte: "signed char",
-        np.ubyte: "unsigned char",
-        np.short: "short",
-        np.ushort: "unsigned short",
-        np.intc: "int",
-        np.uintc: "unsigned int",
-        np.int_: "long",
-        np.uint: "unsigned long",
-        np.longlong: "long long",
-        np.ulonglong: "unsigned long long",
-        np.single: "float",
-        np.double: "double",
-        np.longdouble: "long double",
-        np.csingle: "std::complex<float>",
-        np.cdouble: "std::complex<double>",
-        np.clongdouble: "std::complex<long double>",
-        ctypes.c_bool: "bool",
-        ctypes.c_char: "char",
-        ctypes.c_wchar: "wchar_t",
-        ctypes.c_byte: "char",
-        ctypes.c_ubyte: "unsigned char",
-        ctypes.c_short: "short",
-        ctypes.c_ushort: "unsigned short",
-        ctypes.c_int: "int",
-        ctypes.c_uint: "unsigned int",
-        ctypes.c_long: "long",
-        ctypes.c_ulong: "unsigned long",
-        ctypes.c_longlong: "long long",
-        ctypes.c_ulonglong: "unsigned long long",
-        ctypes.c_size_t: "std::size_t",
-        ctypes.c_ssize_t: "std::ptrdiff_t",
-        ctypes.c_float: "float",
-        ctypes.c_double: "double",
-        ctypes.c_longdouble: "long double",
-    }
-)
+
+def render_scalar_type(scalar_type: ts.ScalarType) -> str:
+    match scalar_type.kind:
+        case ts.ScalarKind.BOOL:
+            return "bool"
+        case ts.ScalarKind.INT32:
+            return "std::int32_t"
+        case ts.ScalarKind.INT64:
+            return "std::int64_t"
+        case ts.ScalarKind.FLOAT32:
+            return "float"
+        case ts.ScalarKind.FLOAT64:
+            return "double"
+        case ts.ScalarKind.STRING:
+            return "std::string"
+        case ts.ScalarKind.DIMENSION:
+            raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
+        case _:
+            raise AssertionError(
+                f"Scalar kind '{scalar_type}' is not implemented when it should be."
+            )
 
 
-def render_python_type(python_type: Type) -> str:
-    return _TYPE_MAPPING[python_type]
-
-
-def _render_function_param(
-    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
-    index: int,
-) -> str:
-    if isinstance(param, interface.ScalarParameter):
-        return f"{render_python_type(param.scalar_type.type)} {param.name}"
-    else:
+def _render_function_param(param: interface.Parameter, index: int) -> str:
+    if isinstance(param.type_, ts.ScalarType):
+        return f"{render_scalar_type(param.type_)} {param.name}"
+    elif isinstance(param.type_, ts.FieldType):
         return f"BufferT{index}&& {param.name}"
+    else:
+        raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
 
 
 def render_function_declaration(function: interface.Function, body: str) -> str:
@@ -98,7 +68,7 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param, (interface.BufferParameter, interface.ConnectivityParameter))
+        if isinstance(param.type_, ts.FieldType)
     ]
     if template_params:
         return f"""

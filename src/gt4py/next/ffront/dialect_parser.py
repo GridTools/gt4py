@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -106,7 +106,6 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> DialectRootT:
-
         source, filename, starting_line = source_definition
         try:
             line_offset = starting_line - 1

@@ -1,6 +1,5 @@
 # Coding Guidelines
 
-
 ## Software design
 
 Designing a clean architecture for a software product is a difficult task and developers can easily overlook it under pressure or when they are eager to deliver exciting new features. However, choosing the quick solution instead of a clean one will likely lead to a large amount of additional work in the future (_technical debt_).
@@ -16,7 +15,6 @@ To keep technical debt at acceptable levels, design and implementation of new fe
 
 Remember that important design decisions should be properly documented for future reference and to share the knowledge with other developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The full list of ADRs and documentation for writing new ones can be found in [docs/functional/architecture/Index.md](docs/functional/architecture/Index.md).
 
-
 ## Code Style
 
 We follow the [Google Python Style Guide][google-style-guide] with a few minor changes (mentioned below). Since the best way to remember something is to understand the reasons behind it, make sure you go through the style guide at least once, paying special attention to the discussions in the _Pros_, _Cons_, and _Decision_ subsections.
@@ -28,15 +26,35 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 - According to subsection [_2.19 Power Features_](https://google.github.io/styleguide/pyguide.html#219-power-features), direct use of _power features_ (e.g. custom metaclasses, import hacks, reflection) should be avoided, but standard library classes that internally use these power features are accepted. Following the same spirit, we allow the use of power features in infrastructure code with similar functionality and scope as the Python standard library.
 - According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing), symbols from `typing` and `collections.abc` modules used in type annotations _"can be imported directly to keep common annotations concise and match standard typing practices"_. Following the same spirit, we allow symbols to be imported directly from third-party or internal modules when they only contain a collection of frequently used typying definitions.
 
+### Common questions
+
+- `pass` vs `...` (`Ellipsis`)
+
+  `pass` is the _no-op_ statement in Python and `...` is a literal value (called _Ellipsis_) introduced for slicing collections of unknown number of dimensions. Although they are very different in nature, both of them are used in places where a statement is required purely for syntactic reasons, and there is not yet a clear standard practice in the community about when to use one or the other. We decided to align with the common pattern of using `...` in the body of empty function definitions working as placeholders for actual implementations defined somewhere else (e.g. type stubs, abstract methods and methods appearing in `Protocol` classes) and `pass` in any other place where its usage is mixed with actual statements.
+
+  ```python
+  # Correct use of `...` as the empty body of an abstract method
+  class AbstractFoo:
+     @abstractmethod
+     def bar(self) -> Bar:
+        ...
+
+  # Correct use of `pass` when mixed with other statements
+  try:
+     resource.load(id=42)
+  except ResourceException:
+     pass
+  ```
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] and some extensions such as [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).
 
 Sphinx supports the [reStructuredText][sphinx-rest] (reST) markup language for defining additional formatting options in the generated documentation, however section [_3.8 Comments and Docstrings_](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) of the Google Python Style Guide does not specify how to use markups in docstrings. As a result, we decided to forbid reST markup in docstrings, except for the following cases:
 
-   - Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).   
-   - Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ``` ``literal`` ```  strings, bulleted lists).
-   
+- Cross-referencing other objects using Sphinx text roles for the [Python domain](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain) (as explained [here](https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#python-roles)).
+- Very basic formatting markup to improve _readability_ of the generated documentation without obscuring the source docstring (e.g. ` ``literal`` ` strings, bulleted lists).
+
 We highly encourage the [doctest][doctest] format for code examples in docstrings. In fact, doctest runs code examples and makes sure they are in sync with the codebase.
 
 ### Module structure
@@ -51,9 +69,11 @@ In general, you should structure new Python modules in the following way:
    2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
 5. Definition of exported symbols (optional, mainly for re-exporting symbols from other modules):
+
 ```python
 __all__ = ["func_a", "CONST_B"]
-   ```
+```
+
 6. Public constants and typing definitions.
 7. Module contents organized in a convenient way for understanding how the pieces of code fit together, usually defining functions before classes.
 
@@ -63,24 +83,25 @@ Consider configuration files as another type of source code and apply the same c
 
 ### Ignoring QA errors
 
-You may occasionally need to disable checks from _quality assurance_  (QA) tools (e.g. linters, type checkers, etc.) on specific lines as some tool might not be able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting your code to pass QA checks would make it less readable. Additionally, you should add a brief comment for future reference, e.g.:
+You may occasionally need to disable checks from _quality assurance_ (QA) tools (e.g. linters, type checkers, etc.) on specific lines as some tool might not be able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting your code to pass QA checks would make it less readable. Additionally, you should add a brief comment for future reference, e.g.:
 
-   ```python
-   f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
-   ```
+```python
+f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
+```
 
-## Testing 
+## Testing
 
 Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration, and regression tests. Note that even though [doctests][doctest] are great for documentation purposes, they lack many features and are difficult to debug. Hence, they should not be used as replacement for proper unit tests except in trivial cases.
- 
+
 TODO: add missing test conventions.
+
 <!--
 TODO: add test conventions:
 TODO:    - to organize tests inside the `tests/` folder
 TODO:    - to name tests
 TODO:    - to use pytest features (fixtures, markers, etc.)
 TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
-TODO:    - to use pytest plugins 
+TODO:    - to use pytest plugins
 
 Links with plugins:
 https://towardsdatascience.com/pytest-plugins-to-love-%EF%B8%8F-9c71635fbe22
@@ -100,4 +121,3 @@ https://testandcode.com/116
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -35,6 +35,26 @@ def can_deref(*args):
 
 @builtin_dispatch
 def shift(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def neighbors(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def map_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def make_const_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def list_get(*args):
     raise BackendNotSelectedError()
 
 
@@ -380,6 +400,10 @@ BUILTINS = {
     "deref",
     "can_deref",
     "shift",
+    "neighbors",
+    "list_get",
+    "make_const_list",
+    "map_",
     "lift",
     "reduce",
     "plus",

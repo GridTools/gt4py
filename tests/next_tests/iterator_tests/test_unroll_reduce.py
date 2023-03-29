@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -38,8 +38,8 @@ def basic_reduction():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="x")],
             )
         ],
     )
@@ -56,8 +56,8 @@ def reduction_with_shift_on_second_arg():
         args=[
             ir.SymRef(id="x"),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="y")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
             ),
         ],
     )
@@ -73,12 +73,12 @@ def reduction_with_incompatible_shifts():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="x")],
             ),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim2")]),
-                args=[ir.SymRef(id="y")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim2"), ir.SymRef(id="y")],
             ),
         ],
     )
@@ -94,22 +94,30 @@ def reduction_with_irrelevant_full_shift():
         ),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(
-                    fun=ir.SymRef(id="shift"),
-                    args=[
-                        ir.OffsetLiteral(value="IrrelevantDim"),
-                        ir.OffsetLiteral(value="0"),
-                        ir.OffsetLiteral(value="Dim"),
-                    ],
-                ),
-                args=[ir.SymRef(id="x")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[
+                    ir.OffsetLiteral(value="Dim"),
+                    ir.FunCall(
+                        fun=ir.FunCall(
+                            fun=ir.SymRef(id="shift"),
+                            args=[
+                                ir.OffsetLiteral(value="IrrelevantDim"),
+                                ir.OffsetLiteral(value="0"),
+                            ],
+                        ),
+                        args=[ir.SymRef(id="x")],
+                    ),
+                ],
             ),
             ir.FunCall(
-                fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="Dim")]),
-                args=[ir.SymRef(id="y")],
+                fun=ir.SymRef(id="neighbors"),
+                args=[ir.OffsetLiteral(value="Dim"), ir.SymRef(id="y")],
             ),
         ],
     )
+
+
+# TODO add a test with lift
 
 
 @pytest.mark.parametrize(
@@ -134,27 +142,24 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
 
     red_fun, red_init = red.fun.args
 
-    shifted_args = [
+    elements = [
         ir.FunCall(
-            fun=ir.SymRef(id="deref"),
-            args=[
-                ir.FunCall(
-                    fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[offset]),
-                    args=[arg],
-                )
-            ],
+            fun=ir.SymRef(id="list_get"),
+            args=[offset, arg],
         )
         for arg in red.args
     ]
 
-    step_expr = ir.FunCall(fun=red_fun, args=[acc] + shifted_args)
+    step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
     if has_skip_values:
+        neighbors_offset = red.args[shifted_arg].args[0]
+        neighbors_it = red.args[shifted_arg].args[1]
         can_deref = ir.FunCall(
             fun=ir.SymRef(id="can_deref"),
             args=[
                 ir.FunCall(
-                    fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[offset]),
-                    args=[red.args[shifted_arg]],
+                    fun=ir.FunCall(fun=ir.SymRef(id="shift"), args=[neighbors_offset, offset]),
+                    args=[neighbors_it],
                 )
             ],
         )

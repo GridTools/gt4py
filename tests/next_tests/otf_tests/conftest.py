@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,6 +18,8 @@ import jinja2
 import numpy as np
 import pytest
 
+import gt4py.next.type_system.type_specifications as ts
+from gt4py.next import common
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import cpp_interface, interface, pybind
 from gt4py.next.otf.compilation import cache
@@ -27,8 +29,14 @@ def make_program_source(name: str) -> stages.ProgramSource:
     entry_point = interface.Function(
         name,
         parameters=[
-            interface.BufferParameter("buf", ("I", "J"), np.dtype(np.float32)),
-            interface.ScalarParameter("sc", np.dtype(np.float32)),
+            interface.Parameter(
+                name="buf",
+                type_=ts.FieldType(
+                    dims=[common.Dimension("I"), common.Dimension("J")],
+                    dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
+                ),
+            ),
+            interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
         ],
     )
     func = cpp_interface.render_function_declaration(

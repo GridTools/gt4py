@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -67,30 +67,3 @@ def test_cartesian_offset_provider():
 
     fencil(out, inp, backend=double_roundtrip.executor)
     assert out[0][0] == 42
-
-
-@fundef
-def delay_complete_shift(inp):
-    return deref(shift(I, J, 1, 1)(inp))
-
-
-@fendef(offset_provider={"I": J_loc, "J": I_loc})
-def delay_complete_shift_fencil(output, input):
-    closure(
-        cartesian_domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
-        delay_complete_shift,
-        output,
-        [input],
-    )
-
-
-def test_delay_complete_shift():
-    inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
-
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
-    delay_complete_shift_fencil(out, inp)
-    assert out[0, 0] == 43
-
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
-    delay_complete_shift_fencil(out, inp, backend=roundtrip.executor)
-    assert out[0, 0] == 43

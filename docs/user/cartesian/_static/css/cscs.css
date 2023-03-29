@@ -1,0 +1,29 @@
+.wy-side-nav-search {
+    background-color: white;
+}
+.wy-side-nav-search > div.version, .wy-side-nav-search > a {
+    color: #343131;
+}
+.wy-side-nav-search input[type="text"] {
+    background: #e3e3e3;
+    color: #343131;
+    border-color: rgb(166, 11, 22);
+}
+.wy-nav-content a {
+    color: rgb(166, 11, 22);
+}
+.wy-nav-content a:hover {
+    color: rgb(226, 0, 36);
+}
+.wy-nav-content a:visited {
+    color: rgb(240, 155, 155);
+}
+.rst-content .note .admonition-title, .rst-content .admonition-todo .admonition-title {
+    background: rgb(226, 0, 36);
+}
+.rst-content .note, .rst-content .admonition-todo {
+    background: rgb(250, 220, 220);
+}
+div[class="linenodiv"] pre {
+    line-height: normal;
+}

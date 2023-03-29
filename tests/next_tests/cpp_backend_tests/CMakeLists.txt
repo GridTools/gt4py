@@ -54,7 +54,7 @@ function(add_fn_codegen_test)
     target_compile_definitions(${ARG_NAME} PRIVATE GT_FN_BACKEND=${BACKEND})
     target_compile_definitions(${ARG_NAME} PRIVATE GENERATED_FILE=\"${STENCIL_IMPL_SOURCE}\")
     if(is_gpu)
-        gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_75) #TODO
+        gridtools_setup_target(${ARG_NAME} CUDA_ARCH sm_60) #TODO
     endif()
     add_dependencies(${ARG_NAME} generated_${ARG_NAME})
 
@@ -71,8 +71,8 @@ if(BUILD_TESTING)
     add_fn_codegen_test(NAME copy_stencil SRC_FILE copy_stencil.py DRIVER_FILE copy_stencil_driver.cpp)
     add_fn_codegen_test(NAME copy_stencil_field_view SRC_FILE copy_stencil_field_view.py DRIVER_FILE copy_stencil_field_view_driver.cpp)
     add_fn_codegen_test(NAME anton_lap SRC_FILE anton_lap.py DRIVER_FILE anton_lap_driver.cpp)
-    add_fn_codegen_test(NAME fvm_nabla_fun SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp IMPERATIVE TRUE)
-    add_fn_codegen_test(NAME fvm_nabla_imp SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp IMPERATIVE FALSE)
+    add_fn_codegen_test(NAME fvm_nabla_fun SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp IMPERATIVE FALSE)
+    add_fn_codegen_test(NAME fvm_nabla_imp SRC_FILE fvm_nabla.py DRIVER_FILE fvm_nabla_driver.cpp IMPERATIVE TRUE)
     add_fn_codegen_test(NAME tridiagonal_solve SRC_FILE tridiagonal_solve.py DRIVER_FILE tridiagonal_solve_driver.cpp)
 endif()
     

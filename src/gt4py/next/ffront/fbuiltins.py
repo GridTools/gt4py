@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from numpy import float32, float64, int32, int64
 
 from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -192,6 +193,7 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
+    "as_offset",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES

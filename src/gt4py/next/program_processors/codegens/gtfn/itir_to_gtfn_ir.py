@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -175,7 +175,7 @@ def _collect_offset_definitions(
                 connectivity.origin_axis,
                 connectivity.neighbor_axis,
             ]:
-                if not dim.kind == common.DimensionKind.HORIZONTAL:
+                if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
                     name=Sym(id=dim.value), alias=_horizontal_dimension
@@ -290,32 +290,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type="axis_literal")
 
-    @staticmethod
-    def _is_sparse_deref_shift(node: itir.FunCall) -> bool:
-        return (
-            node.fun == itir.SymRef(id="deref")
-            and isinstance(node.args[0], itir.FunCall)
-            and isinstance(node.args[0].fun, itir.FunCall)
-            and node.args[0].fun.fun == itir.SymRef(id="shift")
-            and bool(len(node.args[0].fun.args) % 2)
-        )
-
-    def _sparse_deref_shift_to_tuple_get(self, node: itir.FunCall) -> Expr:
-        # deref(shift(i)(sparse)) -> tuple_get(i, deref(sparse))
-        # TODO: remove once ‘real’ sparse field handling is available
-        assert isinstance(node.args[0], itir.FunCall)
-        assert isinstance(node.args[0].fun, itir.FunCall)
-        offsets = node.args[0].fun.args
-        deref_arg = node.args[0].args[0]
-        if len(offsets) > 1:
-            deref_arg = itir.FunCall(
-                fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets[:-1]),
-                args=[deref_arg],
-            )
-        derefed = itir.FunCall(fun=itir.SymRef(id="deref"), args=[deref_arg])
-        sparse_access = itir.FunCall(fun=itir.SymRef(id="tuple_get"), args=[offsets[-1], derefed])
-        return self.visit(sparse_access)
-
     def _make_domain(self, node: itir.FunCall):
         tags = []
         sizes = []
@@ -386,8 +360,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     obj_expr=self.visit(node.args[0], **kwargs),
                     new_dtype=self.visit(node.args[1], **kwargs),
                 )
-            elif self._is_sparse_deref_shift(node):
-                return self._sparse_deref_shift_to_tuple_get(node)
+            elif node.fun.id == "list_get":
+                # should only reach this for the case of an external sparse field
+                return FunCall(
+                    fun=SymRef(id="tuple_get"),
+                    args=[self.visit(node.args[0]), self.visit(node.args[1])],
+                )
             self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
                 sizes, domain_offsets = self._make_domain(node)
@@ -470,7 +448,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
-                args=[self.visit(node.output, **kwargs)] + self.visit(node.inputs),
+                args=[self._visit_output_argument(node.output)] + self.visit(node.inputs),
                 axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(
@@ -494,7 +472,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             assert a.axis == b.axis
 
             index_map = dict[int, int]()
-            compacted_b_args = list[SymRef]()
+            compacted_b_args = list[Expr]()
             for b_idx, b_arg in enumerate(b.args):
                 try:
                     a_idx = a.args.index(b_arg)

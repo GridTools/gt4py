@@ -79,6 +79,7 @@ If needed, we might add functionality to extract the scalar value from a 0-d fie
 ### Notes on lowering
 
 This decision doesn't change the current definition of iterator ir or the `fn` C++ backend:
+
 - a stencil (any lowered field_operator) will only accept iterators (i.e. `deref` is required);
 - `fn` will accept SIDs, scalars have to we wrapped in a helper, e.g. `global_parameter`.
 
@@ -92,7 +93,7 @@ Example: A reduction over a dimension of a field returns a field with one dimens
 
 However, we would need implement it with either possibly strange side-effects (making builtin types, e.g. `float` a subclass of Field) or create custom types for scalars (which is not desirable from a usage perspective, e.g. `gt4py.float`) to make this properly work with Python typing.
 
-It would allow to make some cases work that are forbidden by the now decided rules, e.g. 
+It would allow to make some cases work that are forbidden by the now decided rules, e.g.
 
 ```python=
 @field_operator

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic, Protocol, TypeVar
+from typing import Callable, Generic, Protocol, TypeVar
 
 
 StartT = TypeVar("StartT")
@@ -24,6 +24,7 @@ EndT = TypeVar("EndT")
 EndT_co = TypeVar("EndT_co", covariant=True)
 NewEndT = TypeVar("NewEndT")
 IntermediateT = TypeVar("IntermediateT")
+HashT = TypeVar("HashT")
 
 
 def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
@@ -128,3 +129,42 @@ class CombinedStep(Generic[StartT, IntermediateT, EndT]):
 
     def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
         return CombinedStep(first=self, second=step)
+
+
+@dataclasses.dataclass(frozen=True)
+class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
+    """
+    Cached workflow of single input callables.
+
+    Examples:
+    ---------
+    >>> def heavy_computation(x: int) -> int:
+    ...    print("This might take a while...")
+    ...    return x
+
+    >>> cached_step = CachedStep(step=heavy_computation)
+
+    >>> cached_step(42)
+    This might take a while...
+    42
+
+    The next invocation for the same argument will be cached:
+    >>> cached_step(42)
+    42
+
+    >>> cached_step(1)
+    This might take a while...
+    1
+    """
+
+    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
+
+    _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
+
+    def __call__(self, inp: StartT) -> EndT:
+        hash_ = self.hash_function(inp)
+        try:
+            result = self._cache[hash_]
+        except KeyError:
+            result = self._cache[hash_] = self.step(inp)
+        return result

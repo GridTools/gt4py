@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -209,9 +209,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
 
-    if program_processor == type_check.check:
-        pytest.xfail("type inference does not yet support math builtins")
-
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)
@@ -257,15 +254,12 @@ def _can_deref_lifted(inp):
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
-
     Node = CartesianAxis("Node")
 
     inp = np_as_located_field(Node)(np.ones((1,)))
     out = np_as_located_field(Node)(np.asarray([0]))
 
-    no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
+    no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,

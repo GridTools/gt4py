@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,6 +18,7 @@ import pytest
 
 import gt4py.next.ffront.type_specifications
 from gt4py.next.common import DimensionKind, GTTypeError
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
@@ -311,9 +312,9 @@ def test_unpack_assign():
     )
 
 
-def dimension_promotion_cases() -> list[
-    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
-]:
+def dimension_promotion_cases() -> (
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
         ([["I", "J"], ["I"]], ["I", "J"], None),
@@ -684,3 +685,33 @@ def test_undefined_symbols():
 
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
         _ = FieldOperatorParser.apply_to_function(return_undefined)
+
+
+def test_as_offset_dim():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
+
+    def as_offset_dim(a: Field[[ADim, BDim], float], b: Field[[ADim], int]):
+        return a(as_offset(Boff, b))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=f"not in list of offset field dimensions",
+    ):
+        _ = FieldOperatorParser.apply_to_function(as_offset_dim)
+
+
+def test_as_offset_dtype():
+    ADim = Dimension("ADim")
+    BDim = Dimension("BDim")
+    Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
+
+    def as_offset_dtype(a: Field[[ADim, BDim], float], b: Field[[BDim], float]):
+        return a(as_offset(Boff, b))
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=f"Excepted integer for offset field dtype",
+    ):
+        _ = FieldOperatorParser.apply_to_function(as_offset_dtype)

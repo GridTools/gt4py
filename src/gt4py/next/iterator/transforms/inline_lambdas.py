@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,8 +17,8 @@ from typing import Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.count_symbol_refs import CountSymbolRefs
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
+from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 def inline_lambda(
@@ -38,7 +38,7 @@ def inline_lambda(
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
             #  ignore_shift(...)(it_sym)  # noqa: E800
-            if ref_counts[param.id] != 1 and not isinstance(
+            if ref_counts[param.id] > 1 and not isinstance(
                 node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
             ):
                 eligible_params[i] = False

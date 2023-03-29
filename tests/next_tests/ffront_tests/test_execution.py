@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -17,25 +17,25 @@
 from functools import reduce
 
 import numpy as np
-import pytest as pytest
+import pytest
 
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     Field,
-    FieldOffset,
     astype,
     broadcast,
+    float32,
     float64,
     int32,
     int64,
-    max_over,
-    min_over,
+    maximum,
+    minimum,
     neighbor_sum,
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.builtins import float32
 from gt4py.next.iterator.embedded import (
     NeighborTableOffsetProvider,
     index_field,
@@ -144,9 +144,6 @@ def test_tuples(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
 
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("Tuples are not supported yet.")
-
     @field_operator
     def tuples(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
@@ -247,7 +244,7 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
     assert (out.array() == size).all()
 
 
-def test_scalar_scan():
+def test_scalar_scan(fieldview_backend):
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -259,7 +256,7 @@ def test_scalar_scan():
         qc = qc_in + carry + scalar
         return qc
 
-    @program
+    @program(backend=fieldview_backend)
     def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
         _scan_scalar(qc, scalar, out=qc)
 
@@ -267,7 +264,10 @@ def test_scalar_scan():
     assert np.allclose(np.asarray(qc), expected)
 
 
-def test_tuple_scalar_scan():
+def test_tuple_scalar_scan(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -280,7 +280,7 @@ def test_tuple_scalar_scan():
     ) -> float:
         return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def scan_tuple_scalar(
         qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
     ) -> Field[[IDim, KDim], float]:
@@ -333,7 +333,51 @@ def test_astype_float(fieldview_backend):
     assert np.allclose(c_int32.array(), out_int_32)
 
 
-def test_nested_tuple_return():
+def test_offset_field(fieldview_backend):
+    a_I_arr = np.random.randn(size, size).astype("float64")
+    a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
+    a_I_float_1 = np_as_located_field(IDim, KDim)(
+        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
+    )
+    offset_field_arr = np.asarray(np.ones((size - 1, size - 1)), dtype=int64)
+    offset_field_comp = np.append(
+        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
+    )
+    offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
+    out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+    out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_field_fo(
+        a: Field[[IDim, KDim], float64],
+        offset_field: Field[[IDim, KDim], int64],
+    ) -> Field[[IDim, KDim], float64]:
+        a_i = a(as_offset(Ioff, offset_field))
+        a_i_k = a_i(as_offset(Koff, offset_field))
+        return a_i_k
+
+    offset_index_field_fo(
+        a_I_float,
+        offset_field,
+        out=out_I_float,
+        offset_provider={"Ioff": IDim, "Koff": KDim},
+    )
+
+    @field_operator(backend=fieldview_backend)
+    def offset_index_int_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
+        a_i = a(Ioff[1])
+        a_i_k = a_i(Koff[1])
+        return a_i_k
+
+    offset_index_int_fo(
+        a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
+    )
+    assert np.allclose(
+        out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
+    )
+
+
+def test_nested_tuple_return(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -344,7 +388,7 @@ def test_nested_tuple_return():
     ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
         return (a, (a, b))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def combine(a: Field[[IDim], float64], b: Field[[IDim], float64]) -> Field[[IDim], float64]:
         packed = pack_tuple(a, b)
         return packed[0] + packed[1][0] + packed[1][1]
@@ -354,7 +398,53 @@ def test_nested_tuple_return():
     assert np.allclose(2 * a_I_float.array() + b_I_float.array(), out_I_float)
 
 
-def test_tuple_return_2(reduction_setup):
+def test_nested_reduction(reduction_setup, fieldview_backend):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    E2VDim = rs.E2VDim
+    V2E = rs.V2E
+    E2V = rs.E2V
+
+    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+
+    @field_operator(backend=fieldview_backend)
+    def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:
+        tmp = neighbor_sum(inp(V2E), axis=V2EDim)
+        return neighbor_sum(tmp(E2V), axis=E2VDim)
+
+    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
+
+    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
+    assert np.allclose(out, expected)
+
+
+@pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
+def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    E2VDim = rs.E2VDim
+    V2E = rs.V2E
+    E2V = rs.E2V
+
+    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+
+    @field_operator(backend=fieldview_backend)
+    def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:
+        tmp = inp(V2E)
+        tmp2 = tmp(E2V)
+        return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
+
+    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
+
+    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
+    assert np.allclose(out, expected)
+
+
+def test_tuple_return_2(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -369,7 +459,7 @@ def test_tuple_return_2(reduction_setup):
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def combine_tuple(a: Field[[Edge], int64], b: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         packed = reduction_tuple(a, b)
         return packed[0] + packed[1]
@@ -380,8 +470,8 @@ def test_tuple_return_2(reduction_setup):
     assert np.allclose(ref, rs.out)
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
-def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
+@pytest.mark.xfail
+def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -397,7 +487,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup):
     b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduce_tuple_element(
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
@@ -440,8 +530,6 @@ def test_tuple_arg(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(fieldview_backend, forward):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("gtfn does not yet support scan pass.")
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
@@ -463,8 +551,7 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 
 def test_solve_triag(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("gtfn does not yet support scan pass.")
-
+        pytest.skip("Has a bug.")
     shape = (3, 7, 5)
     rng = np.random.default_rng()
     a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
@@ -507,7 +594,7 @@ def test_solve_triag(fieldview_backend):
     np.allclose(expected, out)
 
 
-def test_ternary_operator():
+def test_ternary_operator(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -515,7 +602,7 @@ def test_ternary_operator():
     left = 2.0
     right = 3.0
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> Field[[IDim], float]:
@@ -525,7 +612,7 @@ def test_ternary_operator():
     e = np.asarray(a_I_float) if left < right else np.asarray(b_I_float)
     np.allclose(e, out_I_float)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op_scalars(left: float, right: float) -> Field[[IDim], float]:
         return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
@@ -534,7 +621,9 @@ def test_ternary_operator():
     np.allclose(e, out_I_float)
 
 
-def test_ternary_operator_tuple():
+def test_ternary_operator_tuple(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -543,7 +632,7 @@ def test_ternary_operator_tuple():
     left = 2.0
     right = 3.0
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: Field[[IDim], float], b: Field[[IDim], float], left: float, right: float
     ) -> tuple[Field[[IDim], float], Field[[IDim], float]]:
@@ -562,7 +651,7 @@ def test_ternary_operator_tuple():
     np.allclose(f, out_I_float_1)
 
 
-def test_ternary_builtin_neighbor_sum(reduction_setup):
+def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
@@ -576,7 +665,7 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     b = np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = np_as_located_field(Vertex)(np.zeros((num_vertices,)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def ternary_reduce(a: Field[[Edge], float], b: Field[[Edge], float]) -> Field[[Vertex], float]:
         out = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return out
@@ -592,14 +681,14 @@ def test_ternary_builtin_neighbor_sum(reduction_setup):
     assert np.allclose(expected, out)
 
 
-def test_ternary_scan():
+def test_ternary_scan(fieldview_backend):
     init = 0.0
     a_float = 4
     a = np_as_located_field(KDim)(a_float * np.ones((size,)))
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.asarray([i if i <= a_float else a_float + 1 for i in range(1, size + 1)])
 
-    @scan_operator(axis=KDim, forward=True, init=init)
+    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
 
@@ -684,7 +773,7 @@ def test_domain(fieldview_backend):
 
     @program
     def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: (1, 9), JDim: (4, 6)})
+        fieldop_domain(a, out=a, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
 
     program_domain(a_IJ_float, offset_provider={})
 
@@ -855,6 +944,9 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
 
 def test_tuple_unpacking(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out1 = np_as_located_field(IDim)(np.ones((size)))
@@ -862,7 +954,7 @@ def test_tuple_unpacking(fieldview_backend):
     out3 = np_as_located_field(IDim)(np.ones((size)))
     out4 = np_as_located_field(IDim)(np.ones((size)))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> tuple[
@@ -885,6 +977,9 @@ def test_tuple_unpacking(fieldview_backend):
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size)))
     out = tuple(np_as_located_field(IDim)(np.ones(size) * i) for i in range(3 * 4))
@@ -904,7 +999,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         Field[[IDim], float64],
     ]
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def unpack(
         inp: Field[[IDim], float64],
     ) -> OutType:
@@ -926,7 +1021,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -937,13 +1032,13 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
 
-        @field_operator
+        @field_operator(backend=fieldview_backend)
         def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
             return a
 
 
-def test_constant_closure_vars():
+def test_constant_closure_vars(fieldview_backend):
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(
@@ -951,7 +1046,7 @@ def test_constant_closure_vars():
         E=np.float32(2.718),
     )
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def consume_constants(input: Field[[IDim], np.float32]) -> Field[[IDim], np.float32]:
         return constants.PI * constants.E * input
 

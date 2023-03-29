@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -125,10 +125,11 @@ def _lift(f):
 
 
 def _reduce(f, init):
-    def apply(*args):
-        return _combine(*args).shift((ALL_NEIGHBORS,)).deref()
+    return _combine
 
-    return apply
+
+def _neighbors(o, x):
+    return x.shift((o, ALL_NEIGHBORS)).deref()
 
 
 def _scan(f, forward, init):
@@ -156,6 +157,7 @@ _START_CTX: Final = {
     "scan": _scan,
     "make_tuple": _make_tuple,
     "tuple_get": _tuple_get,
+    "neighbors": _neighbors,
 }
 
 

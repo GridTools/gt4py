@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,7 +14,7 @@
 
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.count_symbol_refs import CountSymbolRefs
+from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
 class MergeLet(eve.NodeTranslator):

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,8 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 
-import numpy as np
-
+import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve import codegen
 from gt4py.next.otf import languages
 
@@ -27,30 +26,15 @@ def format_source(settings: languages.LanguageSettings, source):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScalarParameter:
+class Parameter:
     name: str
-    scalar_type: np.dtype
-
-
-@dataclasses.dataclass(frozen=True)
-class BufferParameter:
-    name: str
-    dimensions: tuple[str, ...]
-    scalar_type: np.dtype
-
-
-@dataclasses.dataclass(frozen=True)
-class ConnectivityParameter:
-    name: str
-    origin_axis: str
-    offset_tag: str
-    index_type: type[np.int32] | type[np.int64]
+    type_: ts.TypeSpec
 
 
 @dataclasses.dataclass(frozen=True)
 class Function:
     name: str
-    parameters: tuple[ScalarParameter | BufferParameter | ConnectivityParameter, ...]
+    parameters: tuple[Parameter, ...]
 
 
 @dataclasses.dataclass(frozen=True)

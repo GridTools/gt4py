@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,6 +15,7 @@
 import numpy as np
 
 from gt4py.next.common import Dimension
+from gt4py.next.ffront import itir_makers as im
 from gt4py.next.iterator import ir, type_inference as ti
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
@@ -144,6 +145,16 @@ def test_and():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰, bool⁰) → bool⁰"
+
+
+def test_cast():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="cast_"), args=[ir.Literal(value="1.", type="float"), ir.SymRef(id="int")]
+    )
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int⁰"
 
 
 def test_lift():
@@ -320,6 +331,22 @@ def test_tuple_get_in_lambda():
     assert ti.pformat(inferred) == "(ItOrVal₀[(T₁, T₂):T₃⁴]) → ItOrVal₀[T₂⁴]"
 
 
+def test_neighbors():
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="neighbors"), args=[ir.OffsetLiteral(value="V2E"), ir.SymRef(id="it")]
+    )
+    expected = ti.Val(
+        kind=ti.Value(),
+        dtype=ti.List(
+            dtype=ti.TypeVar(idx=0), max_length=ti.TypeVar(idx=1), has_skip_values=ti.TypeVar(idx=2)
+        ),
+        size=ti.TypeVar(idx=3),
+    )
+    inferred = ti.infer(testee)
+    assert expected == inferred
+    assert ti.pformat(inferred) == "L[T₀, T₁, T₂]³"
+
+
 def test_reduce():
     reduction_f = ir.Lambda(
         params=[ir.Sym(id="acc"), ir.Sym(id="x"), ir.Sym(id="y")],
@@ -328,7 +355,22 @@ def test_reduce():
             args=[
                 ir.SymRef(id="acc"),
                 ir.FunCall(
-                    fun=ir.SymRef(id="multiplies"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
+                    fun=ir.SymRef(id="cast_"),  # cast to the type of `init`
+                    args=[
+                        ir.FunCall(
+                            fun=ir.SymRef(id="multiplies"),
+                            args=[
+                                ir.SymRef(id="x"),
+                                ir.FunCall(
+                                    fun=ir.SymRef(
+                                        id="cast_"
+                                    ),  # force `x` to be of type `float64` -> `y` is unconstrained
+                                    args=[ir.SymRef(id="y"), ir.SymRef(id="float64")],
+                                ),
+                            ],
+                        ),
+                        ir.SymRef(id="int"),
+                    ],
                 ),
             ],
         ),
@@ -337,18 +379,18 @@ def test_reduce():
         fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
     )
     expected = ti.FunctionType(
-        args=ti.ValTuple(
-            kind=ti.Iterator(),
-            dtypes=ti.Tuple.from_elems(ti.Primitive(name="int"), ti.Primitive(name="int")),
-            size=ti.TypeVar(idx=0),
-            current_loc=ti.TypeVar(idx=1),
-            defined_locs=ti.TypeVar(idx=2),
+        args=ti.ValListTuple(
+            kind=ti.Value(),
+            list_dtypes=ti.Tuple.from_elems(ti.Primitive(name="float64"), ti.TypeVar(idx=0)),
+            max_length=ti.TypeVar(idx=1),
+            has_skip_values=ti.TypeVar(idx=2),
+            size=ti.TypeVar(idx=3),
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=3)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₁, _, int⁰], It[T₁, _, int⁰]) → int⁰"
+    assert ti.pformat(inferred) == "(L[float64, T₁, T₂]³, L[T₀, T₁, T₂]³) → int³"
 
 
 def test_scan():
@@ -551,9 +593,8 @@ def test_partial_shift_with_unstructured_offset_provider():
 
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunctionDefinitionType(
-        name="f",
-        fun=ti.FunctionType(
+    expected = ti.LetPolymorphic(
+        dtype=ti.FunctionType(
             args=ti.Tuple.from_elems(
                 ti.TypeVar(idx=0),
             ),
@@ -562,7 +603,7 @@ def test_function_definition():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "f :: (T₀) → T₀"
+    assert ti.pformat(inferred.dtype) == "(T₀) → T₀"
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
@@ -608,7 +649,7 @@ def test_stencil_closure():
             kind=ti.Iterator(),
             dtype=ti.TypeVar(idx=0),
             size=ti.Column(),
-            current_loc=ti.TypeVar(idx=1),
+            current_loc=ti.ANYWHERE,
             defined_loc=ti.TypeVar(idx=1),
         ),
         inputs=ti.Tuple.from_elems(
@@ -616,14 +657,14 @@ def test_stencil_closure():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=2),
-                defined_loc=ti.TypeVar(idx=2),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=1),
             ),
         ),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₂, T₂, T₀ᶜ]) ⇒ It[T₁, T₁, T₀ᶜ]"
+    assert ti.pformat(inferred) == "(It[ANYWHERE, T₁, T₀ᶜ]) ⇒ It[ANYWHERE, T₁, T₀ᶜ]"
 
 
 def test_fencil_definition():
@@ -665,29 +706,29 @@ def test_fencil_definition():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=1),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=1),
             ),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=2),
-                defined_loc=ti.TypeVar(idx=2),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=1),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=3),
+                dtype=ti.TypeVar(idx=2),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=4),
-                defined_loc=ti.TypeVar(idx=4),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=3),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=3),
+                dtype=ti.TypeVar(idx=2),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=5),
-                defined_loc=ti.TypeVar(idx=5),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=3),
             ),
         ),
     )
@@ -695,8 +736,69 @@ def test_fencil_definition():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f(intˢ, intˢ, intˢ, It[T₁, T₁, T₀ᶜ], It[T₂, T₂, T₀ᶜ], It[T₄, T₄, T₃ᶜ], It[T₅, T₅, T₃ᶜ])}"
+        == "{f(intˢ, intˢ, intˢ, It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₃, T₂ᶜ], It[ANYWHERE, T₃, T₂ᶜ])}"
     )
+
+
+def test_fencil_definition_same_closure_input():
+    f1 = ir.FunctionDefinition(
+        id="f1", params=[im.sym("vertex_it")], expr=im.deref_(im.shift_("E2V")("vertex_it"))
+    )
+    f2 = ir.FunctionDefinition(id="f2", params=[im.sym("vertex_it")], expr=im.deref_("vertex_it"))
+
+    testee = ir.FencilDefinition(
+        id="fencil",
+        function_definitions=[f1, f2],
+        params=[im.sym("vertex_it"), im.sym("output_edge_it"), im.sym("output_vertex_it")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call_("unstructured_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Edge"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="10", type="int"),
+                    )
+                ),
+                stencil=im.ref("f1"),
+                output=im.ref("output_edge_it"),
+                inputs=[im.ref("vertex_it")],
+            ),
+            ir.StencilClosure(
+                domain=im.call_("unstructured_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Vertex"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="10", type="int"),
+                    )
+                ),
+                stencil=im.ref("f2"),
+                output=im.ref("output_vertex_it"),
+                inputs=[im.ref("vertex_it")],
+            ),
+        ],
+    )
+
+    offset_provider = {
+        "E2V": NeighborTableOffsetProvider(
+            np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
+        )
+    }
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+
+    # validate locations of fencil params
+    fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
+    assert fencil_param_types[0].defined_loc == ti.Location(name="Vertex")
+    assert fencil_param_types[1].defined_loc == ti.Location(name="Edge")
+    assert fencil_param_types[2].defined_loc == ti.Location(name="Vertex")
+
+    # validate locations of stencil params
+    f1_param_type: ti.Val = inferred_all[id(f1.params[0])]
+    assert f1_param_type.current_loc == ti.Location(name="Edge")
+    assert f1_param_type.defined_loc == ti.Location(name="Vertex")
+    #  f2 is polymorphic and there is no shift inside so we only get a TypeVar here
+    f2_param_type: ti.Val = inferred_all[id(f2.params[0])]
+    assert isinstance(f2_param_type.current_loc, ti.TypeVar)
+    assert isinstance(f2_param_type.defined_loc, ti.TypeVar)
 
 
 def test_fencil_definition_with_function_definitions():
@@ -785,43 +887,43 @@ def test_fencil_definition_with_function_definitions():
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=4),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=5),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=5),
             ),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=4),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=6),
-                defined_loc=ti.TypeVar(idx=6),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=5),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=7),
+                dtype=ti.TypeVar(idx=6),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=8),
-                defined_loc=ti.TypeVar(idx=8),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=7),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=7),
+                dtype=ti.TypeVar(idx=6),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=9),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=7),
+            ),
+            ti.Val(
+                kind=ti.Iterator(),
+                dtype=ti.TypeVar(idx=8),
+                size=ti.Column(),
+                current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=9),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=10),
+                dtype=ti.TypeVar(idx=8),
                 size=ti.Column(),
-                current_loc=ti.TypeVar(idx=11),
-                defined_loc=ti.TypeVar(idx=11),
-            ),
-            ti.Val(
-                kind=ti.Iterator(),
-                dtype=ti.TypeVar(idx=10),
-                size=ti.Column(),
-                current_loc=ti.TypeVar(idx=12),
-                defined_loc=ti.TypeVar(idx=12),
+                current_loc=ti.ANYWHERE,
+                defined_loc=ti.TypeVar(idx=9),
             ),
         ),
     )
@@ -829,12 +931,12 @@ def test_fencil_definition_with_function_definitions():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[T₅, T₅, T₄ᶜ], It[T₆, T₆, T₄ᶜ], It[T₈, T₈, T₇ᶜ], It[T₉, T₉, T₇ᶜ], It[T₁₁, T₁₁, T₁₀ᶜ], It[T₁₂, T₁₂, T₁₀ᶜ])}"
+        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
     )
 
 
 def test_pformat():
-    vs = [ti.TypeVar(idx=i) for i in range(4)]
+    vs = [ti.TypeVar(idx=i) for i in range(5)]
     assert ti.pformat(vs[0]) == "T₀"
     assert ti.pformat(ti.Tuple.from_elems(*vs[:2])) == "(T₀, T₁)"
     assert (
@@ -856,6 +958,23 @@ def test_pformat():
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Scalar())) == "T₀ˢ"
     assert ti.pformat(ti.Val(kind=ti.Value(), dtype=vs[0], size=ti.Column())) == "T₀ᶜ"
     assert ti.pformat(ti.ValTuple(kind=vs[0], dtypes=vs[1], size=vs[2])) == "(ItOrVal₀[T²], …)₁"
+    assert (
+        ti.pformat(
+            ti.ValListTuple(
+                list_dtypes=ti.Tuple.from_elems(vs[0], vs[1]),
+                max_length=vs[2],
+                has_skip_values=vs[3],
+                size=vs[4],
+            )
+        )
+        == "(L[T₀, T₂, T₃]⁴, L[T₁, T₂, T₃]⁴)"
+    )
+    assert (
+        ti.pformat(
+            ti.ValListTuple(list_dtypes=vs[0], max_length=vs[1], has_skip_values=vs[2], size=vs[3])
+        )
+        == "(L[…₀, T₁, T₂]³, …)"
+    )
     assert ti.pformat(ti.Primitive(name="foo")) == "foo"
     assert ti.pformat(ti.Closure(output=vs[0], inputs=vs[1])) == "T₁ ⇒ T₀"
     assert (

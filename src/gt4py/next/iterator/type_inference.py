@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,11 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import typing
 from collections import abc
+from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.next.common import DimensionKind
+from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
@@ -27,11 +29,23 @@ from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unif
 
 T = typing.TypeVar("T", bound="Type")
 
+# list of nodes that have a type
+TYPED_IR_NODES: typing.Final = (
+    ir.Expr,
+    ir.FunctionDefinition,
+    ir.StencilClosure,
+    ir.FencilDefinition,
+    ir.Sym,
+)
+
 
 class EmptyTuple(Type):
     def __iter__(self) -> abc.Iterator[Type]:
         return
         yield
+
+    def __len__(self) -> int:
+        return 0
 
 
 class Tuple(Type):
@@ -52,6 +66,9 @@ class Tuple(Type):
         if not isinstance(self.others, (Tuple, EmptyTuple)):
             raise ValueError(f"Can not iterate over partially defined tuple {self}")
         yield from self.others
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
 
 
 class FunctionType(Type):
@@ -162,6 +179,78 @@ class ValTuple(Type):
         return False
 
 
+class ValListTuple(Type):
+    """
+    A tuple of `Val` that contains `List`s.
+
+    All items have:
+      - the same `kind` and `size`;
+      - `dtype` is `List` with different `list_dtypes`, but same `max_length`, and `has_skip_values`.
+    """
+
+    kind: Type = eve.field(default_factory=TypeVar.fresh)
+    list_dtypes: Type = eve.field(default_factory=TypeVar.fresh)
+    max_length: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
+    size: Type = eve.field(default_factory=TypeVar.fresh)
+
+    def __eq__(self, other: typing.Any) -> bool:
+        if isinstance(self.list_dtypes, Tuple) and isinstance(other, Tuple):
+            list_dtypes: Type = self.list_dtypes
+            elems: Type = other
+            while (
+                isinstance(list_dtypes, Tuple)
+                and isinstance(elems, Tuple)
+                and Val(
+                    kind=self.kind,
+                    dtype=List(
+                        dtype=list_dtypes.front,
+                        max_length=self.max_length,
+                        has_skip_values=self.has_skip_values,
+                    ),
+                    size=self.size,
+                )
+                == elems.front
+            ):
+                list_dtypes = list_dtypes.others
+                elems = elems.others
+            return list_dtypes == elems == EmptyTuple()
+
+        return (
+            isinstance(other, ValListTuple)
+            and self.kind == other.kind
+            and self.list_dtypes == other.list_dtypes
+            and self.max_length == other.max_length
+            and self.has_skip_values == other.has_skip_values
+            and self.size == other.size
+        )
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if isinstance(other, Tuple):
+            list_dtypes = [TypeVar.fresh() for _ in other]
+            expanded = [
+                Val(
+                    kind=self.kind,
+                    dtype=List(
+                        dtype=dtype,
+                        max_length=self.max_length,
+                        has_skip_values=self.has_skip_values,
+                    ),
+                    size=self.size,
+                )
+                for dtype in list_dtypes
+            ]
+            add_constraint(self.list_dtypes, Tuple.from_elems(*list_dtypes))
+            add_constraint(Tuple.from_elems(*expanded), other)
+            return True
+        if isinstance(other, EmptyTuple):
+            add_constraint(self.list_dtypes, EmptyTuple())
+            return True
+        return False
+
+
 class Column(Type):
     """Marker for column-sized values/iterators."""
 
@@ -204,6 +293,20 @@ class Iterator(Type):
     ...
 
 
+class Length(Type):
+    length: int
+
+
+class BoolType(Type):
+    value: bool
+
+
+class List(Type):
+    dtype: Type = eve.field(default_factory=TypeVar.fresh)
+    max_length: Type = eve.field(default_factory=TypeVar.fresh)
+    has_skip_values: Type = eve.field(default_factory=TypeVar.fresh)
+
+
 class Closure(Type):
     """Stencil closure type."""
 
@@ -227,7 +330,8 @@ class FencilDefinitionType(Type):
 
 
 class LetPolymorphic(Type):
-    """Wrapper for let-polymorphic types.
+    """
+    Wrapper for let-polymorphic types.
 
     Used for fencil-level function definitions.
     """
@@ -241,6 +345,7 @@ FLOAT_DTYPE = Primitive(name="float")
 AXIS_DTYPE = Primitive(name="axis")
 NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
+OFFSET_TAG_DTYPE = Primitive(name="offset_tag")
 
 # Some helpers to define the builtins’ types
 T0 = TypeVar.fresh()
@@ -253,7 +358,53 @@ Val_T0_T1 = Val(kind=Value(), dtype=T0, size=T1)
 Val_T0_Scalar = Val(kind=Value(), dtype=T0, size=Scalar())
 Val_BOOL_T1 = Val(kind=Value(), dtype=BOOL_DTYPE, size=T1)
 
-BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
+BUILTIN_CATEGORY_MAPPING = (
+    (
+        ir.UNARY_MATH_FP_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0)),
+            ret=Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0),
+        ),
+    ),
+    (
+        ir.UNARY_MATH_NUMBER_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val_T0_T1),
+            ret=Val_T0_T1,
+        ),
+    ),
+    (
+        ir.BINARY_MATH_NUMBER_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    ),
+    (
+        ir.UNARY_MATH_FP_PREDICATE_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0)),
+            ret=Val(kind=Value(), dtype=BOOL_DTYPE, size=T0),
+        ),
+    ),
+    (
+        ir.BINARY_MATH_COMPARISON_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
+    ),
+    (
+        ir.BINARY_LOGICAL_BUILTINS,
+        FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
+    ),
+    (
+        ir.UNARY_LOGICAL_BUILTINS,
+        FunctionType(
+            args=Tuple.from_elems(
+                Val_BOOL_T1,
+            ),
+            ret=Val_BOOL_T1,
+        ),
+    ),
+)
+
+BUILTIN_TYPES: dict[str, Type] = {
+    **{builtin: type_ for category, type_ in BUILTIN_CATEGORY_MAPPING for builtin in category},
     "deref": FunctionType(
         args=Tuple.from_elems(
             Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T2, defined_loc=T2)
@@ -266,28 +417,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ),
         ret=Val_BOOL_T1,
     ),
-    "plus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "minus": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "multiplies": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "divides": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "mod": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "not_eq": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "less": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "less_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "greater": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "greater_equal": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_BOOL_T1),
-    "and_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "or_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "xor_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
-    "not_": FunctionType(
-        args=Tuple.from_elems(
-            Val_BOOL_T1,
-        ),
-        ret=Val_BOOL_T1,
-    ),
     "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
-    "cast_": FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -300,6 +430,18 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ret=Val(kind=Iterator(), dtype=T0, size=T1, current_loc=T5, defined_loc=T3),
         ),
     ),
+    "map_": FunctionType(
+        args=Tuple.from_elems(
+            FunctionType(
+                args=ValTuple(kind=Value(), dtypes=T2, size=T1),
+                ret=Val_T0_T1,
+            ),
+        ),
+        ret=FunctionType(
+            args=ValListTuple(kind=Value(), list_dtypes=T2, size=T1),
+            ret=Val(kind=Value(), dtype=List(dtype=T0, max_length=T4, has_skip_values=T5), size=T1),
+        ),
+    ),
     "reduce": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -308,7 +450,23 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
             ),
             Val_T0_T1,
         ),
-        ret=FunctionType(args=ValTuple(kind=Iterator(), dtypes=T2, size=T1), ret=Val_T0_T1),
+        ret=FunctionType(
+            args=ValListTuple(
+                kind=Value(), list_dtypes=T2, max_length=T4, has_skip_values=T5, size=T1
+            ),
+            ret=Val_T0_T1,
+        ),
+    ),
+    "make_const_list": FunctionType(
+        args=Tuple.from_elems(Val_T0_T1),
+        ret=Val(kind=Value(), dtype=List(dtype=T0, max_length=T2, has_skip_values=T3), size=T1),
+    ),
+    "list_get": FunctionType(
+        args=Tuple.from_elems(
+            Val(kind=Value(), dtype=INT_DTYPE, size=Scalar()),
+            Val(kind=Value(), dtype=List(dtype=T0, max_length=T2, has_skip_values=T3), size=T1),
+        ),
+        ret=Val_T0_T1,
     ),
     "scan": FunctionType(
         args=Tuple.from_elems(
@@ -340,6 +498,7 @@ BUILTIN_TYPES: typing.Final[dict[str, Type]] = {
         ret=Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
     ),
 }
+
 
 del T0, T1, T2, T3, T4, T5, Val_T0_T1, Val_T0_Scalar, Val_BOOL_T1
 
@@ -374,242 +533,377 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
     return current_loc_in, current_loc_out
 
 
-class _TypeInferrer(eve.NodeTranslator):
-    """Visit the full iterator IR tree, convert nodes to respective types and generate constraints."""
+@dataclasses.dataclass
+class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
+    """
+    Visit the full iterator IR tree, convert nodes to respective types and generate constraints.
 
-    def __init__(self, offset_provider):
-        self.offset_provider = offset_provider
+    Attributes:
+        collected_types: Mapping from the (Python) id of a node to its type.
+        constraints: Set of constraints, where a constraint is a pair of types that need to agree.
+            See `unify` for more information.
+    """
 
-    def visit_SymRef(
-        self, node: ir.SymRef, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
-    ) -> Type:
-        if node.id in symtypes:
-            res = symtypes[node.id]
+    offset_provider: Optional[dict[str, Connectivity | Dimension]]
+    collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
+    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
+
+    def visit(self, node, **kwargs) -> typing.Any:
+        result = super().visit(node, **kwargs)
+        if isinstance(node, TYPED_IR_NODES):
+            assert isinstance(result, Type)
+            self.collected_types[id(node)] = result
+
+        return result
+
+    def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
+        return TypeVar.fresh()
+
+    def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
+        if node.id in ir.BUILTINS:
+            if node.id in BUILTIN_TYPES:
+                return freshen(BUILTIN_TYPES[node.id])
+            elif node.id in (
+                "make_tuple",
+                "tuple_get",
+                "shift",
+                "cartesian_domain",
+                "unstructured_domain",
+                "cast_",
+            ):
+                raise TypeError(
+                    f"Builtin '{node.id}' is only allowed as applied/called function by the type "
+                    f"inference."
+                )
+            elif node.id in ir.TYPEBUILTINS:
+                # TODO(tehrengruber): Implement propagating types of values referring to types, e.g.
+                #   >>> my_int = int64
+                #   ... cast_(expr, my_int)
+                #  One way to support this is by introducing a "type of type" similar to pythons
+                #  `typing.Type`.
+                raise NotImplementedError(
+                    f"Type builtin '{node.id}' is only supported as literal argument by the "
+                    f"type inference."
+                )
+            else:
+                raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
+        elif node.id in symtable:
+            sym_decl = symtable[node.id]
+            assert isinstance(sym_decl, TYPED_IR_NODES)
+            res = self.collected_types[id(sym_decl)]
             if isinstance(res, LetPolymorphic):
                 return freshen(res.dtype)
             return res
-        if node.id in BUILTIN_TYPES:
-            return freshen(BUILTIN_TYPES[node.id])
-        if node.id in (
-            "make_tuple",
-            "tuple_get",
-            "shift",
-            "cartesian_domain",
-            "unstructured_domain",
-        ):
-            raise TypeError(
-                f"Builtin '{node.id}' is only supported as applied/called function by the type checker"
-            )
-        if node.id in (ir.BUILTINS - ir.TYPEBUILTINS):
-            raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
 
         return TypeVar.fresh()
 
-    def visit_Literal(
-        self, node: ir.Literal, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
-    ) -> Val:
+    def visit_Literal(self, node: ir.Literal, **kwargs) -> Val:
         return Val(kind=Value(), dtype=Primitive(name=node.type))
 
-    def visit_AxisLiteral(
-        self,
-        node: ir.AxisLiteral,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
-    ) -> Val:
+    def visit_AxisLiteral(self, node: ir.AxisLiteral, **kwargs) -> Val:
         return Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar())
 
-    def visit_OffsetLiteral(
-        self,
-        node: ir.OffsetLiteral,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
-    ) -> TypeVar:
+    def visit_OffsetLiteral(self, node: ir.OffsetLiteral, **kwargs) -> TypeVar:
         return TypeVar.fresh()
 
     def visit_Lambda(
-        self, node: ir.Lambda, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
+        self,
+        node: ir.Lambda,
+        **kwargs,
     ) -> FunctionType:
-        ptypes = {p.id: TypeVar.fresh() for p in node.params}
-        ret = self.visit(node.expr, constraints=constraints, symtypes=symtypes | ptypes)
+        ptypes = {p.id: self.visit(p, **kwargs) for p in node.params}
+        ret = self.visit(node.expr, **kwargs)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
 
-    def visit_FunCall(
-        self, node: ir.FunCall, constraints: set[tuple[Type, Type]], symtypes: dict[str, Type]
-    ) -> Type:
-        if isinstance(node.fun, ir.SymRef):
-            if node.fun.id == "make_tuple":
-                # Calls to make_tuple are handled as being part of the grammar,
-                # not as function calls
-                argtypes = self.visit(node.args, constraints=constraints, symtypes=symtypes)
-                kind = TypeVar.fresh()
-                size = TypeVar.fresh()
-                dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
-                for d, a in zip(dtype, argtypes):
-                    constraints.add((Val(kind=kind, dtype=d, size=size), a))
-                return Val(kind=kind, dtype=dtype, size=size)
-            if node.fun.id == "tuple_get":
-                # Calls to tuple_get are handled as being part of the grammar,
-                # not as function calls
-                if len(node.args) != 2:
-                    raise TypeError("tuple_get requires exactly two arguments")
-                if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-                    raise TypeError("The first argument to tuple_get must be a literal int")
-                idx = int(node.args[0].value)
-                tup = self.visit(node.args[1], constraints=constraints, symtypes=symtypes)
-                kind = TypeVar.fresh()
-                elem = TypeVar.fresh()
-                size = TypeVar.fresh()
+    def _visit_make_tuple(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to `make_tuple` are handled as being part of the grammar, not as function calls.
+        argtypes = self.visit(node.args, **kwargs)
+        kind = (
+            TypeVar.fresh()
+        )  # `kind == Iterator()` means zipping iterators into an iterator of tuples
+        size = TypeVar.fresh()
+        dtype = Tuple.from_elems(*(TypeVar.fresh() for _ in argtypes))
+        for d, a in zip(dtype, argtypes):
+            self.constraints.add((Val(kind=kind, dtype=d, size=size), a))
+        return Val(kind=kind, dtype=dtype, size=size)
 
-                dtype = Tuple(front=elem, others=TypeVar.fresh())
-                for _ in range(idx):
-                    dtype = Tuple(front=TypeVar.fresh(), others=dtype)
+    def _visit_tuple_get(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
+        if len(node.args) != 2:
+            raise TypeError("`tuple_get` requires exactly two arguments.")
+        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
+            raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        idx = int(node.args[0].value)
+        tup = self.visit(node.args[1], **kwargs)
+        kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
+        elem = TypeVar.fresh()
+        size = TypeVar.fresh()
 
-                val = Val(
-                    kind=kind,
-                    dtype=dtype,
+        dtype = Tuple(front=elem, others=TypeVar.fresh())
+        for _ in range(idx):
+            dtype = Tuple(front=TypeVar.fresh(), others=dtype)
+
+        val = Val(
+            kind=kind,
+            dtype=dtype,
+            size=size,
+        )
+        self.constraints.add((tup, val))
+        return Val(kind=kind, dtype=elem, size=size)
+
+    def _visit_neighbors(self, node: ir.FunCall, **kwargs) -> Type:
+        if len(node.args) != 2:
+            raise TypeError("`neighbors` requires exactly two arguments.")
+        if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
+            raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
+
+        max_length: Type = TypeVar.fresh()
+        has_skip_values: Type = TypeVar.fresh()
+        if self.offset_provider:
+            connectivity = self.offset_provider[node.args[0].value]
+            assert isinstance(connectivity, Connectivity)
+            max_length = Length(length=connectivity.max_neighbors)
+            has_skip_values = BoolType(value=connectivity.has_skip_values)
+        current_loc_in, current_loc_out = _infer_shift_location_types(
+            [node.args[0]], self.offset_provider, self.constraints
+        )
+        dtype_ = TypeVar.fresh()
+        size = TypeVar.fresh()
+        it = self.visit(node.args[1], **kwargs)
+        self.constraints.add(
+            (
+                it,
+                Val(
+                    kind=Iterator(),
+                    dtype=dtype_,
                     size=size,
-                )
-                constraints.add((tup, val))
-                return Val(kind=kind, dtype=elem, size=size)
-            if node.fun.id == "shift":
-                # Calls to shift are handled as being part of the grammar, not
-                # as function calls, as the type depends on the offset provider
-                current_loc_in, current_loc_out = _infer_shift_location_types(
-                    node.args, self.offset_provider, constraints
-                )
-                defined_loc = TypeVar.fresh()
-                dtype_ = TypeVar.fresh()
-                size = TypeVar.fresh()
-                return FunctionType(
-                    args=Tuple.from_elems(
-                        Val(
-                            kind=Iterator(),
-                            dtype=dtype_,
-                            size=size,
-                            current_loc=current_loc_in,
-                            defined_loc=defined_loc,
-                        ),
-                    ),
-                    ret=Val(
-                        kind=Iterator(),
-                        dtype=dtype_,
-                        size=size,
-                        current_loc=current_loc_out,
-                        defined_loc=defined_loc,
-                    ),
-                )
-            if node.fun.id.endswith("domain"):
-                for arg in node.args:
-                    constraints.add(
-                        (
-                            Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-                            self.visit(arg, constraints=constraints, symtypes=symtypes),
-                        )
-                    )
-                return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
+                    current_loc=current_loc_in,
+                    defined_loc=current_loc_out,
+                ),
+            )
+        )
+        lst = List(
+            dtype=dtype_,
+            max_length=max_length,
+            has_skip_values=has_skip_values,
+        )
+        return Val(kind=Value(), dtype=lst, size=size)
 
-        fun = self.visit(node.fun, constraints=constraints, symtypes=symtypes)
-        args = Tuple.from_elems(*self.visit(node.args, constraints=constraints, symtypes=symtypes))
+    def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
+        if len(node.args) != 2:
+            raise TypeError("`cast_` requires exactly two arguments.")
+        val_arg_type = self.visit(node.args[0], **kwargs)
+        type_arg = node.args[1]
+        if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
+            raise TypeError("The second argument to `cast_` must be a type literal.")
+
+        size = TypeVar.fresh()
+
+        self.constraints.add(
+            (
+                val_arg_type,
+                Val(
+                    kind=Value(),
+                    dtype=TypeVar.fresh(),
+                    size=size,
+                ),
+            )
+        )
+
+        return Val(
+            kind=Value(),
+            dtype=Primitive(name=type_arg.id),
+            size=size,
+        )
+
+    def _visit_shift(self, node: ir.FunCall, **kwargs) -> Type:
+        # Calls to shift are handled as being part of the grammar, not
+        # as function calls, as the type depends on the offset provider
+        current_loc_in, current_loc_out = _infer_shift_location_types(
+            node.args, self.offset_provider, self.constraints
+        )
+        defined_loc = TypeVar.fresh()
+        dtype_ = TypeVar.fresh()
+        size = TypeVar.fresh()
+        return FunctionType(
+            args=Tuple.from_elems(
+                Val(
+                    kind=Iterator(),
+                    dtype=dtype_,
+                    size=size,
+                    current_loc=current_loc_in,
+                    defined_loc=defined_loc,
+                ),
+            ),
+            ret=Val(
+                kind=Iterator(),
+                dtype=dtype_,
+                size=size,
+                current_loc=current_loc_out,
+                defined_loc=defined_loc,
+            ),
+        )
+
+    def _visit_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        for arg in node.args:
+            self.constraints.add(
+                (
+                    Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+                    self.visit(arg, **kwargs),
+                )
+            )
+        return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
+
+    def _visit_cartesian_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        return self._visit_domain(node, **kwargs)
+
+    def _visit_unstructured_domain(self, node: ir.FunCall, **kwargs) -> Type:
+        return self._visit_domain(node, **kwargs)
+
+    def visit_FunCall(
+        self,
+        node: ir.FunCall,
+        **kwargs,
+    ) -> Type:
+        if isinstance(node.fun, ir.SymRef) and hasattr(self, f"_visit_{node.fun.id}"):
+            # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
+            return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
+
+        fun = self.visit(node.fun, **kwargs)
+        args = Tuple.from_elems(*self.visit(node.args, **kwargs))
         ret = TypeVar.fresh()
-        constraints.add((fun, FunctionType(args=args, ret=ret)))
+        self.constraints.add((fun, FunctionType(args=args, ret=ret)))
         return ret
 
     def visit_FunctionDefinition(
         self,
         node: ir.FunctionDefinition,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
-    ) -> FunctionDefinitionType:
-        if node.id in symtypes:
-            raise TypeError(f"Multiple definitions of symbol {node.id}")
+        **kwargs,
+    ) -> LetPolymorphic:
+        fun = ir.Lambda(params=node.params, expr=node.expr)
 
-        fun = self.visit(
-            ir.Lambda(params=node.params, expr=node.expr),
-            constraints=constraints,
-            symtypes=symtypes,
-        )
-        constraints.add((fun, FunctionType()))
-        return FunctionDefinitionType(name=node.id, fun=fun)
+        # Since functions defined in a function definition are let-polymorphic we don't want
+        # their parameters to inherit the constraints of the arguments in a call to them. A simple
+        # way to do this is to run the type inference on the function itself and reindex its type
+        # vars when referencing the function, i.e. in a `SymRef`.
+        collected_types = infer_all(fun, offset_provider=self.offset_provider, reindex=False)
+        fun_type = LetPolymorphic(dtype=collected_types.pop(id(fun)))
+        assert not set(self.collected_types.keys()) & set(collected_types.keys())
+        self.collected_types = {**self.collected_types, **collected_types}
+
+        return fun_type
 
     def visit_StencilClosure(
         self,
         node: ir.StencilClosure,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
+        **kwargs,
     ) -> Closure:
-        domain = self.visit(node.domain, constraints=constraints, symtypes=symtypes)
-        stencil = self.visit(node.stencil, constraints=constraints, symtypes=symtypes)
-        output = self.visit(node.output, constraints=constraints, symtypes=symtypes)
-        inputs = Tuple.from_elems(
-            *self.visit(node.inputs, constraints=constraints, symtypes=symtypes)
-        )
+        domain = self.visit(node.domain, **kwargs)
+        stencil = self.visit(node.stencil, **kwargs)
+        output = self.visit(node.output, **kwargs)
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
-        constraints.add((domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar())))
-        constraints.add(
+        self.constraints.add(
+            (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
+        )
+        self.constraints.add(
             (
                 output,
                 Val(
                     kind=Iterator(),
                     dtype=output_dtype,
                     size=Column(),
-                    current_loc=output_loc,
                     defined_loc=output_loc,
                 ),
             )
         )
-        constraints.add(
+
+        inputs: list[Type] = self.visit(node.inputs, **kwargs)
+        stencil_params = []
+        for input_ in inputs:
+            stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
+            self.constraints.add(
+                (
+                    input_,
+                    Val(
+                        kind=stencil_param.kind,
+                        dtype=stencil_param.dtype,
+                        size=stencil_param.size,
+                        # closure input and stencil param differ in `current_loc`
+                        current_loc=ANYWHERE,
+                        defined_loc=stencil_param.defined_loc,
+                    ),
+                )
+            )
+            stencil_params.append(stencil_param)
+
+        self.constraints.add(
             (
                 stencil,
-                FunctionType(args=inputs, ret=Val(kind=Value(), dtype=output_dtype, size=Column())),
+                FunctionType(
+                    args=Tuple.from_elems(*stencil_params),
+                    ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
+                ),
             )
         )
-        return Closure(output=output, inputs=inputs)
+        return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
     def visit_FencilDefinition(
         self,
         node: ir.FencilDefinition,
-        constraints: set[tuple[Type, Type]],
-        symtypes: dict[str, Type],
+        **kwargs,
     ) -> FencilDefinitionType:
         ftypes = []
-        fmap = dict[str, LetPolymorphic]()
         # Note: functions have to be ordered according to Lisp/Scheme `let*`
         # statements; that is, functions can only reference other functions
         # that are defined before
-        for f in node.function_definitions:
-            c = set[tuple[Type, Type]]()
-            ftype: FunctionDefinitionType = self.visit(f, constraints=c, symtypes=symtypes | fmap)
-            ftype = typing.cast(FunctionDefinitionType, unify(ftype, c))
+        for fun_def in node.function_definitions:
+            fun_type: LetPolymorphic = self.visit(fun_def, **kwargs)
+            ftype = FunctionDefinitionType(name=fun_def.id, fun=fun_type.dtype)
             ftypes.append(ftype)
-            fmap[ftype.name] = LetPolymorphic(dtype=ftype.fun)
 
-        params = {p.id: TypeVar.fresh() for p in node.params}
-        self.visit(node.closures, constraints=constraints, symtypes=symtypes | fmap | params)
+        params = [self.visit(p, **kwargs) for p in node.params]
+        self.visit(node.closures, **kwargs)
         return FencilDefinitionType(
-            name=node.id,
+            name=str(node.id),
             fundefs=Tuple.from_elems(*ftypes),
-            params=Tuple.from_elems(*params.values()),
+            params=Tuple.from_elems(*params),
         )
+
+
+def infer_all(
+    node: ir.Node,
+    offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+    reindex: bool = True,
+) -> dict[int, Type]:
+    """
+    Infer the types of the child expressions of a given iterator IR expression.
+
+    The result is a dictionary mapping the (Python) id of child nodes to their type.
+    """
+    # Collect preliminary types of all nodes and constraints on them
+    inferrer = _TypeInferrer(offset_provider=offset_provider)
+    inferrer.visit(node)
+
+    # Ensure dict order is pre-order of the tree
+    collected_types = dict(reversed(inferrer.collected_types.items()))
+
+    # Compute the most general type that satisfies all constraints
+    unified_types = unify(list(collected_types.values()), inferrer.constraints)
+
+    if reindex:
+        unified_types = reindex_vars(list(unified_types))
+
+    return {id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)}
 
 
 def infer(
     expr: ir.Node,
-    symtypes: typing.Optional[dict[str, Type]] = None,
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    if symtypes is None:
-        symtypes = dict()
-
-    # Collect constraints
-    constraints = set[tuple[Type, Type]]()
-    dtype = _TypeInferrer(offset_provider=offset_provider).visit(
-        expr, constraints=constraints, symtypes=symtypes
-    )
-    # Compute the most general type that satisfies all constraints
-    unified = unify(dtype, constraints)
-    return reindex_vars(unified)
+    inferred_types = infer_all(expr, offset_provider)
+    return inferred_types[id(expr)]
 
 
 class PrettyPrinter(eve.NodeTranslator):
@@ -680,6 +974,9 @@ class PrettyPrinter(eve.NodeTranslator):
     def visit_Primitive(self, node: Primitive) -> str:
         return node.name
 
+    def visit_List(self, node: List) -> str:
+        return f"L[{self.visit(node.dtype)}, {self.visit(node.max_length)}, {self.visit(node.has_skip_values)}]"
+
     def visit_FunctionDefinitionType(self, node: FunctionDefinitionType) -> str:
         return node.name + " :: " + self.visit(node.fun)
 
@@ -730,6 +1027,29 @@ class PrettyPrinter(eve.NodeTranslator):
                     )
                 )
                 for dtype, defined_loc in zip(node.dtypes, defined_locs)
+            )
+            + ")"
+        )
+
+    def visit_ValListTuple(self, node: ValListTuple) -> str:
+        if isinstance(node.list_dtypes, TypeVar):
+            return f"(L[…{self._subscript(node.list_dtypes.idx)}, {self.visit(node.max_length)}, {self.visit(node.has_skip_values)}]{self._fmt_size(node.size)}, …)"
+        assert isinstance(node.list_dtypes, (Tuple, EmptyTuple))
+        return (
+            "("
+            + ", ".join(
+                self.visit(
+                    Val(
+                        kind=Value(),
+                        dtype=List(
+                            dtype=dtype,
+                            max_length=node.max_length,
+                            has_skip_values=node.has_skip_values,
+                        ),
+                        size=node.size,
+                    )
+                )
+                for dtype in node.list_dtypes
             )
             + ")"
         )

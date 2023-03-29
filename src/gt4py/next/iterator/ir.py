@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -94,7 +94,8 @@ class StencilClosure(Node):
             raise ValueError("Only FunCall to `make_tuple` allowed.")
 
 
-UNARY_MATH_NUMBER_BUILTINS = {"abs", "not_"}
+UNARY_MATH_NUMBER_BUILTINS = {"abs"}
+UNARY_LOGICAL_BUILTINS = {"not_"}
 UNARY_MATH_FP_BUILTINS = {
     "sin",
     "cos",
@@ -128,18 +129,20 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "multiplies",
     "divides",
     "mod",
+}
+BINARY_MATH_COMPARISON_BUILTINS = {
     "eq",
     "less",
     "greater",
     "greater_equal",
     "less_equal",
     "not_eq",
-    "floordiv",  # TODO not treated in gtfn?
+}
+BINARY_LOGICAL_BUILTINS = {
     "and_",
     "or_",
     "xor_",
 }
-
 
 TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
 
@@ -147,6 +150,10 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "neighbors",
+    "list_get",
+    "map_",
+    "make_const_list",
     "lift",
     "make_tuple",
     "tuple_get",
@@ -157,10 +164,14 @@ BUILTINS = {
     "scan",
     "if_",
     "cast_",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
     *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
     *BINARY_MATH_NUMBER_BUILTINS,
+    *BINARY_MATH_COMPARISON_BUILTINS,
+    *BINARY_LOGICAL_BUILTINS,
     *TYPEBUILTINS,
 }
 

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -30,6 +30,10 @@ def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     )
 
 
+def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+    return isinstance(arg, itir.FunCall) and arg.fun == itir.SymRef(id="neighbors")
+
+
 def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
@@ -38,16 +42,16 @@ def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     )
 
 
-def _is_shifted_or_lifted_and_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return _is_shifted(arg) or (
+def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+    return _is_neighbors(arg) or (
         _is_applied_lift(arg)
-        and any(_is_shifted_or_lifted_and_shifted(nested_arg) for nested_arg in arg.args)
+        and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
     )
 
 
-def _get_shifted_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
+def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
     return filter(
-        _is_shifted_or_lifted_and_shifted,
+        _is_neighbors_or_lifted_and_neighbors,
         reduce_args,
     )
 
@@ -57,9 +61,8 @@ def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
 
 
 def _get_partial_offset_tag(arg: itir.FunCall) -> str:
-    if _is_shifted(arg):
-        assert isinstance(arg.fun, itir.FunCall)
-        offset = arg.fun.args[-1]
+    if _is_neighbors(arg):
+        offset = arg.args[0]
         assert isinstance(offset, itir.OffsetLiteral)
         assert isinstance(offset.value, str)
         return offset.value
@@ -72,7 +75,7 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
 
 
 def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    return [_get_partial_offset_tag(arg) for arg in _get_shifted_args(reduce_args)]
+    return [_get_partial_offset_tag(arg) for arg in _get_neighbors_args(reduce_args)]
 
 
 def _is_reduce(node: itir.FunCall) -> TypeGuard[itir.FunCall]:
@@ -102,25 +105,29 @@ def _get_connectivity(
     return connectivities[0]
 
 
-def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr):
+def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
         fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets), args=[iterator]
     )
 
 
-def _make_deref(iterator: itir.Expr):
+def _make_deref(iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator])
 
 
-def _make_can_deref(iterator: itir.Expr):
+def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(fun=itir.SymRef(id="can_deref"), args=[iterator])
 
 
-def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr):
+def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
         fun=itir.SymRef(id="if_"),
         args=[cond, true_expr, false_expr],
     )
+
+
+def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
+    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -130,14 +137,10 @@ class UnrollReduce(NodeTranslator):
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
     @classmethod
-    def apply(cls, node: itir.Node, **kwargs):
+    def apply(cls, node: itir.Node, **kwargs) -> itir.Node:
         return cls().visit(node, **kwargs)
 
-    def visit_FunCall(self, node: itir.FunCall, **kwargs):
-        node = self.generic_visit(node, **kwargs)
-        if not _is_reduce(node):
-            return node
-
+    def _visit_reduce(self, node: itir.FunCall, **kwargs) -> itir.Expr:
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
         connectivity = _get_connectivity(node, offset_provider)
@@ -151,11 +154,12 @@ class UnrollReduce(NodeTranslator):
         assert isinstance(node.fun, itir.FunCall)
         fun, init = node.fun.args
 
-        derefed_shifted_args = [_make_deref(_make_shift([offset], arg)) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + derefed_shifted_args)
+        elems = [_make_list_get(offset, arg) for arg in node.args]
+        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + elems)
         if has_skip_values:
-            check_arg = next(_get_shifted_args(node.args))
-            can_deref = _make_can_deref(_make_shift([offset], check_arg))
+            check_arg = next(_get_neighbors_args(node.args))
+            offset_tag, it = check_arg.args
+            can_deref = _make_can_deref(_make_shift([offset_tag, offset], it))
             step_fun = _make_if(can_deref, step_fun, acc)
         step_fun = itir.Lambda(params=[itir.Sym(id=acc.id), itir.Sym(id=offset.id)], expr=step_fun)
         expr = init
@@ -166,3 +170,9 @@ class UnrollReduce(NodeTranslator):
         )
 
         return expr
+
+    def visit_FunCall(self, node: itir.FunCall, **kwargs) -> itir.Expr:
+        node = self.generic_visit(node, **kwargs)
+        if _is_reduce(node):
+            return self._visit_reduce(node, **kwargs)
+        return node

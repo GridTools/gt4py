@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -44,7 +44,7 @@ def _is_integral_scalar(expr: past.Expr) -> bool:
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
 
 
-def _validate_call_params(new_func: past.Name, new_kwargs: dict):
+def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
     """
     Perform checks for domain and output field types.
 
@@ -54,13 +54,10 @@ def _validate_call_params(new_func: past.Name, new_kwargs: dict):
     """
     if not isinstance(
         new_func.type,
-        (
-            ts_ffront.FieldOperatorType,
-            ts_ffront.ScanOperatorType,
-        ),
+        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
     ):
         raise GTTypeError(
-            f"Only calls `FieldOperator`s and `ScanOperators` "
+            f"Only calls `FieldOperator`s and `ScanOperator`s "
             f"allowed in `Program`, but got `{new_func.type}`."
         )
 
@@ -189,12 +186,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_kwargs = self.visit(node.kwargs, **kwargs)
 
         try:
-            _validate_call_params(new_func, new_kwargs)
+            is_operator = isinstance(
+                new_func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType)
+            )
+            if is_operator:
+                _validate_operator_call(new_func, new_kwargs)
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type
                 for name, expr in new_kwargs.items()
-                if name != "out" and name != "domain"
+                if not is_operator and name != "out" and name != "domain"
             }
 
             type_info.accepts_args(
@@ -203,16 +204,29 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 with_kwargs=kwarg_types,
                 raise_exception=True,
             )
-
-            return_type = type_info.return_type(
-                new_func.type, with_args=arg_types, with_kwargs=kwarg_types
-            )
-            if return_type != new_kwargs["out"].type:
-                raise GTTypeError(
-                    f"Expected keyword argument `out` to be of "
-                    f"type {return_type}, but got "
-                    f"{new_kwargs['out'].type}."
+            return_type = ts.VoidType()
+            if is_operator:
+                operator_return_type = type_info.return_type(
+                    new_func.type, with_args=arg_types, with_kwargs=kwarg_types
                 )
+                if operator_return_type != new_kwargs["out"].type:
+                    raise GTTypeError(
+                        f"Expected keyword argument `out` to be of "
+                        f"type {operator_return_type}, but got "
+                        f"{new_kwargs['out'].type}."
+                    )
+            elif new_func.id in ["minimum", "maximum"]:
+                if new_args[0].type != new_args[1].type:
+                    raise GTTypeError(
+                        f"First and second argument in {new_func.id} must be the same type."
+                        f"Got `{new_args[0].type}` and `{new_args[1].type}`."
+                    )
+                return_type = new_args[0].type
+            else:
+                raise AssertionError(
+                    "Only calls `FieldOperator`s, `ScanOperator`s or minimum and maximum builtins allowed"
+                )
+
         except GTTypeError as ex:
             raise ProgramTypeError.from_past_node(
                 node, msg=f"Invalid call to `{node.func.id}`."
@@ -222,7 +236,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             func=new_func,
             args=new_args,
             kwargs=new_kwargs,
-            type=ts.VoidType(),
+            type=return_type,
             location=node.location,
         )
 

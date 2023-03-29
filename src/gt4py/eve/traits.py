@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -38,6 +38,7 @@ class SymbolTableTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
         collected_symbols = cls.SymbolsCollector.apply(instance)
         instance.annex.symtable = collected_symbols
@@ -93,6 +94,7 @@ class SymbolRefsValidatorTrait:
 
     @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
         validator = cls.SymbolRefsValidator()
         symtable = instance.annex.symtable

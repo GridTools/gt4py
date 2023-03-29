@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -481,5 +481,5 @@ def test_collect_tmps_info():
             Temporary(id="_gtmp_1", domain=tmp_domain, dtype=3),
         ],
     )
-    actual = collect_tmps_info(testee)
+    actual = collect_tmps_info(testee, offset_provider={})
     assert actual == expected

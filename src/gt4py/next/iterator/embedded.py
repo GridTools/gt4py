@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,6 +24,7 @@ import math
 from typing import (
     Any,
     Callable,
+    Generic,
     Iterable,
     Literal,
     Mapping,
@@ -34,6 +35,7 @@ from typing import (
     SupportsInt,
     TypeAlias,
     TypeGuard,
+    TypeVar,
     Union,
     cast,
     overload,
@@ -149,9 +151,6 @@ class ItIterator(Protocol):
     def shift(self, *offsets: OffsetPart) -> ItIterator:
         ...
 
-    def max_neighbors(self) -> int:
-        ...
-
     def can_deref(self) -> bool:
         ...
 
@@ -183,9 +182,9 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
-_column_range: Optional[
-    range
-] = None  # TODO this is a bit ugly, alternative: pass scan range via iterator
+# TODO see https://github.com/GridTools/gt4py/pull/1120
+_column_range: Optional[range] = None
+_offset_provider: Optional[OffsetProvider] = None
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
@@ -343,23 +342,6 @@ def lift(stencil):
                     self.stencil, self.args, offsets=[*self.offsets, *offsets], elem=self.elem
                 )
 
-            def max_neighbors(self):
-                # TODO cleanup, test edge cases
-                open_offsets = get_open_offsets(*self.incomplete_offsets, *self.offsets)
-                assert open_offsets
-                return _get_connectivity(args[0].offset_provider, open_offsets[0]).max_neighbors
-
-            @property
-            def incomplete_offsets(self):
-                incomplete_offsets = []
-                for arg in self.args:
-                    if arg.incomplete_offsets:
-                        assert (
-                            not incomplete_offsets or incomplete_offsets == arg.incomplete_offsets
-                        )
-                        incomplete_offsets = arg.incomplete_offsets
-                return incomplete_offsets
-
             def _shifted_args(self):
                 return tuple(map(lambda arg: arg.shift(*self.offsets), self.args))
 
@@ -383,27 +365,6 @@ def lift(stencil):
         return _WrappedIterator(stencil, args)
 
     return impl
-
-
-@builtins.reduce.register(EMBEDDED)
-def reduce(fun, init):
-    def sten(*iters):
-        # TODO: assert check_that_all_iterators_are_compatible(*iters)
-        first_it = iters[0]
-        n = first_it.max_neighbors()
-        res = init
-        for i in range(n):
-            # we can check a single argument
-            # because all arguments share the same pattern
-            if not builtins.can_deref(builtins.shift(i)(first_it)):
-                break
-            res = fun(
-                res,
-                *(builtins.deref(builtins.shift(i)(it)) for it in iters),
-            )
-        return res
-
-    return sten
 
 
 NamedRange: TypeAlias = tuple[Tag | common.Dimension, range]
@@ -615,28 +576,22 @@ def execute_shift(
     raise AssertionError("Unknown object in `offset_provider`")
 
 
-# The following holds for shifts:
-# shift(tag, index)(inp) -> full shift
-# shift(tag)(inp) -> incomplete shift
-# shift(index)(shift(tag)(inp)) -> full shift
-# Therefore the following transformation holds
-# shift(e2v,0)(shift(c2e,2)(cell_field)) #noqa E800
-# = shift(0)(shift(e2v)(shift(2)(shift(c2e)(cell_field))))
-# = shift(c2e, 2, e2v, 0)(cell_field)
-# = shift(c2e,e2v,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
-# = shift(2,0)(shift(c2e,e2v)(cell_field))
-# for implementations it means everytime we have an index, we can "execute" a concrete shift
-def group_offsets(*offsets: OffsetPart) -> tuple[list[CompleteOffset], list[Tag]]:
-    tag_stack = []
-    complete_offsets = []
-    for offset in offsets:
-        if not isinstance(offset, (int, np.integer)):
-            tag_stack.append(offset)
-        else:
-            assert tag_stack
-            tag = tag_stack.pop()
-            complete_offsets.append((tag, offset))
-    return complete_offsets, tag_stack
+def _is_list_of_complete_offsets(
+    complete_offsets: list[tuple[Any, Any]]
+) -> TypeGuard[list[CompleteOffset]]:
+    return all(
+        isinstance(tag, Tag) and isinstance(offset, (int, np.integer))
+        for tag, offset in complete_offsets
+    )
+
+
+def group_offsets(*offsets: OffsetPart) -> list[CompleteOffset]:
+    assert len(offsets) % 2 == 0
+    complete_offsets = [*zip(offsets[::2], offsets[1::2])]
+    assert _is_list_of_complete_offsets(
+        complete_offsets
+    ), f"Invalid sequence of offset parts: {offsets}"
+    return complete_offsets
 
 
 def shift_position(
@@ -653,10 +608,6 @@ def shift_position(
         else:
             return None
     return new_pos
-
-
-def get_open_offsets(*offsets: OffsetPart) -> list[Tag]:
-    return group_offsets(*offsets)[1]
 
 
 class Undefined:
@@ -724,7 +675,7 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
-) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of LocatedField
     return (
         _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
     )
@@ -810,7 +761,7 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
+def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> Optional[int]:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
@@ -821,29 +772,21 @@ def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
 class MDIterator:
     field: LocatedField
     pos: MaybePosition
-    incomplete_offsets: Sequence[Tag] = dataclasses.field(default_factory=list, kw_only=True)
-    offset_provider: OffsetProvider = dataclasses.field(kw_only=True)
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
-        complete_offsets, open_offsets = group_offsets(*self.incomplete_offsets, *offsets)
+        complete_offsets = group_offsets(*offsets)
+        assert _offset_provider is not None
         return MDIterator(
             self.field,
-            shift_position(self.pos, *complete_offsets, offset_provider=self.offset_provider),
-            incomplete_offsets=open_offsets,
-            offset_provider=self.offset_provider,
+            shift_position(self.pos, *complete_offsets, offset_provider=_offset_provider),
             column_axis=self.column_axis,
         )
-
-    def max_neighbors(self) -> int:
-        assert self.incomplete_offsets
-        return _get_connectivity(self.offset_provider, self.incomplete_offsets[0]).max_neighbors
 
     def can_deref(self) -> bool:
         return self.pos is not None
 
     def deref(self) -> Any:
-        assert not self.incomplete_offsets
         if not self.can_deref():
             # this can legally happen in cases like `if_(can_deref(inp), deref(inp), 42.)`
             # because both branches will be eagerly executed
@@ -877,23 +820,23 @@ class MDIterator:
         )
 
 
+def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
+    return [
+        cast(Tag, axis.value)  # axis.value is always `str`
+        for axis in axes
+        if isinstance(axis, runtime.Offset)
+        or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)
+    ]
+
+
 def make_in_iterator(
     inp: LocatedField,
     pos: Position,
-    offset_provider: OffsetProvider,
     *,
     column_axis: Optional[Tag],
-) -> MDIterator:
+) -> ItIterator:
     axes = _get_axes(inp)
-    sparse_dimensions: list[Tag] = []
-    for axis in axes:
-        if isinstance(axis, runtime.Offset):
-            assert isinstance(axis.value, str)
-            sparse_dimensions.append(axis.value)
-        elif isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL:
-            # we just use the name of the axis to match the offset literal for now
-            sparse_dimensions.append(axis.value)
-
+    sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
         init = [None] * sparse_dimensions.count(sparse_dim)
@@ -902,13 +845,20 @@ def make_in_iterator(
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert _column_range is not None
         new_pos[column_axis] = _column_range.start
-    return MDIterator(
+    it = MDIterator(
         inp,
         new_pos,
-        incomplete_offsets=[SparseTag(x) for x in sparse_dimensions],
-        offset_provider=offset_provider,
         column_axis=column_axis,
     )
+    if len(sparse_dimensions) >= 1:
+        if len(sparse_dimensions) == 1:
+            return SparseListIterator(it, sparse_dimensions[0])
+        else:
+            raise NotImplementedError(
+                f"More than one local dimension is currently not supported, got {sparse_dimensions}"
+            )
+    else:
+        return it
 
 
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
@@ -1122,6 +1072,99 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
     return impl
 
 
+DT = TypeVar("DT")
+
+
+class _List(tuple, Generic[DT]):
+    ...
+
+
+@dataclasses.dataclass(frozen=True)
+class _ConstList(Generic[DT]):
+    value: DT
+
+    def __getitem__(self, _):
+        return self.value
+
+
+@builtins.neighbors.register(EMBEDDED)
+def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
+    offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+    assert isinstance(offset_str, str)
+    assert _offset_provider is not None
+    connectivity = _offset_provider[offset_str]
+    assert isinstance(connectivity, common.Connectivity)
+    return _List(
+        shifted.deref()
+        for i in range(connectivity.max_neighbors)
+        if (shifted := it.shift(offset_str, i)).can_deref()
+    )
+
+
+@builtins.list_get.register(EMBEDDED)
+def list_get(i, lst: _List[Optional[DT]]) -> Optional[DT]:
+    return lst[i]
+
+
+@builtins.map_.register(EMBEDDED)
+def map_(op):
+    def impl_(*lists):
+        return _List(map(lambda x: op(*x), zip(*lists)))
+
+    return impl_
+
+
+@builtins.make_const_list.register(EMBEDDED)
+def make_const_list(value):
+    return _ConstList(value)
+
+
+@builtins.reduce.register(EMBEDDED)
+def reduce(fun, init):
+    def sten(*lists):
+        # TODO: assert check_that_all_lists_are_compatible(*lists)
+        lst = None
+        for cur in lists:
+            if isinstance(cur, _List):
+                lst = cur
+                break
+        # we can check a single argument for length,
+        # because all arguments share the same pattern
+        n = len(lst)
+        res = init
+        for i in range(n):
+            res = fun(
+                res,
+                *(lst[i] for lst in lists),
+            )
+        return res
+
+    return sten
+
+
+@dataclasses.dataclass(frozen=True)
+class SparseListIterator:
+    it: ItIterator
+    list_offset: Tag
+    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
+
+    def deref(self) -> Any:
+        assert _offset_provider is not None
+        connectivity = _offset_provider[self.list_offset]
+        assert isinstance(connectivity, common.Connectivity)
+        return _List(
+            shifted.deref()
+            for i in range(connectivity.max_neighbors)
+            if (shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)).can_deref()
+        )
+
+    def can_deref(self) -> bool:
+        return self.it.shift(*self.offsets).can_deref()
+
+    def shift(self, *offsets: OffsetPart) -> SparseListIterator:
+        return SparseListIterator(self.it, self.list_offset, offsets=[*offsets, *self.offsets])
+
+
 @dataclasses.dataclass(frozen=True)
 class ColumnDescriptor:
     axis: str
@@ -1286,6 +1329,9 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
+    global _offset_provider
+    _offset_provider = kwargs["offset_provider"]
+
     @runtime.closure.register(EMBEDDED)
     def closure(
         domain_: Domain,
@@ -1316,7 +1362,6 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     # TODO(havogt) wrap inp in TupleField?
                     inp,
                     pos,
-                    kwargs["offset_provider"],
                     column_axis=column.axis if column else None,
                 )
                 for inp in promoted_ins

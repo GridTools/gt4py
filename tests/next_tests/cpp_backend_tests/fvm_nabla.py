@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -49,7 +49,7 @@ def tuple_dot(a, b):
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    pnabla_M = tuple_dot(shift(V2E)(zavgS), sign)
+    pnabla_M = tuple_dot(neighbors(V2E, zavgS), deref(sign))
     return make_tuple(tuple_get(0, pnabla_M) / deref(vol), tuple_get(1, pnabla_M) / deref(vol))
 
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file> <imperative>")
     output_file = sys.argv[1]
-    imperative = bool(sys.argv[2])
+    imperative = sys.argv[2].lower() == "true"
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
     prog = trace(nabla_fencil, [None] * 7)
