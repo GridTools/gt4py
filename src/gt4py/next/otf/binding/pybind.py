@@ -174,7 +174,7 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(index: int, name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
+def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
@@ -183,10 +183,7 @@ def make_argument(index: int, name: str, type_: ts.TypeSpec) -> str | BufferSID 
         )
     if isinstance(type_, ts.TupleType):
         return CompositeSID(
-            elems=[
-                make_argument(index * 1000 + i, _tuple_get(i, name), t)
-                for i, t in enumerate(type_.types)
-            ]
+            elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
         )
     else:
         return name
@@ -234,8 +231,8 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(index, param.name, param.type_)
-                        for index, param in enumerate(program_source.entry_point.parameters)
+                        make_argument(param.name, param.type_)
+                        for param in program_source.entry_point.parameters
                     ],
                 )
             ),
