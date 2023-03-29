@@ -148,7 +148,7 @@ class BindingCodeGenerator(TemplatedGenerator):
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
+def make_argument(param: interface.Parameter) -> str | BufferSID:
     if isinstance(param.type_, ts.FieldType):
         return BufferSID(
             source_buffer=param.name,
@@ -198,10 +198,7 @@ def create_bindings(
             body=ReturnStmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,
-                    args=[
-                        make_argument(index, param)
-                        for index, param in enumerate(program_source.entry_point.parameters)
-                    ],
+                    args=[make_argument(param) for param in program_source.entry_point.parameters],
                 )
             ),
         ),
