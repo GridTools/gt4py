@@ -38,7 +38,7 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    dim_config: int
+    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
 
 
 class CompositeSID(Expr):
@@ -150,8 +150,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
-                                  gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{source_buffer}})
+                                  gridtools::sid::unknown_kind>({{source_buffer}})
             )"""
     )
 
@@ -181,7 +180,6 @@ def make_argument(index: int, name: str, type_: ts.TypeSpec) -> str | BufferSID 
             source_buffer=name,
             dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
             scalar_type=type_.dtype,
-            dim_config=index,
         )
     if isinstance(type_, ts.TupleType):
         return CompositeSID(
@@ -218,6 +216,7 @@ def create_bindings(
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
             "gridtools/sid/composite.hpp",
+            "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
             "gridtools/common/tuple_util.hpp",

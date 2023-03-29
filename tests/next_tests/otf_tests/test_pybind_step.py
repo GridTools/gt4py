@@ -29,6 +29,7 @@ def test_bindings(program_source_example):
         #include <gridtools/fn/unstructured.hpp>
         #include <gridtools/sid/composite.hpp>
         #include <gridtools/sid/rename_dimensions.hpp>
+        #include <gridtools/sid/unknown_kind.hpp>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
@@ -39,21 +40,18 @@ def test_bindings(program_source_example):
           return stencil(
               gridtools::sid::rename_numbered_dimensions<generated::I_t,
                                                         generated::J_t>(
-                  gridtools::as_sid<float, 2, gridtools::integral_constant<int, 0>,
-                                    999'999'999>(buf)),
+                  gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(buf)),
               gridtools::sid::composite::keys<gridtools::integral_constant<int, 0>,
                                               gridtools::integral_constant<int, 1>>::
                   make_values(
                       gridtools::sid::rename_numbered_dimensions<generated::I_t,
                                                                 generated::J_t>(
                           gridtools::as_sid<
-                              float, 2, gridtools::integral_constant<int, 1000>,
-                              999'999'999>(gridtools::tuple_util::get<0>(tup))),
+                              float, 2, gridtools::sid::unknown_kind>(gridtools::tuple_util::get<0>(tup))),
                       gridtools::sid::rename_numbered_dimensions<generated::I_t,
                                                                 generated::J_t>(
                           gridtools::as_sid<
-                              float, 2, gridtools::integral_constant<int, 1001>,
-                              999'999'999>(gridtools::tuple_util::get<1>(tup)))),
+                              float, 2, gridtools::sid::unknown_kind>(gridtools::tuple_util::get<1>(tup)))),
               sc);
         }
 
