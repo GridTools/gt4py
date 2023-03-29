@@ -32,6 +32,12 @@ def is_local_kind(symbol_type: ts.FieldType) -> bool:
     return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
 
 
+def local_kind_level(symbol_type: ts.FieldType | ts.ScalarKind) -> int:
+    if isinstance(symbol_type, ts.FieldType):
+        return [dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims].count(True)
+    return 0
+
+
 def is_local_type_kind(type_: ts.TypeSpec) -> bool:
     return any(
         isinstance(t, ts.FieldType) and is_local_kind(t)
@@ -263,10 +269,14 @@ class FieldOperatorLowering(NodeTranslator):
         init_expr: itir.Expr,
         **kwargs,
     ):
-        # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
+        assert isinstance(node.args[0].type, ts.FieldType)
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call_(im.call_("reduce")(op, im.deref_(init_expr)))
+        init = im.deref_(init_expr)
+        for _ in range(local_kind_level(node.args[0].type) - 1):
+            op = im.call_("map_")(op)
+            init = im.call_("make_const_list")(init)
+        val = im.call_(im.call_("reduce")(op, init))
         return im.promote_to_lifted_stencil(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -320,8 +330,12 @@ class FieldOperatorLowering(NodeTranslator):
     def _map(self, op, *args, **kwargs):
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(is_local_type_kind(arg.type) for arg in args):
+            # TODO (before this can be merged): to support nested reductions properly the level of nesting needs to be taking into account for promote_to_list
+            # The best strategy would be to make all implicit broadcasts explicit (then we could remove `promote_to_list` entirely)
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call_("map_")(op)
+            for _ in range(local_kind_level(args[0].type)):
+                op = im.call_("map_")(op)
+                print("map_")
 
         return im.promote_to_lifted_stencil(im.call_(op))(*lowered_args)
 

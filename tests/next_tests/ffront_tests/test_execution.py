@@ -420,8 +420,12 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
     assert np.allclose(out, expected)
 
 
-@pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
+# TODO add another test that has expression in the reduction to make sure all codepaths are tested
 def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.skip(
+            "The unroll_reduce pass cannot detect the nested `neighbors` call (which is a precondition for gtfn)."
+        )
     rs = reduction_setup
     Edge = rs.Edge
     Vertex = rs.Vertex
