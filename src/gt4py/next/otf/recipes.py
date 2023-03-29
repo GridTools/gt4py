@@ -25,6 +25,8 @@ LS = TypeVar("LS", bound=languages.LanguageSettings)
 
 @dataclasses.dataclass(frozen=True)
 class OTFCompileWorkflow(workflow.NamedStepSequence, Generic[SrcL, LS, TgtL]):
+    """The typical compiled backend steps composed into a workflow."""
+
     translation: step_types.TranslationStep[SrcL, LS]
     bindings: workflow.Workflow[
         stages.ProgramSource[SrcL, LS],

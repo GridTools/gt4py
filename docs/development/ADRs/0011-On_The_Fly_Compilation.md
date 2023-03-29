@@ -7,7 +7,7 @@ tags: [backend, bindings, build, compile, otf]
 - **Status**: valid
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2022-10-20
+- **Updated**: 2023-03-29
 
 This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
 
@@ -155,7 +155,7 @@ There is a good use case that justifies the extra effort. Such as implementing c
 ### Statically Typed Workflows
 
 - decided: 2022-09-13
-- revised: --
+- revised: 2023-03-29
 
 Workflow steps are generic on input and output type. Workflows are generic on input, intermediary and output type. This allows the use of static type checkers to ensure that the composed workflow has the intended input and output types, as well as that it is passed the correct argument types and that it's return value is used correctly.
 
@@ -178,9 +178,66 @@ CombinedStep(
 )
 ```
 
+_edit 2023-03-29_
+
+`otf.workflow.NamedStepSequence` provides another way in which workflow steps can be composed, while keeping static typing somewhat intact.
+
+```python
+@dataclasses.dataclass(frozen=True)
+class ExampleWorkflow(NamedStepSequence):
+    parsing: Workflow[A, B]
+    lowering: Workflow[B, C]
+    first_pass: Workflow[C, C]
+    second_pass: Workflow[C, C]
+
+    step_order = ["parsing", "lowering", "first_pass", "second_pass"]
+```
+
+As can be seen in the above example, the step types are statically hinted and mypy will catch wrong types on constructor calls. However, making sure that the steps are compatible in the order specified is up to the implementer of `ExampleWorkflow`.
+
 #### Reason
 
 It is in line with the rest of GT4Py to make static type checking for it's code objects as useful as possible. Any linear (and with extensions, non-linear) workflow can be represented in this way.
+
+_edit 2023-03-29_
+
+`NamedStepSequence` solves the following problem:
+
+By making it possible to quickly create a variant of an existing workflow (using `workflow.replace`), they make it unneccessary to escalate sub-workflow configuration.
+
+Coming back to the above example of `ExampleWorkflow`, instead of:
+
+```python
+examplewf_foo = Parser().chain(Lowerer(lower_flag=True)).chain(...)
+examplewf_bar = Parser().chain(Lowerer(lower_flag=False)).chain(...)
+```
+
+which avoids escalation, but is tedious, one might be tempted to implement a pattern like this:
+
+```python
+def make_workflow(lower_flag):
+    return Parser().chain(Lowerer(lower_flag=lower_flag)).chain(...)
+```
+
+which hardcodes the step classes and requires all sub-workflow configuration that needs to be accessible to be collected up front (escalated). One might fix the hardcoding of steps but the problem of escalated configuration just gets worse: now all configuration of all potentially allowed step types need to be escalated. `workflow.replace` in combination with `NamedStepSequence` solves both:
+
+```python
+examplewf_foo = ExampleWorkflow(
+    parsing=Parser(),
+    lowering=Lowerer(lower_flag=True),
+    ...
+)
+
+examplewf_bar = workflow.replace(
+    examplewf_foo,
+    lowering=dataclasses.replace(  # assuming the lowerer is a dataclass
+        examplewf_foo.lowering,
+        lower_flag=False
+    )
+)
+```
+
+This may be verbose but is much less dense semantically and much less error prone. A more terse interface may be added on top if warranted by usecases. This is of course a compromise when it comes to static typing. `workflow.replace` will take any argument which fulfills the `workflow.Workflow` protocol. This is a conscious tradeoff between usefulness of static typing and convenience of interface.
 
 #### Revise If
 
