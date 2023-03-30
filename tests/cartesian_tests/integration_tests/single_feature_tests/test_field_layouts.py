@@ -17,9 +17,10 @@ import pytest
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
-
-from ..definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS
-from .stencil_definitions import copy_stencil
+from tests.cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS
+from tests.cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
+    copy_stencil,
+)
 
 
 try:

@@ -14,8 +14,8 @@
 
 import gt4py.cartesian.definitions as gt_definitions
 import gt4py.cartesian.gtscript as gtscript
+from tests.cartesian_tests.definitions import id_version
 
-from ..definitions import id_version
 from .stencil_definitions import EXTERNALS_REGISTRY, REGISTRY as stencil_registry
 
 

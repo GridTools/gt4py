@@ -27,15 +27,14 @@ from gt4py.cartesian.frontend.nodes import (
     ScalarLiteral,
 )
 from gt4py.cartesian.gtc import common, gtir
-
-from .definition_setup import ijk_domain  # noqa: F401
-from .definition_setup import (
+from tests.cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401
     BlockStmt,
     IterationOrder,
     TAssign,
     TComputationBlock,
     TDefinition,
     TFieldRef,
+    ijk_domain,
 )
 
 

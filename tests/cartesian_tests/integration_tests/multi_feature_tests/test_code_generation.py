@@ -31,8 +31,8 @@ from gt4py.cartesian.gtscript import (
     region,
 )
 from gt4py.storage import utils as storage_utils
+from tests.cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
 
-from ..definitions import ALL_BACKENDS, CPU_BACKENDS
 from .stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
