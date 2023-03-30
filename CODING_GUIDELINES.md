@@ -113,12 +113,13 @@ Each test suite should follow the following structure:
         test_<feature>.py  # test <feature> in bigger context, starting from <starting_end>
     multi_feature_tests/
       __init__.py
-      test_<feature_combination>.py  # test <feature_combination>, which can be user code snipets etc
-      <feature_group>_tests/  # grouped feature combination tests with common data
-        __init__.py
-        <test_data>.py
-        test_<feature_combination>.py
-        test_<other_feature_combination>.py
+      <starting_end>_tests/
+        test_<feature_combination>.py  # test <feature_combination>, which can be user code snipets etc
+        <feature_group>_tests/  # grouped feature combination tests with common data
+          __init__.py
+          <test_data>.py
+          test_<feature_combination>.py
+          test_<other_feature_combination>.py
   unit_tests/
     __init__.py
     ...  # mirror subpackage folder structure
