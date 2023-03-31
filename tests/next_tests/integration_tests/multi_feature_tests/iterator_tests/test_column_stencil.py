@@ -14,7 +14,6 @@
 
 import numpy as np
 import pytest
-from next_tests.unit_tests.conftest import run_processor
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import *
@@ -24,6 +23,8 @@ from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+
+from next_tests.unit_tests.conftest import run_processor
 
 
 I = offset("I")

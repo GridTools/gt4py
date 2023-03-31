@@ -16,12 +16,13 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
-from next_tests.unit_tests.conftest import DummyConnectivity
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import deref
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
+
+from next_tests.unit_tests.conftest import DummyConnectivity
 
 
 @fundef

@@ -18,12 +18,6 @@ import pytest
 
 pytest.importorskip("atlas4py")
 
-from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_setup import (
-    assert_close,
-    nabla_setup,
-)
-from next_tests.unit_tests.conftest import run_processor
-
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import library
 from gt4py.next.iterator.atlas_utils import AtlasTable
@@ -49,6 +43,12 @@ from gt4py.next.iterator.embedded import (
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+
+from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_setup import (
+    assert_close,
+    nabla_setup,
+)
+from next_tests.unit_tests.conftest import run_processor
 
 
 Vertex = Dimension("Vertex")

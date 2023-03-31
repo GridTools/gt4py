@@ -15,7 +15,6 @@
 import re
 
 import pytest
-from next_tests.past_common_fixtures import IDim, float64
 
 import gt4py.eve as eve
 from gt4py.eve.pattern_matching import ObjectPattern as P
@@ -24,6 +23,8 @@ from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
+
+from next_tests.past_common_fixtures import IDim, float64
 
 
 @pytest.fixture

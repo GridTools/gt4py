@@ -18,13 +18,14 @@ import re
 
 import numpy as np
 import pytest
-from next_tests.past_common_fixtures import IDim, Ioff, JDim, float64
 
 from gt4py.next.common import Field, GTTypeError
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+
+from next_tests.past_common_fixtures import IDim, Ioff, JDim, float64
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])

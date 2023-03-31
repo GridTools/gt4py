@@ -17,10 +17,6 @@ from typing import Callable
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
-from next_tests.integration_tests.single_feature_tests.math_builtin_test_data import (
-    math_builtin_test_data,
-)
 
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
@@ -28,6 +24,11 @@ from gt4py.next.ffront.fbuiltins import Field, float64
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.type_system import type_translation
+
+from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.single_feature_tests.math_builtin_test_data import (
+    math_builtin_test_data,
+)
 
 
 # TODO: reduce duplication with `test_math_unary_builtins`

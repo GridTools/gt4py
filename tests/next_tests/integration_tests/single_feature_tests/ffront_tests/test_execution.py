@@ -18,7 +18,6 @@ from functools import reduce
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
 
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.experimental import as_offset
@@ -38,6 +37,8 @@ from gt4py.next.ffront.fbuiltins import (
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
+
+from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):
