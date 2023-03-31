@@ -26,7 +26,7 @@ from gt4py.next.ffront.fbuiltins import (
     where,
 )
 
-from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
