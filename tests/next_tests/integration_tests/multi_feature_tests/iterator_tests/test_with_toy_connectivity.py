@@ -51,6 +51,7 @@ from next_tests.toy_connectivity import (
     v2v_arr,
 )
 from next_tests.unit_tests.conftest import (
+    lift_mode,
     program_processor,
     program_processor_no_gtfn_exec,
     run_processor,
