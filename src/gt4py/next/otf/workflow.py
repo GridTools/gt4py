@@ -49,6 +49,13 @@ def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
     return Step(function)
 
 
+def replace(
+    workflow: NamedStepSequence[StartT, EndT], **kwargs: Any
+) -> NamedStepSequence[StartT, EndT]:
+    """Make a copy of the workflow with changed configuration or subworkflows."""
+    return dataclasses.replace(workflow, **kwargs)
+
+
 @typing.runtime_checkable
 class Workflow(Protocol[StartT_contra, EndT_co]):
     """
@@ -61,44 +68,6 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
 
     def __call__(self, inp: StartT_contra) -> EndT_co:
         ...
-
-
-WFT = TypeVar("WFT", bound=Workflow)
-
-
-def replace(workflow: WFT, **kwargs: Any) -> WFT:
-    """Make a copy of the workflow with changed configuration or subworkflows."""
-    return dataclasses.replace(workflow, **kwargs)
-
-
-@dataclasses.dataclass(frozen=True)
-class Step(Generic[StartT, EndT]):
-    """
-    Workflow step convenience wrapper.
-
-    Can wrap any callable which implements the workflow step protocol,
-    adds the .chain(other_step) method for convenience.
-
-    Examples:
-    ---------
-    >>> def times_two(x: int) -> int:
-    ...    return x * 2
-
-    >>> def stringify(x: int) -> str:
-    ...    return str(x)
-
-    >>> # create a workflow int -> int -> str
-    >>> Step(times_two).chain(stringify)(3)
-    '6'
-    """
-
-    step: Workflow[StartT, EndT]
-
-    def __call__(self, inp: StartT) -> EndT:
-        return self.step(inp)
-
-    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
-        return CombinedStep(first=self.step, second=step)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -177,7 +146,31 @@ class NamedStepSequence(Generic[StartT, EndT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class CombinedStep(NamedStepSequence, Generic[StartT, IntermediateT, EndT]):
+class Step(NamedStepSequence[StartT, EndT], Generic[StartT, EndT]):
+    """
+    Workflow step convenience wrapper.
+
+    Can wrap any callable which implements the workflow step protocol,
+    adds the .chain(other_step) method for convenience.
+
+    Examples:
+    ---------
+    >>> def times_two(x: int) -> int:
+    ...    return x * 2
+
+    >>> def stringify(x: int) -> str:
+    ...    return str(x)
+
+    >>> # create a workflow int -> int -> str
+    >>> Step(times_two).chain(stringify)(3)
+    '6'
+    """
+
+    step: Workflow[StartT, EndT]
+
+
+@dataclasses.dataclass(frozen=True)
+class CombinedStep(NamedStepSequence[StartT, EndT], Generic[StartT, IntermediateT, EndT]):
     """
     Composable workflow of single input callables.
 
