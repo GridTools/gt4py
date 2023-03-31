@@ -97,7 +97,7 @@ Testing components is a critical part of a software development project. We foll
 
 There are separate test suites (each living in a subfolder) for the separate subpackages of GT4Py. This is so that not all subpackages have to be tested on CI all the time (see [`ci-docs`][the ci docs] for details).
 
-The `tests` folder and test suites are python packages.
+The `tests` folder should not be a package but the contained test suites are python packages.
 
 Each test suite should follow the following structure:
 
