@@ -19,7 +19,11 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
-from next_tests.unit_tests.conftest import program_processor_no_gtfn_exec, run_processor
+from next_tests.unit_tests.conftest import (
+    program_processor,
+    program_processor_no_gtfn_exec,
+    run_processor,
+)
 
 
 IDim = CartesianAxis("IDim")

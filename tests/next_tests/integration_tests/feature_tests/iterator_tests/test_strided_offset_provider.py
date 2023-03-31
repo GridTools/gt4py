@@ -20,7 +20,11 @@ from gt4py.next.iterator.builtins import deref, lift, named_range, shift, unstru
 from gt4py.next.iterator.embedded import StridedNeighborOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
-from next_tests.unit_tests.conftest import program_processor_no_gtfn_exec, run_processor
+from next_tests.unit_tests.conftest import (
+    program_processor,
+    program_processor_no_gtfn_exec,
+    run_processor,
+)
 
 
 LocA = Dimension("LocA")

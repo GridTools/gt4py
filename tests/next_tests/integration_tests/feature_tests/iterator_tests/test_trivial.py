@@ -22,7 +22,7 @@ from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")

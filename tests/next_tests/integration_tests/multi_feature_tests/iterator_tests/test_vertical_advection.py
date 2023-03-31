@@ -25,7 +25,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 @fundef

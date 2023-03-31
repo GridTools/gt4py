@@ -24,7 +24,14 @@ from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
 
-from next_tests.past_common_fixtures import IDim, float64
+from next_tests.past_common_fixtures import (
+    IDim,
+    copy_program_def,
+    copy_restrict_program_def,
+    float64,
+    identity_def,
+    invalid_call_sig_program_def,
+)
 
 
 @pytest.fixture

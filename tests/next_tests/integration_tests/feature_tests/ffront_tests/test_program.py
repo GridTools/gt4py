@@ -25,7 +25,16 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
-from next_tests.past_common_fixtures import IDim, Ioff, JDim, float64
+from next_tests.past_common_fixtures import (
+    IDim,
+    Ioff,
+    JDim,
+    copy_program_def,
+    copy_restrict_program_def,
+    double_copy_program_def,
+    float64,
+    identity_def,
+)
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])

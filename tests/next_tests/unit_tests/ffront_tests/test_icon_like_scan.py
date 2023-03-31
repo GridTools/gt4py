@@ -23,6 +23,10 @@ from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    fieldview_backend,
+)
+
 
 Cell = Dimension("Cell")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
