@@ -15,11 +15,11 @@
 from types import SimpleNamespace
 
 import pytest
+from next_tests.unit_tests.conftest import DummyConnectivity
 
 from gt4py.eve.utils import UIDs
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
-from tests.next_tests.unit_tests.conftest import DummyConnectivity
 
 
 @pytest.fixture(params=[True, False])

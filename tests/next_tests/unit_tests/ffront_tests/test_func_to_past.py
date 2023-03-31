@@ -15,6 +15,7 @@
 import re
 
 import pytest
+from next_tests.past_common_fixtures import IDim, float64
 
 import gt4py.eve as eve
 from gt4py.eve.pattern_matching import ObjectPattern as P
@@ -25,7 +26,6 @@ from gt4py.next.ffront.fbuiltins import float64
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.type_system import type_specifications as ts
-from tests.next_tests.past_common_fixtures import IDim, float64
 
 
 def test_tuple_constructed_in_out(make_tuple_op):

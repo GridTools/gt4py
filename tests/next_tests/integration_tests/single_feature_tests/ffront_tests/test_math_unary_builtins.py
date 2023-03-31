@@ -13,6 +13,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
+
 #
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.fbuiltins import (
@@ -36,7 +38,6 @@ from gt4py.next.ffront.fbuiltins import (
     tanh,
     trunc,
 )
-from tests.next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
 
 
 # Math builtins

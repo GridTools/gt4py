@@ -13,6 +13,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
+
 #
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.fbuiltins import (
@@ -25,7 +27,6 @@ from gt4py.next.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
-from tests.next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
