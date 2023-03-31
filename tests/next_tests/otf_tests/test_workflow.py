@@ -33,8 +33,6 @@ class NamedStepsExample(workflow.NamedStepSequence[int, str]):
     repeat: workflow.Workflow[int, list[int]]
     strify: workflow.Workflow[list[int], str]
 
-    step_order = ["repeat", "strify"]
-
 
 def step_zero(inp: int) -> StageOne:
     return StageOne(inp)

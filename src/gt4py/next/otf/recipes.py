@@ -37,4 +37,3 @@ class OTFCompileWorkflow(workflow.NamedStepSequence, Generic[SrcL, LS, TgtL]):
         stages.CompiledProgram,
     ]
     decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]
-    step_order = ["translation", "bindings", "compilation", "decoration"]

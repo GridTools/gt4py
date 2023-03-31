@@ -15,7 +15,9 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Callable, ClassVar, Generic, Protocol, TypeVar
+import functools
+import typing
+from typing import Any, Callable, Generic, Protocol, TypeVar
 
 
 StartT = TypeVar("StartT")
@@ -47,6 +49,7 @@ def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
     return Step(function)
 
 
+@typing.runtime_checkable
 class Workflow(Protocol[StartT_contra, EndT_co]):
     """
     Workflow protocol.
@@ -121,7 +124,6 @@ class NamedStepSequence(Generic[StartT, EndT]):
     ...    parse: Workflow[str, int]
     ...    op: Workflow[int, float]
     ...    print: Workflow[float, str]
-    ...    step_order = ["parse", "op", "print"]
 
     >>> pop = ParseOpPrint(
     ...    parse=parse,
@@ -129,17 +131,19 @@ class NamedStepSequence(Generic[StartT, EndT]):
     ...    print=stringify
     ... )
 
+    >>> pop.step_order
+    ['parse', 'op', 'print']
+
     >>> pop(73)
     '73.5'
 
     >>> def plus_tenth(x: int) -> float:
     ...   return x + 0.1
 
+
     >>> pop.replace(op=plus_tenth)(73)
     '73.1'
     """
-
-    step_order: ClassVar[list[str]]
 
     def __call__(self, inp: StartT) -> EndT:
         """Compose the steps in the order defined in the `.step_order` class attribute."""
@@ -153,6 +157,23 @@ class NamedStepSequence(Generic[StartT, EndT]):
 
     def replace(self, **kwargs: Any) -> NamedStepSequence[StartT, EndT]:
         return dataclasses.replace(self, **kwargs)
+
+    @functools.cached_property
+    def step_order(self) -> list[str]:
+        """
+        Read step order from class definition by default.
+
+        Only attributes who are type hinted to be of a type that
+        conforms to the Workflow protocol are considered steps.
+        """
+        step_names: list[str] = []
+        annotations = typing.get_type_hints(self.__class__)
+        for field in dataclasses.fields(self):
+            field_type = annotations[field.name]
+            field_type = typing.get_origin(field_type) or field_type
+            if issubclass(field_type, Workflow):
+                step_names.append(field.name)
+        return step_names
 
 
 @dataclasses.dataclass(frozen=True)
@@ -188,7 +209,6 @@ class CombinedStep(NamedStepSequence, Generic[StartT, IntermediateT, EndT]):
 
     first: Workflow[StartT, IntermediateT]
     second: Workflow[IntermediateT, EndT]
-    step_order = ["first", "second"]
 
 
 @dataclasses.dataclass(frozen=True)

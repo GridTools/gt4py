@@ -189,8 +189,6 @@ class ExampleWorkflow(NamedStepSequence):
     lowering: Workflow[B, C]
     first_pass: Workflow[C, C]
     second_pass: Workflow[C, C]
-
-    step_order = ["parsing", "lowering", "first_pass", "second_pass"]
 ```
 
 As can be seen in the above example, the step types are statically hinted and mypy will catch wrong types on constructor calls. However, making sure that the steps are compatible in the order specified is up to the implementer of `ExampleWorkflow`.
