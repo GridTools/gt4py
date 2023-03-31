@@ -20,7 +20,7 @@ from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 def test_scan_in_stencil(program_processor, lift_mode):

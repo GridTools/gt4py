@@ -54,7 +54,7 @@ from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, 
 from gt4py.next.program_processors.runners.gtfn_cpu import GTFNExecutor
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 def asarray(*lists):
