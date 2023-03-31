@@ -22,7 +22,8 @@ from hypothesis.extra.numpy import arrays as st_arrays
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
-from tests.cartesian_tests.definitions import ALL_BACKENDS
+
+from cartesian_tests.definitions import ALL_BACKENDS
 
 
 class TestExecInfo:

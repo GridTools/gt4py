@@ -20,8 +20,9 @@ import pytest
 import gt4py.cartesian.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.cartesian.gtscript import Field, K
-from tests.cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
-from tests.cartesian_tests.utils import DimensionsWrapper, OriginWrapper
+
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
+from cartesian_tests.utils import DimensionsWrapper, OriginWrapper
 
 
 def base_stencil(

@@ -181,7 +181,8 @@ rst-roles = [
 [tool.isort]
 combine_as_imports = true
 group_by_package = true
-known_first_party = ["gt4py", "tests", "__externals__", "__gtscript__"]
+known_first_party = ["gt4py", "__externals__", "__gtscript__"]
+known_local_folder = ["cartesian_tests", "eve_tests", "next_tests", "storage_tests"]  # TODO category for tests
 known_third_party = [
   "attr",
   "black",

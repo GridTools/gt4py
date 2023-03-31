@@ -14,19 +14,6 @@
 
 import numpy as np
 import pytest
-from next_tests.toy_connectivity import (
-    C2E,
-    E2V,
-    V2E,
-    V2V,
-    Cell,
-    Edge,
-    Vertex,
-    c2e_arr,
-    e2v_arr,
-    v2e_arr,
-    v2v_arr,
-)
 
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import (
@@ -50,6 +37,20 @@ from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.formatters import gtfn, type_check
 from gt4py.next.program_processors.runners import gtfn_cpu
 from tests.next_tests.unit_tests.conftest import run_processor
+
+from next_tests.toy_connectivity import (
+    C2E,
+    E2V,
+    V2E,
+    V2V,
+    Cell,
+    Edge,
+    Vertex,
+    c2e_arr,
+    e2v_arr,
+    v2e_arr,
+    v2v_arr,
+)
 
 
 def edge_index_field():  # TODO replace by index_field once supported in bindings

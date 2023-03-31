@@ -26,8 +26,8 @@ from gt4py.cartesian.gtscript import (
     interval,
     region,
 )
-from tests.cartesian_tests.definitions import ALL_BACKENDS
 
+from ...definitions import ALL_BACKENDS
 from .stencil_definitions import optional_field, two_optional_fields
 
 

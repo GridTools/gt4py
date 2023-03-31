@@ -15,14 +15,15 @@
 import math
 
 import numpy as np
-from next_tests.unit_tests.otf_tests.compilation_tests.build_system_tests.conftest import (
-    program_source_with_name,
-)
 
 from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
+
+from next_tests.unit_tests.otf_tests.compilation_tests.build_system_tests.conftest import (
+    program_source_with_name,
+)
 
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):

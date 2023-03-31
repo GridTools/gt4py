@@ -27,7 +27,8 @@ from gt4py.cartesian.frontend.nodes import (
     ScalarLiteral,
 )
 from gt4py.cartesian.gtc import common, gtir
-from tests.cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401
+
+from cartesian_tests.unit_tests.frontend_tests.defir_to_gtir_definition_setup import (  # noqa: F401
     BlockStmt,
     IterationOrder,
     TAssign,

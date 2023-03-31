@@ -24,7 +24,8 @@ from gt4py.cartesian.gtc import gtir, utils
 from gt4py.cartesian.gtscript import __INLINED, PARALLEL, Field, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.type_hints import StencilFunc
-from tests.cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
+
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, GPU_BACKENDS
 
 
 def stencil_def(
