@@ -53,9 +53,7 @@ from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_loca
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import GTFNExecutor
 
-from next_tests.integration_tests.single_feature_tests.math_builtin_test_data import (
-    math_builtin_test_data,
-)
+from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import run_processor
 
 

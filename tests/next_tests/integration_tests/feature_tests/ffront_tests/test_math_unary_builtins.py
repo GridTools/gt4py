@@ -37,7 +37,7 @@ from gt4py.next.ffront.fbuiltins import (
     trunc,
 )
 
-from next_tests.integration_tests.single_feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
 # Math builtins
