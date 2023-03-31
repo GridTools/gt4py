@@ -25,7 +25,13 @@ from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 
-from .utility import connectivity_identifier, create_memlet_at, create_memlet_full
+from .utility import (
+    connectivity_identifier,
+    create_memlet_at,
+    create_memlet_full,
+    create_memlet_full_to_at,
+    simplify_sdfg,
+)
 
 
 _TYPE_MAPPING = {
@@ -215,32 +221,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Translate the function's body
         function_result: ValueExpr = self.visit(node.expr)[0]
-        forwarding_tasklet = self.entry_state.add_tasklet(
-            name="forwarding",
-            inputs={f"{function_result.value.data}_internal"},
-            outputs={f"{result}_internal" for result in result_names},
-            code=f"{result_names[0]}_internal = {function_result.value.data}_internal",
-            language=dace.dtypes.Language.Python,
-        )
-        function_result_memlet = create_memlet_full(
-            function_result.value.data, self.sdfg.arrays[function_result.value.data]
-        )
-        self.entry_state.add_edge(
-            function_result.value,
-            None,
-            forwarding_tasklet,
-            f"{function_result.value.data}_internal",
-            function_result_memlet,
-        )
 
         output_accesses: list[dace.nodes.AccessNode] = [
             self.entry_state.add_access(name) for name in result_names
         ]
         for access in output_accesses:
-            name = access.data
             ndim = len(self.sdfg.arrays[access.data].shape)
-            memlet = create_memlet_at(name, tuple(["0"] * ndim))
-            self.entry_state.add_edge(forwarding_tasklet, f"{name}_internal", access, None, memlet)
+            function_result_memlet = create_memlet_full_to_at(
+                function_result.value.data,
+                self.sdfg.arrays[function_result.value.data],
+                tuple(["0"] * ndim),
+            )
+            self.entry_state.add_edge(
+                function_result.value, None, access, None, function_result_memlet
+            )
 
     def visit_SymRef(
         self, node: itir.SymRef, *, hack_is_iterator=False, **kwargs
@@ -248,10 +242,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert self.entry_state is not None
         access_node = self.entry_state.add_access(str(node.id))
         if hack_is_iterator:
-            index = {
-                dim: self.add_expr_tasklet([], idx, dace.dtypes.int64, idx)[0].value
-                for dim, idx in self.domain.items()
-            }
+            index = {}
+            for dim, idx in self.domain.items():
+                index[dim] = self.add_expr_tasklet([], idx, dace.dtypes.int64, idx)[0].value
+                assert self.sdfg is not None
+                if str(idx) not in self.sdfg.symbols:
+                    self.sdfg.add_symbol(idx, stype=dace.int64)
             return IteratorExpr(access_node, index)
         return [ValueExpr(access_node)]
 
@@ -445,4 +441,5 @@ def closure_to_tasklet_sdfg(
         offset_provider, domain, input_args, output_args, connectivity_args
     )
     translator.visit(node.stencil)
+    simplify_sdfg(translator.sdfg)
     return translator.sdfg, translator.params, translator.results

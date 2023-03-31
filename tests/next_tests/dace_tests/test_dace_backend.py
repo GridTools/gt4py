@@ -65,21 +65,21 @@ def test_pointwise():
     assert np.allclose(np.asarray(a) + np.asarray(b), np.asarray(r))
 
 
-def test_shift_left():
+def test_shift_cartesian():
     @field_operator
-    def shift_left(a: Field[[IDim], float]) -> Field[[IDim], float]:
-        return a(IOff[1])
+    def shift_cartesian(a: Field[[IDim], float]) -> Field[[IDim], float]:
+        return a(IOff[1]) + a(IOff[-1])
 
     @program(backend=run_dace_iterator)
     def shift_program(a: Field[[IDim], float], out: Field[[IDim], float]):
-        shift_left(a, out=out, domain={IDim: (0, 2)})
+        shift_cartesian(a, out=out, domain={IDim: (1, 3)})
 
-    a = np_as_located_field(IDim)(np.array([1, 2, 3], dtype=float))
-    r = np_as_located_field(IDim)(np.array([0, 0], dtype=float))
+    a = np_as_located_field(IDim)(np.array([1, 2, 3, 4], dtype=float))
+    r = np_as_located_field(IDim)(np.array([0, 0, 0, 0], dtype=float))
 
     shift_program(a, out=r, offset_provider={"IOff": IDim})
 
-    assert np.allclose(np.asarray(a)[1::], np.asarray(r))
+    assert np.allclose(np.asarray(a)[0:2] + np.asarray(a)[2:4], np.asarray(r)[1:-1])
 
 
 def test_indirect_addressing():

@@ -29,6 +29,7 @@ from .utility import (
     create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
+    simplify_sdfg,
     type_spec_to_dtype,
 )
 
@@ -114,8 +115,8 @@ class ItirToSDFG(eve.NodeVisitor):
             for inner_name, access_node in zip(output_names, output_accesses):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
-
-        program_sdfg.validate()
+        simplify_sdfg(program_sdfg)
+        program_sdfg.view()
         return program_sdfg
 
     def visit_StencilClosure(

@@ -94,16 +94,18 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
+    all_dace_args = {
+        **dace_args,
+        **dace_conn_args,
+        **dace_shapes,
+        **dace_conn_shapes,
+        **dace_strides,
+        **dace_conn_stirdes,
+    }
+    required_dace_args = {k: all_dace_args[k] for k in sdfg.signature_arglist(with_types=False)}
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("compiler", "build_type", value="Debug")
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(
-            **dace_args,
-            **dace_conn_args,
-            **dace_shapes,
-            **dace_conn_shapes,
-            **dace_strides,
-            **dace_conn_stirdes,
-        )
+        sdfg(**required_dace_args)

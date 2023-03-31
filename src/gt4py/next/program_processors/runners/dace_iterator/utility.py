@@ -15,6 +15,8 @@
 from typing import Any
 
 import dace
+from dace.transformation.dataflow.redundant_array import RedundantArray, RedundantSecondArray
+from dace.transformation.dataflow.trivial_tasklet_elimination import TrivialTaskletElimination
 
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
@@ -46,12 +48,37 @@ def connectivity_identifier(name: str):
     return f"__connectivity_{name}"
 
 
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
+def create_full_subset(source_array: dace.data.Array):
     bounds = [(0, size) for size in source_array.shape]
-    subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
+    return ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
+
+
+def create_index_subset(index: tuple[str, ...]):
+    return ", ".join(index)
+
+
+def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
+    subset = create_full_subset(source_array)
     return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
+    subset = create_index_subset(index)
     return dace.Memlet(data=source_identifier, subset=subset)
+
+
+def create_memlet_full_to_at(
+    source_identifier: str, source_array: dace.data.Array, index: tuple[str, ...]
+):
+    subset = create_full_subset(source_array)
+    other_subset = create_index_subset(index)
+    return dace.Memlet(data=source_identifier, subset=subset, other_subset=other_subset)
+
+
+def simplify_sdfg(sdfg: dace.SDFG):
+    sdfg.apply_transformations_repeated(
+        [TrivialTaskletElimination, RedundantArray, RedundantSecondArray], validate=False
+    )
+    sdfg.simplify(validate=False)
+
+    sdfg.validate()
