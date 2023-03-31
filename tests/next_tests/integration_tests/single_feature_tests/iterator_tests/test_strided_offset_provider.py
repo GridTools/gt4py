@@ -14,12 +14,12 @@
 
 import numpy as np
 import pytest
+from next_tests.unit_tests.conftest import run_processor
 
 from gt4py.next.common import Dimension
 from gt4py.next.iterator.builtins import deref, lift, named_range, shift, unstructured_domain
 from gt4py.next.iterator.embedded import StridedNeighborOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from tests.next_tests.unit_tests.conftest import run_processor
 
 
 LocA = Dimension("LocA")

@@ -14,6 +14,7 @@
 
 import numpy as np
 import pytest
+from next_tests.unit_tests.conftest import run_processor
 
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator import transforms
@@ -21,7 +22,6 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
-from tests.next_tests.unit_tests.conftest import run_processor
 
 
 I = offset("I")

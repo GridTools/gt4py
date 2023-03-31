@@ -14,12 +14,12 @@
 
 import numpy as np
 import pytest
+from next_tests.unit_tests.conftest import lift_mode, run_processor
 
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
-from tests.next_tests.unit_tests.conftest import lift_mode, run_processor
 
 
 @fundef

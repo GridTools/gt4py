@@ -17,6 +17,10 @@ from typing import Callable, Iterable
 
 import numpy as np
 import pytest
+from next_tests.integration_tests.single_feature_tests.math_builtin_test_data import (
+    math_builtin_test_data,
+)
+from next_tests.unit_tests.conftest import run_processor
 
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
@@ -52,10 +56,6 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import GTFNExecutor
-from tests.next_tests.integration_tests.single_feature_tests.math_builtin_test_data import (
-    math_builtin_test_data,
-)
-from tests.next_tests.unit_tests.conftest import run_processor
 
 
 def asarray(*lists):
