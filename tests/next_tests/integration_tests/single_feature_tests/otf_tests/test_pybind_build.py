@@ -21,7 +21,7 @@ from gt4py.next.otf.binding import pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
 
-from next_tests.unit_tests.otf_tests.compilation_tests.build_system_tests.conftest import (
+from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
     program_source_with_name,
 )
 
