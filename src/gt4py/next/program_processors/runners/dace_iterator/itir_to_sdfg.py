@@ -116,7 +116,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
         simplify_sdfg(program_sdfg)
-        program_sdfg.view()
         return program_sdfg
 
     def visit_StencilClosure(

@@ -75,10 +75,12 @@ def create_memlet_full_to_at(
     return dace.Memlet(data=source_identifier, subset=subset, other_subset=other_subset)
 
 
-def simplify_sdfg(sdfg: dace.SDFG):
+def simplify_sdfg(sdfg: dace.SDFG, validate: bool = True, validate_all: bool = False):
     sdfg.apply_transformations_repeated(
-        [TrivialTaskletElimination, RedundantArray, RedundantSecondArray], validate=False
+        [TrivialTaskletElimination, RedundantArray, RedundantSecondArray],
+        validate=False,
+        validate_all=validate_all,
     )
-    sdfg.simplify(validate=False)
-
-    sdfg.validate()
+    sdfg.simplify(validate=False, validate_all=validate_all)
+    if validate:
+        sdfg.validate()
