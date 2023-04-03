@@ -174,7 +174,7 @@ class TestInlinedExternals:
             "other_call",
             "func",
             "another_const",
-            "cartesian_tests.unit_tests.test_gtscript_frontend.func_nested.func_deeply_nested",
+            "test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
