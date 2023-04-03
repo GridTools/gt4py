@@ -42,7 +42,9 @@ class Sym(Node):  # helper
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
     kind: typing.Literal["Iterator", "Value", None] = None
-    dtype: Optional[str] = None
+    dtype: Optional[
+        tuple[str, bool]
+    ] = None  # format: name of primitive type, boolean indicating if it is a list
 
     @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
