@@ -564,11 +564,14 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
             )
         if node.dtype:
-            assert node.dtype in ir.TYPEBUILTINS
+            assert node.dtype is not None
+            dtype: Primitive | List = Primitive(name=node.dtype[0])
+            if node.dtype[1]:
+                dtype = List(dtype=dtype)
             self.constraints.add(
                 (
                     Val(
-                        dtype=Primitive(name=node.dtype),
+                        dtype=dtype,
                         current_loc=TypeVar.fresh(),
                         defined_loc=TypeVar.fresh(),
                     ),

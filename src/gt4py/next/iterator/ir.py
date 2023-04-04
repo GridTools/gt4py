@@ -53,7 +53,7 @@ class Sym(Node):  # helper
 
     @datamodels.validator("dtype")
     def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
-        if value and value not in TYPEBUILTINS:
+        if value and value[0] not in TYPEBUILTINS:
             raise ValueError(
                 f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
             )
