@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import collections.abc
 import copy
+from typing import ClassVar
 
 from . import concepts, trees
 from .extended_typing import Any
@@ -151,6 +152,8 @@ class NodeTranslator(NodeVisitor):
 
     """
 
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ()
+
     def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         memo = kwargs.get("__memo__", None)
 
@@ -162,6 +165,15 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
+            if self.PRESERVED_ANNEX_ATTRS:
+                new_annex = copy.deepcopy(new_node.annex)
+                for k in self.PRESERVED_ANNEX_ATTRS:
+                    try:
+                        assert not hasattr(new_annex, k)
+                        setattr(new_annex, k, getattr(node.annex, k))
+                    except AttributeError:
+                        pass
+                object.__setattr__(new_node, "__node_annex__", new_annex)
             return new_node
 
         if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
