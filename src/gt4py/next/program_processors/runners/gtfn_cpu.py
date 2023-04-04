@@ -110,8 +110,14 @@ run_gtfn_imperative = otf_compile_executor.OTFCompileExecutor[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
 ](
     name="run_gtfn_imperative",
-    otf_workflow=workflow.replace(
-        GTFN_DEFAULT_WORKFLOW,
-        translation=workflow.replace(GTFN_DEFAULT_TRANSLATION_STEP, use_imperative_backend=True),
+    otf_workflow=run_gtfn.otf_workflow.replace(
+        translation=run_gtfn.otf_workflow.replace(use_imperative_backend=True),
     ),
 )
+
+run_gtfn_cached = otf_compile_executor.OTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](
+    name="run_gtfn_cached",
+    otf_workflow=workflow.CachedStep(step=run_gtfn.otf_workflow, hash_function=compilation_hash),
+)  # todo(ricoh): add API for converting an executor to a cached version of itself and vice versa

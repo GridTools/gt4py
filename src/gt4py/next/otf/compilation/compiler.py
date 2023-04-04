@@ -47,7 +47,15 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 
 @dataclasses.dataclass(frozen=True)
 class Compiler(
-    step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python]
+    workflow.Chainable[
+        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompiledProgram,
+    ],
+    workflow.WorkflowWithReplace[
+        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
+        stages.CompiledProgram,
+    ],
+    step_types.CompilationStep[SourceLanguageType, LanguageSettingsType, languages.Python],
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
@@ -78,15 +86,6 @@ class Compiler(
         return getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
-
-    def chain(
-        self, step: workflow.Workflow[stages.CompiledProgram, T]
-    ) -> workflow.CombinedStep[
-        stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
-        stages.CompiledProgram,
-        T,
-    ]:
-        return workflow.CombinedStep(first=self, second=step)
 
 
 class CompilationError(RuntimeError):

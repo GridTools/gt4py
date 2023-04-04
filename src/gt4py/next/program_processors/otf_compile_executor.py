@@ -31,6 +31,7 @@ class OTFCompileExecutor(ppi.ProgramExecutor, Generic[SrcL, LS, TgtL, HashT]):
     otf_workflow: (
         recipes.OTFCompileWorkflow[SrcL, LS, TgtL]
         | workflow.CachedStep[stages.ProgramCall, stages.CompiledProgram, HashT]
+        | workflow.WorkflowWithReplace[stages.ProgramCall, stages.CompiledProgram]
     )
     name: Optional[str] = None
 
