@@ -55,3 +55,22 @@ def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
     return dace.Memlet(data=source_identifier, subset=subset)
+
+
+def map_nested_sdfg_symbols(
+        parent_sdfg: dace.SDFG,
+        nested_sdfg: dace.SDFG,
+        array_mapping: dict[str, dace.Memlet]
+) -> dict[str, Any]:
+    symbol_mapping: dict[str, Any] = {}
+    for param, arg in array_mapping.items():
+        arg_array = parent_sdfg.arrays[arg.data]
+        param_array = nested_sdfg.arrays[param]
+        for arg_shape, param_shape in zip(arg.subset.size(), param_array.shape):
+            symbol_mapping[str(param_shape)] = str(arg_shape)
+        for arg_stride, param_stride in zip(arg_array.strides, param_array.strides):
+            symbol_mapping[str(param_stride)] = str(arg_stride)
+    for sym in nested_sdfg.free_symbols:
+        if str(sym) not in symbol_mapping:
+            symbol_mapping[str(sym)] = str(sym)
+    return symbol_mapping

@@ -91,14 +91,6 @@ _MATH_BUILTINS_MAPPING = {
     "not_": "~{}",
 }
 
-
-@dataclasses.dataclass
-class ClosureArg:
-    memlet: dace.Memlet
-    strides: tuple[dace.symbol]
-    dtype: dace.dtypes.typeclass
-
-
 @dataclasses.dataclass
 class ValueExpr:
     value: dace.nodes.AccessNode
@@ -108,6 +100,13 @@ class ValueExpr:
 class IteratorExpr:
     field: dace.nodes.AccessNode
     indices: dict[str, dace.nodes.AccessNode]
+
+
+@dataclasses.dataclass
+class CallableSpec:
+    input_args: Sequence[dace.Memlet]
+    output_args: Sequence[dace.Memlet]
+    conn_args: Sequence[dace.Memlet]
 
 
 def builtin_if(transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]) -> list[ValueExpr]:
@@ -166,9 +165,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     entry_state: Optional[dace.SDFGState]
     offset_provider: dict[str, Any]
     domain: dict[str, str]
-    input_args: Sequence[ClosureArg]
-    output_args: Sequence[ClosureArg]
-    conn_args: Sequence[ClosureArg]
+    input_args: Sequence[dace.Memlet]
+    output_args: Sequence[dace.Memlet]
+    conn_args: Sequence[dace.Memlet]
     params: list[str]
     results: list[str]
 
@@ -176,9 +175,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self,
         offset_provider: dict[str, Any],
         domain: dict[str, str],
-        input_args: Sequence[ClosureArg],
-        output_args: Sequence[ClosureArg],
-        conn_args: Sequence[ClosureArg],
+        input_args: Sequence[dace.Memlet],
+        output_args: Sequence[dace.Memlet],
+        conn_args: Sequence[dace.Memlet],
     ):
         self.sdfg = None
         self.entry_state = None
@@ -197,7 +196,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         func_name = f"lambda_{abs(hash(node)):x}"
         param_names = [str(p.id) for p in node.params]
         result_names = [f"__result_{str(i)}" for i in range(len(self.output_args))]
-        conn_names = [conn.memlet.data for conn in self.conn_args]
+        conn_names = [conn.data for conn in self.conn_args]
 
         self.params = param_names
         self.results = result_names
@@ -210,8 +209,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         array_names = [*param_names, *result_names, *conn_names]
         args = [*self.input_args, *self.output_args, *self.conn_args]
         for name, arg in zip(array_names, args):
-            shape = arg.memlet.subset.size()
-            self.sdfg.add_array(name, shape=shape, strides=arg.strides, dtype=arg.dtype)
+            shape = tuple(dace.symbol(self.sdfg.temp_data_name() + "__shp", dace.int64)
+                          for _ in range(arg.subset.dims()))
+            strides = tuple(dace.symbol(self.sdfg.temp_data_name() + "__strd", dace.int64)
+                            for _ in range(arg.subset.dims()))
+            dtype = dace.int64 if name.startswith("__connectivity") else dace.float64  # TODO: take ITIR node dtype
+            self.sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         # Translate the function's body
         function_result: ValueExpr = self.visit(node.expr)[0]
@@ -437,9 +440,9 @@ def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
     domain: dict[str, str],
-    input_args: Sequence[ClosureArg],
-    output_args: Sequence[ClosureArg],
-    connectivity_args: Sequence[ClosureArg],
+    input_args: Sequence[dace.Memlet],
+    output_args: Sequence[dace.Memlet],
+    connectivity_args: Sequence[dace.Memlet],
 ) -> tuple[dace.SDFG, list[str], list[str]]:
     translator = PythonTaskletCodegen(
         offset_provider, domain, input_args, output_args, connectivity_args

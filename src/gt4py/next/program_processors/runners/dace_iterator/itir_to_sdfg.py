@@ -23,13 +23,14 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from .itir_to_tasklet import ClosureArg, closure_to_tasklet_sdfg
+from .itir_to_tasklet import closure_to_tasklet_sdfg
 from .utility import (
     connectivity_identifier,
     create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
     type_spec_to_dtype,
+    map_nested_sdfg_symbols,
 )
 
 
@@ -162,9 +163,9 @@ class ItirToSDFG(eve.NodeVisitor):
             node,
             self.offset_provider,
             index_domain,
-            [self._closure_arg_from_memlet(closure_sdfg, arg) for arg in input_args],
-            [self._closure_arg_from_memlet(closure_sdfg, arg) for arg in output_args],
-            [self._closure_arg_from_memlet(closure_sdfg, arg) for arg in conn_args],
+            input_args,
+            output_args,
+            conn_args,
         )
 
         # Map SDFG tasklet arguments to parameters
@@ -172,19 +173,20 @@ class ItirToSDFG(eve.NodeVisitor):
         output_mapping = {param: arg for param, arg in zip(output_params, output_args)}
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_args)}
 
+        array_mapping = {**input_mapping, **output_mapping, **conn_mapping}
+        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, tasklet_sdfg, array_mapping)
+
         self._add_mapped_nested_sdfg(
             closure_state,
             sdfg=tasklet_sdfg,
             map_ranges=map_domain,
             inputs={**input_mapping, **conn_mapping},
             outputs=output_mapping,
+            symbol_mapping=symbol_mapping,
             schedule=dace.ScheduleType.Sequential,
         )
 
         return closure_sdfg
-
-    def _closure_arg_from_memlet(self, sdfg: dace.SDFG, memlet: dace.Memlet):
-        return ClosureArg(memlet, sdfg.arrays[memlet.data].strides, sdfg.arrays[memlet.data].dtype)
 
     def _add_mapped_nested_sdfg(
         self,
@@ -192,8 +194,9 @@ class ItirToSDFG(eve.NodeVisitor):
         map_ranges: dict[str, str | dace.subsets.Subset]
         | list[tuple[str, str | dace.subsets.Subset]],
         inputs: dict[str, dace.Memlet],
-        sdfg: dace.SDFG,
         outputs: dict[str, dace.Memlet],
+        sdfg: dace.SDFG,
+        symbol_mapping: dict[str, Any] | None = None,
         schedule: Any = dace.dtypes.ScheduleType.Default,
         unroll_map: bool = False,
         location: Any = None,
@@ -201,12 +204,15 @@ class ItirToSDFG(eve.NodeVisitor):
         input_nodes: dict[str, dace.nodes.AccessNode] | None = None,
         output_nodes: dict[str, dace.nodes.AccessNode] | None = None,
     ) -> tuple[dace.nodes.NestedSDFG, dace.nodes.MapEntry, dace.nodes.MapExit]:
+        if not symbol_mapping:
+            symbol_mapping = {sym: sym for sym in sdfg.free_symbols}
+
         nsdfg_node = state.add_nested_sdfg(
             sdfg,
             None,
             set(inputs.keys()),
             set(outputs.keys()),
-            {sym: sym for sym in sdfg.free_symbols},
+            symbol_mapping,
             name=sdfg.name,
             schedule=schedule,
             location=location,
