@@ -334,7 +334,7 @@ def test_offset_field(fieldview_backend):
     a_I_float_1 = np_as_located_field(IDim, KDim)(
         np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
     )
-    offset_field_arr = np.asarray(np.ones((size - 1, size - 1)), dtype=int64)
+    offset_field_arr = np.ones((size - 1, size - 1), dtype=int64)
     offset_field_comp = np.append(
         np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
     )
@@ -589,13 +589,11 @@ def test_solve_triag(fieldview_backend):
     assert np.allclose(expected, out)
 
 
-def test_ternary_operator(fieldview_backend):
+@pytest.mark.parametrize("left,right", [(2.0, 3.0), (3.0, 2.0)])
+def test_ternary_operator(left, right, fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
-
-    left = 2.0
-    right = 3.0
 
     @field_operator(backend=fieldview_backend)
     def ternary_field_op(
@@ -616,16 +614,14 @@ def test_ternary_operator(fieldview_backend):
     assert np.allclose(e, out_I_float)
 
 
-def test_ternary_operator_tuple(fieldview_backend):
+@pytest.mark.parametrize("left,right", [(2.0, 3.0), (3.0, 2.0)])
+def test_ternary_operator_tuple(left, right, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Tuple arguments are not supported in gtfn yet.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
     out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
-
-    left = 2.0
-    right = 3.0
 
     @field_operator(backend=fieldview_backend)
     def ternary_field_op(
