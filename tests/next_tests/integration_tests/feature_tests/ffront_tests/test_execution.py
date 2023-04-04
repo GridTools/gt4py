@@ -612,7 +612,7 @@ def test_ternary_operator(fieldview_backend):
         return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
     ternary_field_op_scalars(left, right, out=out_I_float, offset_provider={})
-    e = np.full(e.shape, 3.0) if left > right else e
+    e = np.full(e.shape, 3.0) if left > right else np.full(e.shape, 4.0)
     assert np.allclose(e, out_I_float)
 
 
@@ -760,9 +760,10 @@ def test_docstring():
 
 
 def test_domain(fieldview_backend):
-    a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
+    inp = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
+    out = np_as_located_field(IDim, JDim)(2 * np.ones((size, size), dtype=float64))
 
-    expected = np.array(a_IJ_float)
+    expected = np.array(out)
     expected[1:9, 4:6] = 1 + 1
 
     @field_operator(backend=fieldview_backend)
@@ -770,17 +771,53 @@ def test_domain(fieldview_backend):
         return a + a
 
     @program
-    def program_domain(a: Field[[IDim, JDim], float64]):
-        fieldop_domain(a, out=a, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
+    def program_domain(inp: Field[[IDim, JDim], float64], out: Field[[IDim, JDim], float64]):
+        fieldop_domain(inp, out=out, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
 
-    program_domain(a_IJ_float, offset_provider={})
+    program_domain(inp, out, offset_provider={})
 
-    assert np.allclose(expected, a_IJ_float)
+    assert np.allclose(expected, out)
 
 
 def test_domain_input_bounds(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("FloorDiv not fully supported in gtfn.")
+    inp = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
+    out = np_as_located_field(IDim, JDim)(2 * np.ones((size, size), dtype=float64))
+
+    lower_i = 1
+    upper_i = 9
+    lower_j = 4
+    upper_j = 6
+
+    expected = np.array(out)
+    expected[lower_i:upper_i, lower_j:upper_j] = 1 + 1
+
+    @field_operator(backend=fieldview_backend)
+    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
+        return a + a
+
+    @program
+    def program_domain(
+        inp: Field[[IDim, JDim], float64],
+        out: Field[[IDim, JDim], float64],
+        lower_i: int64,
+        upper_i: int64,
+        lower_j: int64,
+        upper_j: int64,
+    ):
+        fieldop_domain(
+            inp,
+            out=out,
+            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
+        )
+
+    program_domain(inp, out, lower_i, upper_i, lower_j, upper_j, offset_provider={})
+
+    assert np.allclose(expected, out)
+
+
+def test_domain_input_bounds_1(fieldview_backend):
     a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
 
     lower_i = 1
@@ -806,40 +843,6 @@ def test_domain_input_bounds(fieldview_backend):
         fieldop_domain(
             a,
             out=a,
-            domain={IDim: (lower_i, upper_i // 1), JDim: (lower_j**1, upper_j)},
-        )
-
-    program_domain(a_IJ_float, lower_i, upper_i, lower_j, upper_j, offset_provider={})
-
-    assert np.allclose(expected, a_IJ_float)
-
-
-def test_domain_input_bounds_1(fieldview_backend):
-    a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
-
-    lower_i = 1
-    upper_i = 9
-    lower_j = 4
-    upper_j = 6
-
-    expected = np.array(a_IJ_float)
-    expected[lower_i:upper_i, lower_j:upper_j] = 2 * 2
-
-    @field_operator(backend=fieldview_backend)
-    def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
-        return a * a
-
-    @program
-    def program_domain(
-        a: Field[[IDim, JDim], float64],
-        lower_i: int64,
-        upper_i: int64,
-        lower_j: int64,
-        upper_j: int64,
-    ):
-        fieldop_domain(
-            a,
-            out=a,
             domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)},
         )
 
@@ -849,25 +852,35 @@ def test_domain_input_bounds_1(fieldview_backend):
 
 
 def test_domain_tuple(fieldview_backend):
-    a_IJ_float = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
-    b2d_float = a_IJ_float
+    inp0 = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
+    inp1 = np_as_located_field(IDim, JDim)(2 * np.ones((size, size), dtype=float64))
+    out0 = np_as_located_field(IDim, JDim)(3 * np.ones((size, size), dtype=float64))
+    out1 = np_as_located_field(IDim, JDim)(4 * np.ones((size, size), dtype=float64))
 
-    expected = np.array(a_IJ_float)
-    expected[1:9, 4:6] = 1 + 1
+    expected0 = np.array(out0)
+    expected0[1:9, 4:6] = (np.asarray(inp0) + np.asarray(inp1))[1:9, 4:6]
+    expected1 = np.array(out1)
+    expected1[1:9, 4:6] = np.asarray(inp1)[1:9, 4:6]
 
     @field_operator(backend=fieldview_backend)
     def fieldop_domain_tuple(
-        a: Field[[IDim, JDim], float64]
+        a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]
     ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
-        return (a + a, a)
+        return (a + b, b)
 
     @program
-    def program_domain_tuple(a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64]):
-        fieldop_domain_tuple(a, out=(b, a), domain={IDim: (1, 9), JDim: (4, 6)})
+    def program_domain_tuple(
+        inp0: Field[[IDim, JDim], float64],
+        inp1: Field[[IDim, JDim], float64],
+        out0: Field[[IDim, JDim], float64],
+        out1: Field[[IDim, JDim], float64],
+    ):
+        fieldop_domain_tuple(inp0, inp1, out=(out0, out1), domain={IDim: (1, 9), JDim: (4, 6)})
 
-    program_domain_tuple(a_IJ_float, b2d_float, offset_provider={})
+    program_domain_tuple(inp0, inp1, out0, out1, offset_provider={})
 
-    assert np.allclose(expected, b2d_float)
+    assert np.allclose(expected0, out0)
+    assert np.allclose(expected1, out1)
 
 
 def test_where_k_offset(fieldview_backend):
