@@ -26,8 +26,8 @@ from gt4py.next.ffront.fbuiltins import (
     Field,
     astype,
     broadcast,
+    float32,
     float64,
-    int32,
     int64,
     maximum,
     minimum,
@@ -287,7 +287,7 @@ def test_tuple_scalar_scan(fieldview_backend):
 
 def test_astype_int(fieldview_backend):
     size = 10
-    b_float_64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.float64))
+    b_float_64 = np_as_located_field(IDim)(np.full((size,), fill_value=1.5, dtype=np.float64))
     c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
     out_int_64 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
 
@@ -301,7 +301,7 @@ def test_astype_int(fieldview_backend):
 
 
 def test_astype_bool(fieldview_backend):
-    b_float_64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.float64))
+    b_float_64 = np_as_located_field(IDim)(np.full((size,), fill_value=0.5, dtype=np.float64))
     c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
     out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
 
@@ -315,17 +315,18 @@ def test_astype_bool(fieldview_backend):
 
 
 def test_astype_float(fieldview_backend):
-    c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
-    c_int32 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int32))
-    out_int_32 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int32))
+    c_float64 = np_as_located_field(IDim)(
+        np.full((size,), fill_value=np.float64("5e300"), dtype=np.float64)
+    )
+    out_int_32 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.float32))
 
     @field_operator(backend=fieldview_backend)
-    def astype_fieldop_float(b: Field[[IDim], int64]) -> Field[[IDim], int32]:
-        d = astype(b, int32)
+    def astype_fieldop_float(b: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
+        d = astype(b, float32)
         return d
 
-    astype_fieldop_float(c_int64, out=out_int_32, offset_provider={})
-    assert np.allclose(c_int32.array(), out_int_32)
+    astype_fieldop_float(c_float64, out=out_int_32, offset_provider={})
+    assert np.all(out_int_32.array() == np.inf)
 
 
 def test_offset_field(fieldview_backend):
