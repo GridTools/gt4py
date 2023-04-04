@@ -181,37 +181,39 @@ rst-roles = [
 [tool.isort]
 combine_as_imports = true
 group_by_package = true
-known_first_party = ["gt4py", "tests", "__externals__", "__gtscript__"]
+known_first_party = ['gt4py', '__externals__', '__gtscript__']
+known_tests = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
 known_third_party = [
-  "attr",
-  "black",
-  "boltons",
-  "cached_property",
-  "click",
-  "dace",
-  "devtools",
-  "factory",
-  "hypothesis",
-  "importlib_resources",
-  "jinja2",
-  "mako",
-  "networkx",
-  "numpy",
-  "packaging",
-  "pybind11",
-  "pytest",
-  "pytest_factoryboy",
-  "setuptools",
-  "tabulate",
-  "typing_extensions",
-  "xxhash"
+  'attr',
+  'black',
+  'boltons',
+  'cached_property',
+  'click',
+  'dace',
+  'devtools',
+  'factory',
+  'hypothesis',
+  'importlib_resources',
+  'jinja2',
+  'mako',
+  'networkx',
+  'numpy',
+  'packaging',
+  'pybind11',
+  'pytest',
+  'pytest_factoryboy',
+  'setuptools',
+  'tabulate',
+  'typing_extensions',
+  'xxhash'
 ]
 lexicographical = true
 line_length = 100
 lines_after_imports = 2
-profile = "black"
+profile = 'black'
+sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
 skip_gitignore = true
-skip_glob = ["*.venv/**", "_local/**"]
+skip_glob = ['*.venv/**', '_local/**']
 
 # -- mypy  --
 [tool.mypy]

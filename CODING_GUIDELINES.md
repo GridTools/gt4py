@@ -93,12 +93,50 @@ f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
 
 Testing components is a critical part of a software development project. We follow standard practices in software development and write unit, integration, and regression tests. Note that even though [doctests][doctest] are great for documentation purposes, they lack many features and are difficult to debug. Hence, they should not be used as replacement for proper unit tests except in trivial cases.
 
+### Test suite folder structure
+
+There are separate test suites (each living in a subfolder) for the separate subpackages of GT4Py. This is so that not all subpackages have to be tested on CI all the time (see [`ci-docs`][the ci docs] for details).
+
+The `tests` folder should not be a package but the contained test suites are python packages.
+
+Each test suite should follow the following structure:
+
+```
+<subpackage>_tests/
+  __init__.py  # each subpackage test should be a python package
+  integration_tests/
+    __init__.py
+    feature_test/
+      __init__.py
+      <starting_end>_tests/
+        __init__.py
+        test_<feature>.py  # test <feature> in bigger context, starting from <starting_end>
+    multi_feature_tests/
+      __init__.py
+      <starting_end>_tests/
+        test_<feature_combination>.py  # test <feature_combination>, which can be user code snipets etc
+        <feature_group>_tests/  # grouped feature combination tests with common data
+          __init__.py
+          <test_data>.py
+          test_<feature_combination>.py
+          test_<other_feature_combination>.py
+  unit_tests/
+    __init__.py
+    ...  # mirror subpackage folder structure
+    <subsubpackage>_tests/
+      test_<module>.py  # unit tests for gt4py.<subpackage>.<subsubpackage>.<module>
+  regression_tests/
+    __init__.py
+    test_<bug_description>.py
+```
+
+Temporarily it may be allowed to split unit tests for a module into multiple `test_<module>_<feature>.py` test modules. This should be taken as a reason to think about splitting the source module though.
+
 TODO: add missing test conventions.
 
 <!--
 TODO: add test conventions:
-TODO:    - to organize tests inside the `tests/` folder
-TODO:    - to name tests
+TODO:    - to name test functions
 TODO:    - to use pytest features (fixtures, markers, etc.)
 TODO:    - to generate mock objects and data for tests (e.g. pytest-factoryboy, pytest-cases)
 TODO:    - to use pytest plugins
@@ -121,3 +159,4 @@ https://testandcode.com/116
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#
 [sphinx-rest]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
+[ci-docs]: docs/development/CI/infrastructure.md
