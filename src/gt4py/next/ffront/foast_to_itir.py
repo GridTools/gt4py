@@ -15,7 +15,6 @@
 from typing import Any, Callable
 
 from gt4py.eve import NodeTranslator
-from gt4py.next.common import DimensionKind
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -28,21 +27,10 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def is_local_kind(symbol_type: ts.FieldType) -> bool:
-    return any(dim.kind == DimensionKind.LOCAL for dim in symbol_type.dims)
-
-
-def is_local_type_kind(type_: ts.TypeSpec) -> bool:
-    return any(
-        isinstance(t, ts.FieldType) and is_local_kind(t)
-        for t in type_info.primitive_constituents(type_)
-    )
-
-
 def promote_to_list(
     node: foast.Symbol | foast.Expr,
 ) -> Callable[[itir.Expr], itir.Expr]:
-    if not is_local_type_kind(node.type):
+    if not type_info.contains_local_field(node.type):
         return lambda x: im.promote_to_lifted_stencil("make_const_list")(x)
     return lambda x: x
 
@@ -157,7 +145,8 @@ class FieldOperatorLowering(NodeTranslator):
         if isinstance(node.type, ts.FieldType):
             kind = "Iterator"
             dtype = node.type.dtype.kind.name.lower()
-            return itir.Sym(id=node.id, kind=kind, dtype=dtype)
+            is_list = type_info.is_local_field(node.type)
+            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
@@ -324,7 +313,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _map(self, op, *args, **kwargs):
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if any(is_local_type_kind(arg.type) for arg in args):
+        if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call_("map_")(op)
 

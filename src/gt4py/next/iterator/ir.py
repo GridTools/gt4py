@@ -41,10 +41,12 @@ class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
-    kind: Optional[typing.Literal["Iterator", "Value"]] = None
-    dtype: Optional[str] = None
+    kind: typing.Literal["Iterator", "Value", None] = None
+    dtype: Optional[
+        tuple[str, bool]
+    ] = None  # format: name of primitive type, boolean indicating if it is a list
 
-    @datamodels.validator("dtype")
+    @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
         if value and value not in ["Iterator", "Value"]:
             raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")

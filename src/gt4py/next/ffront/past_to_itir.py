@@ -352,7 +352,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if isinstance(node.type, ts.FieldType):
             kind = "Iterator"
             dtype = node.type.dtype.kind.name.lower()
-            return itir.Sym(id=node.id, kind=kind, dtype=dtype)
+            is_list = type_info.is_local_field(node.type)
+            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
