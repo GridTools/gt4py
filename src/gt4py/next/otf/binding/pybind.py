@@ -19,9 +19,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-import numpy as np
-
 import gt4py.eve as eve
+import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
@@ -35,10 +34,10 @@ class DimensionType(Expr):
     name: str
 
 
-class SidConversion(Expr):
-    buffer_name: str
+class BufferSID(Expr):
+    source_buffer: str
     dimensions: Sequence[DimensionType]
-    scalar_type: np.dtype
+    scalar_type: ts.ScalarType
     dim_config: int
 
 
@@ -53,8 +52,7 @@ class ReturnStmt(eve.Node):
 
 class FunctionParameter(eve.Node):
     name: str
-    ndim: int
-    dtype: np.dtype
+    type_: ts.TypeSpec
 
 
 class WrapperFunction(eve.Node):
@@ -109,11 +107,13 @@ class BindingCodeGenerator(TemplatedGenerator):
     )
 
     def visit_FunctionParameter(self, param: FunctionParameter):
-        if param.ndim > 0:
+        if isinstance(param.type_, ts.FieldType):
             type_str = "pybind11::buffer"
+        elif isinstance(param.type_, ts.ScalarType):
+            type_str = cpp_interface.render_scalar_type(param.type_)
         else:
-            type_str = cpp_interface.render_python_type(param.dtype.type)
-        return type_str + " " + param.name
+            raise ValueError(f"Type '{param.type_}' is not supported in pybind11 interfaces.")
+        return f"{type_str} {param.name}"
 
     ReturnStmt = as_jinja("""return {{expr}};""")
 
@@ -132,59 +132,33 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_SidConversion(self, sid: SidConversion):
+    def visit_BufferSID(self, sid: BufferSID):
         return self.generic_visit(
-            sid, rendered_scalar_type=cpp_interface.render_python_type(sid.scalar_type.type)
+            sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
         )
 
-    SidConversion = as_jinja(
+    BufferSID = as_jinja(
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
                                   gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{buffer_name}})
+                                  999'999'999>({{source_buffer}})
             )"""
     )
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_parameter(
-    parameter: interface.ScalarParameter
-    | interface.BufferParameter
-    | interface.ConnectivityParameter,
-) -> FunctionParameter:
-    if isinstance(parameter, interface.ConnectivityParameter):
-        return FunctionParameter(name=parameter.name, ndim=2, dtype=parameter.index_type)
-    name = parameter.name
-    ndim = 0 if isinstance(parameter, interface.ScalarParameter) else len(parameter.dimensions)
-    scalar_type = parameter.scalar_type
-    return FunctionParameter(name=name, ndim=ndim, dtype=scalar_type)
-
-
-def make_argument(
-    index: int,
-    param: interface.ScalarParameter | interface.BufferParameter | interface.ConnectivityParameter,
-) -> str | SidConversion:
-    if isinstance(param, interface.ScalarParameter):
-        return param.name
-    elif isinstance(param, interface.ConnectivityParameter):
-        return SidConversion(
-            buffer_name=param.name,
-            dimensions=[
-                DimensionType(name=param.origin_axis),
-                DimensionType(name=param.offset_tag),
-            ],
-            scalar_type=param.index_type,
+def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
+    if isinstance(param.type_, ts.FieldType):
+        return BufferSID(
+            source_buffer=param.name,
+            dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
+            scalar_type=param.type_.dtype,
             dim_config=index,
         )
     else:
-        return SidConversion(
-            buffer_name=param.name,
-            dimensions=[DimensionType(name=dim) for dim in param.dimensions],
-            scalar_type=param.scalar_type,
-            dim_config=index,
-        )
+        return param.name
 
 
 def create_bindings(
@@ -218,7 +192,10 @@ def create_bindings(
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
-            parameters=[make_parameter(param) for param in program_source.entry_point.parameters],
+            parameters=[
+                FunctionParameter(name=param.name, type_=param.type_)
+                for param in program_source.entry_point.parameters
+            ],
             body=ReturnStmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,

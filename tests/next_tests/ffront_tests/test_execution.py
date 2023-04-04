@@ -398,6 +398,52 @@ def test_nested_tuple_return(fieldview_backend):
     assert np.allclose(2 * a_I_float.array() + b_I_float.array(), out_I_float)
 
 
+def test_nested_reduction(reduction_setup, fieldview_backend):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    E2VDim = rs.E2VDim
+    V2E = rs.V2E
+    E2V = rs.E2V
+
+    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+
+    @field_operator(backend=fieldview_backend)
+    def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:
+        tmp = neighbor_sum(inp(V2E), axis=V2EDim)
+        return neighbor_sum(tmp(E2V), axis=E2VDim)
+
+    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
+
+    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
+    assert np.allclose(out, expected)
+
+
+@pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
+def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    E2VDim = rs.E2VDim
+    V2E = rs.V2E
+    E2V = rs.E2V
+
+    out = np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
+
+    @field_operator(backend=fieldview_backend)
+    def testee(inp: Field[[Edge], int64]) -> Field[[Edge], int64]:
+        tmp = inp(V2E)
+        tmp2 = tmp(E2V)
+        return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
+
+    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
+
+    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
+    assert np.allclose(out, expected)
+
+
 def test_tuple_return_2(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
@@ -424,7 +470,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out)
 
 
-@pytest.mark.xfail(raises=NotImplementedError)
+@pytest.mark.xfail
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
     Edge = rs.Edge
