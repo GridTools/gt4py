@@ -7,7 +7,7 @@ tags: [backend, bindings, build, compile, otf]
 - **Status**: valid
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2023-03-29
+- **Updated**: 2023-04-03
 
 This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
 
@@ -157,26 +157,20 @@ There is a good use case that justifies the extra effort. Such as implementing c
 - decided: 2022-09-13
 - revised: 2023-03-29
 
-Workflow steps are generic on input and output type. Workflows are generic on input, intermediary and output type. This allows the use of static type checkers to ensure that the composed workflow has the intended input and output types, as well as that it is passed the correct argument types and that it's return value is used correctly.
+Workflow steps are generic on input and output type and the chaining function is generic on the input, intermediary and (new) output type. This allows the use of static type checkers to ensure that the composed workflow has the intended input and output types, as well as that it is passed the correct argument types and that it's return value is used correctly.
 
-In order to achieve this, workflows are implemented as nested pairs (or more generally, finite sized tuples) of steps, with the output type of the first step matching the input type of the second step in the pair. More complex workflow components than pairs might be introduced if the "Linear Workflows" decision is revised.
-
-To allow building workflows in a linear-looking way in code, the first step can be wrapped in a `otf.workflow.Step` instance, on which `.chain` can be called with the next step. The result will be a workflow instance with `.chain` available also.
+To allow building workflows in a linear-looking way in code, the `otf.workflow.Chainable` mixin is provided.
+The first step can be wrapped in any chainable step type on which `.chain` can then be called with the next step. The result will be a workflow instance with `.chain` available also.
 
 ```
-workflow = <@todo put class name here too>(step1).chain(step2).chain(step3).chain(step4)
-# results in
-CombinedStep(
-  first=CombinedStep(
-    first=CombinedStep(
-      first=<@todo class name>(step1),
-      second=step2
-    ),
-    second=step3
-  ),
-  second=step4
-)
+step1: Workflow[I, A]
+step2: Workflow[A, B]
+step3: Workflow[B, C]
+step4: Workflow[C, O]
+workflow: Workflow[I, O] = StepSequence.from_step(step1).chain(step2).chain(step3).chain(step4)
 ```
+
+`otf.workflow.StepSequence` is only one example of a chainable step type.
 
 _edit 2023-03-29_
 

@@ -29,7 +29,7 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 
 
-def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
+def make_step(function: Workflow[StartT, EndT]) -> StepSequence[StartT, EndT]:
     """
     Wrap a function in the workflow step convenience wrapper.
 
@@ -46,14 +46,7 @@ def make_step(function: Workflow[StartT, EndT]) -> Step[StartT, EndT]:
     >>> times_two.chain(stringify)(3)
     '6'
     """
-    return Step(function)
-
-
-def replace(
-    workflow: NamedStepSequence[StartT, EndT], **kwargs: Any
-) -> NamedStepSequence[StartT, EndT]:
-    """Make a copy of the workflow with changed configuration or subworkflows."""
-    return dataclasses.replace(workflow, **kwargs)
+    return StepSequence.from_step(function)
 
 
 @typing.runtime_checkable
@@ -70,8 +63,36 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
         ...
 
 
+class WorkflowWithReplace(Workflow[StartT, EndT], Generic[StartT, EndT]):
+    """
+    Subworkflow replacement mixin.
+
+    Any subclass MUST be a dataclass for `.replace` to work
+    """
+
+    def replace(
+        self: WorkflowWithReplace[StartT, EndT], **kwargs: Any
+    ) -> WorkflowWithReplace[StartT, EndT]:
+        """
+        Build a new instance with replaced substeps.
+
+        Raises:
+            TypeError: If `self` is not a dataclass.
+        """
+        if not dataclasses.is_dataclass(self.__class__):
+            raise TypeError(f"{self.__class__} is not a dataclass")
+        return dataclasses.replace(self, **kwargs)
+
+
+class Chainable(Workflow[StartT, EndT], Generic[StartT, EndT]):
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Workflow[StartT, NewEndT]:
+        return StepSequence.from_step(self).chain(next_step=next_step)
+
+
 @dataclasses.dataclass(frozen=True)
-class NamedStepSequence(Generic[StartT, EndT]):
+class NamedStepSequence(
+    Chainable[StartT, EndT], WorkflowWithReplace[StartT, EndT], Generic[StartT, EndT]
+):
     """
     Workflow with linear succession of named steps.
 
@@ -121,12 +142,6 @@ class NamedStepSequence(Generic[StartT, EndT]):
             step_result = step(step_result)
         return step_result
 
-    def chain(self, step: Workflow[EndT, NewEndT]) -> CombinedStep[StartT, EndT, NewEndT]:
-        return CombinedStep(first=self, second=step)
-
-    def replace(self, **kwargs: Any) -> NamedStepSequence[StartT, EndT]:
-        return dataclasses.replace(self, **kwargs)
-
     @functools.cached_property
     def step_order(self) -> list[str]:
         """
@@ -146,31 +161,7 @@ class NamedStepSequence(Generic[StartT, EndT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Step(NamedStepSequence[StartT, EndT], Generic[StartT, EndT]):
-    """
-    Workflow step convenience wrapper.
-
-    Can wrap any callable which implements the workflow step protocol,
-    adds the .chain(other_step) method for convenience.
-
-    Examples:
-    ---------
-    >>> def times_two(x: int) -> int:
-    ...    return x * 2
-
-    >>> def stringify(x: int) -> str:
-    ...    return str(x)
-
-    >>> # create a workflow int -> int -> str
-    >>> Step(times_two).chain(stringify)(3)
-    '6'
-    """
-
-    step: Workflow[StartT, EndT]
-
-
-@dataclasses.dataclass(frozen=True)
-class CombinedStep(NamedStepSequence[StartT, EndT], Generic[StartT, IntermediateT, EndT]):
+class StepSequence(Generic[StartT, EndT]):
     """
     Composable workflow of single input callables.
 
@@ -185,27 +176,38 @@ class CombinedStep(NamedStepSequence[StartT, EndT], Generic[StartT, Intermediate
     >>> def stringify(x: float) -> str:
     ...    return str(x)
 
-    >>> CombinedStep(  # workflow (int -> float -> str)
-    ...    first=CombinedStep(  # workflow (int -> int -> float)
-    ...        first=plus_one,
-    ...        second=plus_half
-    ...    ),
-    ...    second=stringify
-    ... )(73)
-    '74.5'
-
-    >>> # is exactly equivalent to
-    >>> CombinedStep(first=plus_one, second=plus_half).chain(stringify)(73)
+    >>> StepSequence.from_step(plus_one).chain(plus_half).chain(stringify)(73)
     '74.5'
 
     """
 
-    first: Workflow[StartT, IntermediateT]
-    second: Workflow[IntermediateT, EndT]
+    steps: list[Workflow[Any, Any]] = []
+
+    def __post_init__(self):
+        if len(self.steps) >= 1:
+            raise ValueError(
+                "StepSequence can not be initialized with more than one step, use .chain() to compose more steps."
+            )
+
+    @classmethod
+    def from_step(cls, step: Workflow[StartT, EndT]) -> StepSequence[StartT, EndT]:
+        return cls([step])
+
+    def __call__(self, inp: StartT) -> EndT:
+        step_result: Any = inp
+        for step in self.steps:
+            step_result = step(step_result)
+        return step_result
+
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> StepSequence[StartT, NewEndT]:
+        new_instance = dataclasses.replace(self, steps=self.steps + [next_step])
+        return typing.cast(StepSequence[StartT, NewEndT], new_instance)
 
 
 @dataclasses.dataclass(frozen=True)
-class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
+class CachedStep(
+    Chainable[StartT, EndT], WorkflowWithReplace[StartT, EndT], Generic[StartT, EndT, HashT]
+):
     """
     Cached workflow of single input callables.
 
@@ -230,6 +232,7 @@ class CachedStep(Step[StartT, EndT], Generic[StartT, EndT, HashT]):
     1
     """
 
+    step: Workflow[StartT, EndT]
     hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
 
     _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
