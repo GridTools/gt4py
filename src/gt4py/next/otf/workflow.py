@@ -138,8 +138,8 @@ class NamedStepSequence(
     def __call__(self, inp: StartT) -> EndT:
         """Compose the steps in the order defined in the `.step_order` class attribute."""
         step_result: Any = inp
-        for step in [getattr(self, s) for s in self.step_order]:
-            step_result = step(step_result)
+        for step_name in self.step_order:
+            step_result = getattr(self, step_name)(step_result)
         return step_result
 
     @functools.cached_property
