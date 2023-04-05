@@ -20,10 +20,10 @@ from __future__ import annotations
 from typing import Any, Sequence, Union
 
 import gt4py.eve as eve
-import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 class Expr(eve.Node):
@@ -179,12 +179,13 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
             dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
             scalar_type=type_.dtype,
         )
-    if isinstance(type_, ts.TupleType):
+    if ti.is_tuple_of_type(type_, ts.FieldType):
         return CompositeSID(
             elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
         )
-    else:
-        return name
+    if ti.is_tuple_of_type(type_, ts.ScalarType):
+        raise NotImplementedError("Tuples of scalars are not implemented.")
+    return name
 
 
 def create_bindings(
