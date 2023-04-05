@@ -1,8 +1,8 @@
 # CI infrastructure
 
-Any test job that runs on CI is encoded in automation tools like tox and pre-commit and can be run locally instead.
+Any test job that runs on CI is encoded in automation tools like **tox** and **pre-commit** and can be run locally instead.
 
-## Workflows
+## GitHub Workflows
 
 The following workflows are currently active:
 
@@ -85,13 +85,18 @@ flowchart LR
 
 The `Test Eve`, `Test Storage (CPU)`, `Test Cartesian (CPU)`, and `Test Next (CPU)` workflows run the automated tests for the respective subpackages. In all cases only tests are run that do not require the presence of a GPU.
 
-The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like mypy or flake8.
+The `Code Quality` workflow runs pre-commit to check code quality requirements through tools like **mypy** or **flake8**.
 
 Code coverage workflows are currently disabled.
 
 ### When are workflows triggered
 
-The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, eve tests will not be run when only GT4Py sources are changed.
+The general idea is to run workflows only when needed. In this monorepo structure, this practically means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py sources are changed. In those cases where some subpackage workflows are not triggered, replacement (always-succeeding) `Fallback:` workflows will be executed instead to satisfy the GitHub merge protection rules.
+
+### Daily CI
+
+There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions  and lowest dependencies versions including extras. Failures are reported on [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and (optionally) in the [#jenkins](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack.
+
 
 ## CSCS-CI
 

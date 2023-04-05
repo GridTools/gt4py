@@ -16,8 +16,21 @@ from __future__ import annotations
 
 import enum
 import functools
+import types
 import typing
-from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Generic,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 
@@ -809,7 +822,7 @@ def data_type_to_typestr(dtype: DataType) -> str:
 
 
 # Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
-OP_TO_UFUNC_NAME: Dict[
+OP_TO_UFUNC_NAME: Mapping[
     Union[
         Type[UnaryOperator],
         Type[ArithmeticOperator],
@@ -817,70 +830,81 @@ OP_TO_UFUNC_NAME: Dict[
         Type[LogicalOperator],
         Type[NativeFunction],
     ],
-    Dict[
+    Mapping[
         Union[
             UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
         ],
         str,
     ],
-] = {
-    UnaryOperator: {
-        UnaryOperator.POS: "positive",
-        UnaryOperator.NEG: "negative",
-        UnaryOperator.NOT: "logical_not",
-    },
-    ArithmeticOperator: {
-        ArithmeticOperator.ADD: "add",
-        ArithmeticOperator.SUB: "subtract",
-        ArithmeticOperator.MUL: "multiply",
-        ArithmeticOperator.DIV: "true_divide",
-    },
-    ComparisonOperator: {
-        ComparisonOperator.GT: "greater",
-        ComparisonOperator.LT: "less",
-        ComparisonOperator.GE: "greater_equal",
-        ComparisonOperator.LE: "less_equal",
-        ComparisonOperator.EQ: "equal",
-        ComparisonOperator.NE: "not_equal",
-    },
-    LogicalOperator: {
-        LogicalOperator.AND: "logical_and",
-        LogicalOperator.OR: "logical_or",
-    },
-    NativeFunction: {
-        NativeFunction.ABS: "abs",
-        NativeFunction.MIN: "minimum",
-        NativeFunction.MAX: "maximum",
-        NativeFunction.MOD: "remainder",
-        NativeFunction.SIN: "sin",
-        NativeFunction.COS: "cos",
-        NativeFunction.TAN: "tan",
-        NativeFunction.ARCSIN: "arcsin",
-        NativeFunction.ARCCOS: "arccos",
-        NativeFunction.ARCTAN: "arctan",
-        NativeFunction.SINH: "sinh",
-        NativeFunction.COSH: "cosh",
-        NativeFunction.TANH: "tanh",
-        NativeFunction.ARCSINH: "arcsinh",
-        NativeFunction.ARCCOSH: "arccosh",
-        NativeFunction.ARCTANH: "arctanh",
-        NativeFunction.SQRT: "sqrt",
-        NativeFunction.POW: "power",
-        NativeFunction.EXP: "exp",
-        NativeFunction.LOG: "log",
-        NativeFunction.GAMMA: "gamma",
-        NativeFunction.CBRT: "cbrt",
-        NativeFunction.ISFINITE: "isfinite",
-        NativeFunction.ISINF: "isinf",
-        NativeFunction.ISNAN: "isnan",
-        NativeFunction.FLOOR: "floor",
-        NativeFunction.CEIL: "ceil",
-        NativeFunction.TRUNC: "trunc",
-    },
-}
+] = types.MappingProxyType(
+    {
+        UnaryOperator: types.MappingProxyType(
+            {
+                UnaryOperator.POS: "positive",
+                UnaryOperator.NEG: "negative",
+                UnaryOperator.NOT: "logical_not",
+            }
+        ),
+        ArithmeticOperator: types.MappingProxyType(
+            {
+                ArithmeticOperator.ADD: "add",
+                ArithmeticOperator.SUB: "subtract",
+                ArithmeticOperator.MUL: "multiply",
+                ArithmeticOperator.DIV: "true_divide",
+            }
+        ),
+        ComparisonOperator: types.MappingProxyType(
+            {
+                ComparisonOperator.GT: "greater",
+                ComparisonOperator.LT: "less",
+                ComparisonOperator.GE: "greater_equal",
+                ComparisonOperator.LE: "less_equal",
+                ComparisonOperator.EQ: "equal",
+                ComparisonOperator.NE: "not_equal",
+            }
+        ),
+        LogicalOperator: types.MappingProxyType(
+            {
+                LogicalOperator.AND: "logical_and",
+                LogicalOperator.OR: "logical_or",
+            }
+        ),
+        NativeFunction: types.MappingProxyType(
+            {
+                NativeFunction.ABS: "abs",
+                NativeFunction.MIN: "minimum",
+                NativeFunction.MAX: "maximum",
+                NativeFunction.MOD: "remainder",
+                NativeFunction.SIN: "sin",
+                NativeFunction.COS: "cos",
+                NativeFunction.TAN: "tan",
+                NativeFunction.ARCSIN: "arcsin",
+                NativeFunction.ARCCOS: "arccos",
+                NativeFunction.ARCTAN: "arctan",
+                NativeFunction.SINH: "sinh",
+                NativeFunction.COSH: "cosh",
+                NativeFunction.TANH: "tanh",
+                NativeFunction.ARCSINH: "arcsinh",
+                NativeFunction.ARCCOSH: "arccosh",
+                NativeFunction.ARCTANH: "arctanh",
+                NativeFunction.SQRT: "sqrt",
+                NativeFunction.POW: "power",
+                NativeFunction.EXP: "exp",
+                NativeFunction.LOG: "log",
+                NativeFunction.GAMMA: "gamma",
+                NativeFunction.CBRT: "cbrt",
+                NativeFunction.ISFINITE: "isfinite",
+                NativeFunction.ISINF: "isinf",
+                NativeFunction.ISNAN: "isnan",
+                NativeFunction.FLOOR: "floor",
+                NativeFunction.CEIL: "ceil",
+                NativeFunction.TRUNC: "trunc",
+            }
+        ),
+    }
+)
 
 
-@functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
