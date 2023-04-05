@@ -38,7 +38,8 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    dim_config: int
+    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
+    # unit_stride_dim: int # TODO(havogt): we can fix the dimension with unity stride once we have the "frozen stencil" mechanism
 
 
 class FunctionCall(Expr):
@@ -141,21 +142,19 @@ class BindingCodeGenerator(TemplatedGenerator):
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
-                                  gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{source_buffer}})
+                                  gridtools::sid::unknown_kind>({{source_buffer}})
             )"""
     )
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
+def make_argument(param: interface.Parameter) -> str | BufferSID:
     if isinstance(param.type_, ts.FieldType):
         return BufferSID(
             source_buffer=param.name,
             dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
             scalar_type=param.type_.dtype,
-            dim_config=index,
         )
     else:
         return param.name
@@ -184,6 +183,7 @@ def create_bindings(
             "pybind11/pybind11.h",
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
             "gridtools/fn/unstructured.hpp",
@@ -199,10 +199,7 @@ def create_bindings(
             body=ReturnStmt(
                 expr=FunctionCall(
                     target=program_source.entry_point,
-                    args=[
-                        make_argument(index, param)
-                        for index, param in enumerate(program_source.entry_point.parameters)
-                    ],
+                    args=[make_argument(param) for param in program_source.entry_point.parameters],
                 )
             ),
         ),
