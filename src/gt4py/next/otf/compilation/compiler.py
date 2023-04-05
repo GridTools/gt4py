@@ -47,11 +47,11 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
 
 @dataclasses.dataclass(frozen=True)
 class Compiler(
-    workflow.Chainable[
+    workflow.ChainableWorkflowMixin[
         stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],
-    workflow.WorkflowWithReplace[
+    workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
         stages.CompiledProgram,
     ],

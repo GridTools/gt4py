@@ -159,7 +159,7 @@ There is a good use case that justifies the extra effort. Such as implementing c
 
 Workflow steps are generic on input and output type and the chaining function is generic on the input, intermediary and (new) output type. This allows the use of static type checkers to ensure that the composed workflow has the intended input and output types, as well as that it is passed the correct argument types and that it's return value is used correctly.
 
-To allow building workflows in a linear-looking way in code, the `otf.workflow.Chainable` mixin is provided.
+To allow building workflows in a linear-looking way in code, the `otf.workflow.ChainableWorkflowMixin` mixin is provided.
 The first step can be wrapped in any chainable step type on which `.chain` can then be called with the next step. The result will be a workflow instance with `.chain` available also.
 
 ```

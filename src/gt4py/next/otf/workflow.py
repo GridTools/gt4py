@@ -29,7 +29,7 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 
 
-def make_step(function: Workflow[StartT, EndT]) -> Chainable[StartT, EndT]:
+def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
     """
     Wrap a function in the workflow step convenience wrapper.
 
@@ -63,7 +63,7 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
         ...
 
 
-class WorkflowWithReplace(Workflow[StartT, EndT], Generic[StartT, EndT]):
+class ReplaceEnabledWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT]):
     """
     Subworkflow replacement mixin.
 
@@ -71,8 +71,8 @@ class WorkflowWithReplace(Workflow[StartT, EndT], Generic[StartT, EndT]):
     """
 
     def replace(
-        self: WorkflowWithReplace[StartT, EndT], **kwargs: Any
-    ) -> WorkflowWithReplace[StartT, EndT]:
+        self: ReplaceEnabledWorkflowMixin[StartT, EndT], **kwargs: Any
+    ) -> ReplaceEnabledWorkflowMixin[StartT, EndT]:
         """
         Build a new instance with replaced substeps.
 
@@ -84,14 +84,16 @@ class WorkflowWithReplace(Workflow[StartT, EndT], Generic[StartT, EndT]):
         return dataclasses.replace(self, **kwargs)
 
 
-class Chainable(Workflow[StartT, EndT], Generic[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Chainable[StartT, NewEndT]:
+class ChainableWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT]):
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    Chainable[StartT, EndT], WorkflowWithReplace[StartT, EndT], Generic[StartT, EndT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    Generic[StartT, EndT],
 ):
     """
     Workflow with linear succession of named steps.
@@ -161,7 +163,7 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(Chainable[StartT, EndT], Generic[StartT, EndT]):
+class StepSequence(ChainableWorkflowMixin[StartT, EndT], Generic[StartT, EndT]):
     """
     Composable workflow of single input callables.
 
@@ -198,20 +200,22 @@ class StepSequence(Chainable[StartT, EndT], Generic[StartT, EndT]):
             step_result = step(step_result)
         return step_result
 
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Chainable[StartT, NewEndT]:
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return typing.cast(
-            Chainable[StartT, NewEndT],
+            ChainableWorkflowMixin[StartT, NewEndT],
             self.__class__(self.__Steps((*self.steps.inner, next_step))),
         )
 
     @classmethod
-    def start(cls, first_step: Workflow[StartT, EndT]) -> Chainable[StartT, EndT]:
+    def start(cls, first_step: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
         return cls(cls.__Steps((first_step,)))
 
 
 @dataclasses.dataclass(frozen=True)
 class CachedStep(
-    Chainable[StartT, EndT], WorkflowWithReplace[StartT, EndT], Generic[StartT, EndT, HashT]
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    Generic[StartT, EndT, HashT],
 ):
     """
     Cached workflow of single input callables.

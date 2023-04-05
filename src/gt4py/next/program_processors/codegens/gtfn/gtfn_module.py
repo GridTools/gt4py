@@ -39,11 +39,11 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
-    workflow.Chainable[
+    workflow.ChainableWorkflowMixin[
         stages.ProgramCall,
         stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
     ],
-    workflow.WorkflowWithReplace[
+    workflow.ReplaceEnabledWorkflowMixin[
         stages.ProgramCall,
         stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
     ],
