@@ -28,11 +28,22 @@ HashT = TypeVar("HashT")
 
 @dataclasses.dataclass(frozen=True)
 class OTFCompileExecutor(ppi.ProgramExecutor, Generic[SrcL, LS, TgtL, HashT]):
-    otf_workflow: (
-        recipes.OTFCompileWorkflow[SrcL, LS, TgtL]
-        | workflow.CachedStep[stages.ProgramCall, stages.CompiledProgram, HashT]
-        | workflow.ReplaceEnabledWorkflowMixin[stages.ProgramCall, stages.CompiledProgram]
-    )
+    otf_workflow: recipes.OTFCompileWorkflow[SrcL, LS, TgtL]
+    name: Optional[str] = None
+
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:
+        self.otf_workflow(stages.ProgramCall(program, args, kwargs))(
+            *args, offset_provider=kwargs["offset_provider"]
+        )
+
+    @property
+    def __name__(self) -> str:
+        return self.name or repr(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class CachedOTFCompileExecutor(ppi.ProgramExecutor, Generic[SrcL, LS, TgtL, HashT]):
+    otf_workflow: workflow.CachedStep[stages.ProgramCall, stages.CompiledProgram, HashT]
     name: Optional[str] = None
 
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:

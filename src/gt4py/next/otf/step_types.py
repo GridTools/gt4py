@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import languages, stages, workflow
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -31,6 +31,11 @@ class TranslationStep(Protocol[SrcL, LS]):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
     def __call__(self, program_call: stages.ProgramCall) -> stages.ProgramSource[SrcL, LS]:
+        ...
+
+    def replace(
+        self, **kwargs: Any
+    ) -> workflow.ReplaceEnabledWorkflowMixin[stages.ProgramCall, stages.ProgramSource]:
         ...
 
 

@@ -111,11 +111,11 @@ run_gtfn_imperative = otf_compile_executor.OTFCompileExecutor[
 ](
     name="run_gtfn_imperative",
     otf_workflow=run_gtfn.otf_workflow.replace(
-        translation=run_gtfn.otf_workflow.replace(use_imperative_backend=True),
+        translation=run_gtfn.otf_workflow.translation.replace(use_imperative_backend=True),
     ),
 )
 
-run_gtfn_cached = otf_compile_executor.OTFCompileExecutor[
+run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
 ](
     name="run_gtfn_cached",

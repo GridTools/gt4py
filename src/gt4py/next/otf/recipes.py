@@ -14,7 +14,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic, TypeVar
+import typing
+from typing import Any, Generic, TypeVar
 
 from gt4py.next.otf import languages, stages, step_types, workflow
 
@@ -38,3 +39,6 @@ class OTFCompileWorkflow(workflow.NamedStepSequence, Generic[SrcL, LS, TgtL]):
         stages.CompiledProgram,
     ]
     decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]
+
+    def replace(self, **kwargs: Any) -> OTFCompileWorkflow[SrcL, LS, TgtL]:
+        return typing.cast(OTFCompileWorkflow[SrcL, LS, TgtL], super().replace(**kwargs))
