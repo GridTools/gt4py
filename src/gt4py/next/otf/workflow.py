@@ -185,6 +185,11 @@ class StepSequence(Chainable[StartT, EndT], Generic[StartT, EndT]):
     class __StepList:
         inner: list[Workflow[Any, Any]]
 
+    # todo(ricoh): replace with normal tuple with TypeVarTuple hints
+    #   to enable automatic deduction StartT and EndT fom constructor
+    #   calls. TypeVarTuple is available in typing_extensions in
+    #   Python <= 3.11. Revise after mypy constraint is > 1.0.1,
+    #   which fails on trying to check TypeVarTuple.
     step_list: __StepList
 
     def __call__(self, inp: StartT) -> EndT:
