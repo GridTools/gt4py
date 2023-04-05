@@ -95,8 +95,7 @@ The general idea is to run workflows only when needed. In this monorepo structur
 
 ### Daily CI
 
-There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions  and lowest dependencies versions including extras. Failures are reported on [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and (optionally) in the [#jenkins](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack.
-
+There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions and lowest dependencies versions including extras. Failures are reported on [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and (optionally) in the [#jenkins](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack.
 
 ## CSCS-CI
 
