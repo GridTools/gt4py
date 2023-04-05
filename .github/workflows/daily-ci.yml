@@ -17,7 +17,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10"]
         tox-module-factor: ["cartesian", "eve", "next", "storage"]
         os: ["ubuntu-latest"]
-        requirements-file: ["requirements-dev.txt", "min-requirements.txt"]
+        requirements-file: ["requirements-dev.txt", "min-requirements-test.txt", "min-extra-requirements-test.txt"]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
