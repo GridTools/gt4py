@@ -182,31 +182,31 @@ class StepSequence(Chainable[StartT, EndT], Generic[StartT, EndT]):
     """
 
     @dataclasses.dataclass(frozen=True)
-    class __StepList:
-        inner: list[Workflow[Any, Any]]
+    class __Steps:
+        inner: tuple[Workflow[Any, Any], ...]
 
     # todo(ricoh): replace with normal tuple with TypeVarTuple hints
     #   to enable automatic deduction StartT and EndT fom constructor
     #   calls. TypeVarTuple is available in typing_extensions in
     #   Python <= 3.11. Revise after mypy constraint is > 1.0.1,
     #   which fails on trying to check TypeVarTuple.
-    step_list: __StepList
+    steps: __Steps
 
     def __call__(self, inp: StartT) -> EndT:
         step_result: Any = inp
-        for step in self.step_list.inner:
+        for step in self.steps.inner:
             step_result = step(step_result)
         return step_result
 
     def chain(self, next_step: Workflow[EndT, NewEndT]) -> Chainable[StartT, NewEndT]:
         return typing.cast(
             Chainable[StartT, NewEndT],
-            self.__class__(self.__StepList(self.step_list.inner + [next_step])),
+            self.__class__(self.__Steps((*self.steps.inner, next_step))),
         )
 
     @classmethod
     def start(cls, first_step: Workflow[StartT, EndT]) -> Chainable[StartT, EndT]:
-        return cls(cls.__StepList([first_step]))
+        return cls(cls.__Steps((first_step,)))
 
 
 @dataclasses.dataclass(frozen=True)
