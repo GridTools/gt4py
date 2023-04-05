@@ -47,7 +47,7 @@ def step_two(inp: StageTwo) -> str:
 
 
 def test_single_step():
-    step1: workflow.Workflow[StageOne, StageTwo] = workflow.StepSequence.from_step(step_one)
+    step1: workflow.Workflow[StageOne, StageTwo] = workflow.make_step(step_one)
     assert step1(StageOne(3)) == step_one(StageOne(3))
 
 

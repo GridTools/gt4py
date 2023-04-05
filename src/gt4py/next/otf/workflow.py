@@ -29,7 +29,7 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 
 
-def make_step(function: Workflow[StartT, EndT]) -> StepSequence[StartT, EndT]:
+def make_step(function: Workflow[StartT, EndT]) -> Chainable[StartT, EndT]:
     """
     Wrap a function in the workflow step convenience wrapper.
 
@@ -46,7 +46,7 @@ def make_step(function: Workflow[StartT, EndT]) -> StepSequence[StartT, EndT]:
     >>> times_two.chain(stringify)(3)
     '6'
     """
-    return StepSequence.from_step(function)
+    return StepSequence.start(function)
 
 
 @typing.runtime_checkable
@@ -85,8 +85,8 @@ class WorkflowWithReplace(Workflow[StartT, EndT], Generic[StartT, EndT]):
 
 
 class Chainable(Workflow[StartT, EndT], Generic[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Workflow[StartT, NewEndT]:
-        return StepSequence.from_step(self).chain(next_step=next_step)
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Chainable[StartT, NewEndT]:
+        return make_step(self).chain(next_step)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -161,7 +161,7 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(Generic[StartT, EndT]):
+class StepSequence(Chainable[StartT, EndT], Generic[StartT, EndT]):
     """
     Composable workflow of single input callables.
 
@@ -176,32 +176,32 @@ class StepSequence(Generic[StartT, EndT]):
     >>> def stringify(x: float) -> str:
     ...    return str(x)
 
-    >>> StepSequence.from_step(plus_one).chain(plus_half).chain(stringify)(73)
+    >>> StepSequence.start(plus_one).chain(plus_half).chain(stringify)(73)
     '74.5'
 
     """
 
-    steps: list[Workflow[Any, Any]] = []
+    @dataclasses.dataclass(frozen=True)
+    class __StepList:
+        inner: list[Workflow[Any, Any]]
 
-    def __post_init__(self):
-        if len(self.steps) >= 1:
-            raise ValueError(
-                "StepSequence can not be initialized with more than one step, use .chain() to compose more steps."
-            )
-
-    @classmethod
-    def from_step(cls, step: Workflow[StartT, EndT]) -> StepSequence[StartT, EndT]:
-        return cls([step])
+    step_list: __StepList
 
     def __call__(self, inp: StartT) -> EndT:
         step_result: Any = inp
-        for step in self.steps:
+        for step in self.step_list.inner:
             step_result = step(step_result)
         return step_result
 
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> StepSequence[StartT, NewEndT]:
-        new_instance = dataclasses.replace(self, steps=self.steps + [next_step])
-        return typing.cast(StepSequence[StartT, NewEndT], new_instance)
+    def chain(self, next_step: Workflow[EndT, NewEndT]) -> Chainable[StartT, NewEndT]:
+        return typing.cast(
+            Chainable[StartT, NewEndT],
+            self.__class__(self.__StepList(self.step_list.inner + [next_step])),
+        )
+
+    @classmethod
+    def start(cls, first_step: Workflow[StartT, EndT]) -> Chainable[StartT, EndT]:
+        return cls(cls.__StepList([first_step]))
 
 
 @dataclasses.dataclass(frozen=True)
