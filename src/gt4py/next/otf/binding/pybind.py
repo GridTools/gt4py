@@ -179,13 +179,14 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
             dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
             scalar_type=type_.dtype,
         )
-    if ti.is_tuple_of_type(type_, ts.FieldType):
+    elif ti.is_tuple_of_type(type_, ts.FieldType):
         return CompositeSID(
             elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
         )
-    if ti.is_tuple_of_type(type_, ts.ScalarType):
-        raise NotImplementedError("Tuples of scalars are not implemented.")
-    return name
+    elif isinstance(type_, ts.ScalarType):
+        return name
+    else:
+        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
 
 
 def create_bindings(
