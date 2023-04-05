@@ -173,7 +173,7 @@ def test_native_function() -> None:
         is_serial=False,
     )
     print(result)
-    match = re.match(r"np.minimum\(a\[.*\],\s*p\)", result)
+    match = re.match(r"ufuncs.minimum\(a\[.*\],\s*p\)", result)
     assert match
 
 
@@ -299,11 +299,7 @@ def test_computation() -> None:
             r"import numbers\n"
             r"from typing import Tuple\n+"
             r"import numpy as np\n"
-            r"try:\n"
-            r"    from scipy.special import gamma as gamma_\n"
-            r"except ImportError:\n"
-            r"    import math\n"
-            r"    gamma_ = np.vectorize\(math\.gamma\)\n+"
+            r"from gt4py.cartesian.gtc import ufuncs\n+"
             r"class Field:\n"
             r"(.*\n)+"
             r"def run\(\*, a, b, _domain_, _origin_\):\n"

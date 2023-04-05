@@ -21,16 +21,8 @@ from typing import Any, ClassVar, Dict, Generic, List, Optional, Tuple, Type, Ty
 
 import numpy as np
 
-
-try:
-    from scipy.special import gamma as gamma_
-except ImportError:
-    import math
-
-    gamma_ = np.vectorize(math.gamma)
-    gamma_.types = ["f->f", "d->d", "F->F", "D->D"]
-
 from gt4py import eve
+from gt4py.cartesian.gtc import ufuncs
 from gt4py.cartesian.gtc.utils import dimension_flags_to_names, flatten_list
 from gt4py.eve import datamodels
 
@@ -816,82 +808,91 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
+# Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
+OP_TO_UFUNC_NAME: Dict[
+    Union[
+        Type[UnaryOperator],
+        Type[ArithmeticOperator],
+        Type[ComparisonOperator],
+        Type[LogicalOperator],
+        Type[NativeFunction],
+    ],
+    Dict[
+        Union[
+            UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
+        ],
+        str,
+    ],
+] = {
+    UnaryOperator: {
+        UnaryOperator.POS: "positive",
+        UnaryOperator.NEG: "negative",
+        UnaryOperator.NOT: "logical_not",
+    },
+    ArithmeticOperator: {
+        ArithmeticOperator.ADD: "add",
+        ArithmeticOperator.SUB: "subtract",
+        ArithmeticOperator.MUL: "multiply",
+        ArithmeticOperator.DIV: "true_divide",
+    },
+    ComparisonOperator: {
+        ComparisonOperator.GT: "greater",
+        ComparisonOperator.LT: "less",
+        ComparisonOperator.GE: "greater_equal",
+        ComparisonOperator.LE: "less_equal",
+        ComparisonOperator.EQ: "equal",
+        ComparisonOperator.NE: "not_equal",
+    },
+    LogicalOperator: {
+        LogicalOperator.AND: "logical_and",
+        LogicalOperator.OR: "logical_or",
+    },
+    NativeFunction: {
+        NativeFunction.ABS: "abs",
+        NativeFunction.MIN: "minimum",
+        NativeFunction.MAX: "maximum",
+        NativeFunction.MOD: "remainder",
+        NativeFunction.SIN: "sin",
+        NativeFunction.COS: "cos",
+        NativeFunction.TAN: "tan",
+        NativeFunction.ARCSIN: "arcsin",
+        NativeFunction.ARCCOS: "arccos",
+        NativeFunction.ARCTAN: "arctan",
+        NativeFunction.SINH: "sinh",
+        NativeFunction.COSH: "cosh",
+        NativeFunction.TANH: "tanh",
+        NativeFunction.ARCSINH: "arcsinh",
+        NativeFunction.ARCCOSH: "arccosh",
+        NativeFunction.ARCTANH: "arctanh",
+        NativeFunction.SQRT: "sqrt",
+        NativeFunction.POW: "power",
+        NativeFunction.EXP: "exp",
+        NativeFunction.LOG: "log",
+        NativeFunction.GAMMA: "gamma",
+        NativeFunction.CBRT: "cbrt",
+        NativeFunction.ISFINITE: "isfinite",
+        NativeFunction.ISINF: "isinf",
+        NativeFunction.ISNAN: "isnan",
+        NativeFunction.FLOOR: "floor",
+        NativeFunction.CEIL: "ceil",
+        NativeFunction.TRUNC: "trunc",
+    },
+}
+
+
 @functools.lru_cache(maxsize=None, typed=True)  # typed since uniqueness is only guaranteed per enum
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
     ]
 ) -> np.ufunc:
-    table: Dict[
-        Union[
-            UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-        ],
-        np.ufunc,
-    ]
-    # Can't put all in single table since UnaryOperator.POS == BinaryOperator.ADD
-    if isinstance(op, UnaryOperator):
-        table = {
-            UnaryOperator.POS: np.positive,
-            UnaryOperator.NEG: np.negative,
-            UnaryOperator.NOT: np.logical_not,
-        }
-    elif isinstance(op, ArithmeticOperator):
-        table = {
-            ArithmeticOperator.ADD: np.add,
-            ArithmeticOperator.SUB: np.subtract,
-            ArithmeticOperator.MUL: np.multiply,
-            ArithmeticOperator.DIV: np.true_divide,
-        }
-    elif isinstance(op, ComparisonOperator):
-        table = {
-            ComparisonOperator.GT: np.greater,
-            ComparisonOperator.LT: np.less,
-            ComparisonOperator.GE: np.greater_equal,
-            ComparisonOperator.LE: np.less_equal,
-            ComparisonOperator.EQ: np.equal,
-            ComparisonOperator.NE: np.not_equal,
-        }
-    elif isinstance(op, LogicalOperator):
-        table = {
-            LogicalOperator.AND: np.logical_and,
-            LogicalOperator.OR: np.logical_or,
-        }
-    elif isinstance(op, NativeFunction):
-        table = {
-            NativeFunction.ABS: np.abs,
-            NativeFunction.MIN: np.minimum,
-            NativeFunction.MAX: np.maximum,
-            NativeFunction.MOD: np.remainder,
-            NativeFunction.SIN: np.sin,
-            NativeFunction.COS: np.cos,
-            NativeFunction.TAN: np.tan,
-            NativeFunction.ARCSIN: np.arcsin,
-            NativeFunction.ARCCOS: np.arccos,
-            NativeFunction.ARCTAN: np.arctan,
-            NativeFunction.SINH: np.sinh,
-            NativeFunction.COSH: np.cosh,
-            NativeFunction.TANH: np.tanh,
-            NativeFunction.ARCSINH: np.arcsinh,
-            NativeFunction.ARCCOSH: np.arccosh,
-            NativeFunction.ARCTANH: np.arctanh,
-            NativeFunction.SQRT: np.sqrt,
-            NativeFunction.POW: np.power,
-            NativeFunction.EXP: np.exp,
-            NativeFunction.LOG: np.log,
-            NativeFunction.GAMMA: gamma_,
-            NativeFunction.CBRT: np.cbrt,
-            NativeFunction.ISFINITE: np.isfinite,
-            NativeFunction.ISINF: np.isinf,
-            NativeFunction.ISNAN: np.isnan,
-            NativeFunction.FLOOR: np.floor,
-            NativeFunction.CEIL: np.ceil,
-            NativeFunction.TRUNC: np.trunc,
-        }
-    else:
+    if not isinstance(
+        op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
+    ):
         raise TypeError(
             "Can only convert instances of GTC operators and supported native functions to typestr."
         )
-    return table[op]
+    return getattr(ufuncs, OP_TO_UFUNC_NAME[type(op)][op])
 
 
 @functools.lru_cache(maxsize=None)
