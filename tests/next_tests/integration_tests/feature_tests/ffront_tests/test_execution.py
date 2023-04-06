@@ -57,21 +57,22 @@ def test_copy(fieldview_backend):
     assert np.allclose(a_I_float, b_I_float)
 
 
-@pytest.mark.skip(reason="no lowering for returning a tuple of fields exists yet.")
 def test_multicopy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
-    out_I_float_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
+    inp0 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float32"))
+    out0 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    out1 = np_as_located_field(IDim)(np.zeros((size), dtype=float32))
 
     @field_operator(backend=fieldview_backend)
     def multicopy(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float32]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float32]]:
         return inp1, inp2
 
-    assert np.allclose(a_I_float, out_I_float)
-    assert np.allclose(b_I_float, out_I_float_1)
+    multicopy(inp0, inp1, out=(out0, out1), offset_provider={})
+
+    assert np.allclose(inp0, out0)
+    assert np.allclose(inp1, out1)
 
 
 def test_cartesian_shift(fieldview_backend):
@@ -261,7 +262,7 @@ def test_scalar_scan(fieldview_backend):
 
 def test_tuple_scalar_scan(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple arguments are not supported in gtfn yet.")
+        pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
 
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
@@ -510,9 +511,6 @@ def test_tuple_arg(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple arguments are not supported in gtfn yet.")
-
     @field_operator(backend=fieldview_backend)
     def unpack_tuple(
         inp: tuple[tuple[Field[[IDim], float64], Field[[IDim], float64]], Field[[IDim], float64]]
@@ -617,8 +615,6 @@ def test_ternary_operator(left, right, fieldview_backend):
 
 @pytest.mark.parametrize("left,right", [(2.0, 3.0), (3.0, 2.0)])
 def test_ternary_operator_tuple(left, right, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple arguments are not supported in gtfn yet.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
@@ -691,9 +687,6 @@ def test_ternary_scan(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(fieldview_backend, forward):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("gtfn does not yet support scan pass or tuple out arguments.")
-
     init = (1.0, (2.0, 3.0))
     out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
     expected = np.arange(1.0, 1.0 + size, 1)
@@ -715,9 +708,6 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_input(fieldview_backend, forward):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("gtfn does not yet support scan pass or tuple arguments.")
-
     init = 1.0
     inp1 = np_as_located_field(KDim)(np.ones((size,)))
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
@@ -910,9 +900,6 @@ def test_undefined_symbols():
 
 
 def test_zero_dims_fields(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Implicit broadcast are not supported yet.")
-
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
 
@@ -925,9 +912,6 @@ def test_zero_dims_fields(fieldview_backend):
 
 
 def test_implicit_broadcast_mixed_dims(fieldview_backend):
-    if fieldview_backend == gtfn_cpu.run_gtfn:
-        pytest.skip("Implicit broadcast are not supported yet.")
-
     input1 = np_as_located_field(IDim)(np.ones((10,)))
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field(IDim)(np.ones((10,)))
@@ -948,9 +932,6 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
 
 def test_tuple_unpacking(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple arguments are not supported in gtfn yet.")
-
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size,)))
     out1 = np_as_located_field(IDim)(np.ones((size,)))
@@ -981,9 +962,6 @@ def test_tuple_unpacking(fieldview_backend):
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple arguments are not supported in gtfn yet.")
-
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size,)))
     out = tuple(np_as_located_field(IDim)(np.ones((size,)) * i) for i in range(3 * 4))
