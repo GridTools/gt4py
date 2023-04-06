@@ -63,7 +63,7 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
         ...
 
 
-class ReplaceEnabledWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT]):
+class ReplaceEnabledWorkflowMixin(Workflow[StartT, EndT]):
     """
     Subworkflow replacement mixin.
 
@@ -84,7 +84,7 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT])
         return dataclasses.replace(self, **kwargs)
 
 
-class ChainableWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT]):
+class ChainableWorkflowMixin(Workflow[StartT, EndT]):
     def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
@@ -93,7 +93,6 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT], Generic[StartT, EndT]):
 class NamedStepSequence(
     ChainableWorkflowMixin[StartT, EndT],
     ReplaceEnabledWorkflowMixin[StartT, EndT],
-    Generic[StartT, EndT],
 ):
     """
     Workflow with linear succession of named steps.
@@ -163,7 +162,7 @@ class NamedStepSequence(
 
 
 @dataclasses.dataclass(frozen=True)
-class StepSequence(ChainableWorkflowMixin[StartT, EndT], Generic[StartT, EndT]):
+class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     """
     Composable workflow of single input callables.
 
