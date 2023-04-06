@@ -31,8 +31,8 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 IDim = Dimension("IDim")
@@ -143,7 +143,10 @@ def test_temp_assignment():
 
     reference = im.let(itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"), "inp")(
         im.let(itir.Sym(id="inp__0", dtype=("float64", False), kind="Iterator"), "tmp__0")(
-            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), "inp__0")("tmp2__0"))
+            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), "inp__0")(
+                "tmp2__0"
+            )
+        )
     )
 
     assert lowered.expr == reference
@@ -193,8 +196,10 @@ def test_unpacking():
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(itir.Sym(id="tmp1__0", dtype=("float64", False), kind="Iterator"), tuple_access_0)(
-            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"),
-                   tuple_access_1)("tmp1__0"))
+            im.let(
+                itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), tuple_access_1
+            )("tmp1__0")
+        )
     )
 
     assert lowered.expr == reference
@@ -488,7 +493,10 @@ def test_reduction_lowering_expr():
         im.promote_to_lifted_stencil(im.map__("plus"))("e1_nbh__0", "e2"),
     )
 
-    reference = im.let(itir.Sym(id="e1_nbh__0", dtype=("float64", True), kind="Iterator"), im.lifted_neighbors("V2E", "e1"))(
+    reference = im.let(
+        itir.Sym(id="e1_nbh__0", dtype=("float64", True), kind="Iterator"),
+        im.lifted_neighbors("V2E", "e1"),
+    )(
         im.promote_to_lifted_stencil(
             im.call_(
                 im.call_("reduce")(

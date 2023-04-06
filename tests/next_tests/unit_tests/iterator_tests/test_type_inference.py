@@ -95,7 +95,7 @@ def test_lambda():
 
 def test_typed_lambda():
     testee = ir.Lambda(
-        params=[ir.Sym(id="x", kind="Iterator", dtype="float")], expr=ir.SymRef(id="x")
+        params=[ir.Sym(id="x", kind="Iterator", dtype=("float", False))], expr=ir.SymRef(id="x")
     )
     expected_val = ti.Val(
         kind=ti.Iterator(),
