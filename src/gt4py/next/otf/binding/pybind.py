@@ -122,8 +122,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    def visit_FunctionParameter(self, param: FunctionParameter):
-        return f"{_type_string(param.type_)} {param.name}"
+    FunctionParameter = as_jinja("{{_this_module._type_string(_this_node.type_)}} {{name}}")
 
     ReturnStmt = as_jinja("""return {{expr}};""")
 

@@ -59,14 +59,14 @@ def test_copy(fieldview_backend):
 
 def test_multicopy(fieldview_backend):
     inp0 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float32"))
     out0 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-    out1 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
+    out1 = np_as_located_field(IDim)(np.zeros((size), dtype=float32))
 
     @field_operator(backend=fieldview_backend)
     def multicopy(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float32]
+    ) -> tuple[Field[[IDim], float64], Field[[IDim], float32]]:
         return inp1, inp2
 
     multicopy(inp0, inp1, out=(out0, out1), offset_provider={})
