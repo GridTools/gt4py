@@ -53,7 +53,7 @@ def test_single_step():
 
 
 def test_chain_step_sequence():
-    wf: workflow.Workflow[StageOne, str] = workflow.StepSequence.from_step(step_one).chain(step_two)
+    wf: workflow.Workflow[StageOne, str] = workflow.StepSequence.start(step_one).chain(step_two)
     inp = StageOne(5)
     assert wf(inp) == step_two(step_one(inp))
 

@@ -167,7 +167,7 @@ step1: Workflow[I, A]
 step2: Workflow[A, B]
 step3: Workflow[B, C]
 step4: Workflow[C, O]
-workflow: Workflow[I, O] = StepSequence.from_step(step1).chain(step2).chain(step3).chain(step4)
+workflow: Workflow[I, O] = StepSequence.start(step1).chain(step2).chain(step3).chain(step4)
 ```
 
 `otf.workflow.StepSequence` is only one example of a chainable step type.
