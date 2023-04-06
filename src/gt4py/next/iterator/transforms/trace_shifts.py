@@ -12,13 +12,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import types
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, Union
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.collect_shifts import ALL_NEIGHBORS
+
+
+VALUE_TOKEN = types.new_class("VALUE_TOKEN")
+TYPE_TOKEN = types.new_class("TYPE_TOKEN")
 
 
 @dataclass(frozen=True)
@@ -37,77 +42,26 @@ class InputTracer:
         )
 
     def deref(self):
-        if self.lift_level:
-            return self
         self.register_deref(self.inp, self.offsets)
-
-    def lift(self):
-        return InputTracer(
-            inp=self.inp,
-            register_deref=self.register_deref,
-            offsets=self.offsets,
-            lift_level=self.lift_level + 1,
-        )
-
-    def unlift(self):
-        assert self.lift_level > 0
-        return InputTracer(
-            inp=self.inp,
-            register_deref=self.register_deref,
-            offsets=self.offsets,
-            lift_level=self.lift_level - 1,
-        )
+        return VALUE_TOKEN
 
 
-@dataclass(frozen=True)
-class CombinedTracer:
-    tracers: tuple[InputTracer, ...]
-
-    def shift(self, offsets):
-        return CombinedTracer(tracers=tuple(t.shift(offsets) for t in self.tracers))
-
-    def deref(self):
-        lift_levels = {t.lift_level for t in self.tracers}
-        assert len(lift_levels) == 1
-        if lift_levels.pop():
-            return self
-        for t in self.tracers:
-            t.deref()
-
-    def lift(self):
-        return CombinedTracer(tracers=tuple(t.lift() for t in self.tracers))
-
-    def unlift(self):
-        return CombinedTracer(tracers=tuple(t.unlift() for t in self.tracers))
-
-
-def _combine(*tracers):
-    input_tracers = []
-
-    def handle_tracer(tracer):
-        if isinstance(tracer, InputTracer):
-            input_tracers.append(tracer)
-        elif isinstance(tracer, CombinedTracer):
-            input_tracers.extend(tracer.tracers)
-        elif isinstance(tracer, tuple):
-            for t in tracer:
-                handle_tracer(t)
-
-    for tracer in tracers:
-        handle_tracer(tracer)
-
-    return CombinedTracer(tracers=tuple(input_tracers))
+def _combine(*values):
+    # `OffsetLiteral`s may occur in `list_get` calls
+    if not all(
+        val in [VALUE_TOKEN, TYPE_TOKEN] or isinstance(val, ir.OffsetLiteral) for val in values
+    ):
+        raise AssertionError("All arguments must be values or types.")
+    return VALUE_TOKEN
 
 
 # implementations of builtins
-
-
 def _deref(x):
     return x.deref()
 
 
 def _can_deref(x):
-    return
+    return VALUE_TOKEN
 
 
 def _shift(*offsets):
@@ -117,9 +71,23 @@ def _shift(*offsets):
     return apply
 
 
+@dataclass(frozen=True)
+class AppliedLift:
+    stencil: Callable
+    its: tuple[Union[InputTracer, "AppliedLift"]]
+
+    def shift(self, offsets):
+        return AppliedLift(self.stencil, tuple(_shift(it) for it in self.its))
+
+    def deref(self):
+        return self.stencil(*self.its)
+
+
 def _lift(f):
-    def apply(*args):
-        return f(*(arg.lift() for arg in args)).unlift()
+    def apply(*its):
+        if not all(isinstance(it, (InputTracer, AppliedLift)) for it in its):
+            raise AssertionError("All arguments must be iterators.")
+        return AppliedLift(f, its)
 
     return apply
 
@@ -128,8 +96,12 @@ def _reduce(f, init):
     return _combine
 
 
+def _map(f):
+    return _combine
+
+
 def _neighbors(o, x):
-    return x.shift((o, ALL_NEIGHBORS)).deref()
+    return _deref(_shift(o, ALL_NEIGHBORS)(x))
 
 
 def _scan(f, forward, init):
@@ -139,32 +111,27 @@ def _scan(f, forward, init):
     return apply
 
 
-def _make_tuple(*args):
-    return args
-
-
-def _tuple_get(idx, tup):
-    if tup is not None:
-        return tup[int(idx.value)]
-
-
 _START_CTX: Final = {
     "deref": _deref,
     "can_deref": _can_deref,
     "shift": _shift,
     "lift": _lift,
-    "reduce": _reduce,
     "scan": _scan,
-    "make_tuple": _make_tuple,
-    "tuple_get": _tuple_get,
+    "reduce": _reduce,
     "neighbors": _neighbors,
+    "map_": _map,
 }
 
 
 class TraceShifts(NodeTranslator):
+    def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
+        return VALUE_TOKEN
+
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
+        elif node.id in ir.TYPEBUILTINS:
+            return TYPE_TOKEN
         return _combine
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
@@ -182,10 +149,15 @@ class TraceShifts(NodeTranslator):
         self, node: ir.StencilClosure, *, shifts: dict[str, list[tuple[ir.OffsetLiteral, ...]]]
     ):
         def register_deref(inp: str, offsets: tuple[ir.OffsetLiteral, ...]):
-            shifts.setdefault(inp, []).append(offsets)
+            shifts[inp].append(offsets)
 
-        tracers = [InputTracer(inp=inp.id, register_deref=register_deref) for inp in node.inputs]
-        self.visit(node.stencil, ctx=_START_CTX)(*tracers)
+        tracers = []
+        for inp in node.inputs:
+            shifts.setdefault(inp.id, [])
+            tracers.append(InputTracer(inp=inp.id, register_deref=register_deref))
+
+        result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
+        assert result is VALUE_TOKEN
 
     @classmethod
     def apply(cls, node: ir.StencilClosure) -> dict[str, list[tuple[ir.OffsetLiteral, ...]]]:
