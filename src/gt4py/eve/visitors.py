@@ -165,15 +165,14 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
-            if self.PRESERVED_ANNEX_ATTRS:
-                new_annex = copy.deepcopy(new_node.annex)
-                for k in self.PRESERVED_ANNEX_ATTRS:
-                    try:
-                        assert not hasattr(new_annex, k)
-                        setattr(new_annex, k, getattr(node.annex, k))
-                    except AttributeError:
-                        pass
-                object.__setattr__(new_node, "__node_annex__", new_annex)
+            if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
+                # note: access to `new_node.annex` creates the annex in the property
+                new_annex_dict = new_node.annex.__dict__
+                for key in self.PRESERVED_ANNEX_ATTRS:
+                    if value := getattr(old_annex, key, None):
+                        assert key not in new_annex_dict
+                        new_annex_dict[key] = value
+
             return new_node
 
         if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
