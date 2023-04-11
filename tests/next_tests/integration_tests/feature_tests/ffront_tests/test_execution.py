@@ -39,18 +39,23 @@ from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.feature_tests import cases
 
 
 def test_copy(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    case = cases.CartesianCase(fieldview_backend)
+    # a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    # b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
-    def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def copy(inp: cases.IField) -> cases.IField:
         field_tuple = (inp, inp)
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
+
+    a_I_float = case.allocate(copy, "inp").default()
+    b_I_float = case.allocate(copy, "out").zeros()
 
     copy(a_I_float, out=b_I_float, offset_provider={})
 
