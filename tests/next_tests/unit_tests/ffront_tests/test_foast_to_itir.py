@@ -11,7 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+# TODO(tehrengruber): The style of the tests in this file is not optimal as a single change in the
+#  lowering can (and often does) make all of them fail. Once we have embedded field view we want to
+#  switch to executing the different cases here; once with a regular backend (i.e. including
+#  parsing) and then with embedded field view (i.e. no parsing). If the results match the lowering
+#  should be correct.
 from __future__ import annotations
 
 from types import SimpleNamespace
