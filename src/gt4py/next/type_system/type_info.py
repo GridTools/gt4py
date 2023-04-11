@@ -241,7 +241,7 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType):
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:
     """
-    Return True if ``type_`` matches any of the expected.
+    Return True if ``type_`` matches any of the expected or is a tuple of them.
 
     Examples:
     ---------
@@ -257,6 +257,26 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
     False
     """
     return all(isinstance(t, expected_type) for t in primitive_constituents(type_))
+
+
+def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGuard[ts.TupleType]:
+    """
+    Return True if ``type_`` matches (nested) tuple of ``expected_type``.
+
+    Examples:
+    ---------
+    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
+    >>> is_tuple_of_type(field_type, ts.FieldType)
+    False
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType))
+    True
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type]), ts.FieldType)
+    False
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+    False
+    """
+    return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
 
 def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:

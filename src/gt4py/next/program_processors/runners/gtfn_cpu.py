@@ -33,6 +33,8 @@ from gt4py.next.type_system.type_translation import from_value
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    if isinstance(arg, tuple):
+        return tuple(convert_arg(a) for a in arg)
     if hasattr(arg, "__array__"):
         return np.asarray(arg)
     else:

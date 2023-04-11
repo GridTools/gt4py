@@ -17,13 +17,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Sequence, Union
 
 import gt4py.eve as eve
-import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 class Expr(eve.Node):
@@ -38,7 +38,12 @@ class BufferSID(Expr):
     source_buffer: str
     dimensions: Sequence[DimensionType]
     scalar_type: ts.ScalarType
-    dim_config: int
+    # strides_kind: int # TODO(havogt): implement strides_kind once we have the "frozen stencil" mechanism
+    # unit_stride_dim: int # TODO(havogt): we can fix the dimension with unity stride once we have the "frozen stencil" mechanism
+
+
+class CompositeSID(Expr):
+    elems: Sequence[Union[BufferSID, CompositeSID]]
 
 
 class FunctionCall(Expr):
@@ -80,6 +85,17 @@ class BindingFile(eve.Node):
     binding_module: BindingModule
 
 
+def _type_string(type_: ts.TypeSpec) -> str:
+    if isinstance(type_, ts.TupleType):
+        return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
+    elif isinstance(type_, ts.FieldType):
+        return "pybind11::buffer"
+    elif isinstance(type_, ts.ScalarType):
+        return cpp_interface.render_scalar_type(type_)
+    else:
+        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+
+
 class BindingCodeGenerator(TemplatedGenerator):
     BindingFile = as_jinja(
         """\
@@ -106,14 +122,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         """
     )
 
-    def visit_FunctionParameter(self, param: FunctionParameter):
-        if isinstance(param.type_, ts.FieldType):
-            type_str = "pybind11::buffer"
-        elif isinstance(param.type_, ts.ScalarType):
-            type_str = cpp_interface.render_scalar_type(param.type_)
-        else:
-            raise ValueError(f"Type '{param.type_}' is not supported in pybind11 interfaces.")
-        return f"{type_str} {param.name}"
+    FunctionParameter = as_jinja("{{_this_module._type_string(_this_node.type_)}} {{name}}")
 
     ReturnStmt = as_jinja("""return {{expr}};""")
 
@@ -132,7 +141,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         args = [self.visit(arg) for arg in call.args]
         return cpp_interface.render_function_call(call.target, args)
 
-    def visit_BufferSID(self, sid: BufferSID):
+    def visit_BufferSID(self, sid: BufferSID, **kwargs):
         return self.generic_visit(
             sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
         )
@@ -141,24 +150,42 @@ class BindingCodeGenerator(TemplatedGenerator):
         """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
                 gridtools::as_sid<{{rendered_scalar_type}},\
                                   {{dimensions.__len__()}},\
-                                  gridtools::integral_constant<int, {{dim_config}}>,\
-                                  999'999'999>({{source_buffer}})
+                                  gridtools::sid::unknown_kind>({{source_buffer}})
             )"""
+    )
+
+    def visit_CompositeSID(self, node: CompositeSID, **kwargs):
+        kwargs["composite_ids"] = (
+            f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
+        )
+        return self.generic_visit(node, **kwargs)
+
+    CompositeSID = as_jinja(
+        "gridtools::sid::composite::keys<{{','.join(composite_ids)}}>::make_values({{','.join(elems)}})"
     )
 
     DimensionType = as_jinja("""generated::{{name}}_t""")
 
 
-def make_argument(index: int, param: interface.Parameter) -> str | BufferSID:
-    if isinstance(param.type_, ts.FieldType):
+def _tuple_get(index: int, var: str) -> str:
+    return f"gridtools::tuple_util::get<{index}>({var})"
+
+
+def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeSID:
+    if isinstance(type_, ts.FieldType):
         return BufferSID(
-            source_buffer=param.name,
-            dimensions=[DimensionType(name=dim.value) for dim in param.type_.dims],
-            scalar_type=param.type_.dtype,
-            dim_config=index,
+            source_buffer=name,
+            dimensions=[DimensionType(name=dim.value) for dim in type_.dims],
+            scalar_type=type_.dtype,
         )
+    elif ti.is_tuple_of_type(type_, ts.FieldType):
+        return CompositeSID(
+            elems=[make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
+        )
+    elif isinstance(type_, ts.ScalarType):
+        return name
     else:
-        return param.name
+        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
 
 
 def create_bindings(
@@ -184,8 +211,11 @@ def create_bindings(
             "pybind11/pybind11.h",
             "pybind11/stl.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "gridtools/sid/composite.hpp",
+            "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
             "gridtools/common/defs.hpp",
+            "gridtools/common/tuple_util.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
             "gridtools/fn/backend/naive.hpp",
@@ -200,8 +230,8 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(index, param)
-                        for index, param in enumerate(program_source.entry_point.parameters)
+                        make_argument(param.name, param.type_)
+                        for param in program_source.entry_point.parameters
                     ],
                 )
             ),
