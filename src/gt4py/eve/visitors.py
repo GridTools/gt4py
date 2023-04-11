@@ -166,7 +166,7 @@ class NodeTranslator(NodeVisitor):
                 },
             )
             if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
-                # note: access to `new_node.annex` creates the annex in the property
+                # note: access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
                 new_annex_dict = new_node.annex.__dict__
                 for key in self.PRESERVED_ANNEX_ATTRS:
                     if value := getattr(old_annex, key, None):
