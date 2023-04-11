@@ -24,10 +24,10 @@ def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     Examples
     --------
     >>> sym("a")
-    Sym(id=SymbolName('a'))
+    Sym(id=SymbolName('a'), kind=None, dtype=None)
 
     >>> sym(itir.Sym(id="b"))
-    Sym(id=SymbolName('b'))
+    Sym(id=SymbolName('b'), kind=None, dtype=None)
     """
     if isinstance(sym_or_name, itir.Sym):
         return sym_or_name
@@ -99,7 +99,7 @@ class lambda__:
     Examples
     --------
     >>> lambda__("a")(deref_("a"))  # doctest: +ELLIPSIS
-    Lambda(params=[Sym(id=SymbolName('a'))], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
+    Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
     """
 
     def __init__(self, *args):
@@ -240,7 +240,7 @@ class let:
     Examples
     --------
     >>> let("a", "b")("a")  # doctest: +ELLIPSIS
-    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'))], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
+    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
     """
 
     def __init__(self, var, init_form):
