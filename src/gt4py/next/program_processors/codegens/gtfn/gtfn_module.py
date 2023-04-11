@@ -43,10 +43,6 @@ class GTFNTranslationStep(
         stages.ProgramCall,
         stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
     ],
-    workflow.ReplaceEnabledWorkflowMixin[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-    ],
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
