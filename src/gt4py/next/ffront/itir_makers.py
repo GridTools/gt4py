@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Union
+from typing import Callable, Union
 
 from gt4py.next.iterator import ir as itir
 
@@ -273,3 +273,63 @@ def shift_(offset, value=None):
 
 def literal_(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
+
+
+def neighbors_(offset, it):
+    offset = ensure_offset(offset)
+    return call_("neighbors")(offset, it)
+
+
+def lifted_neighbors(offset, it) -> itir.Expr:
+    """
+    Create a lifted neighbors call.
+
+    Examples
+    --------
+    >>> str(lifted_neighbors("off", "a"))
+    '(↑(λ(it) → neighbors(offₒ, it)))(a)'
+    """
+    return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
+
+
+def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
+    """
+    Create a lifted nullary lambda that captures `expr`.
+
+    Examples
+    --------
+    >>> str(promote_to_const_iterator("foo"))
+    '(↑(λ() → foo))()'
+    """
+    return lift_(lambda__()(expr))()
+
+
+def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[..., itir.Expr]:
+    """
+    Promotes a function `op` from values to iterators.
+
+    `op` is a function from values to value.
+
+    Returns:
+        A lifted stencil, a function from iterators to iterator.
+
+    Examples
+    --------
+    >>> str(promote_to_lifted_stencil("op")("a", "b"))
+    '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
+    """
+    if isinstance(op, (str, itir.SymRef)):
+        op = call_(op)
+
+    def _impl(*its: itir.Expr) -> itir.Expr:
+        args = [
+            f"__arg{i}" for i in range(len(its))
+        ]  # TODO: `op` must not contain `SymRef(id="__argX")`
+        return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)  # type: ignore[operator] # `op` is not `str`
+
+    return _impl
+
+
+def map__(op):
+    """Create a `map_` call."""
+    return call_(call_("map_")(op))
