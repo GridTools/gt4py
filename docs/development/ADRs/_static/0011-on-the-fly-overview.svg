@@ -1,0 +1,732 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="827px" preserveAspectRatio="none" style="width:1622px;height:827px;background:#FFFFFF;" version="1.1" viewBox="0 0 1622 827" width="1622px" zoomAndPan="magnify"><defs/><g><!--MD5=[47c14c564e796a575e671c2b0469a7bb]
+cluster backend--><g id="cluster_backend"><rect fill="none" height="494" rx="2.5" ry="2.5" style="stroke:#444444;stroke-width:1.0;stroke-dasharray:7.0,7.0;" width="1346" x="270.5" y="327"/><text fill="#444444" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="152" x="867.5" y="344.4688">Compiled Backend</text><text fill="#444444" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="69" x="909" y="359.4453">[Container]</text></g><!--MD5=[6cebd8022e1b8c9ba6a84a7524f8e7af]
+cluster workflow--><g id="cluster_workflow"><rect fill="none" height="411" rx="2.5" ry="2.5" style="stroke:#444444;stroke-width:1.0;stroke-dasharray:7.0,7.0;" width="1098" x="294.5" y="386"/><text fill="#444444" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="77" x="805" y="403.4688">Workflow</text><text fill="#444444" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="69" x="809" y="418.4453">[Container]</text></g><!--MD5=[768ea89973af6b7c4289680bccdf36de]
+entity compiled_program--><g id="elem_compiled_program"><rect fill="#85BBF0" height="85.9531" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="191" x="1409" y="678.5"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="153" x="1428" y="703.9688">Compiled Program</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="39" x="1485" y="718.9453">[Stage]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="1502.5" y="735.0117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="167" x="1423" y="751.5">Python callable program</text></g><!--MD5=[91d4ab8e59f3d5d3798d66dae5b45386]
+entity program_call--><g id="elem_program_call"><rect fill="#85BBF0" height="85.9531" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="145" x="311" y="461.5"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="105" x="331" y="486.9688">Program Call</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="39" x="364" y="501.9453">[Stage]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="381.5" y="518.0117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="121" x="325" y="534.5">Program + inputs</text></g><!--MD5=[666ea9bf5f2f72457afbd1989afa1ab6]
+entity program_source--><g id="elem_program_source"><rect fill="#85BBF0" height="102.4414" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="203" x="721" y="453.5"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="130" x="757.5" y="478.9688">Program Source</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="39" x="803" y="493.9453">[Stage]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="820.5" y="510.0117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175" x="735" y="526.5">Generated source code in</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="92" x="776.5" y="542.9883">any language</text></g><!--MD5=[644bafc2ff75c18e9ad08292c433466e]
+entity bindings_source--><g id="elem_bindings_source"><rect fill="#85BBF0" height="135.418" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="219" x="1157" y="437"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="133" x="1200" y="462.4688">Bindings Source</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="39" x="1247" y="477.4453">[Stage]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="1264.5" y="493.5117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="195" x="1171" y="510">Bindings for calling Program</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="142" x="1193.5" y="526.4883">Source from another</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="165" x="1182" y="542.9766">language (typically from</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52" x="1240.5" y="559.4648">Python)</text></g><!--MD5=[444060c807171c3eaa08985e6d667406]
+entity compilable_source--><g id="elem_compilable_source"><rect fill="#85BBF0" height="118.9297" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="202" x="967.5" y="662"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="152" x="992.5" y="687.4688">Compilable Source</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="39" x="1049" y="702.4453">[Stage]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="1066.5" y="718.5117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="157" x="990" y="735">Compilable package of</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="140" x="996.5" y="751.4883">Program Source and</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="182" x="977.5" y="767.9766">optionally Bindings Source</text></g><!--MD5=[8fc3522a43f8c7199df5e09e5bb0188e]
+entity user--><g id="elem_user"><rect fill="#08427B" height="86.8438" rx="2.5" ry="2.5" style="stroke:#073B6F;stroke-width:0.5;" width="68" x="360.5" y="150"/><image height="48" width="48" x="370.5" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAACD0lEQVR4Xu2YoU4EMRCGT+4j8Ai8AhaH4QHgAUjQuFMECUgMIUgwJAgMhgQsAYUiJCiQIBBY+EITsjfTdme6V24v4c8vyGbb+ZjOtN0bNcvjQXmkH83WvYBWto6PLm6v7p7uH1/w2fXD+PBycX1Pv2l3IdDm/vn7x+dXQiAubRzoURa7gRZWd0iGRIiJbOnhnfYBQZNJjNbuyY2eJG8fkDE3bbG4ep6MHUAsgYxmE3nVs6VsBWJSGccsOlFPmLIViMzLOB7pCVO2AtHJMohH7Fh6zqitQK7m0rJvAVYgGcEpe//PLdDz65sM4pF9N7ICcXDKIB5Nv6j7tD0NoSdM2QrU9Gg0ewE1LqBhHR3BBdvj2vapnidjHxD/q6vd7Pvhr31AwcY8eXMTXAKECZZJFXuEq27aLgQK5uLMohCenGGuGewOxSjBvYBqeG6B+Nqiblggdjnc+ZXDy+FNFpFzw76O3UBAROuXh6FoiAcf5g9eTvUgzy0nWg6I8cXHRUpg5bOVBCo+KDpFajOf23GgPme7RSQ+lacIENUgJ6gg1k6HjgOlqnLqip4tEuhv0hNEMXUD0clyXE3p6pZA0S2nnvTlXwLJEZWlb7cTQH1+USgTN4VhAenm/wea1OCAOmqo6fE1WCb9WSKBah+rbUWPWAmE2Rvk0ApiB45eOyNAzU8xcTvj8KvkKEoOaIYeHNA3ZuygAvFMUO0AAAAASUVORK5CYII=" y="160"/><text fill="#FFFFFF" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="37" x="376" y="223.4688">User</text></g><!--MD5=[a8b7d611c732ff8fef7906790d4053a1]
+entity iteratorir--><g id="elem_iteratorir"><rect fill="#85BBF0" height="85.9531" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="197" x="7" y="461.5"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="80" x="65.5" y="486.9688">Iterator IR</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="19" x="96" y="501.9453">[IR]</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="4" x="103.5" y="518.0117"> </text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="173" x="21" y="534.5">Canonical representation</text></g><!--MD5=[120c0689b747e22b28456524aab761f0]
+entity dslcode--><g id="elem_dslcode"><rect fill="#CCCCCC" height="52.9766" rx="2.5" ry="2.5" style="stroke:#BFBFBF;stroke-width:0.5;" width="171" x="20" y="167"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="77" x="67" y="192.4688">DSL Code</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="151" x="30" y="207.4453">[FieldView or IteratorView]</text></g><!--MD5=[72626896c7871fbe974960a26836c8ca]
+entity embedded--><g id="elem_embedded"><rect fill="#85BBF0" height="52.9766" rx="2.5" ry="2.5" style="stroke:#78A8D8;stroke-width:0.5;" width="193" x="252" y="7"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="173" x="262" y="32.4688">Embedded Execution</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="8" x="344.5" y="47.4453">[]</text></g><!--MD5=[0d054bb84ffd728dba12b6dde8f13585]
+entity inputs--><g id="elem_inputs"><rect fill="#CCCCCC" height="52.9766" rx="2.5" ry="2.5" style="stroke:#BFBFBF;stroke-width:0.5;" width="148" x="518.5" y="167"/><text fill="#000000" font-family="sans-serif" font-size="16" font-weight="bold" lengthAdjust="spacing" textLength="128" x="528.5" y="192.4688">Program Inputs</text><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="89" x="548" y="207.4453">[Fields, Scalars]</text></g><!--MD5=[1a0be5c4ef00a64a699e0064c7b45e64]
+reverse link dslcode to user--><g id="link_dslcode_user"><path d="M200.83,193.5 C255.67,193.5 321.25,193.5 360.3,193.5 " fill="none" id="dslcode-backto-user" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="192.94,193.5,200.94,196.5,200.94,190.5,192.94,193.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="129" x="209.25" y="173.1016">supplies (via DSL -&gt;</text><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="58" x="246.75" y="187.2344">lowering)</text></g><!--MD5=[80eead0e05a7cd4a0910a51ddb2c3b15]
+link dslcode to iteratorir--><g id="link_dslcode_iteratorir"><path d="M105.5,220.31 C105.5,271.16 105.5,385.11 105.5,451.93 " fill="none" id="dslcode-to-iteratorir" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="105.5,459.52,108.5,451.52,102.5,451.52,105.5,459.52" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="81" x="179" y="279.6016">is lowered to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="171" x="134" y="293.7344">[ffront.decorator.Program.itir,</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="226" x="106.5" y="307.8672">iterator.runtime.FendefDispatcher.itir()]</text></g><!--MD5=[e171fe61e0400681f3665224e206e121]
+reverse link embedded to dslcode--><g id="link_embedded_dslcode"><path d="M300.72,65.57 C255.35,95.06 187.94,138.9 145.38,166.57 " fill="none" id="embedded-backto-dslcode" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="307.38,61.24,299.0389,63.0908,302.3126,68.119,307.38,61.24" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="149" x="263.5" y="102.6016">can be directly executed</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="118" x="279" y="116.7344">[iterator.embedded]</text></g><!--MD5=[fd89731658800dc119026ceb8415dd04]
+link user to inputs--><g id="link_user_inputs"><path d="M428.99,193.5 C451.09,193.5 480.78,193.5 508.8,193.5 " fill="none" id="user-to-inputs" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="516.71,193.5,508.71,190.5,508.71,196.5,516.71,193.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="53" x="447" y="187.1016">supplies</text></g><!--MD5=[142fa79742f2d38cbe2535e27fa4f992]
+link inputs to embedded--><g id="link_inputs_embedded"><path d="M552.46,166.57 C509.72,138.9 442.03,95.06 396.47,65.57 " fill="none" id="inputs-to-embedded" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="389.79,61.24,394.8677,68.1114,398.1339,63.0783,389.79,61.24" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="84" x="478.5" y="109.6016">are passed to</text></g><!--MD5=[277c08de2bf8d9912734b72f9b281cb6]
+link iteratorir to program_call--><g id="link_iteratorir_program_call"><path d="M204.3,504.5 C236.12,504.5 271.02,504.5 301.49,504.5 " fill="none" id="iteratorir-to-program_call" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="309.29,504.5,301.29,501.5,301.29,507.5,309.29,504.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="70" x="222.5" y="498.1016">is added to</text></g><!--MD5=[00c8d146c273e381213c4b8f6700e800]
+link inputs to program_call--><g id="link_inputs_program_call"><path d="M575.04,220.31 C540.37,271.57 462.31,386.98 417.28,453.56 " fill="none" id="inputs-to-program_call" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="413.07,459.78,420.0309,454.8256,415.0568,451.4702,413.07,459.78" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="78" x="542.5" y="293.6016">are added to</text></g><!--MD5=[e016677b499505fa75e24cb7c46dc059]
+link program_call to program_source--><g id="link_program_call_program_source"><path d="M456.48,504.5 C525.97,504.5 631.52,504.5 711.45,504.5 " fill="none" id="program_call-to-program_source" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="719.06,504.5,711.06,501.5,711.06,507.5,719.06,504.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="95" x="541" y="484.1016">is translated to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="228" x="474.5" y="498.2344">[program_processors.gtfn.gtfn_module]</text></g><!--MD5=[38ac55fbee22295d75bfcca046f2d32a]
+link program_source to bindings_source--><g id="link_program_source_bindings_source"><path d="M924.36,504.5 C990.76,504.5 1077.68,504.5 1147.3,504.5 " fill="none" id="program_source-to-bindings_source" style="stroke:#666666;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#666666" points="1155.05,504.5,1147.05,501.5,1147.05,507.5,1155.05,504.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="120" x="980.5" y="484.1016">is used to generate</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="196" x="942.5" y="498.2344">[otf.binding.pybind.bind_source()]</text></g><!--MD5=[1e4e37d407d9b017fc8ffb1d6201e470]
+link program_source to compilable_source--><g id="link_program_source_compilable_source"><path d="M843.73,555.96 C856.25,581.17 874.06,610.74 896.5,632 C914.63,649.18 936.74,663.84 958.99,676 " fill="none" id="program_source-to-compilable_source" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="965.85,679.66,960.1982,673.2524,957.3786,678.5486,965.85,679.66" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="70" x="960.5" y="614.6016">is added to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="196" x="897.5" y="628.7344">[otf.binding.pybind.bind_source()]</text></g><!--MD5=[61baf0f7b25f4a095ccf568ba328442a]
+link bindings_source to compilable_source--><g id="link_bindings_source_compilable_source"><path d="M1156.6,570.26 C1144.59,579.98 1133.21,590.6 1123.5,602 C1110.79,616.91 1100.4,635.24 1092.21,653 " fill="none" id="bindings_source-to-compilable_source" style="stroke:#666666;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#666666" points="1088.97,660.27,1094.9694,654.1866,1089.4901,651.7418,1088.97,660.27" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="70" x="1187.5" y="614.6016">is added to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="196" x="1124.5" y="628.7344">[otf.binding.pybind.bind_source()]</text></g><!--MD5=[64b90fdc4c35e4684f6e1e2fd011b227]
+link compilable_source to compiled_program--><g id="link_compilable_source_compiled_program"><path d="M1169.9,721.5 C1238.76,721.5 1329.62,721.5 1399.28,721.5 " fill="none" id="compilable_source-to-compiled_program" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="1407.02,721.5,1399.02,718.5,1399.02,724.5,1407.02,721.5" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="89" x="1244.75" y="701.1016">is compiled to</text><text fill="#666666" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="203" x="1187.75" y="715.2344">[otf.compilation.compiler.Compiler]</text></g><!--MD5=[039d942a625650c5607abedc36609adb]
+link inputs to compiled_program--><g id="link_inputs_compiled_program"><path d="M666.8,196.09 C844.22,201.42 1285.73,224.11 1392.5,319 C1493.9,409.12 1506.85,582.57 1506.52,668.97 " fill="none" id="inputs-to-compiled_program" style="stroke:#666666;stroke-width:1.0;"/><polygon fill="#666666" points="1506.44,676.79,1509.5113,668.8171,1503.5115,668.7635,1506.44,676.79" style="stroke:#666666;stroke-width:1.0;"/><text fill="#666666" font-family="sans-serif" font-size="12" font-weight="bold" lengthAdjust="spacing" textLength="96" x="1501.5" y="509.1016">are passed into</text></g><!--MD5=[16c3da64a2182d6784f4217e8478ffd2]
+@startuml 0011-on-the-fly-overview
+!include <C4/C4_Component>
+
+hide stereotype
+
+AddRelTag('optional', $lineStyle=DashedLine())
+
+Person(user, 'User')
+
+Component(iteratorir, 'Iterator IR', 'IR', 'Canonical representation')
+
+Component_Ext(dslcode, "DSL Code", "FieldView or IteratorView")
+
+Rel_L(user, dslcode, 'supplies (via DSL -> lowering)')
+Rel_D(dslcode, iteratorir, 'is lowered to', 'ffront.decorator.Program.itir, iterator.runtime.FendefDispatcher.itir()')
+
+Component(embedded, "Embedded Execution")
+Rel_L(dslcode, embedded, 'can be directly executed', 'iterator.embedded')
+
+Component_Ext(inputs, 'Program Inputs', 'Fields, Scalars')
+Rel_R(user, inputs, 'supplies')
+Rel(inputs, embedded, 'are passed to')
+
+Container_Boundary(backend, 'Compiled Backend', 'program_processors.runners.gtfn_cpu') {
+
+Container_Boundary(workflow, 'Workflow', 'otf.workflow.Workflow') {
+  Component(program_call, 'Program Call', 'Stage', 'Program + inputs')
+  Rel_R(iteratorir, program_call, 'is added to')
+  Rel(inputs, program_call, 'are added to')
+
+  Component(program_source, 'Program Source', 'Stage', 'Generated source code in any language')
+  Rel_R(program_call, program_source, 'is translated to', 'program_processors.gtfn.gtfn_module')
+
+  Component(bindings_source, 'Bindings Source', 'Stage', 'Bindings for calling Program Source from another language (typically from Python)')
+  Rel_R(program_source, bindings_source, 'is used to generate', 'otf.binding.pybind.bind_source()' , $tags='optional')
+
+  Component(compilable_source, 'Compilable Source', 'Stage', 'Compilable package of Program Source and optionally Bindings Source')
+  Rel(program_source, compilable_source, 'is added to', 'otf.binding.pybind.bind_source()')
+  Rel(bindings_source, compilable_source, 'is added to', 'otf.binding.pybind.bind_source()', $tags='optional')
+
+}
+
+  Component(compiled_program, 'Compiled Program', 'Stage', 'Python callable program')
+  Rel_R(compilable_source, compiled_program, 'is compiled to', 'otf.compilation.compiler.Compiler')
+  Rel(inputs, compiled_program, 'are passed into')
+
+}
+
+@enduml
+
+@startuml 0011-on-the-fly-overview
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+skinparam defaultTextAlignment center
+
+skinparam wrapWidth 200
+skinparam maxMessageSize 150
+
+skinparam LegendBorderColor transparent
+skinparam LegendBackgroundColor transparent
+skinparam LegendFontColor #FFFFFF
+
+skinparam shadowing<<legendArea>> false
+skinparam rectangle<<legendArea>> {
+    backgroundcolor #00000000
+    bordercolor #00000000
+}
+
+skinparam rectangle {
+    StereotypeFontSize 12
+    shadowing false
+}
+
+skinparam database {
+    StereotypeFontSize 12
+    shadowing false
+}
+
+skinparam queue {
+    StereotypeFontSize 12
+    shadowing false
+}
+
+skinparam arrow {
+    Color #666666
+    FontColor #666666
+    FontSize 12
+}
+
+skinparam actor {
+    StereotypeFontSize 12
+    shadowing false
+    style awesome
+}
+
+skinparam person {
+    StereotypeFontSize 12
+    shadowing false
+}
+
+skinparam package {
+    StereotypeFontSize 6
+    StereotypeFontColor transparent
+    FontStyle plain
+    BackgroundColor transparent
+}
+
+skinparam rectangle<<boundary>> {
+    Shadowing false
+    StereotypeFontSize 6
+    StereotypeFontColor transparent
+    FontColor #444444
+    BorderColor #444444
+    BackgroundColor transparent
+    BorderStyle dashed
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+skinparam rectangle<<person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #08427B
+    BorderColor #073B6F
+}
+skinparam database<<person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #08427B
+    BorderColor #073B6F
+}
+skinparam queue<<person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #08427B
+    BorderColor #073B6F
+}
+skinparam actor<<person>> {
+    StereotypeFontColor #08427B
+    FontColor #08427B
+    BackgroundColor #08427B
+    BorderColor #073B6F
+}
+skinparam person<<person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #08427B
+    BorderColor #073B6F
+}
+
+
+skinparam rectangle<<external_person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #686868
+    BorderColor #8A8A8A
+}
+skinparam database<<external_person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #686868
+    BorderColor #8A8A8A
+}
+skinparam queue<<external_person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #686868
+    BorderColor #8A8A8A
+}
+skinparam actor<<external_person>> {
+    StereotypeFontColor #686868
+    FontColor #686868
+    BackgroundColor #686868
+    BorderColor #8A8A8A
+}
+skinparam person<<external_person>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #686868
+    BorderColor #8A8A8A
+}
+
+
+skinparam rectangle<<system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #1168BD
+    BorderColor #3C7FC0
+}
+skinparam database<<system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #1168BD
+    BorderColor #3C7FC0
+}
+skinparam queue<<system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #1168BD
+    BorderColor #3C7FC0
+}
+skinparam actor<<system>> {
+    StereotypeFontColor #1168BD
+    FontColor #1168BD
+    BackgroundColor #1168BD
+    BorderColor #3C7FC0
+}
+skinparam person<<system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #1168BD
+    BorderColor #3C7FC0
+}
+
+
+skinparam rectangle<<external_system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #999999
+    BorderColor #8A8A8A
+}
+skinparam database<<external_system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #999999
+    BorderColor #8A8A8A
+}
+skinparam queue<<external_system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #999999
+    BorderColor #8A8A8A
+}
+skinparam actor<<external_system>> {
+    StereotypeFontColor #999999
+    FontColor #999999
+    BackgroundColor #999999
+    BorderColor #8A8A8A
+}
+skinparam person<<external_system>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #999999
+    BorderColor #8A8A8A
+}
+
+
+
+
+
+sprite $person [48x48/16] {
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+0000000000000000000049BCCA7200000000000000000000
+0000000000000000006EFFFFFFFFB3000000000000000000
+00000000000000001CFFFFFFFFFFFF700000000000000000
+0000000000000001EFFFFFFFFFFFFFF80000000000000000
+000000000000000CFFFFFFFFFFFFFFFF6000000000000000
+000000000000007FFFFFFFFFFFFFFFFFF100000000000000
+00000000000001FFFFFFFFFFFFFFFFFFF900000000000000
+00000000000006FFFFFFFFFFFFFFFFFFFF00000000000000
+0000000000000BFFFFFFFFFFFFFFFFFFFF40000000000000
+0000000000000EFFFFFFFFFFFFFFFFFFFF70000000000000
+0000000000000FFFFFFFFFFFFFFFFFFFFF80000000000000
+0000000000000FFFFFFFFFFFFFFFFFFFFF80000000000000
+0000000000000DFFFFFFFFFFFFFFFFFFFF60000000000000
+0000000000000AFFFFFFFFFFFFFFFFFFFF40000000000000
+00000000000006FFFFFFFFFFFFFFFFFFFE00000000000000
+00000000000000EFFFFFFFFFFFFFFFFFF800000000000000
+000000000000007FFFFFFFFFFFFFFFFFF100000000000000
+000000000000000BFFFFFFFFFFFFFFFF5000000000000000
+0000000000000001DFFFFFFFFFFFFFF70000000000000000
+00000000000000000BFFFFFFFFFFFF500000000000000000
+0000000000000000005DFFFFFFFFA1000000000000000000
+0000000000000000000037ABB96100000000000000000000
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+000000000000025788300000000005886410000000000000
+000000000007DFFFFFFD9643347BFFFFFFFB400000000000
+0000000004EFFFFFFFFFFFFFFFFFFFFFFFFFFB1000000000
+000000007FFFFFFFFFFFFFFFFFFFFFFFFFFFFFD200000000
+00000006FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE10000000
+0000003FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB0000000
+000000BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5000000
+000003FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD000000
+000009FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF200000
+00000DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF600000
+00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF800000
+00001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA00000
+00001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB00000
+00001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB00000
+00001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB00000
+00001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA00000
+00000EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF700000
+000006FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE100000
+0000008FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD3000000
+000000014555555555555555555555555555555300000000
+000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000
+}
+
+sprite $person2 [48x48/16] {
+0000000000000000000049BCCA7200000000000000000000
+0000000000000000006EFFFFFFFFB3000000000000000000
+00000000000000001CFFFFFFFFFFFF700000000000000000
+0000000000000001EFFFFFFFFFFFFFF80000000000000000
+000000000000000CFFFFFFFFFFFFFFFF6000000000000000
+000000000000007FFFFFFFFFFFFFFFFFF100000000000000
+00000000000001FFFFFFFFFFFFFFFFFFF900000000000000
+00000000000006FFFFFFFFFFFFFFFFFFFF00000000000000
+0000000000000BFFFFFFFFFFFFFFFFFFFF40000000000000
+0000000000000EFFFFFFFFFFFFFFFFFFFF70000000000000
+0000000000000FFFFFFFFFFFFFFFFFFFFF80000000000000
+0000000000000FFFFFFFFFFFFFFFFFFFFF80000000000000
+0000000000000DFFFFFFFFFFFFFFFFFFFF60000000000000
+0000000000000AFFFFFFFFFFFFFFFFFFFF40000000000000
+00000000000006FFFFFFFFFFFFFFFFFFFE00000000000000
+00000000000000EFFFFFFFFFFFFFFFFFF800000000000000
+000000000000007FFFFFFFFFFFFFFFFFF100000000000000
+000000000000000BFFFFFFFFFFFFFFFF5000000000000000
+0000000000000001DFFFFFFFFFFFFFF70000000000000000
+00000000000000000BFFFFFFFFFFFF500000000000000000
+0000000000000000005DFFFFFFFFA1000000000000000000
+0000000000000000000037ABB96100000000000000000000
+000000000002578888300000000005888864100000000000
+0000000007DFFFFFFFFD9643347BFFFFFFFFFB4000000000
+00000004EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB10000000
+0000007FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD2000000
+000006FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE100000
+00003FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB00000
+0000BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF50000
+0003FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD0000
+0009FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF2000
+000DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF6000
+000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8000
+001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB000
+001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB000
+001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB000
+001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA000
+000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8000
+000DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF6000
+0009FFFFFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFFFFF2000
+0003FFFFFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFFFFD0000
+0000BFFFFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFFFF50000
+00003FFFFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFFFB00000
+000006FFFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFFE100000
+0000007FFFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFFD2000000
+00000004EFFF8FFFFFFFFFFFFFFFFFFFFFF8FFFB10000000
+0000000007DF8FFFFFFFFFFFFFFFFFFFFFF8FB4000000000
+000000000002578888888888888888888864100000000000
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+skinparam rectangle<<container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #438DD5
+    BorderColor #3C7FC0
+}
+skinparam database<<container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #438DD5
+    BorderColor #3C7FC0
+}
+skinparam queue<<container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #438DD5
+    BorderColor #3C7FC0
+}
+skinparam actor<<container>> {
+    StereotypeFontColor #438DD5
+    FontColor #438DD5
+    BackgroundColor #438DD5
+    BorderColor #3C7FC0
+}
+skinparam person<<container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #438DD5
+    BorderColor #3C7FC0
+}
+
+
+skinparam rectangle<<external_container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #B3B3B3
+    BorderColor #A6A6A6
+}
+skinparam database<<external_container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #B3B3B3
+    BorderColor #A6A6A6
+}
+skinparam queue<<external_container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #B3B3B3
+    BorderColor #A6A6A6
+}
+skinparam actor<<external_container>> {
+    StereotypeFontColor #B3B3B3
+    FontColor #B3B3B3
+    BackgroundColor #B3B3B3
+    BorderColor #A6A6A6
+}
+skinparam person<<external_container>> {
+    StereotypeFontColor #FFFFFF
+    FontColor #FFFFFF
+    BackgroundColor #B3B3B3
+    BorderColor #A6A6A6
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+skinparam rectangle<<component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #85BBF0
+    BorderColor #78A8D8
+}
+skinparam database<<component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #85BBF0
+    BorderColor #78A8D8
+}
+skinparam queue<<component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #85BBF0
+    BorderColor #78A8D8
+}
+skinparam actor<<component>> {
+    StereotypeFontColor #85BBF0
+    FontColor #85BBF0
+    BackgroundColor #85BBF0
+    BorderColor #78A8D8
+}
+skinparam person<<component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #85BBF0
+    BorderColor #78A8D8
+}
+
+
+skinparam rectangle<<external_component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #CCCCCC
+    BorderColor #BFBFBF
+}
+skinparam database<<external_component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #CCCCCC
+    BorderColor #BFBFBF
+}
+skinparam queue<<external_component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #CCCCCC
+    BorderColor #BFBFBF
+}
+skinparam actor<<external_component>> {
+    StereotypeFontColor #CCCCCC
+    FontColor #CCCCCC
+    BackgroundColor #CCCCCC
+    BorderColor #BFBFBF
+}
+skinparam person<<external_component>> {
+    StereotypeFontColor #000000
+    FontColor #000000
+    BackgroundColor #CCCCCC
+    BorderColor #BFBFBF
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+hide stereotype
+
+skinparam arrow<<optional>> {
+    Color ;line.dashed
+}
+
+
+rectangle "<$person>\n==User" <<person>> as user 
+
+rectangle "==Iterator IR\n//<size:12>[IR]</size>//\n\n Canonical representation" <<component>> as iteratorir 
+
+rectangle "==DSL Code\n//<size:12>[FieldView or IteratorView]</size>//" <<external_component>> as dslcode 
+
+user -LEFT->> dslcode : **supplies (via DSL -> lowering)**
+dslcode -DOWN->> iteratorir : **is lowered to**\n//<size:12>[ffront.decorator.Program.itir,</size>//\n//<size:12>iterator.runtime.FendefDispatcher.itir()]</size>//
+
+rectangle "==Embedded Execution\n//<size:12>[]</size>//" <<component>> as embedded 
+dslcode -LEFT->> embedded : **can be directly executed**\n//<size:12>[iterator.embedded]</size>//
+
+rectangle "==Program Inputs\n//<size:12>[Fields, Scalars]</size>//" <<external_component>> as inputs 
+user -RIGHT->> inputs : **supplies**
+inputs - ->> embedded : **are passed to**
+
+rectangle "==Compiled Backend\n<size:12>[Container]</size>" <<program_processors.runners.gtfn_cpu>><<boundary>> as backend  {
+
+rectangle "==Workflow\n<size:12>[Container]</size>" <<otf.workflow.Workflow>><<boundary>> as workflow  {
+  rectangle "==Program Call\n//<size:12>[Stage]</size>//\n\n Program + inputs" <<component>> as program_call 
+  iteratorir -RIGHT->> program_call : **is added to**
+  inputs - ->> program_call : **are added to**
+
+  rectangle "==Program Source\n//<size:12>[Stage]</size>//\n\n Generated source code in any language" <<component>> as program_source 
+  program_call -RIGHT->> program_source : **is translated to**\n//<size:12>[program_processors.gtfn.gtfn_module]</size>//
+
+  rectangle "==Bindings Source\n//<size:12>[Stage]</size>//\n\n Bindings for calling Program Source from another language (typically from Python)" <<component>> as bindings_source 
+  program_source -RIGHT->> bindings_source <<optional>> : **is used to generate**\n//<size:12>[otf.binding.pybind.bind_source()]</size>//
+
+  rectangle "==Compilable Source\n//<size:12>[Stage]</size>//\n\n Compilable package of Program Source and optionally Bindings Source" <<component>> as compilable_source 
+  program_source - ->> compilable_source : **is added to**\n//<size:12>[otf.binding.pybind.bind_source()]</size>//
+  bindings_source - ->> compilable_source <<optional>> : **is added to**\n//<size:12>[otf.binding.pybind.bind_source()]</size>//
+
+}
+
+  rectangle "==Compiled Program\n//<size:12>[Stage]</size>//\n\n Python callable program" <<component>> as compiled_program 
+  compilable_source -RIGHT->> compiled_program : **is compiled to**\n//<size:12>[otf.compilation.compiler.Compiler]</size>//
+  inputs - ->> compiled_program : **are passed into**
+
+}
+
+@enduml
+
+PlantUML version 1.2022.12(Sun Oct 23 20:12:26 CEST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: GB
+--></g></svg>
