@@ -19,6 +19,8 @@ import functools
 import typing
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
+from typing_extensions import Self
+
 
 StartT = TypeVar("StartT")
 StartT_contra = TypeVar("StartT_contra", contravariant=True)
@@ -63,16 +65,14 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
         ...
 
 
-class ReplaceEnabledWorkflowMixin(Workflow[StartT, EndT]):
+class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
     """
     Subworkflow replacement mixin.
 
     Any subclass MUST be a dataclass for `.replace` to work
     """
 
-    def replace(
-        self: ReplaceEnabledWorkflowMixin[StartT, EndT], **kwargs: Any
-    ) -> ReplaceEnabledWorkflowMixin[StartT, EndT]:
+    def replace(self, **kwargs: Any) -> Self:
         """
         Build a new instance with replaced substeps.
 
