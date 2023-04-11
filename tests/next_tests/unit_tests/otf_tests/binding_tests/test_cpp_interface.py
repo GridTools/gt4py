@@ -107,3 +107,54 @@ def test_render_function_call_buffer(function_buffer_example):
     )
     expected = format_source("cpp", """example(get_arg_1(), get_arg_2())""", style="LLVM")
     assert rendered == expected
+
+
+@pytest.fixture
+def function_tuple_example():
+    return interface.Function(
+        name="example",
+        parameters=[
+            interface.Parameter(
+                name="a_buf",
+                type_=ts.TupleType(
+                    types=[
+                        ts.FieldType(
+                            dims=[Dimension("foo"), Dimension("bar")],
+                            dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
+                        ),
+                        ts.FieldType(
+                            dims=[Dimension("foo"), Dimension("bar")],
+                            dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
+                        ),
+                    ]
+                ),
+            )
+        ],
+    )
+
+
+def test_render_function_declaration_tuple(function_tuple_example):
+    rendered = format_source(
+        "cpp", cpp.render_function_declaration(function_tuple_example, "return;"), style="LLVM"
+    )
+    expected = format_source(
+        "cpp",
+        """\
+    template <class BufferT0>
+    decltype(auto) example(BufferT0&& a_buf) {
+        return;
+    }\
+    """,
+        style="LLVM",
+    )
+    assert rendered == expected
+
+
+def test_render_function_call_tuple(function_tuple_example):
+    rendered = format_source(
+        "cpp",
+        cpp.render_function_call(function_tuple_example, args=["get_arg_1()"]),
+        style="LLVM",
+    )
+    expected = format_source("cpp", """example(get_arg_1())""", style="LLVM")
+    assert rendered == expected
