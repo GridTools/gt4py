@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, Union, no_type_check
 
+from typing import Any, Generic, TypeVar, Union, no_type_check
+
 from eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from eve.traits import SymbolTableTrait
 from eve.type_definitions import StrEnum

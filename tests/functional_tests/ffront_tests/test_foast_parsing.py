@@ -131,7 +131,7 @@ def test_invalid_syntax_no_return():
 
     with pytest.raises(
         FieldOperatorSyntaxError,
-        match="Function must return a value, but no unconditional return statement was found\.",
+        match="Function must return a value, but no return statement was found\.",
     ):
         _ = FieldOperatorParser.apply_to_function(no_return)
 

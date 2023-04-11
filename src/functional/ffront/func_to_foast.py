@@ -175,8 +175,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         if deduce_stmt_return_kind(new_body) != StmtReturnKind.UNCONDITIONAL_RETURN:
             raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg="Function must return a value, but no unconditional return statement was found.",
+                node, msg="Function must return a value, but no return statement was found."
             )
 
         return foast.FunctionDefinition(

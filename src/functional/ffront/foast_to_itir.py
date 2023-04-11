@@ -158,7 +158,7 @@ class FieldOperatorLowering(NodeTranslator):
     [Sym(id=SymbolName('inp'))]
     """
 
-    uid_generator: UIDGenerator
+    uid_generator: UIDGenerator  # TODO(tehrengruber): add default factory
 
     class lifted_lambda:
         def __init__(self, *params):
