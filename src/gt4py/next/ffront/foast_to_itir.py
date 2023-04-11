@@ -59,7 +59,7 @@ class FieldOperatorLowering(NodeTranslator):
     >>> lowered.id
     SymbolName('fieldop')
     >>> lowered.params
-    [Sym(id=SymbolName('inp'))]
+    [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
     @classmethod
