@@ -97,18 +97,50 @@ def test_unstructured_shift(reduction_setup, fieldview_backend):
     Edge = reduction_setup.Edge
     E2V = reduction_setup.E2V
 
-    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    a = np_as_located_field(Vertex)(np.arange(0, reduction_setup.num_vertices, dtype=np.float64))
     b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
 
     @field_operator(backend=fieldview_backend)
-    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+    def shift_unstructured(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
         return inp(E2V[0])
 
-    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+    shift_unstructured(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
 
     ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
 
     assert np.allclose(b, ref)
+
+
+def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
+    Cell = reduction_setup.Cell
+    Edge = reduction_setup.Edge
+    Vertex = reduction_setup.Vertex
+    E2V = reduction_setup.E2V
+    C2E = reduction_setup.C2E
+    e2v_table = reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]
+    c2e_table = reduction_setup.offset_provider["C2E"].table[slice(0, None), 0]
+
+    a = np_as_located_field(Vertex)(np.arange(0, reduction_setup.num_vertices, dtype=np.float64))
+    b = np_as_located_field(Cell)(np.zeros(reduction_setup.num_cells))
+
+    @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured_flat(inp: Field[[Vertex], float64]) -> Field[[Cell], float64]:
+        return inp(E2V[0])(C2E[0])
+
+    @field_operator(backend=fieldview_backend)
+    def shift_e2v(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured(inp: Field[[Vertex], float64]) -> Field[[Cell], float64]:
+        return shift_e2v(inp)(C2E[0])
+
+    ref = np.asarray(a)[e2v_table][c2e_table]
+
+    for field_op in [composed_shift_unstructured_flat, composed_shift_unstructured]:
+        field_op(a, out=b, offset_provider=reduction_setup.offset_provider)
+
+        assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
