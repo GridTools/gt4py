@@ -95,7 +95,7 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     in_array = np.random.default_rng().uniform(low=-1, high=1, size=rs.v2e_table.shape)
     in_field = np_as_located_field(Vertex, V2EDim)(in_array)
     out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices))
