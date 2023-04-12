@@ -93,8 +93,6 @@ def test_cartesian_shift(fieldview_backend):
 
 
 def test_unstructured_shift(reduction_setup, fieldview_backend):
-    Vertex = reduction_setup.Vertex
-    Edge = reduction_setup.Edge
     E2V = reduction_setup.E2V
 
     a = np_as_located_field(Vertex)(np.arange(0, reduction_setup.num_vertices, dtype=np.float64))
@@ -112,9 +110,6 @@ def test_unstructured_shift(reduction_setup, fieldview_backend):
 
 
 def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
-    Cell = reduction_setup.Cell
-    Edge = reduction_setup.Edge
-    Vertex = reduction_setup.Vertex
     E2V = reduction_setup.E2V
     C2E = reduction_setup.C2E
     e2v_table = reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]
@@ -128,6 +123,13 @@ def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
         return inp(E2V[0])(C2E[0])
 
     @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured_intermediate_result(
+        inp: Field[[Vertex], float64]
+    ) -> Field[[Cell], float64]:
+        tmp = inp(E2V[0])
+        return tmp(C2E[0])
+
+    @field_operator(backend=fieldview_backend)
     def shift_e2v(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
         return inp(E2V[0])
 
@@ -137,7 +139,11 @@ def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
 
     ref = np.asarray(a)[e2v_table][c2e_table]
 
-    for field_op in [composed_shift_unstructured_flat, composed_shift_unstructured]:
+    for field_op in [
+        composed_shift_unstructured_flat,
+        composed_shift_unstructured_intermediate_result,
+        composed_shift_unstructured,
+    ]:
         field_op(a, out=b, offset_provider=reduction_setup.offset_provider)
 
         assert np.allclose(b, ref)
