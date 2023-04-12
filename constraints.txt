@@ -70,7 +70,7 @@ jsonschema==4.17.3        # via nbformat
 jupyter-core==5.3.0       # via nbformat
 jupytext==1.14.5          # via -r requirements-dev.in
 lark==1.1.5               # via gt4py (pyproject.toml)
-mako==1.2.4               # via gt4py (pyproject.toml)
+mako==1.2.2               # via gt4py (pyproject.toml)
 markdown-it-py==2.2.0     # via jupytext, mdit-py-plugins
 markupsafe==2.1.2         # via jinja2, mako, werkzeug
 mccabe==0.7.0             # via flake8
