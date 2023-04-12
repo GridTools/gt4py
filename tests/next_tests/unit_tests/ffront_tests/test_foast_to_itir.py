@@ -111,7 +111,7 @@ def test_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.shift_("Ioff", 1)("inp")
+    reference = im.lift_(im.lambda__("it")(im.deref_(im.shift_("Ioff", 1)("it"))))("inp")
 
     assert lowered.expr == reference
 
@@ -125,7 +125,7 @@ def test_negative_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.shift_("Ioff", -1)("inp")
+    reference = im.lift_(im.lambda__("it")(im.deref_(im.shift_("Ioff", -1)("it"))))("inp")
 
     assert lowered.expr == reference
 
