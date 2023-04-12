@@ -1,6 +1,6 @@
-# GT4Py Project - GridTools Framework
+# GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations
 
 import dataclasses
@@ -47,8 +48,7 @@ def no_backend(*args, **kwargs) -> None:
 @dataclasses.dataclass
 class FieldBuilder:
     backend: ppi.ProgramProcessor
-    fieldop: decorator.FieldOperator
-    name: str
+    ftype: ts.FieldType
     shape: tuple[int, int, int] = (10, 10, 10)
     _dtype: str = int
 
@@ -71,23 +71,23 @@ class FieldBuilder:
         )
 
     def size(self, size: int) -> Self:
-        return self.__class__(self.backend, self.fieldop, self.name, (size, size, size))
+        return self.__class__(self.backend, self.ftype, (size, size, size), self.dtype)
 
     def dtype(self, dtype: str) -> Self:
-        return self.__class__(self.backend, self.fieldop, self.name, self.shape, dtype)
+        return self.__class__(self.backend, self.ftype, self.shape, dtype)
 
     @property
     def dims(self) -> tuple[fbuiltins.Dimension]:
-        if self.name == "out":
-            my_type = self.fieldop.foast_node.definition.body.stmts[-1].value.type
-        else:
-            params = {
-                str(param.id): param.type for param in self.fieldop.foast_node.definition.params
-            }
-            my_type = params[self.name]
-        if not isinstance(my_type, ts.FieldType):
-            raise TypeError("Can not allocate non-field argument!")
-        return my_type.dims
+        #  if self.name == "out":
+        #      my_type = self.fieldop.foast_node.definition.body.stmts[-1].value.type
+        #  else:
+        #      params = {
+        #          str(param.id): param.type for param in self.fieldop.foast_node.definition.params
+        #      }
+        #      my_type = params[self.name]
+        #  if not isinstance(my_type, ts.FieldType):
+        #      raise TypeError("Can not allocate non-field argument!")
+        return self.ftype.dims
 
     @property
     def effective_shape(self):
@@ -104,18 +104,65 @@ class FieldBuilder:
         return i
 
     def ij_defaults(self, i: int, j: int) -> int:
-        return self.i_defaults(i) + (self.size[0] * j)
+        return self.i_defaults(i) + (self.shape[0] * j)
 
     def ijk_defaults(self, i: int, j: int, k: int) -> int:
-        return self.ij_defaults(i, j) + (self.size[0] * self.size[1] * k)
+        return self.ij_defaults(i, j) + (self.shape[0] * self.shape[1] * k)
+
+
+@dataclasses.dataclass
+class FieldTupleBuilder:
+    field_builders: tuple[FieldBuilder, ...]
+
+    def zeros(self) -> tuple[fbuiltins.Field, ...]:
+        return tuple(fb.zeros() for fb in self.field_builders)
+
+    def default(self) -> tuple[fbuiltins.Field, ...]:
+        return tuple(fb.default() for fb in self.field_builders)
+
+    def size(self, size: int) -> Self:
+        return self.__class__((fb.size(size) for fb in self.field_builders))
+
+    def dtype(self, dtype: str) -> Self:
+        return self.__class__((fb.dtype(dtype) for fb in self.field_builders))
 
 
 @dataclasses.dataclass
 class CartesianCase:
     backend: ppi.ProgramProcessor
 
-    def allocate(self, fieldop: decorator.FieldOperator, name: str) -> FieldBuilder:
-        return FieldBuilder(self.backend, fieldop, name)
+    def allocate(
+        self, fieldop: decorator.FieldOperator, name: str
+    ) -> FieldBuilder | FieldTupleBuilder:
+        arg_type = (
+            fieldop.foast_node.definition.body.stmts[-1].value.type
+            if name == "out"
+            else {str(param.id): param.type for param in fieldop.foast_node.definition.params}[name]
+        )
+        return self._allocate_for(arg_type)
+
+    def _allocate_for(
+        self, arg_type: ts.FieldType | ts.TupleType
+    ) -> FieldBuilder | FieldTupleBuilder:
+        match arg_type:
+            case ts.FieldType():
+                return FieldBuilder(self.backend, arg_type)
+            case ts.TupleType():
+                return FieldTupleBuilder((self._allocate_for(t) for t in arg_type.types))
+            case _:
+                raise TypeError(f"Can not allocate for type {arg_type}")
+
+    def verify(
+        self,
+        fieldop: decorator.FieldOperator,
+        *args: fbuiltins.Field,
+        out: fbuiltins.Field,
+        ref: fbuiltins.Field,
+        offset_provider={},
+    ) -> None:
+        fieldop.with_backend(self.backend)(*args, out=out, offset_provider=offset_provider)
+
+        assert np.allclose(ref, out)
 
 
 @pytest.fixture

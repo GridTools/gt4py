@@ -38,46 +38,37 @@ from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 from next_tests.integration_tests.feature_tests import cases
+from next_tests.integration_tests.feature_tests.cases import cartesian_case
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
-def test_copy(fieldview_backend):
-    case = cases.CartesianCase(fieldview_backend)
-    # a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    # b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-
-    @field_operator(backend=fieldview_backend)
-    def copy(inp: cases.IField) -> cases.IField:
+def test_copy(cartesian_case):
+    @field_operator
+    def copy(inp: cases.IJKField) -> cases.IJKField:
         field_tuple = (inp, inp)
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
 
-    a_I_float = case.allocate(copy, "inp").default()
-    b_I_float = case.allocate(copy, "out").zeros()
+    inp = cartesian_case.allocate(copy, "inp").default()
+    out = cartesian_case.allocate(copy, "out").zeros()
 
-    copy(a_I_float, out=b_I_float, offset_provider={})
-
-    assert np.allclose(a_I_float, b_I_float)
+    cartesian_case.verify(copy, inp, out=out, ref=inp)
 
 
-def test_multicopy(fieldview_backend):
-    inp0 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float32"))
-    out0 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
-    out1 = np_as_located_field(IDim)(np.zeros((size), dtype=float32))
-
-    @field_operator(backend=fieldview_backend)
+def test_multicopy(cartesian_case):
+    @field_operator
     def multicopy(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float32]
-    ) -> tuple[Field[[IDim], float64], Field[[IDim], float32]]:
+        inp1: cases.IJKField, inp2: cases.IJKField
+    ) -> tuple[cases.IJKField, cases.IJKField]:
         return inp1, inp2
 
-    multicopy(inp0, inp1, out=(out0, out1), offset_provider={})
+    inp1 = cartesian_case.allocate(multicopy, "inp1").default()
+    inp2 = cartesian_case.allocate(multicopy, "inp2").default()
+    out = cartesian_case.allocate(multicopy, "out").zeros()
 
-    assert np.allclose(inp0, out0)
-    assert np.allclose(inp1, out1)
+    cartesian_case.verify(multicopy, inp1, inp2, out=out, ref=tuple(inp1, inp2))
 
 
 def test_cartesian_shift(fieldview_backend):
