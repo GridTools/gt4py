@@ -77,6 +77,7 @@ cuda117 = ["cupy-cuda117"]
 cuda11x = ["cupy-cuda11x"]
 dace = ["dace>=0.14.2,<0.15", "sympy>=1.7"]
 formatting = ["clang-format>=9.0"]
+# Always add all extra packages to 'full' for a simple full gt4py installation
 full = [
   "clang-format>=9.0",
   "dace>=0.14.2,<0.15",
