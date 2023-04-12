@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import dataclasses
 from typing import Any, Final, TypeVar
 
@@ -37,6 +39,10 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
+    workflow.ChainableWorkflowMixin[
+        stages.ProgramCall,
+        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+    ],
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
@@ -181,18 +187,6 @@ class GTFNTranslationStep(
             language_settings=self.language_settings,
         )
         return module
-
-    def chain(
-        self,
-        step: workflow.Workflow[
-            stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings], T
-        ],
-    ) -> workflow.CombinedStep[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-        T,
-    ]:
-        return workflow.CombinedStep(first=self, second=step)
 
 
 translate_program: Final[

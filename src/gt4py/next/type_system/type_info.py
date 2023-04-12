@@ -18,7 +18,7 @@ from typing import Callable, Iterator, Type, TypeGuard, cast
 import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next.common import Dimension, DimensionKind, GTTypeError
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -241,7 +241,7 @@ def arithmetic_bounds(arithmetic_type: ts.ScalarType):
 
 def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> bool:
     """
-    Return True if ``type_`` matches any of the expected.
+    Return True if ``type_`` matches any of the expected or is a tuple of them.
 
     Examples:
     ---------
@@ -257,6 +257,26 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
     False
     """
     return all(isinstance(t, expected_type) for t in primitive_constituents(type_))
+
+
+def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGuard[ts.TupleType]:
+    """
+    Return True if ``type_`` matches (nested) tuple of ``expected_type``.
+
+    Examples:
+    ---------
+    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
+    >>> is_tuple_of_type(field_type, ts.FieldType)
+    False
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType))
+    True
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type]), ts.FieldType)
+    False
+    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), ts.FieldType)
+    False
+    """
+    return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
 
 def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
@@ -280,6 +300,29 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
         case ts.FieldType(dims):
             return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
+
+
+def is_local_field(type_: ts.FieldType) -> bool:
+    """
+    Return if `type_` is a field defined on a local dimension.
+
+    Examples:
+    ---------
+    >>> V = Dimension(value="V")
+    >>> V2E = Dimension(value="V2E", kind=DimensionKind.LOCAL)
+    >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+    True
+    >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+    False
+    """
+    return any(dim.kind == DimensionKind.LOCAL for dim in type_.dims)
+
+
+def contains_local_field(type_: ts.TypeSpec) -> bool:
+    """Return if primitive constitutens of `type_` contains a field defined on a local dimension."""
+    return any(
+        isinstance(t, ts.FieldType) and is_local_field(t) for t in primitive_constituents(type_)
+    )
 
 
 def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:

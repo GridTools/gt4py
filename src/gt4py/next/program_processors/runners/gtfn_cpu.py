@@ -12,34 +12,33 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import dataclasses
-from typing import Any, Callable, Final, Optional
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
-from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import languages, stages, workflow
+from gt4py.next.otf import languages, recipes, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, pybind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.otf.workflow import CachedStep
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    if isinstance(arg, tuple):
+        return tuple(convert_arg(a) for a in arg)
     if hasattr(arg, "__array__"):
         return np.asarray(arg)
     else:
         return arg
 
 
-def convert_args(inp: Callable) -> Callable:
+def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
@@ -88,69 +87,39 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class GTFNExecutor(ppi.ProgramExecutor):
-    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
-    builder_factory: compiler.BuildSystemProjectGenerator = compiledb.CompiledbFactory()
-
-    name: Optional[str] = None
-    enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
-    use_imperative_backend: bool = False
-
-    # TODO(tehrengruber): Revisit default value. The hash function for the caching currently
-    #  only uses a subset of the closure and implicitly relies on the workflow to only use that
-    #  information. As this is dangerous the caching is disabled by default and should be considered
-    #  experimental.
-    use_caching: bool = False
-    caching_strategy = cache.Strategy.SESSION
-
-    _otf_workflow: workflow.Workflow[
-        stages.ProgramCall, stages.CompiledProgram
-    ] = dataclasses.field(repr=False, init=False)
-
-    def __post_init__(self):
-        # TODO(tehrengruber): Restrict arguments of OTF workflow to the parts it actually needs
-        #  to compile the program instead of the entire closure.
-        otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram] = (
-            gtfn_module.GTFNTranslationStep(
-                self.language_settings, self.enable_itir_transforms, self.use_imperative_backend
-            )
-            .chain(pybind.bind_source)
-            .chain(
-                compiler.Compiler(
-                    cache_strategy=self.caching_strategy, builder_factory=self.builder_factory
-                )
-            )
-            .chain(convert_args)
-        )
-
-        if self.use_caching:
-            otf_workflow = CachedStep(step=otf_workflow, hash_function=compilation_hash)
-
-        super().__setattr__("_otf_workflow", otf_workflow)
-
-    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-        """
-        Execute the iterator IR program with the provided arguments.
-
-        The program is compiled to machine code with C++ as an intermediate step,
-        so the first execution is expected to have a significant overhead, while subsequent
-        calls are very fast. Only scalar and buffer arguments are supported currently.
-
-        See ``ProgramExecutorFunction`` for details.
-        """
-        compiled_runner = self._otf_workflow(stages.ProgramCall(program, args, kwargs))
-
-        return compiled_runner(*args, offset_provider=kwargs["offset_provider"])
-
-    @property
-    def __name__(self) -> str:
-        return self.name or repr(self)
-
-
-run_gtfn: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
-    name="run_gtfn", use_imperative_backend=False
+GTFN_DEFAULT_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
+    cpp_interface.CPP_DEFAULT, enable_itir_transforms=True, use_imperative_backend=False
 )
-run_gtfn_imperative: Final[ppi.ProgramProcessor[None, ppi.ProgramExecutor]] = GTFNExecutor(
-    name="run_gtfn_imperative", use_imperative_backend=True
+
+GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
+    cache_strategy=cache.Strategy.SESSION, builder_factory=compiledb.CompiledbFactory()
 )
+
+
+GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
+    translation=GTFN_DEFAULT_TRANSLATION_STEP,
+    bindings=pybind.bind_source,
+    compilation=GTFN_DEFAULT_COMPILE_STEP,
+    decoration=convert_args,
+)
+
+
+run_gtfn = otf_compile_executor.OTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW)
+
+run_gtfn_imperative = otf_compile_executor.OTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](
+    name="run_gtfn_imperative",
+    otf_workflow=run_gtfn.otf_workflow.replace(
+        translation=run_gtfn.otf_workflow.translation.replace(use_imperative_backend=True),
+    ),
+)
+
+run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](
+    name="run_gtfn_cached",
+    otf_workflow=workflow.CachedStep(step=run_gtfn.otf_workflow, hash_function=compilation_hash),
+)  # todo(ricoh): add API for converting an executor to a cached version of itself and vice versa

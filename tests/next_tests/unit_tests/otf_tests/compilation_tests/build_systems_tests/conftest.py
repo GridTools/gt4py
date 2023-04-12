@@ -36,6 +36,21 @@ def make_program_source(name: str) -> stages.ProgramSource:
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                 ),
             ),
+            interface.Parameter(
+                name="tup",
+                type_=ts.TupleType(
+                    types=[
+                        ts.FieldType(
+                            dims=[common.Dimension("I"), common.Dimension("J")],
+                            dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
+                        ),
+                        ts.FieldType(
+                            dims=[common.Dimension("I"), common.Dimension("J")],
+                            dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
+                        ),
+                    ]
+                ),
+            ),
             interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
         ],
     )

@@ -27,20 +27,36 @@ def test_bindings(program_source_example):
         #include "stencil.cpp.inc"
 
         #include <gridtools/common/defs.hpp>
+        #include <gridtools/common/tuple_util.hpp>
         #include <gridtools/fn/backend/naive.hpp>
         #include <gridtools/fn/cartesian.hpp>
         #include <gridtools/fn/unstructured.hpp>
+        #include <gridtools/sid/composite.hpp>
         #include <gridtools/sid/rename_dimensions.hpp>
         #include <gridtools/sid/unknown_kind.hpp>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
 
-        decltype(auto) stencil_wrapper(pybind11::buffer buf, float sc) {
+        decltype(auto)
+        stencil_wrapper(pybind11::buffer buf,
+                        std::tuple<pybind11::buffer, pybind11::buffer> tup, float sc) {
           return stencil(
               gridtools::sid::rename_numbered_dimensions<generated::I_t,
-                                                         generated::J_t>(
-                  gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(buf)), sc);
+                                                        generated::J_t>(
+                  gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(buf)),
+              gridtools::sid::composite::keys<gridtools::integral_constant<int, 0>,
+                                              gridtools::integral_constant<int, 1>>::
+                  make_values(
+                      gridtools::sid::rename_numbered_dimensions<generated::I_t,
+                                                                generated::J_t>(
+                          gridtools::as_sid<
+                              float, 2, gridtools::sid::unknown_kind>(gridtools::tuple_util::get<0>(tup))),
+                      gridtools::sid::rename_numbered_dimensions<generated::I_t,
+                                                                generated::J_t>(
+                          gridtools::as_sid<
+                              float, 2, gridtools::sid::unknown_kind>(gridtools::tuple_util::get<1>(tup)))),
+              sc);
         }
 
         PYBIND11_MODULE(stencil, module) {

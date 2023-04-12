@@ -14,9 +14,9 @@
 
 from typing import Final, Sequence
 
-import gt4py.next.type_system.type_specifications as ts
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
+from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
@@ -52,7 +52,9 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
 def _render_function_param(param: interface.Parameter, index: int) -> str:
     if isinstance(param.type_, ts.ScalarType):
         return f"{render_scalar_type(param.type_)} {param.name}"
-    elif isinstance(param.type_, ts.FieldType):
+    elif ti.is_type_or_tuple_of_type(
+        param.type_, ts.FieldType
+    ):  # TODO(havogt): add support for scalar tuples
         return f"BufferT{index}&& {param.name}"
     else:
         raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
@@ -68,7 +70,9 @@ def render_function_declaration(function: interface.Function, body: str) -> str:
     template_params = [
         f"class BufferT{index}"
         for index, param in enumerate(function.parameters)
-        if isinstance(param.type_, ts.FieldType)
+        if ti.is_type_or_tuple_of_type(
+            param.type_, ts.FieldType
+        )  # TODO(havogt): add support for scalar tuples
     ]
     if template_params:
         return f"""
