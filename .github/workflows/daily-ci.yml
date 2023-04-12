@@ -5,9 +5,9 @@ on:
   - cron: '0 4 * * *'
 
   ## COMMENTED OUT: only for testing CI action changes
-  pull_request:
-    branches:
-    - main
+  # pull_request:
+  #   branches:
+  #   - main
   ## END
 
 jobs:
