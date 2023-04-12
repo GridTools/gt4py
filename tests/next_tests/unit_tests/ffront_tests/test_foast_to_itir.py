@@ -36,6 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -145,8 +146,12 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp__0", "inp")(
-        im.let("inp__0", "tmp__0")(im.let("tmp2__0", "inp__0")("tmp2__0"))
+    reference = im.let(itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"), "inp")(
+        im.let(itir.Sym(id="inp__0", dtype=("float64", False), kind="Iterator"), "tmp__0")(
+            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), "inp__0")(
+                "tmp2__0"
+            )
+        )
     )
 
     assert lowered.expr == reference
@@ -162,13 +167,13 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        "tmp__0",
+        itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"),
         im.promote_to_lifted_stencil("plus")(
             im.promote_to_const_iterator(im.literal_("0", "float64")), "inp"
         ),
     )(
         im.let(
-            "tmp__1",
+            itir.Sym(id="tmp__1", dtype=("float64", False), kind="Iterator"),
             im.promote_to_lifted_stencil("minus")(
                 im.promote_to_const_iterator(im.literal_("0", "float64")), "tmp__0"
             ),
@@ -195,7 +200,11 @@ def test_unpacking():
     tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get_(1, x))("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
-        im.let("tmp1__0", tuple_access_0)(im.let("tmp2__0", tuple_access_1)("tmp1__0"))
+        im.let(itir.Sym(id="tmp1__0", dtype=("float64", False), kind="Iterator"), tuple_access_0)(
+            im.let(
+                itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), tuple_access_1
+            )("tmp1__0")
+        )
     )
 
     assert lowered.expr == reference
@@ -489,7 +498,10 @@ def test_reduction_lowering_expr():
         im.promote_to_lifted_stencil(im.map__("plus"))("e1_nbh__0", "e2"),
     )
 
-    reference = im.let("e1_nbh__0", im.lifted_neighbors("V2E", "e1"))(
+    reference = im.let(
+        itir.Sym(id="e1_nbh__0", dtype=("float64", True), kind="Iterator"),
+        im.lifted_neighbors("V2E", "e1"),
+    )(
         im.promote_to_lifted_stencil(
             im.call_(
                 im.call_("reduce")(
