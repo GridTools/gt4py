@@ -79,8 +79,9 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         Raises:
             TypeError: If `self` is not a dataclass.
         """
-        if not dataclasses.is_dataclass(self.__class__):
+        if not dataclasses.is_dataclass(self):
             raise TypeError(f"{self.__class__} is not a dataclass")
+        assert not isinstance(self, type)
         return dataclasses.replace(self, **kwargs)
 
 
