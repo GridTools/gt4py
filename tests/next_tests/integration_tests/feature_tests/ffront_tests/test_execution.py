@@ -435,8 +435,6 @@ def test_nested_tuple_return(fieldview_backend):
 
 def test_nested_reduction(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
     V2E = rs.V2E
@@ -458,8 +456,6 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
 @pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
     V2E = rs.V2E
@@ -481,8 +477,6 @@ def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
 
 def test_tuple_return_2(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
@@ -508,8 +502,6 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
 @pytest.mark.xfail
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
     E2V = rs.E2V
@@ -679,8 +671,6 @@ def test_ternary_operator_tuple(left, right, fieldview_backend):
 
 def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
