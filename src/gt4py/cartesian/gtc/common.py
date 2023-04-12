@@ -821,7 +821,7 @@ def data_type_to_typestr(dtype: DataType) -> str:
     return np.dtype(table[dtype]).str
 
 
-# This is a mapping of mappings instead of a single table because
+# This is a mapping of mappings instead of a flat mapping because
 # different operators use the same key: UnaryOperator.POS == BinaryOperator.ADD
 OP_TO_UFUNC_NAME: Final[
     Mapping[
