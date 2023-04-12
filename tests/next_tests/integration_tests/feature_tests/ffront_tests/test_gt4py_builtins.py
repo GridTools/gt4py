@@ -35,7 +35,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
@@ -76,7 +76,7 @@ def test_minover_execution(reduction_setup, fieldview_backend):
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
@@ -135,7 +135,7 @@ def test_reduction_execution_nb(reduction_setup, fieldview_backend):
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     nb_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
@@ -154,7 +154,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
         pytest.skip("Has a bug.")
 
     rs = reduction_setup
-    V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
+    V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @field_operator
     def reduce_expr(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
