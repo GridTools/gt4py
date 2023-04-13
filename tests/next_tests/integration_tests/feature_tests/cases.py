@@ -40,7 +40,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 IField: TypeAlias = fbuiltins.Field[[IDim], int]
 IJKField: TypeAlias = fbuiltins.Field[[IDim, JDim, KDim], int]
 
-
 def no_backend(*args, **kwargs) -> None:
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
@@ -112,7 +111,9 @@ class FieldBuilder:
 
 @dataclasses.dataclass
 class FieldTupleBuilder:
-    field_builders: tuple[FieldBuilder, ...]
+    field_builders: tuple[FieldBuilder | FieldTupleBuilder, ...]
+
+    # TODO: make "generic" forwarder?
 
     def zeros(self) -> tuple[fbuiltins.Field, ...]:
         return tuple(fb.zeros() for fb in self.field_builders)
@@ -127,47 +128,54 @@ class FieldTupleBuilder:
         return self.__class__((fb.dtype(dtype) for fb in self.field_builders))
 
 
+def verify(
+    case: CartesianCase,
+    fieldop: decorator.FieldOperator,
+    *args: fbuiltins.Field,
+    out: fbuiltins.Field,  # TODO: make optional
+    ref: fbuiltins.Field,
+    offset_provider: dict[str, common.Connectivty | common.Dimension] = None,
+) -> None:
+    if not offset_provider:
+        offset_provider = case.offset_provider
+    fieldop.with_backend(case.backend)(*args, out=out, offset_provider=case.offset_provider)
+
+    assert np.allclose(ref, out)
+
+
+def allocate(case: CartesianCase, fieldop: decorator.FieldOperator, name: str) -> FieldBuilder | FieldTupleBuilder:
+    # TODO: generalize to program
+    arg_type = (
+        fieldop.foast_node.type.definition.returns
+        if name == "out"
+        else {str(param.id): param.type for param in fieldop.foast_node.definition.params}[name]
+    )
+    return _allocate_for(case, arg_type)
+
+
+def _allocate_for(case: CartesianCase,
+    arg_type: ts.FieldType | ts.TupleType
+) -> FieldBuilder | FieldTupleBuilder:
+    match arg_type:
+        case ts.FieldType():
+            return FieldBuilder(case.backend, arg_type)
+        case ts.TupleType():
+            return FieldTupleBuilder((_allocate_for(case, t) for t in arg_type.types))
+        case _:
+            raise TypeError(f"Can not allocate for type {arg_type}")
+
+
 @dataclasses.dataclass
 class CartesianCase:
     backend: ppi.ProgramProcessor
-
-    def allocate(
-        self, fieldop: decorator.FieldOperator, name: str
-    ) -> FieldBuilder | FieldTupleBuilder:
-        arg_type = (
-            fieldop.foast_node.definition.body.stmts[-1].value.type
-            if name == "out"
-            else {str(param.id): param.type for param in fieldop.foast_node.definition.params}[name]
-        )
-        return self._allocate_for(arg_type)
-
-    def _allocate_for(
-        self, arg_type: ts.FieldType | ts.TupleType
-    ) -> FieldBuilder | FieldTupleBuilder:
-        match arg_type:
-            case ts.FieldType():
-                return FieldBuilder(self.backend, arg_type)
-            case ts.TupleType():
-                return FieldTupleBuilder((self._allocate_for(t) for t in arg_type.types))
-            case _:
-                raise TypeError(f"Can not allocate for type {arg_type}")
-
-    def verify(
-        self,
-        fieldop: decorator.FieldOperator,
-        *args: fbuiltins.Field,
-        out: fbuiltins.Field,
-        ref: fbuiltins.Field,
-        offset_provider={},
-    ) -> None:
-        fieldop.with_backend(self.backend)(*args, out=out, offset_provider=offset_provider)
-
-        assert np.allclose(ref, out)
+    # default offset provider for verify
+    offset_provider: dict[str, common.Connectivty | common.Dimension]
+    default_size: dict[Dimension, int]
 
 
 @pytest.fixture
 def cartesian_case(fieldview_backend):  # noqa: F811 # fixture
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
-    yield CartesianCase(fieldview_backend)
+    yield CartesianCase(fieldview_backend, offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim})
     decorator.DEFAULT_BACKEND = backup_backend

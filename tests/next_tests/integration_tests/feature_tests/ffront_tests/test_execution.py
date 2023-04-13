@@ -39,7 +39,7 @@ from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import cartesian_case
+from next_tests.integration_tests.feature_tests.cases import cartesian_case, verify, allocate
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
@@ -51,10 +51,10 @@ def test_copy(cartesian_case):
         field_1 = field_tuple[1]
         return field_0
 
-    inp = cartesian_case.allocate(copy, "inp").default()
-    out = cartesian_case.allocate(copy, "out").zeros()
+    inp = allocate(cartesian_case, copy, "inp").default()
+    out = allocate(cartesian_case, copy, "out").zeros()
 
-    cartesian_case.verify(copy, inp, out=out, ref=inp)
+    verify(cartesian_case, copy, inp, out=out, ref=inp)
 
 
 def test_multicopy(cartesian_case):
