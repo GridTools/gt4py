@@ -68,7 +68,7 @@ def test_multicopy(cartesian_case):
     inp2 = cartesian_case.allocate(multicopy, "inp2").default()
     out = cartesian_case.allocate(multicopy, "out").zeros()
 
-    cartesian_case.verify(multicopy, inp1, inp2, out=out, ref=tuple(inp1, inp2))
+    cartesian_case.verify(multicopy, inp1, inp2, out=out, ref=(inp1, inp2))
 
 
 def test_cartesian_shift(fieldview_backend):
