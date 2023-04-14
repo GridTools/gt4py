@@ -40,6 +40,8 @@ class LazyStencil:
     def __init__(self, builder: "StencilBuilder"):
         self.builder = builder
         self.builder.caching.capture_externals()
+        if self.builder.options.build_async:
+            self.builder.build_async()
 
     @cached_property
     def implementation(self) -> "StencilObject":

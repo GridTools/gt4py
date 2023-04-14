@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Optional, Type, Union
 
 import numpy as np
 
@@ -403,6 +403,8 @@ def lazy_stencil(
         raise ValueError(f"Invalid 'rebuild' bool value ('{rebuild}')")
     if not isinstance(raise_if_not_cached, bool):
         raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
+    if not isinstance(eager, bool) and not (isinstance(eager, str) and eager == "async"):
+        raise ValueError(f"Invalid 'eager' value ('{eager}')")
 
     module = None
     if name:
@@ -437,6 +439,7 @@ def lazy_stencil(
         backend_opts=kwargs,
         build_info=build_info,
         impl_opts=_impl_opts,
+        build_async=(eager == "async"),
     )
 
     def _decorator(definition_func):
@@ -448,20 +451,19 @@ def lazy_stencil(
 
         if not build_options.name:
             build_options.name = f"{definition_func.__name__}"
+        builder = (
+            StencilBuilder(definition_func, backend=backend, options=build_options)
+            .with_externals(externals or {})
+            .with_dtypes(dtypes or {})
+        )
+
         if backend and "dace" in backend:
-            stencil = DaCeLazyStencil(
-                StencilBuilder(definition_func, backend=backend, options=build_options)
-                .with_externals(externals or {})
-                .with_dtypes(dtypes or {})
-            )
+            stencil = DaCeLazyStencil(builder)
 
         else:
-            stencil = LazyStencil(
-                StencilBuilder(definition_func, backend=backend, options=build_options)
-                .with_externals(externals or {})
-                .with_dtypes(dtypes or {})
-            )
-        if eager:
+            stencil = LazyStencil(builder)
+
+        if eager == True:
             stencil = stencil.implementation
         elif check_syntax:
             stencil.check_syntax()
