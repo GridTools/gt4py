@@ -89,8 +89,7 @@ class GTFNTranslationStep(
             ):
                 # convert into sid
                 arg = f"gridtools::stencil::global_parameter({arg})"
-            else:
-                assert isinstance(parameter.type_, ts.FieldType)
+            elif isinstance(parameter.type_, ts.FieldType):
                 for dim in parameter.type_.dims:
                     if (
                         isinstance(dim, fbuiltins.FieldOffset)
