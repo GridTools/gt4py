@@ -25,7 +25,7 @@ from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend.gtscript_frontend import GTScriptDefinitionError
 from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 from gt4py.cartesian.lazy_stencil import LazyStencil
-from gt4py.cartesian.stencil_builder import FUTURES_REGISTRY, StencilBuilder
+from gt4py.cartesian.stencil_builder import FUTURES_REGISTRY, StencilBuilder, wait_all
 
 from ..definitions import ALL_BACKENDS
 
@@ -134,6 +134,18 @@ class TestAsyncConsistency:
             definition=copy_stencil_definition, backend="dace:cpu", rebuild=True, eager="async"
         )
         assert len(FUTURES_REGISTRY) == 2
+
+    def test_barrier(self, reset_async_executor):
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="gt:cpu_kfirst", rebuild=True, eager="async"
+        )
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="dace:cpu", rebuild=True, eager="async"
+        )
+
+        wait_all()
+
+        assert all(f.future.done() for f in FUTURES_REGISTRY.values())
 
 
 class TestAsyncTiming:

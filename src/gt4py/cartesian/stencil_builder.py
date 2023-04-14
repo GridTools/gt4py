@@ -34,10 +34,11 @@ def hashable_cache_info(cache_info: Dict[str, Hashable]) -> Tuple[Tuple[str, Has
     return tuple((k, v) for k, v in cache_info.items())
 
 
-def barrier():
+def wait_all():
     for f in FUTURES_REGISTRY.values():
         if f is not None:
-            f.result()
+            f.wait()
+            f.builder.build()()  # makes sure the load step is also executed
 
 
 if TYPE_CHECKING:
