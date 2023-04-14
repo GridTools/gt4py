@@ -80,7 +80,7 @@ class GTFNTranslationStep(
             parameter = get_param_description(program_param.id, obj)
             parameters.append(parameter)
 
-            arg = f"std::forward<decltype({parameter.name})>({parameter.name})"
+            arg = parameter.name
 
             # argument conversion expression
             if (
@@ -90,13 +90,13 @@ class GTFNTranslationStep(
                 # convert into sid
                 arg = f"gridtools::stencil::global_parameter({arg})"
             else:
-                # pass as is
                 assert isinstance(parameter.type_, ts.FieldType)
                 for dim in parameter.type_.dims:
                     if (
                         isinstance(dim, fbuiltins.FieldOffset)
                         or dim.kind == common.DimensionKind.LOCAL
                     ):
+                        # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
                         connectivity = offset_provider[dim_name]
                         assert isinstance(connectivity, Connectivity)

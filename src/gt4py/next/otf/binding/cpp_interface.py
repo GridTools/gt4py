@@ -55,7 +55,7 @@ def _render_function_param(param: interface.Parameter, index: int) -> str:
     elif ti.is_type_or_tuple_of_type(
         param.type_, ts.FieldType
     ):  # TODO(havogt): add support for scalar tuples
-        return f"BufferT{index}&& {param.name}"
+        return f"BufferT{index} {param.name}"  # should be perfect forwarding, but it's a cheap way to make non-copyable sids wrappable in dimension_to_tuple_lik
     else:
         raise ValueError(f"Type '{param.type_}' is not supported in C++ interfaces.")
 
