@@ -91,6 +91,7 @@ _MATH_BUILTINS_MAPPING = {
     "not_": "~{}",
 }
 
+
 @dataclasses.dataclass
 class ValueExpr:
     value: dace.nodes.AccessNode
@@ -103,10 +104,9 @@ class IteratorExpr:
 
 
 @dataclasses.dataclass
-class CallableSpec:
-    input_args: Sequence[dace.Memlet]
-    output_args: Sequence[dace.Memlet]
-    conn_args: Sequence[dace.Memlet]
+class Context:
+    body: dace.SDFG
+    state: dace.SDFGState
 
 
 def builtin_if(transformer: "PythonTaskletCodegen", node_args: list[itir.Expr]) -> list[ValueExpr]:
@@ -161,60 +161,59 @@ _GENERAL_BUILTIN_MAPPING: dict[
 
 
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
-    sdfg: Optional[dace.SDFG]
-    entry_state: Optional[dace.SDFGState]
     offset_provider: dict[str, Any]
     domain: dict[str, str]
-    input_args: Sequence[dace.Memlet]
-    output_args: Sequence[dace.Memlet]
-    conn_args: Sequence[dace.Memlet]
-    params: list[str]
-    results: list[str]
+    context: Context
 
     def __init__(
         self,
         offset_provider: dict[str, Any],
         domain: dict[str, str],
-        input_args: Sequence[dace.Memlet],
-        output_args: Sequence[dace.Memlet],
-        conn_args: Sequence[dace.Memlet],
     ):
-        self.sdfg = None
-        self.entry_state = None
         self.offset_provider = offset_provider
         self.domain = domain
-        self.input_args = input_args
-        self.output_args = output_args
-        self.conn_args = conn_args
 
     def visit_FunctionDefinition(self, node: itir.FunctionDefinition, **kwargs):
         raise NotImplementedError()
 
-    def visit_Lambda(self, node: itir.Lambda, **kwargs):
-        assert not self.sdfg
-
+    def visit_Lambda(self, node: itir.Lambda, args: Sequence[ValueExpr | IteratorExpr]):
         func_name = f"lambda_{abs(hash(node)):x}"
         param_names = [str(p.id) for p in node.params]
         result_names = [f"__result_{str(i)}" for i in range(len(self.output_args))]
         conn_names = [conn.data for conn in self.conn_args]
 
-        self.params = param_names
-        self.results = result_names
-
         # Create the SDFG for the function's body
-        self.sdfg = dace.SDFG(func_name)
-        self.entry_state = self.sdfg.add_state(f"{func_name}_entry", True)
+        prev_context = self.context
+        context_sdfg = dace.SDFG(func_name)
+        self.context = Context(
+            context_sdfg,
+            context_sdfg.add_state(f"{func_name}_entry", True)
+        )
 
         # Add input, connectivity, and output parameters as arrays
-        array_names = [*param_names, *result_names, *conn_names]
-        args = [*self.input_args, *self.output_args, *self.conn_args]
-        for name, arg in zip(array_names, args):
+        for param_names, arg in zip(param_names, args):
             shape = tuple(dace.symbol(self.sdfg.temp_data_name() + "__shp", dace.int64)
                           for _ in range(arg.subset.dims()))
             strides = tuple(dace.symbol(self.sdfg.temp_data_name() + "__strd", dace.int64)
                             for _ in range(arg.subset.dims()))
-            dtype = dace.int64 if name.startswith("__connectivity") else dace.float64  # TODO: take ITIR node dtype
+            dtype = dace.float64
+            self.sdfg.add_array(str(param_names.id), shape=shape, strides=strides, dtype=dtype)
+
+        for name in conn_names:
+            shape = (
+                dace.symbol(self.sdfg.temp_data_name() + "__shp", dace.int64),
+                dace.symbol(self.sdfg.temp_data_name() + "__shp", dace.int64)
+            )
+            strides = (
+                dace.symbol(self.sdfg.temp_data_name() + "__strd", dace.int64),
+                dace.symbol(self.sdfg.temp_data_name() + "__strd", dace.int64)
+            )
+            dtype = dace.int64
             self.sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
+
+        for name in result_names:
+            dtype = dace.float64
+            self.sdfg.add_scalar(name, dtype, transient=True)
 
         # Translate the function's body
         function_result: ValueExpr = self.visit(node.expr)[0]
@@ -244,6 +243,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             ndim = len(self.sdfg.arrays[access.data].shape)
             memlet = create_memlet_at(name, tuple(["0"] * ndim))
             self.entry_state.add_edge(forwarding_tasklet, f"{name}_internal", access, None, memlet)
+
+        self.context = prev_context
 
     def visit_SymRef(
         self, node: itir.SymRef, *, hack_is_iterator=False, **kwargs
