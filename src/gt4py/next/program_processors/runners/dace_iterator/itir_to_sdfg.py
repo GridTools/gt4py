@@ -23,7 +23,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from .itir_to_tasklet import closure_to_tasklet_sdfg
+from .itir_to_tasklet import closure_to_tasklet_sdfg, Context
 from .utility import (
     connectivity_identifier,
     create_memlet_at,
@@ -116,6 +116,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
+        program_sdfg.view()
         program_sdfg.validate()
         return program_sdfg
 
@@ -126,7 +127,6 @@ class ItirToSDFG(eve.NodeVisitor):
         assert ItirToSDFG._check_no_inner_lambdas(node)
         assert ItirToSDFG._check_shift_offsets_are_literals(node)
         assert isinstance(node.output, itir.SymRef)
-        assert isinstance(node.stencil, itir.Lambda)
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
@@ -159,26 +159,26 @@ class ItirToSDFG(eve.NodeVisitor):
 
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
-        tasklet_sdfg, input_params, output_params = closure_to_tasklet_sdfg(
+        context, results = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             index_domain,
             input_args,
             output_args,
-            conn_args,
+            conn_args
         )
 
         # Map SDFG tasklet arguments to parameters
-        input_mapping = {param: arg for param, arg in zip(input_params, input_args)}
-        output_mapping = {param: arg for param, arg in zip(output_params, output_args)}
+        input_mapping = {param: arg for param, arg in zip(input_names, input_args)}
+        output_mapping = {param.value.data: arg for param, arg in zip(results, output_args)}
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_args)}
 
         array_mapping = {**input_mapping, **output_mapping, **conn_mapping}
-        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, tasklet_sdfg, array_mapping)
+        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, context.body, array_mapping)
 
         self._add_mapped_nested_sdfg(
             closure_state,
-            sdfg=tasklet_sdfg,
+            sdfg=context.body,
             map_ranges=map_domain,
             inputs={**input_mapping, **conn_mapping},
             outputs=output_mapping,

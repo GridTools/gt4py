@@ -52,6 +52,18 @@ a2b_neighbor_data = np.array(
 a2b_neighbor_table = NeighborTableOffsetProvider(a2b_neighbor_data, ADim, BDim, 3)
 
 
+def test_passthrough():
+    @field_operator(backend=run_dace_iterator)
+    def passthrough(inp: Field[[IDim], float]) -> Field[[IDim], float]:
+        return inp
+
+    inp = np_as_located_field(IDim)(np.array([1, 2, 3], dtype=float))
+    r = np_as_located_field(IDim)(np.array([0, 0, 0], dtype=float))
+    passthrough(inp, out=r, offset_provider={})
+
+    assert np.allclose(np.asarray(inp), np.asarray(r))
+
+
 def test_pointwise():
     @field_operator(backend=run_dace_iterator)
     def add(a: Field[[IDim], float], b: Field[[IDim], float]) -> Field[[IDim], float]:

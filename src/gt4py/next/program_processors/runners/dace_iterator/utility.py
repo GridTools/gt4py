@@ -67,9 +67,11 @@ def map_nested_sdfg_symbols(
         arg_array = parent_sdfg.arrays[arg.data]
         param_array = nested_sdfg.arrays[param]
         for arg_shape, param_shape in zip(arg.subset.size(), param_array.shape):
-            symbol_mapping[str(param_shape)] = str(arg_shape)
+            if isinstance(param_shape, dace.symbol):
+                symbol_mapping[str(param_shape)] = str(arg_shape)
         for arg_stride, param_stride in zip(arg_array.strides, param_array.strides):
-            symbol_mapping[str(param_stride)] = str(arg_stride)
+            if isinstance(param_stride, dace.symbol):
+                symbol_mapping[str(param_stride)] = str(arg_stride)
     for sym in nested_sdfg.free_symbols:
         if str(sym) not in symbol_mapping:
             symbol_mapping[str(sym)] = str(sym)
