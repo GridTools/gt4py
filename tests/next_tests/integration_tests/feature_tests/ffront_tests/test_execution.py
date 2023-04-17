@@ -39,11 +39,18 @@ from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import cartesian_case, verify, allocate
+from next_tests.integration_tests.feature_tests.cases import (
+    allocate,
+    cartesian_case,
+    no_default_backend,
+    unstructured_case,
+    verify,
+)
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
-def test_copy(cartesian_case):
+@pytest.mark.cases
+def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def copy(inp: cases.IJKField) -> cases.IJKField:
         field_tuple = (inp, inp)
@@ -51,108 +58,89 @@ def test_copy(cartesian_case):
         field_1 = field_tuple[1]
         return field_0
 
-    inp = allocate(cartesian_case, copy, "inp").default()
-    out = allocate(cartesian_case, copy, "out").zeros()
-
-    verify(cartesian_case, copy, inp, out=out, ref=inp)
+    cases.verify_with_default_data(cartesian_case, copy, ref=lambda a: a)
 
 
-def test_multicopy(cartesian_case):
+@pytest.mark.cases
+def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def multicopy(
         inp1: cases.IJKField, inp2: cases.IJKField
     ) -> tuple[cases.IJKField, cases.IJKField]:
         return inp1, inp2
 
-    inp1 = cartesian_case.allocate(multicopy, "inp1").default()
-    inp2 = cartesian_case.allocate(multicopy, "inp2").default()
-    out = cartesian_case.allocate(multicopy, "out").zeros()
-
-    cartesian_case.verify(multicopy, inp1, inp2, out=out, ref=(inp1, inp2))
+    cases.verify_with_default_data(cartesian_case, multicopy, ref=lambda a, b: (a, b))
 
 
-def test_cartesian_shift(fieldview_backend):
-    a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
+@pytest.mark.cases
+def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
+    Ioff = cases.Ioff
 
     @field_operator
-    def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def shift_by_one(inp: cases.IJKField) -> cases.IJKField:
         return inp(Ioff[1])
 
-    @program(backend=fieldview_backend)
-    def fencil(inp: Field[[IDim], float64], out: Field[[IDim], float64]) -> None:
-        shift_by_one(inp, out=out)
+    inp = (
+        allocate(cartesian_case, shift_by_one, "inp")
+        .extend({cases.IDim: (0, 1)})
+        .strategy(cases.DEFAULT)()
+    )
+    out = allocate(cartesian_case, shift_by_one, "out").strategy(cases.zeros)()
 
-    fencil(a, out_I_float, offset_provider={"Ioff": IDim})
-
-    assert np.allclose(out_I_float.array(), np.arange(1, 11))
-
-
-def test_unstructured_shift(reduction_setup, fieldview_backend):
-    Vertex = reduction_setup.Vertex
-    Edge = reduction_setup.Edge
-    E2V = reduction_setup.E2V
-
-    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
-    b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
-
-    @field_operator(backend=fieldview_backend)
-    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
-        return inp(E2V[0])
-
-    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
-
-    ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
-
-    assert np.allclose(b, ref)
+    verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
 
 
-def test_fold_shifts(fieldview_backend):
-    """Shifting the result of an addition should work."""
-    a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
-    b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
-    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
+@pytest.mark.cases
+def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
+    E2V = cases.E2V
 
     @field_operator
-    def auto_lift(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
-    ) -> Field[[IDim], float64]:
+    def shift_by_one(inp: cases.VField) -> cases.EField:
+        return inp(E2V[0])
+
+    inp = allocate(unstructured_case, shift_by_one, "inp").strategy(cases.DEFAULT)()
+    out = allocate(unstructured_case, shift_by_one, "out").strategy(cases.zeros)()
+
+    ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[slice(0, None), 0]]
+    verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
+
+
+@pytest.mark.cases
+def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
+    """Shifting the result of an addition should work."""
+    Ioff = cases.Ioff
+
+    @field_operator
+    def auto_lift(inp1: cases.IJKField, inp2: cases.IJKField) -> cases.IJKField:
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    @program(backend=fieldview_backend)
-    def fencil(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
-    ) -> None:
-        auto_lift(inp1, inp2, out=out)
+    a = (
+        allocate(cartesian_case, auto_lift, "inp1")
+        .extend({cases.IDim: (0, 1)})
+        .strategy(cases.DEFAULT)()
+    )
+    b = (
+        allocate(cartesian_case, auto_lift, "inp2")
+        .extend({cases.IDim: (0, 2)})
+        .strategy(cases.DEFAULT)()
+    )
+    out_I_float = allocate(cartesian_case, auto_lift, "out").strategy(cases.zeros)()
 
-    fencil(a, b, out_I_float, offset_provider={"Ioff": IDim})
-
-    assert np.allclose(a[1:] + b[2:], out_I_float)
+    verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
 
 
-def test_tuples(fieldview_backend):
-    a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
-
+@pytest.mark.cases
+def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def tuples(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
-    ) -> Field[[IDim], float64]:
+    def tuples(inp1: cases.IJKFloatField, inp2: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = inp1, inp2
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
-    @program(backend=fieldview_backend)
-    def fencil(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
-    ) -> None:
-        tuples(inp1, inp2, out=out)
-
-    fencil(a_I_float, b_I_float, out_I_float, offset_provider={})
-
-    assert np.allclose((a_I_float.array() * 1.3 + b_I_float.array() * 5.0) * 3.4, out_I_float)
+    cases.verify_with_default_data(
+        cartesian_case, tuples, ref=lambda a, b: (a * 1.3 + b * 5.0) * 3.4
+    )
 
 
 def test_scalar_arg(fieldview_backend):

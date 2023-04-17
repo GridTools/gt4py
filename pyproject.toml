@@ -312,7 +312,8 @@ module = "gt4py.next.iterator.transforms.global_tmps"
 markers = [
   "requires_atlas",  # mark tests that require 'atlas4py' bindings package
   "requires_dace",  # mark tests that require 'dace' package
-  "requires_gpu:"  # mark tests that require a NVidia GPU (assume 'cupy' and 'cudatoolkit' are installed)
+  "requires_gpu:",  # mark tests that require a NVidia GPU (assume 'cupy' and 'cudatoolkit' are installed)
+  "cases"  # todo: this is ad hoc, remove before merging
 ]
 norecursedirs = ["dist", "build", "cpp_backend_tests/build*", "_local/*", ".*"]
 testpaths = "tests"

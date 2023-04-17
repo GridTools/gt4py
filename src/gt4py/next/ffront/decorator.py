@@ -484,6 +484,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
         )
 
+    @property
+    def param_types(self) -> dict[str, ts.DataType]:
+        return {str(param.id): param.type for param in self.foast_node.definition.params}
+
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type
         assert isinstance(type_, ts.CallableType)
