@@ -187,6 +187,8 @@ class Program:
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     past_node: past.Program
@@ -443,6 +445,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             specified for the program takes precedence.
         definition: The original Python function object the field operator
             was created from.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     foast_node: OperatorNodeT
@@ -494,7 +498,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+            definition=self.definition,
             backend=backend,
             grid_type=self.grid_type,
         )
@@ -503,7 +507,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+            definition=self.definition,
             backend=self.backend,
             grid_type=grid_type,
         )
