@@ -447,8 +447,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor]
+    grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
@@ -493,8 +494,18 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
-            backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+            backend=backend,
+            grid_type=self.grid_type,
+        )
+
+    def with_grid_type(self, grid_type: GridType):
+        return FieldOperator(
+            foast_node=self.foast_node,
+            closure_vars=self.closure_vars,
+            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+            backend=self.backend,
+            grid_type=grid_type,
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
@@ -574,6 +585,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
+            grid_type=self.grid_type,
         )
 
     def __call__(
