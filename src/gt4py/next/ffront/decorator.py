@@ -193,8 +193,8 @@ class Program:
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
     @classmethod
@@ -452,7 +452,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor]
+    backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
     @classmethod
