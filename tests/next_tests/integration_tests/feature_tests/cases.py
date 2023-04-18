@@ -59,9 +59,12 @@ def no_backend(program: itir.FencilDefinition, *args, **kwargs) -> None:
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-class FieldInitializer(Protocol):
-    """Protocol for field initialization strategies."""
+class ScalarInitializer(Protocol):
+    def __call__(self, dtype: str) -> int | float:
+        ...
 
+
+class FieldInitializer(Protocol):
     def __call__(
         self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
     ) -> common.Field:
@@ -85,7 +88,10 @@ def unique(
     )
 
 
-DEFAULT = unique
+def scalar5(dtype: str, shape: Optional[tuple[int, ...]]) -> int | float | np.array:
+    if shape:
+        return np.ones(np.prod(shape), dtype=dtype) * 5
+    return np.dtype(dtype).type(5)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -143,10 +149,10 @@ def allocate_fieldop(
     fieldop: decorator.FieldOperator,
     name: str,
     sizes: dict[common.Dimension, int],
-    strategy: FieldInitializer,
+    strategy: Optional[FieldInitializer | ScalarInitializer] = None,
     dtype: Optional[str] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> common.Field | tuple[common.Field, ...]:
+) -> common.Field | tuple[common.Field, ...] | int | float:
     """Allocate a field for a parameter or return value of a fieldview program or operator."""
     sizes = case.default_sizes | (sizes or {})
     if extend:
@@ -155,6 +161,8 @@ def allocate_fieldop(
     arg_type = (
         fieldop.foast_node.type.definition.returns if name == "out" else fieldop.param_types[name]
     )
+    if name == "out" and strategy is None:
+        strategy = zeros
     return _allocate_for(case=case, arg_type=arg_type, sizes=sizes, dtype=dtype, strategy=strategy)
 
 
@@ -162,17 +170,21 @@ def _allocate_for(
     case: Case,
     arg_type: ts.FieldType | ts.TupleType,
     sizes: dict[common.Dimension, int],
-    strategy: FieldInitializer,
+    strategy: Optional[FieldInitializer | ScalarInitializer] = None,
     dtype: Optional[str] = None,
-) -> common.Field | tuple[common.Field, ...]:
+) -> common.Field | tuple[common.Field, ...] | int | float:
     """Allocate a field based on the field type or a (nested) tuple thereof."""
     match arg_type:
         case ts.FieldType():
+            strategy = strategy or unique
             return strategy(
                 backend=case.backend,
                 sizes={dim: sizes[dim] for dim in arg_type.dims},
                 dtype=dtype or arg_type.dtype.kind.name.lower(),
             )
+        case ts.ScalarType():
+            strategy = strategy or scalar5
+            return strategy(dtype=dtype or arg_type.kind.name.lower(), shape=arg_type.shape)
         case ts.TupleType():
             return tuple(
                 (
@@ -195,23 +207,24 @@ def verify(
     offset_provider: Optional[dict[str, common.Connectivty | common.Dimension]] = None,
 ) -> None:
     """Check the result of executing a fieldview program or operator against ref."""
-    offset_provider = offset_provider or case.offset_provider
+    offset_provider = offset_provider if offset_provider is not None else case.offset_provider
     fieldop.with_backend(case.backend)(*args, out=out, offset_provider=offset_provider)
 
     assert np.allclose(ref, out)
 
 
 def verify_with_default_data(case: Case, fieldop: decorator.FieldOperator, ref: Callable) -> None:
-    inps = tuple(allocate(case, fieldop, name).strategy(DEFAULT)() for name in fieldop.param_types)
+    inps = tuple(allocate(case, fieldop, name)() for name in fieldop.param_types)
     out = allocate(case, fieldop, "out").strategy(zeros)()
-    print(f"inps:\n{[i.array() for i in inps]}")  # todo: remove
+    ref_args = (i.array if hasattr(i, "array") else i for i in inps)
+    print(f"inps:\n{ref_args}")  # todo: remove
     print(f"out:\n{out}")  # todo: remove
     verify(
         case,
         fieldop,
         *inps,
         out=out,
-        ref=ref(*(i.array() for i in inps)),
+        ref=ref(*ref_args),
         offset_provider=case.offset_provider,
     )
 

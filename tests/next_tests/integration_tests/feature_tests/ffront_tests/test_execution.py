@@ -40,11 +40,21 @@ from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import (
-    allocate,
+    E2V,
+    V2E,
+    E2VDim,
+    Edge,
+    IDim,
+    Ioff,
+    JDim,
+    Joff,
+    KDim,
+    Koff,
+    V2EDim,
+    Vertex,
     cartesian_case,
     no_default_backend,
     unstructured_case,
-    verify,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
@@ -74,32 +84,24 @@ def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
 
 @pytest.mark.cases
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
-    Ioff = cases.Ioff
-
     @field_operator
     def shift_by_one(inp: cases.IJKField) -> cases.IJKField:
         return inp(Ioff[1])
 
-    inp = (
-        allocate(cartesian_case, shift_by_one, "inp")
-        .extend({cases.IDim: (0, 1)})
-        .strategy(cases.DEFAULT)()
-    )
-    out = allocate(cartesian_case, shift_by_one, "out").strategy(cases.zeros)()
+    inp = cases.allocate(cartesian_case, shift_by_one, "inp").extend({IDim: (0, 1)})()
+    out = cases.allocate(cartesian_case, shift_by_one, "out")()  # pass some tag instead of "out"
 
-    verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
+    cases.verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
 
 
 @pytest.mark.cases
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
-    E2V = cases.E2V
-
     @field_operator
     def shift_by_one(inp: cases.VField) -> cases.EField:
         return inp(E2V[0])
 
-    inp = allocate(unstructured_case, shift_by_one, "inp").strategy(cases.DEFAULT)()
-    out = allocate(unstructured_case, shift_by_one, "out").strategy(cases.zeros)()
+    inp = allocate(unstructured_case, shift_by_one, "inp")()
+    out = allocate(unstructured_case, shift_by_one, "out")()
 
     ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[slice(0, None), 0]]
     verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
@@ -108,24 +110,15 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
 @pytest.mark.cases
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
-    Ioff = cases.Ioff
 
     @field_operator
     def auto_lift(inp1: cases.IJKField, inp2: cases.IJKField) -> cases.IJKField:
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    a = (
-        allocate(cartesian_case, auto_lift, "inp1")
-        .extend({cases.IDim: (0, 1)})
-        .strategy(cases.DEFAULT)()
-    )
-    b = (
-        allocate(cartesian_case, auto_lift, "inp2")
-        .extend({cases.IDim: (0, 2)})
-        .strategy(cases.DEFAULT)()
-    )
-    out_I_float = allocate(cartesian_case, auto_lift, "out").strategy(cases.zeros)()
+    a = allocate(cartesian_case, auto_lift, "inp1").extend({cases.IDim: (0, 1)})()
+    b = allocate(cartesian_case, auto_lift, "inp2").extend({cases.IDim: (0, 2)})()
+    out_I_float = allocate(cartesian_case, auto_lift, "out")()
 
     verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
 
@@ -143,37 +136,39 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_scalar_arg(fieldview_backend):
+@pytest.mark.cases
+def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
-    inp = 5.0
-    out = np_as_located_field(Vertex)(np.zeros([size]))
 
-    @field_operator(backend=fieldview_backend)
-    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return broadcast(scalar_inp + 1.0, (Vertex,))
+    @field_operator
+    def scalar_arg(scalar_inp: int) -> cases.VField:
+        return broadcast(scalar_inp + 1, (Vertex,))
 
-    scalar_arg(inp, out=out, offset_provider={})
+    inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
+    out = cases.allocate(unstructured_case, scalar_arg, "out")()
+    ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 1)
 
-    ref = np.full([size], 6.0)
-    assert np.allclose(ref, out.array())
+    # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
+    #       Explanation: using `verify` here to override `offset_provider`,
+    #       which is necessary to avoid domain type deduction clash in GTFN.
+    cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
 
 
-def test_nested_scalar_arg(fieldview_backend):
-    inp = 5.0
-    out = np_as_located_field(Vertex)(np.zeros([size]))
+@pytest.mark.cases
+def test_nested_scalar_arg(unstructured_case):
+    @field_operator
+    def scalar_arg_inner(scalar_inp: int) -> cases.VField:
+        return broadcast(scalar_inp + 1, (Vertex,))
 
-    @field_operator(backend=fieldview_backend)
-    def scalar_arg_inner(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return broadcast(scalar_inp + 1.0, (Vertex,))
+    @field_operator
+    def scalar_arg(scalar_inp: int) -> cases.VField:
+        return scalar_arg_inner(scalar_inp + 1)
 
-    @field_operator(backend=fieldview_backend)
-    def scalar_arg(scalar_inp: float64) -> Field[[Vertex], float64]:
-        return scalar_arg_inner(scalar_inp + 1.0)
+    inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
+    out = cases.allocate(unstructured_case, scalar_arg, "out")()
 
-    scalar_arg(inp, out=out, offset_provider={})
-
-    ref = np.full([size], 7.0)
-    assert np.allclose(ref, out.array())
+    ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 2)
+    cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
 
 
 def test_scalar_arg_with_field(fieldview_backend):
