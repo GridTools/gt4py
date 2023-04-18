@@ -29,13 +29,14 @@ from .utility import (
     create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
-    type_spec_to_dtype,
+    as_dace_type,
     map_nested_sdfg_symbols,
 )
 
 
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
+    storages: dict[str, ts.TypeSpec]
     offset_provider: dict[str, Any]
 
     def __init__(
@@ -45,17 +46,19 @@ class ItirToSDFG(eve.NodeVisitor):
     ):
         self.param_types = param_types
         self.offset_provider = offset_provider
+        self.storages = {}
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec):
         if isinstance(type_, ts.FieldType):
             shape = [dace.symbol(sdfg.temp_data_name()) for _ in range(len(type_.dims))]
             strides = [dace.symbol(sdfg.temp_data_name()) for _ in range(len(type_.dims))]
-            dtype = type_spec_to_dtype(type_.dtype)
+            dtype = as_dace_type(type_.dtype)
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
         elif isinstance(type_, ts.ScalarType):
-            sdfg.add_symbol(name, type_spec_to_dtype(type_))
+            sdfg.add_symbol(name, as_dace_type(type_))
         else:
             raise NotImplementedError()
+        self.storages[name] = type_
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
@@ -116,7 +119,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
-        program_sdfg.view()
         program_sdfg.validate()
         return program_sdfg
 
@@ -124,7 +126,6 @@ class ItirToSDFG(eve.NodeVisitor):
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
         assert ItirToSDFG._check_no_lifts(node)
-        assert ItirToSDFG._check_no_inner_lambdas(node)
         assert ItirToSDFG._check_shift_offsets_are_literals(node)
         assert isinstance(node.output, itir.SymRef)
 
@@ -151,27 +152,29 @@ class ItirToSDFG(eve.NodeVisitor):
         map_domain = {f"i_{dim}": f"{lb}:{ub}" for dim, (lb, ub) in closure_domain}
 
         # Create an SDFG for the tasklet that computes a single item of the output domain.
-        input_args = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names]
-        conn_args = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
-        output_args = [
-            create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names
-        ]
-
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
+
+        input_arrays = [(closure_sdfg.arrays[name], name, self.storages[name]) for name in input_names]
+        conn_arrays = [(closure_sdfg.arrays[name], name) for name in conn_names]
 
         context, results = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             index_domain,
-            input_args,
-            output_args,
-            conn_args
+            input_arrays,
+            conn_arrays
         )
 
         # Map SDFG tasklet arguments to parameters
-        input_mapping = {param: arg for param, arg in zip(input_names, input_args)}
-        output_mapping = {param.value.data: arg for param, arg in zip(results, output_args)}
-        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_args)}
+        input_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names]
+        conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
+        output_memlets = [
+            create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names
+        ]
+
+        input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
+        output_mapping = {param.value.data: arg for param, arg in zip(results, output_memlets)}
+        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
 
         array_mapping = {**input_mapping, **output_mapping, **conn_mapping}
         symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, context.body, array_mapping)
@@ -280,12 +283,6 @@ class ItirToSDFG(eve.NodeVisitor):
             getattr(fun, "id", "") == "lift"
             for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
         ):
-            return False
-        return True
-
-    @staticmethod
-    def _check_no_inner_lambdas(node: itir.StencilClosure):
-        if len(eve.walk_values(node.stencil).if_isinstance(itir.Lambda).to_list()) > 1:
             return False
         return True
 

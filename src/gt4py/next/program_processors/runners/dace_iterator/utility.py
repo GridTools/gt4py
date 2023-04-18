@@ -20,7 +20,7 @@ from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
 
-def type_spec_to_dtype(type_: ts.ScalarType):
+def as_dace_type(type_: ts.ScalarType):
     if type_.kind == ts.ScalarKind.BOOL:
         return dace.bool_
     elif type_.kind == ts.ScalarKind.INT32:
