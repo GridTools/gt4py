@@ -62,7 +62,7 @@ def no_backend(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 class ScalarInitializer(Protocol):
-    def __call__(self, dtype: str) -> int | float:
+    def __call__(self, dtype: str, shape: tuple[int, ...]) -> int | float | np.array:
         ...
 
 
@@ -91,6 +91,7 @@ def unique(
 
 
 def scalar5(dtype: str, shape: Optional[tuple[int, ...]]) -> int | float | np.array:
+    """Initialize a scalar to the value 5."""
     if shape:
         return np.ones(np.prod(shape), dtype=dtype) * 5
     return np.dtype(dtype).type(5)
@@ -100,10 +101,10 @@ def scalar5(dtype: str, shape: Optional[tuple[int, ...]]) -> int | float | np.ar
 class Builder:
     partial: functools.partial
 
-    def build(self, *args, **kwargs):
+    def build(self, *args, **kwargs) -> Self:
         return self.partial(*args, **kwargs)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Any:
         return self.build(*args, **kwargs)
 
 
@@ -141,6 +142,7 @@ def allocate(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
 ) -> Builder:
+    """Allocate a parameter or return value from a fieldview code object with a fluid interface."""
     return (
         make_builder(allocate_)
         .sizes(case.default_sizes)
@@ -201,7 +203,7 @@ def _allocate_for(
     strategy: Optional[FieldInitializer | ScalarInitializer] = None,
     dtype: Optional[str] = None,
 ) -> common.Field | tuple[common.Field, ...] | int | float:
-    """Allocate a field based on the field type or a (nested) tuple thereof."""
+    """Allocate a field based on the field or scalar type or a (nested) tuple thereof."""
     match arg_type:
         case ts.FieldType():
             strategy = strategy or unique
@@ -232,6 +234,7 @@ def run(
     *args: common.Field,
     **kwargs: Any,
 ) -> None:
+    """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
     fieldview_prog.with_backend(case.backend)(*args, **kwargs)
@@ -241,6 +244,11 @@ def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
 ) -> tuple[tuple[common.Field | int | float, ...], dict[str : common.Field | int | float]]:
+    """
+    Allocate default params and return values for a fieldview code object given a test case.
+
+    Meant to reduce boiler plate for simple cases, everything else should rely on `allocate()`.
+    """
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
     if param_types.setdefault(RETURN, types.NoneType) is not types.NoneType:
@@ -291,6 +299,12 @@ def verify_with_default_data(
     ref: Callable,
     comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
+    """
+    Check the result of executing a fieldview code object agains a reference constructed from the inputs.
+
+    This is a convenience function to reduce boiler plate and not meant to hide logic for complex cases.
+    The `verify` function allowes more fine grained control for such tests.
+    """
     inps, kwfields = get_default_data(case, fieldop)
     ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
     verify(
@@ -306,14 +320,16 @@ def verify_with_default_data(
 
 @dataclasses.dataclass
 class Case:
+    """Parametrizable components for single feature integration tests."""
+
     backend: ppi.ProgramProcessor
-    # default offset provider for verify
     offset_provider: dict[str, common.Connectivty | common.Dimension]
     default_sizes: dict[common.Dimension, int]
 
 
 @pytest.fixture
 def no_default_backend():
+    """Temporarily switch off default backend for feature tests."""
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
     yield
