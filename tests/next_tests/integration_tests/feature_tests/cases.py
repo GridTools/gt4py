@@ -259,7 +259,7 @@ def verify(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     *args: common.Field,
     out: Optional[common.Field] = None,
-    out_arg: Optional[common.Field] = None,
+    nopass_out: Optional[common.Field] = None,
     ref: common.Field,
     offset_provider: Optional[dict[str, common.Connectivty | common.Dimension]] = None,
     comparison: Callable[[Any, Any], bool] = np.allclose,
@@ -267,9 +267,9 @@ def verify(
     """
     Check the result of executing a fieldview program or operator against ref.
 
-    One of `out` or `out_arg` must be passed.
+    One of `out` or `nopass_out` must be passed.
     If `out` is passed it will be used as an argument to the fieldview program and compared against `ref`.
-    Else, `out_arg` will not be passed and compared to `ref`.
+    Else, `nopass_out` will not be passed and compared to `ref`.
     """
     if out:
         run(
@@ -282,7 +282,7 @@ def verify(
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
-    assert comparison(ref, out or out_arg)
+    assert comparison(ref, out or nopass_out)
 
 
 def verify_with_default_data(
@@ -291,16 +291,8 @@ def verify_with_default_data(
     ref: Callable,
     comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
-    #  inps = tuple(
-    #      allocate(case, fieldop, name)()
-    #      for name in get_param_types(fieldop)
-    #      if name != "out" and name != RETURN
-    #  )
-    #  out = allocate(case, fieldop, RETURN).strategy(zeros)()
     inps, kwfields = get_default_data(case, fieldop)
     ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
-    print(f"inps:\n{ref_args}")  # todo: remove
-    print(f"kwfields:\n{kwfields}")  # todo: remove
     verify(
         case,
         fieldop,

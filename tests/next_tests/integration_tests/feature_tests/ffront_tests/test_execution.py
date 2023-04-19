@@ -59,7 +59,6 @@ from next_tests.integration_tests.feature_tests.cases import (
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
-@pytest.mark.cases
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def copy(inp: cases.IJKField) -> cases.IJKField:
@@ -71,7 +70,6 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, copy, ref=lambda a: a)
 
 
-@pytest.mark.cases
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def multicopy(
@@ -82,7 +80,6 @@ def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, multicopy, ref=lambda a, b: (a, b))
 
 
-@pytest.mark.cases
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def shift_by_one(inp: cases.IJKField) -> cases.IJKField:
@@ -94,7 +91,6 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
 
 
-@pytest.mark.cases
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
     def shift_by_one(inp: cases.VField) -> cases.EField:
@@ -107,7 +103,6 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     cases.verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
 
 
-@pytest.mark.cases
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
@@ -123,7 +118,6 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
 
 
-@pytest.mark.cases
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def tuples(inp1: cases.IJKFloatField, inp2: cases.IJKFloatField) -> cases.IJKFloatField:
@@ -136,7 +130,6 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-@pytest.mark.cases
 def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
@@ -154,7 +147,6 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
 
 
-@pytest.mark.cases
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
     def scalar_arg_inner(scalar_inp: int) -> cases.VField:
@@ -166,12 +158,14 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
     inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
     out = cases.allocate(unstructured_case, scalar_arg, cases.RETURN)()
-
     ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 2)
+
+    # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
+    #       Explanation: using `verify` here to override `offset_provider`,
+    #       which is necessary to avoid domain type deduction clash in GTFN.
     cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
 
 
-@pytest.mark.cases
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def scalar_and_field_args(inp: cases.IJKField, factor: int) -> cases.IJKField:
@@ -186,7 +180,6 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, scalar_and_field_args, inp, factor, out=out, ref=ref)
 
 
-@pytest.mark.cases
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip(
@@ -210,7 +203,6 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     cases.verify(cartesian_case, bar, inp, out=out, ref=np.full_like(out.array(), inp, dtype=int))
 
 
-@pytest.mark.cases
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @scan_operator(axis=KDim, forward=True, init=(0.0))
     def _scan_scalar(carry: float, qc_in: float, scalar: float) -> float:
@@ -228,10 +220,9 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
 
-    cases.verify(cartesian_case, scan_scalar, qc, scalar, out_arg=qc, ref=expected)
+    cases.verify(cartesian_case, scan_scalar, qc, scalar, nopass_out=qc, ref=expected)
 
 
-@pytest.mark.case
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
@@ -256,7 +247,6 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, scan_tuple_scalar, qc, tuple_scalar, out=qc, ref=expected)
 
 
-@pytest.mark.case
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int64]:
@@ -271,7 +261,6 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-@pytest.mark.case
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def astype_fieldop_bool(b: Field[[IDim], float64]) -> Field[[IDim], bool]:
@@ -286,7 +275,6 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-@pytest.mark.case
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     @field_operator(backend=cartesian_case.backend)
     def astype_fieldop_float(b: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
