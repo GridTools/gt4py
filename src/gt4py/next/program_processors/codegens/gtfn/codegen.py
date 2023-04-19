@@ -59,7 +59,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "float": "double",
         "float32": "float",
         "float64": "double",
-        "int": "long",
+        "int": "int",
         "int32": "std::int32_t",
         "int64": "std::int64_t",
         "bool": "bool",
@@ -101,7 +101,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         match pytype_to_cpptype(node.type):
-            case "int":
+            case "integral_constant_int":
                 return node.value + "_c"
             case "float":
                 return self.asfloat(node.value) + "f"

@@ -57,6 +57,7 @@ def pytype_to_cpptype(t: str):
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",
+            "integral_constant_int": "integral_constant_int",
             "axis_literal": None,  # TODO: domain?
         }[t]
     except KeyError:
@@ -282,6 +283,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
+        if "as_integral_constant" in kwargs and kwargs["as_integral_constant"]:
+            assert node.type in ["int", "int32", "int64"]
+            return Literal(value=node.value, type="integral_constant_int")
         return Literal(value=node.value, type=node.type)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
@@ -360,11 +364,23 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     obj_expr=self.visit(node.args[0], **kwargs),
                     new_dtype=self.visit(node.args[1], **kwargs),
                 )
+            elif node.fun.id == "tuple_get":
+                assert isinstance(node.args[0], itir.Literal)
+                return FunCall(
+                    fun=SymRef(id="tuple_get"),
+                    args=[
+                        self.visit(node.args[0], as_integral_constant=True),
+                        self.visit(node.args[1]),
+                    ],
+                )
             elif node.fun.id == "list_get":
                 # should only reach this for the case of an external sparse field
                 return FunCall(
                     fun=SymRef(id="tuple_get"),
-                    args=[self.visit(node.args[0]), self.visit(node.args[1])],
+                    args=[
+                        self.visit(node.args[0], as_integral_constant=True),
+                        self.visit(node.args[1]),
+                    ],
                 )
             self._error_on_illegal_function_calls(node)
             if node.fun.id == "cartesian_domain":
