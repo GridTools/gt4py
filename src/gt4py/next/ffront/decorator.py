@@ -187,12 +187,14 @@ class Program:
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
     @classmethod
@@ -443,12 +445,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             specified for the program takes precedence.
         definition: The original Python function object the field operator
             was created from.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
+    grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
@@ -493,8 +498,18 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return FieldOperator(
             foast_node=self.foast_node,
             closure_vars=self.closure_vars,
+            definition=self.definition,
             backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+            grid_type=self.grid_type,
+        )
+
+    def with_grid_type(self, grid_type: GridType):
+        return FieldOperator(
+            foast_node=self.foast_node,
+            closure_vars=self.closure_vars,
+            definition=self.definition,
+            backend=self.backend,
+            grid_type=grid_type,
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
@@ -574,6 +589,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
+            grid_type=self.grid_type,
         )
 
     def __call__(
