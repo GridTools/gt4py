@@ -367,7 +367,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def _visit_cartesian_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
         sizes, domain_offsets = self._make_domain(node)
-        return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
+        return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
 
     def _visit_unstructured_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
         sizes, domain_offsets = self._make_domain(node)
@@ -383,7 +383,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             tagged_sizes=sizes,
             tagged_offsets=domain_offsets,
             connectivities=connectivities,
-        )  # type: ignore
+        )
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):

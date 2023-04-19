@@ -16,12 +16,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional, Union
 
-from gt4py.eve import Coerced, Node, SymbolName
+from gt4py.eve import Coerced, SymbolName
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Sym, SymRef
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
 class UnaryExpr(Expr):
