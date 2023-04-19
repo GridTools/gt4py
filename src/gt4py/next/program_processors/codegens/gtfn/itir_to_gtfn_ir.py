@@ -330,12 +330,60 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         return result
 
-    def _error_on_illegal_function_calls(self, node: itir.FunCall) -> None:
-        assert isinstance(node.fun, itir.SymRef)
-        if node.fun.id == "shift":
-            raise ValueError("unapplied shift call not supported: {node}")
-        elif node.fun.id == "scan":
-            raise ValueError("scans are only supported at the top level of a stencil closure")
+    def _visit_if_(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert len(node.args) == 3
+        return TernaryExpr(
+            cond=self.visit(node.args[0], **kwargs),
+            true_expr=self.visit(node.args[1], **kwargs),
+            false_expr=self.visit(node.args[2], **kwargs),
+        )
+
+    def _visit_cast_(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert len(node.args) == 2
+        return CastExpr(
+            obj_expr=self.visit(node.args[0], **kwargs),
+            new_dtype=self.visit(node.args[1], **kwargs),
+        )
+
+    def _visit_tuple_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert isinstance(node.args[0], itir.Literal)
+        return FunCall(
+            fun=SymRef(id="tuple_get"),
+            args=[
+                self.visit(node.args[0], as_integral_constant=True),
+                self.visit(node.args[1]),
+            ],
+        )
+
+    def _visit_list_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        # should only reach this for the case of an external sparse field
+        return FunCall(
+            fun=SymRef(id="tuple_get"),
+            args=[
+                self.visit(node.args[0], as_integral_constant=True),
+                self.visit(node.args[1]),
+            ],
+        )
+
+    def _visit_cartesian_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        sizes, domain_offsets = self._make_domain(node)
+        return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
+
+    def _visit_unstructured_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        sizes, domain_offsets = self._make_domain(node)
+        connectivities = []
+        if "stencil" in kwargs:
+            shift_offsets = self._collect_offset_or_axis_node(itir.OffsetLiteral, kwargs["stencil"])
+            for o in shift_offsets:
+                if o in self.offset_provider and isinstance(
+                    self.offset_provider[o], common.Connectivity
+                ):
+                    connectivities.append(SymRef(id=o))
+        return UnstructuredDomain(
+            tagged_sizes=sizes,
+            tagged_offsets=domain_offsets,
+            connectivities=connectivities,
+        )  # type: ignore
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
@@ -351,58 +399,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     lhs=self.visit(node.args[0], **kwargs),
                     rhs=self.visit(node.args[1], **kwargs),
                 )
-            elif node.fun.id == "if_":
-                assert len(node.args) == 3
-                return TernaryExpr(
-                    cond=self.visit(node.args[0], **kwargs),
-                    true_expr=self.visit(node.args[1], **kwargs),
-                    false_expr=self.visit(node.args[2], **kwargs),
-                )
-            elif node.fun.id == "cast_":
-                assert len(node.args) == 2
-                return CastExpr(
-                    obj_expr=self.visit(node.args[0], **kwargs),
-                    new_dtype=self.visit(node.args[1], **kwargs),
-                )
-            elif node.fun.id == "tuple_get":
-                assert isinstance(node.args[0], itir.Literal)
-                return FunCall(
-                    fun=SymRef(id="tuple_get"),
-                    args=[
-                        self.visit(node.args[0], as_integral_constant=True),
-                        self.visit(node.args[1]),
-                    ],
-                )
-            elif node.fun.id == "list_get":
-                # should only reach this for the case of an external sparse field
-                return FunCall(
-                    fun=SymRef(id="tuple_get"),
-                    args=[
-                        self.visit(node.args[0], as_integral_constant=True),
-                        self.visit(node.args[1]),
-                    ],
-                )
-            self._error_on_illegal_function_calls(node)
-            if node.fun.id == "cartesian_domain":
-                sizes, domain_offsets = self._make_domain(node)
-                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
-            elif node.fun.id == "unstructured_domain":
-                sizes, domain_offsets = self._make_domain(node)
-                connectivities = []
-                if "stencil" in kwargs:
-                    shift_offsets = self._collect_offset_or_axis_node(
-                        itir.OffsetLiteral, kwargs["stencil"]
-                    )
-                    for o in shift_offsets:
-                        if o in self.offset_provider and isinstance(
-                            self.offset_provider[o], common.Connectivity
-                        ):
-                            connectivities.append(SymRef(id=o))
-                return UnstructuredDomain(
-                    tagged_sizes=sizes,
-                    tagged_offsets=domain_offsets,
-                    connectivities=connectivities,
-                )  # type: ignore
+            elif hasattr(self, f"_visit_{node.fun.id}"):
+                # special handling of applied builtins is handled in `_visit_<builtin>`
+                return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
+            elif node.fun.id == "shift":
+                raise ValueError("unapplied shift call not supported: {node}")
+            elif node.fun.id == "scan":
+                raise ValueError("scans are only supported at the top level of a stencil closure")
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1
@@ -410,8 +413,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     fun=self.visit(node.fun.fun, **kwargs),
                     args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
                 )
-            elif node.fun == itir.SymRef(id="shift"):
-                raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(
