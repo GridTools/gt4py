@@ -244,17 +244,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_NativeFunction(
         self, node: common.NativeFunction, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        if node == common.NativeFunction.MIN:
-            return "np.minimum"
-        elif node == common.NativeFunction.MAX:
-            return "np.maximum"
-        elif node == common.NativeFunction.POW:
-            return "np.power"
-        elif node == common.NativeFunction.GAMMA:
-            return "scipy.special.gamma"
-        name = self.generic_visit(node, **kwargs)
-        assert isinstance(name, str)
-        return f"np.{name}"
+        return f"ufuncs.{common.OP_TO_UFUNC_NAME[common.NativeFunction][node]}"
 
     def visit_NativeFuncCall(
         self, node: npir.NativeFuncCall, *, mask: Optional[str] = None, **kwargs: Any
@@ -398,7 +388,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             from typing import Tuple
 
             import numpy as np
-            import scipy.special
+            from gt4py.cartesian.gtc import ufuncs
 
             {{ data_view_class }}
 

@@ -93,6 +93,26 @@ def test_lambda():
     assert ti.pformat(inferred) == "(T₀) → T₀"
 
 
+def test_typed_lambda():
+    testee = ir.Lambda(
+        params=[ir.Sym(id="x", kind="Iterator", dtype=("float", False))], expr=ir.SymRef(id="x")
+    )
+    expected_val = ti.Val(
+        kind=ti.Iterator(),
+        dtype=ti.Primitive(name="float"),
+        size=ti.TypeVar(idx=0),
+        current_loc=ti.TypeVar(idx=1),
+        defined_loc=ti.TypeVar(idx=2),
+    )
+    expected = ti.FunctionType(
+        args=ti.Tuple.from_elems(expected_val),
+        ret=expected_val,
+    )
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "(It[T₁, T₂, float⁰]) → It[T₁, T₂, float⁰]"
+
+
 def test_plus():
     testee = ir.SymRef(id="plus")
     t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1))
@@ -604,6 +624,21 @@ def test_function_definition():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred.dtype) == "(T₀) → T₀"
+
+
+def test_dynamic_offset():
+    """Test that the type of a dynamic offset is correctly inferred."""
+    offset_it = ir.SymRef(id="offset_it")
+    testee = ir.FunCall(
+        fun=ir.SymRef(id="shift"),
+        args=[
+            ir.OffsetLiteral(value="V2E"),
+            ir.FunCall(fun=ir.SymRef(id="deref"), args=[offset_it]),
+        ],
+    )
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee)
+    offset_it_type = inferred_all[id(offset_it)]
+    assert isinstance(offset_it_type, ti.Val) and offset_it_type.kind == ti.Iterator()
 
 
 CARTESIAN_DOMAIN = ir.FunCall(
