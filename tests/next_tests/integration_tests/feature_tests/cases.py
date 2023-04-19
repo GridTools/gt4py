@@ -17,7 +17,9 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
-from typing import Callable, Optional, Protocol, TypeAlias
+import types
+import typing
+from typing import Any, Callable, Optional, Protocol, Type, TypeAlias
 
 import numpy as np
 import pytest
@@ -134,19 +136,50 @@ def make_builder(func):
     return NewBuilder(functools.partial(func))
 
 
-def allocate(case: Case, fieldop: decorator.FieldOperator, name: str) -> Builder:
+def allocate(
+    case: Case,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    name: str,
+) -> Builder:
     return (
-        make_builder(allocate_fieldop)
+        make_builder(allocate_)
         .sizes(case.default_sizes)
         .case(case)
-        .fieldop(fieldop)
+        .fieldview_prog(fieldview_prog)
         .name(name)
     )
 
 
-def allocate_fieldop(
+def get_param_types(
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+) -> dict[str, ts.FieldType | ts.TupleType | ts.ScalarType]:
+    if fieldview_prog.definition is None:
+        raise ValueError(
+            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
+        )
+    annotations = typing.get_type_hints(fieldview_prog.definition)
+    return {
+        name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
+    }
+
+
+def extend_sizes(
+    sizes: dict[common.Dimension, str],
+    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
+) -> dict[common.Dimension, str]:
+    sizes = sizes.copy()
+    if extend:
+        for dim, (lower, upper) in extend.items():
+            sizes[dim] += upper - lower
+    return sizes
+
+
+RETURN = "return"
+
+
+def allocate_(
     case: Case,
-    fieldop: decorator.FieldOperator,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
     sizes: dict[common.Dimension, int],
     strategy: Optional[FieldInitializer | ScalarInitializer] = None,
@@ -154,14 +187,9 @@ def allocate_fieldop(
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> common.Field | tuple[common.Field, ...] | int | float:
     """Allocate a field for a parameter or return value of a fieldview program or operator."""
-    sizes = case.default_sizes | (sizes or {})
-    if extend:
-        for dim, (lower, upper) in extend.items():
-            sizes[dim] += upper - lower
-    arg_type = (
-        fieldop.foast_node.type.definition.returns if name == "out" else fieldop.param_types[name]
-    )
-    if name == "out" and strategy is None:
+    sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
+    arg_type = get_param_types(fieldview_prog)[name]
+    if name in ["out", RETURN] and strategy is None:
         strategy = zeros
     return _allocate_for(case=case, arg_type=arg_type, sizes=sizes, dtype=dtype, strategy=strategy)
 
@@ -198,34 +226,89 @@ def _allocate_for(
             raise TypeError(f"Can not allocate for type {arg_type}")
 
 
+def run(
+    case: Case,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+    *args: common.Field,
+    **kwargs: Any,
+) -> None:
+    if kwargs.get("offset_provider", None) is None:
+        kwargs["offset_provider"] = case.offset_provider
+    fieldview_prog.with_backend(case.backend)(*args, **kwargs)
+
+
+def get_default_data(
+    case: Case,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+) -> tuple[tuple[common.Field | int | float, ...], dict[str : common.Field | int | float]]:
+    param_types = get_param_types(fieldview_prog)
+    kwfields: dict[str, Any] = {}
+    if param_types.setdefault(RETURN, types.NoneType) is not types.NoneType:
+        kwfields = {"out": allocate(case, fieldview_prog, RETURN).strategy(zeros)()}
+    param_types.pop(RETURN)
+    inps = tuple(
+        allocate(case, fieldview_prog, name)()
+        for name in get_param_types(fieldview_prog)
+        if name != "out" and name != RETURN
+    )
+    return inps, kwfields
+
+
 def verify(
     case: Case,
-    fieldop: decorator.FieldOperator,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
     *args: common.Field,
-    out: common.Field,  # TODO: make optional
+    out: Optional[common.Field] = None,
+    out_arg: Optional[common.Field] = None,
     ref: common.Field,
     offset_provider: Optional[dict[str, common.Connectivty | common.Dimension]] = None,
+    comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
-    """Check the result of executing a fieldview program or operator against ref."""
-    offset_provider = offset_provider if offset_provider is not None else case.offset_provider
-    fieldop.with_backend(case.backend)(*args, out=out, offset_provider=offset_provider)
+    """
+    Check the result of executing a fieldview program or operator against ref.
 
-    assert np.allclose(ref, out)
+    One of `out` or `out_arg` must be passed.
+    If `out` is passed it will be used as an argument to the fieldview program and compared against `ref`.
+    Else, `out_arg` will not be passed and compared to `ref`.
+    """
+    if out:
+        run(
+            case,
+            fieldview_prog,
+            *args,
+            out=out,
+            offset_provider=offset_provider,
+        )
+    else:
+        run(case, fieldview_prog, *args, offset_provider=offset_provider)
+
+    assert comparison(ref, out or out_arg)
 
 
-def verify_with_default_data(case: Case, fieldop: decorator.FieldOperator, ref: Callable) -> None:
-    inps = tuple(allocate(case, fieldop, name)() for name in fieldop.param_types)
-    out = allocate(case, fieldop, "out").strategy(zeros)()
-    ref_args = (i.array if hasattr(i, "array") else i for i in inps)
+def verify_with_default_data(
+    case: Case,
+    fieldop: decorator.FieldOperator,
+    ref: Callable,
+    comparison: Callable[[Any, Any], bool] = np.allclose,
+) -> None:
+    #  inps = tuple(
+    #      allocate(case, fieldop, name)()
+    #      for name in get_param_types(fieldop)
+    #      if name != "out" and name != RETURN
+    #  )
+    #  out = allocate(case, fieldop, RETURN).strategy(zeros)()
+    inps, kwfields = get_default_data(case, fieldop)
+    ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
     print(f"inps:\n{ref_args}")  # todo: remove
-    print(f"out:\n{out}")  # todo: remove
+    print(f"kwfields:\n{kwfields}")  # todo: remove
     verify(
         case,
         fieldop,
         *inps,
-        out=out,
+        **kwfields,
         ref=ref(*ref_args),
         offset_provider=case.offset_provider,
+        comparison=comparison,
     )
 
 

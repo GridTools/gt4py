@@ -89,7 +89,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
         return inp(Ioff[1])
 
     inp = cases.allocate(cartesian_case, shift_by_one, "inp").extend({IDim: (0, 1)})()
-    out = cases.allocate(cartesian_case, shift_by_one, "out")()  # pass some tag instead of "out"
+    out = cases.allocate(cartesian_case, shift_by_one, cases.RETURN)()
 
     cases.verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
 
@@ -100,11 +100,11 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     def shift_by_one(inp: cases.VField) -> cases.EField:
         return inp(E2V[0])
 
-    inp = allocate(unstructured_case, shift_by_one, "inp")()
-    out = allocate(unstructured_case, shift_by_one, "out")()
+    inp = cases.allocate(unstructured_case, shift_by_one, "inp")()
+    out = cases.allocate(unstructured_case, shift_by_one, cases.RETURN)()
 
     ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[slice(0, None), 0]]
-    verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
+    cases.verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
 
 
 @pytest.mark.cases
@@ -116,11 +116,11 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    a = allocate(cartesian_case, auto_lift, "inp1").extend({cases.IDim: (0, 1)})()
-    b = allocate(cartesian_case, auto_lift, "inp2").extend({cases.IDim: (0, 2)})()
-    out_I_float = allocate(cartesian_case, auto_lift, "out")()
+    a = cases.allocate(cartesian_case, auto_lift, "inp1").extend({cases.IDim: (0, 1)})()
+    b = cases.allocate(cartesian_case, auto_lift, "inp2").extend({cases.IDim: (0, 2)})()
+    out_I_float = cases.allocate(cartesian_case, auto_lift, cases.RETURN)()
 
-    verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
+    cases.verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
 
 
 @pytest.mark.cases
@@ -145,7 +145,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
         return broadcast(scalar_inp + 1, (Vertex,))
 
     inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
-    out = cases.allocate(unstructured_case, scalar_arg, "out")()
+    out = cases.allocate(unstructured_case, scalar_arg, cases.RETURN)()
     ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 1)
 
     # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
@@ -155,7 +155,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 @pytest.mark.cases
-def test_nested_scalar_arg(unstructured_case):
+def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
     def scalar_arg_inner(scalar_inp: int) -> cases.VField:
         return broadcast(scalar_inp + 1, (Vertex,))
@@ -165,89 +165,76 @@ def test_nested_scalar_arg(unstructured_case):
         return scalar_arg_inner(scalar_inp + 1)
 
     inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
-    out = cases.allocate(unstructured_case, scalar_arg, "out")()
+    out = cases.allocate(unstructured_case, scalar_arg, cases.RETURN)()
 
     ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 2)
     cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
 
 
-def test_scalar_arg_with_field(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("IndexFields and ConstantFields are not supported yet.")
-
-    inp = index_field(Edge, dtype=float64)
-    factor = 3.0
-    out = np_as_located_field(Edge)(np.zeros((size,), dtype=np.float64))
-
+@pytest.mark.cases
+def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def scalar_and_field_args(
-        inp: Field[[Edge], float64], factor: float64
-    ) -> Field[[Edge], float64]:
+    def scalar_and_field_args(inp: cases.IJKField, factor: int) -> cases.IJKField:
         tmp = factor * inp
-        return tmp(EdgeOffset[1])
+        return tmp(Ioff[1])
 
-    @program(backend=fieldview_backend)
-    def fencil(out: Field[[Edge], float64], inp: Field[[Edge], float64], factor: float64) -> None:
-        scalar_and_field_args(inp, factor, out=out)
+    inp = cases.allocate(cartesian_case, scalar_and_field_args, "inp").extend({IDim: (0, 1)})()
+    factor = cases.allocate(cartesian_case, scalar_and_field_args, "factor")()
+    out = cases.allocate(cartesian_case, scalar_and_field_args, cases.RETURN)()
+    ref = inp.array()[1:] * factor
 
-    fencil(out, inp, factor, offset_provider={"EdgeOffset": Edge})
-
-    ref = np.arange(1, size + 1) * factor
-    assert np.allclose(ref, out.array())
+    cases.verify(cartesian_case, scalar_and_field_args, inp, factor, out=out, ref=ref)
 
 
-def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+@pytest.mark.cases
+def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip(
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
         )
 
-    size = 10
-    out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
-
     @field_operator
-    def foo(size: int) -> Field[[Vertex], int]:
-        return broadcast(size, (Vertex,))
+    def foo(size: int) -> cases.IField:
+        return broadcast(size, (IDim,))
 
-    @program(backend=fieldview_backend)
-    def bar(size: int, out: Field[[Vertex], int]):
-        foo(size, out=out, domain={Vertex: (0, size)})
+    @program
+    def bar(size: int, out: cases.IField):
+        foo(size, out=out, domain={IDim: (0, size)})
 
-    bar(size, out, offset_provider={})
+    inp = cases.allocate(cartesian_case, bar, "size").strategy(
+        lambda dtype, shape: np.dtype(dtype).type(cartesian_case.default_sizes[IDim])
+    )()
+    out = cases.allocate(cartesian_case, bar, "out")()
 
-    assert (out.array() == size).all()
+    cases.verify(cartesian_case, bar, inp, out=out, ref=np.full_like(out.array(), inp, dtype=int))
 
 
-def test_scalar_scan(fieldview_backend):
-    size = 10
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-    qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
-    scalar = 1.0
-    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
-
+@pytest.mark.cases
+def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @scan_operator(axis=KDim, forward=True, init=(0.0))
     def _scan_scalar(carry: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + carry + scalar
         return qc
 
-    @program(backend=fieldview_backend)
+    @program
     def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
         _scan_scalar(qc, scalar, out=qc)
 
-    scan_scalar(qc, scalar, offset_provider={})
-    assert np.allclose(np.asarray(qc), expected)
+    qc = cases.allocate(cartesian_case, scan_scalar, "qc").strategy(cases.zeros)()
+    scalar = cases.allocate(cartesian_case, scan_scalar, "scalar").strategy(
+        lambda dtype, shape: np.dtype(dtype).type(1)
+    )()
+    ksize = cartesian_case.default_sizes[KDim]
+    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
+
+    cases.verify(cartesian_case, scan_scalar, qc, scalar, out_arg=qc, ref=expected)
 
 
-def test_tuple_scalar_scan(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+@pytest.mark.case
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
-
-    size = 10
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-    qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
-    tuple_scalar = (1.0, (1.0, 0.0))
-    expected = np.full((size, size), np.arange(start=1, stop=11, step=1).astype(float64))
 
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def _scan_tuple_scalar(
@@ -255,58 +242,63 @@ def test_tuple_scalar_scan(fieldview_backend):
     ) -> float:
         return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator
     def scan_tuple_scalar(
         qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
     ) -> Field[[IDim, KDim], float]:
         return _scan_tuple_scalar(qc, tuple_scalar)
 
-    scan_tuple_scalar(qc, tuple_scalar, out=qc, offset_provider={})
-    assert np.allclose(np.asarray(qc), expected)
+    qc = cases.allocate(cartesian_case, scan_tuple_scalar, "qc").strategy(cases.zeros)()
+    tuple_scalar = (1.0, (1.0, 0.0))
+    ksize = cartesian_case.default_sizes[KDim]
+    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
+
+    cases.verify(cartesian_case, scan_tuple_scalar, qc, tuple_scalar, out=qc, ref=expected)
 
 
-def test_astype_int(fieldview_backend):
-    size = 10
-    b_float_64 = np_as_located_field(IDim)(np.full((size,), fill_value=1.5, dtype=np.float64))
-    c_int64 = np_as_located_field(IDim)(np.ones((size,), dtype=np.int64))
-    out_int_64 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.int64))
-
-    @field_operator(backend=fieldview_backend)
+@pytest.mark.case
+def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
+    @field_operator
     def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int64]:
         d = astype(b, int64)
         return d
 
-    astype_fieldop_int(b_float_64, out=out_int_64, offset_provider={})
-    assert np.allclose(c_int64.array(), out_int_64)
+    cases.verify_with_default_data(
+        cartesian_case,
+        astype_fieldop_int,
+        ref=lambda a: a.astype(int),
+        comparison=lambda a, b: np.all(np.equal(a, b)),
+    )
 
 
-def test_astype_bool(fieldview_backend):
-    b_float_64 = np_as_located_field(IDim)(np.full((size,), fill_value=0.5, dtype=np.float64))
-    c_bool = np_as_located_field(IDim)(np.ones((size,), dtype=bool))
-    out_bool = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
-
-    @field_operator(backend=fieldview_backend)
+@pytest.mark.case
+def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
+    @field_operator
     def astype_fieldop_bool(b: Field[[IDim], float64]) -> Field[[IDim], bool]:
         d = astype(b, bool)
         return d
 
-    astype_fieldop_bool(b_float_64, out=out_bool, offset_provider={})
-    assert np.allclose(c_bool, out_bool)
-
-
-def test_astype_float(fieldview_backend):
-    c_float64 = np_as_located_field(IDim)(
-        np.full((size,), fill_value=np.float64("5e300"), dtype=np.float64)
+    cases.verify_with_default_data(
+        cartesian_case,
+        astype_fieldop_bool,
+        ref=lambda a: a.astype(bool),
+        comparison=lambda a, b: np.all(np.equal(a, b)),
     )
-    out_int_32 = np_as_located_field(IDim)(np.zeros((size,), dtype=np.float32))
 
-    @field_operator(backend=fieldview_backend)
+
+@pytest.mark.case
+def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
+    @field_operator(backend=cartesian_case.backend)
     def astype_fieldop_float(b: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
         d = astype(b, float32)
         return d
 
-    astype_fieldop_float(c_float64, out=out_int_32, offset_provider={})
-    assert np.all(out_int_32.array() == np.inf)
+    cases.verify_with_default_data(
+        cartesian_case,
+        astype_fieldop_float,
+        ref=lambda a: a.astype(np.float32),
+        comparison=lambda a, b: np.all(np.equal(a, b)),
+    )
 
 
 def test_offset_field(fieldview_backend):
