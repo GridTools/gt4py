@@ -19,7 +19,7 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Optional, Protocol, Type, TypeAlias
+from typing import Any, Callable, Optional, Protocol, TypeAlias
 
 import numpy as np
 import pytest
@@ -31,9 +31,8 @@ from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # import alias for later moving this here; noqa: F401: # fixture
     Edge,
-    EdgeOffset,
     IDim,
     Ioff,
     JDim,
@@ -251,7 +250,7 @@ def get_default_data(
     """
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
-    if param_types.setdefault(RETURN, types.NoneType) is not types.NoneType:
+    if not isinstance(param_types.setdefault(RETURN, types.NoneType), types.NoneType):
         kwfields = {"out": allocate(case, fieldview_prog, RETURN).strategy(zeros)()}
     param_types.pop(RETURN)
     inps = tuple(
