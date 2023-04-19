@@ -111,8 +111,8 @@ class StencilExecution(Node):
 
 class Scan(Node):
     function: SymRef
-    output: Literal
-    inputs: list[Literal]
+    output: int
+    inputs: list[int]
     init: Expr
 
 

@@ -162,7 +162,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Scan = as_fmt("assign({output}, {function}(), {', '.join([init] + inputs)})")
+    Scan = as_fmt(
+        "assign({output}_c, {function}(), {', '.join([init] + [input + '_c' for input in inputs])})"
+    )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )

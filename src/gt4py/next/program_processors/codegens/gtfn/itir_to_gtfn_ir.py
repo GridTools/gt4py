@@ -456,8 +456,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             extracted_functions.append(scan_def)
             scan = Scan(
                 function=SymRef(id=scan_id),
-                output=Literal(value="0", type="int"),
-                inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
+                output=0,
+                inputs=[i + 1 for i, _ in enumerate(node.inputs)],
                 init=self.visit(node.stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
@@ -499,13 +499,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     compacted_b_args.append(b_arg)
 
             def remap_args(s: Scan) -> Scan:
-                def remap_literal(x: Literal) -> Literal:
-                    return Literal(value=str(index_map[int(x.value)]), type=x.type)
-
                 return Scan(
                     function=s.function,
-                    output=remap_literal(s.output),
-                    inputs=[remap_literal(i) for i in s.inputs],
+                    output=index_map[s.output],
+                    inputs=[index_map[i] for i in s.inputs],
                     init=s.init,
                 )
 
