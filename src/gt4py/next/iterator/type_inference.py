@@ -847,17 +847,17 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         inputs: list[Type] = self.visit(node.inputs, **kwargs)
         stencil_params = []
         for input_ in inputs:
-            stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
+            stencil_param = Val(
+                current_loc=output_loc, defined_loc=TypeVar.fresh(), kind=Iterator()
+            )
             self.constraints.add(
                 (
                     input_,
                     Val(
-                        kind=stencil_param.kind,
                         dtype=stencil_param.dtype,
-                        size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
                         current_loc=ANYWHERE,
-                        defined_loc=stencil_param.defined_loc,
+                        # defined_loc=stencil_param.defined_loc, # TODO if we remove this constraint we cannot conclude the defined_loc from how the iterator is used in a stencil
                     ),
                 )
             )

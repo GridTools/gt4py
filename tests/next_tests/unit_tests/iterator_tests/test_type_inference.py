@@ -775,6 +775,121 @@ def test_fencil_definition():
     )
 
 
+def test_fencil_definition_scalar_input():
+    testee_fencil_param = im.sym("size")
+    testee_stencil_param = im.sym("it")
+
+    copy_stencil = ir.FunctionDefinition(
+        id="copy_stencil", params=[testee_stencil_param], expr=im.deref_("it")
+    )
+
+    fencil = ir.FencilDefinition(
+        id="fencil",
+        function_definitions=[copy_stencil],
+        params=[im.sym("out"), testee_fencil_param],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call_("cartesian_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="I"),
+                        ir.Literal(value="0", type="int"),
+                        im.ref("size"),
+                    )
+                ),
+                stencil=im.ref("copy_stencil"),
+                output=im.ref("out"),
+                inputs=[im.ref("size")],
+            )
+        ],
+    )
+    inferred_all: dict[int, ti.Type] = ti.infer_all(fencil, {})
+    inferred_fencil_param = inferred_all[id(testee_fencil_param)]
+    inferred_stencil_param = inferred_all[id(testee_stencil_param)]
+
+    expected_fencil_param = ti.Val(
+        kind=ti.Value(),  # all inferred becaused used in `named_range`
+        dtype=ti.INT_DTYPE,
+        size=ti.Scalar(),
+        defined_loc=ti.ANYWHERE,
+        current_loc=ti.ANYWHERE,
+    )
+    expected_stencil_param = ti.Val(
+        kind=ti.Iterator(),
+        dtype=ti.TypeVar(idx=0),
+        size=ti.TypeVar(idx=1),
+        defined_loc=ti.TypeVar(idx=2),
+        current_loc=ti.TypeVar(idx=2),
+    )
+
+    assert inferred_fencil_param == expected_fencil_param
+    assert inferred_stencil_param == expected_stencil_param
+
+
+def test_fencil_definition_scalar_input_different_locations():
+    shift_v2e = ir.FunctionDefinition(
+        id="shift_v2e",
+        params=[ir.Sym(id="it", dtype=("float", False))],
+        expr=im.deref_(im.shift_("V2E")("it")),
+    )
+    shift_e2c = ir.FunctionDefinition(
+        id="shift_e2c", params=[im.sym("it")], expr=im.deref_(im.shift_("E2C")("it"))
+    )
+
+    testee = im.sym("scalar")
+
+    fencil = ir.FencilDefinition(
+        id="fencil",
+        function_definitions=[shift_v2e, shift_e2c],
+        params=[im.sym("out0"), im.sym("out1"), testee],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call_("cartesian_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Vertex"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="1", type="int"),
+                    )
+                ),
+                stencil=im.ref("shift_v2e"),
+                output=im.ref("out0"),
+                inputs=[im.ref("scalar")],
+            ),
+            ir.StencilClosure(
+                domain=im.call_("cartesian_domain")(
+                    im.call_("named_range")(
+                        ir.AxisLiteral(value="Edge"),
+                        ir.Literal(value="0", type="int"),
+                        ir.Literal(value="1", type="int"),
+                    )
+                ),
+                stencil=im.ref("shift_e2c"),
+                output=im.ref("out1"),
+                inputs=[im.ref("scalar")],
+            ),
+        ],
+    )
+    offset_provider = {
+        "V2E": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        ),
+        "E2C": NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        ),
+    }
+    inferred_all: dict[int, ti.Type] = ti.infer_all(fencil, offset_provider)
+    inferred = inferred_all[id(testee)]
+
+    expected = ti.Val(
+        kind=ti.TypeVar(idx=3),
+        dtype=ti.FLOAT_DTYPE,  # inferred because stencil provided dtype in its parameter
+        size=ti.TypeVar(idx=4),
+        defined_loc=ti.ANYWHERE,
+        current_loc=ti.ANYWHERE,
+    )
+
+    assert inferred == expected
+
+
 def test_fencil_definition_same_closure_input():
     f1 = ir.FunctionDefinition(
         id="f1", params=[im.sym("vertex_it")], expr=im.deref_(im.shift_("E2V")("vertex_it"))
