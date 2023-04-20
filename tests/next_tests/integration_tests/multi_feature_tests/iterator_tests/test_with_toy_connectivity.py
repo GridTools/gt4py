@@ -413,7 +413,7 @@ def test_shift_sparse_input_field2(program_processor, lift_mode):
     if program_processor == gtfn_cpu.run_gtfn or program_processor == gtfn_cpu.run_gtfn_imperative:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
-        )  # observed in PERSISTENT mode
+        )  # observed in `cache.Strategy.PERSISTENT` mode
     inp = index_field(Vertex)
     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
     out1 = np_as_located_field(Vertex)(np.zeros([9]))
