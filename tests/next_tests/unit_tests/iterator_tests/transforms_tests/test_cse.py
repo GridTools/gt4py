@@ -12,15 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pytest
-
-from gt4py.eve.utils import UIDs
-from gt4py.next.ffront import itir_makers as im
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.cse import (
-    CollectSubexpressions,
-    CommonSubexpressionElimination as CSE,
-)
+from gt4py.next.iterator import ir, makers as im
+from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination as CSE
 
 
 def test_trivial():

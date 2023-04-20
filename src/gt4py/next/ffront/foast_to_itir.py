@@ -19,11 +19,10 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
-    itir_makers as im,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 

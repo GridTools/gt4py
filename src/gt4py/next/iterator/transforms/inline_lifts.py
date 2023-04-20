@@ -18,8 +18,7 @@ from typing import Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.ffront import itir_makers as im
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir, makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 

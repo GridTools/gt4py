@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 from gt4py.next.common import DimensionKind, Field
-from gt4py.next.ffront import itir_makers as im, type_specifications as ts_ffront
+from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -36,7 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 

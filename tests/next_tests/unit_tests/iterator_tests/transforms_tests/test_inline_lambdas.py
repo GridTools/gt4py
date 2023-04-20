@@ -14,7 +14,7 @@
 
 import pytest
 
-from gt4py.next.ffront import itir_makers as im
+from gt4py.next.iterator import makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
 
