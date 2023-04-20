@@ -54,7 +54,7 @@ flake8-pyproject==1.2.3   # via -r requirements-dev.in
 flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
 flask==2.2.3              # via dace
 frozendict==2.3.6         # via gt4py (pyproject.toml)
-./gridtools_cpp-2.3.0-py3-none-any.whl
+gridtools-cpp==2.3.0      # via gt4py (pyproject.toml)
 hypothesis==6.70.2        # via -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.5.22          # via pre-commit
 idna==3.4                 # via requests
