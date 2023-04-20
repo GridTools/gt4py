@@ -92,7 +92,9 @@ class GTFNTranslationStep(
             elif isinstance(parameter.type_, ts.FieldType):
                 for dim in parameter.type_.dims:
                     if (
-                        isinstance(dim, fbuiltins.FieldOffset)
+                        isinstance(
+                            dim, fbuiltins.FieldOffset
+                        )  # TODO(havogt): remove support for FieldOffset as Dimension
                         or dim.kind == common.DimensionKind.LOCAL
                     ):
                         # translate sparse dimensions to tuple dtype
