@@ -367,13 +367,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return self.add_expr_tasklet(list(zip(args, internals)), expr, dace.dtypes.float64, "deref")
 
     def _split_shift_args(self, args: list[itir.Expr]) -> tuple[list[itir.Expr], Optional[list[itir.Expr]]]:
-        idx = 1
-        for _ in range(idx, len(args)):
-            if not isinstance(args[idx], itir.OffsetLiteral):
-                idx += 1
-        head = args[0:idx]
-        rest = args[idx::] if idx < len(args) else None
-        return head, rest
+        pairs = [args[i:i+2] for i in range(0, len(args), 2)]
+        assert len(pairs) >= 1
+        assert all(len(pair) == 2 for pair in pairs)
+        return pairs[0], pairs[1:] if len(pairs) > 1 else None
 
     def _make_shift_for_rest(self, rest, iterator):
         return itir.FunCall(
@@ -396,11 +393,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert isinstance(offset, str)
         shifted_dim = self.offset_provider[offset].value
 
-        shift_amount = self.visit(head[1])
+        assert isinstance(head[1], itir.OffsetLiteral)
+        shift_amount = head[1].value
+        assert isinstance(shift_amount, int)
 
-        args = [ValueExpr(iterator.indices[shifted_dim], dace.int64), *shift_amount]
+        args = [ValueExpr(iterator.indices[shifted_dim], dace.int64)]
         internals = [f"{arg.value.data}_v" for arg in args]
-        expr = f"{internals[0]} + {internals[1]}"
+        expr = f"{internals[0]} + {shift_amount}"
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "dir_addr"
         )[0].value
@@ -419,12 +418,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         else:
             iterator = self.visit(node.args[0])
 
-        if len(head) < 2:
-            raise NotImplementedError("reductions are not supported")
         assert isinstance(head[0], itir.OffsetLiteral)
         offset = head[0].value
         assert isinstance(offset, str)
-        element = self.visit(head[1])
+
+        assert isinstance(head[1], itir.OffsetLiteral)
+        element = head[1].value
+        assert isinstance(element, int)
 
         table: NeighborTableOffsetProvider = self.offset_provider[offset]
         shifted_dim = table.origin_axis.value
@@ -434,11 +434,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         args = [
             ValueExpr(conn, table.table.dtype),
-            ValueExpr(iterator.indices[shifted_dim], dace.int64),
-            *element
+            ValueExpr(iterator.indices[shifted_dim], dace.int64)
         ]
         internals = [f"{arg.value.data}_v" for arg in args]
-        expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
+        expr = f"{internals[0]}[{internals[1]}, {element}]"
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"
         )[0].value
