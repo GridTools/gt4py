@@ -90,7 +90,7 @@ def test_render_function_declaration_buffer(function_buffer_example):
         "cpp",
         """\
     template <class BufferT0, class BufferT1>
-    decltype(auto) example(BufferT0 a_buf, BufferT1 b_buf) {
+    decltype(auto) example(BufferT0 &&a_buf, BufferT1 &&b_buf) {
         return;
     }\
     """,
@@ -141,7 +141,7 @@ def test_render_function_declaration_tuple(function_tuple_example):
         "cpp",
         """\
     template <class BufferT0>
-    decltype(auto) example(BufferT0 a_buf) {
+    decltype(auto) example(BufferT0 &&a_buf) {
         return;
     }\
     """,
