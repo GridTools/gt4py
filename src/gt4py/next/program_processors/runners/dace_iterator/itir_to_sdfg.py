@@ -20,6 +20,7 @@ import sympy
 import gt4py.eve as eve
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -38,6 +39,7 @@ class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storages: dict[str, ts.TypeSpec]
     offset_provider: dict[str, Any]
+    node_types: dict[int, itir_typing.Type]
 
     def __init__(
         self,
@@ -63,6 +65,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
         last_state = program_sdfg.add_state("program_entry")
+        self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
@@ -162,7 +165,8 @@ class ItirToSDFG(eve.NodeVisitor):
             self.offset_provider,
             index_domain,
             input_arrays,
-            conn_arrays
+            conn_arrays,
+            self.node_types,
         )
 
         # Map SDFG tasklet arguments to parameters
