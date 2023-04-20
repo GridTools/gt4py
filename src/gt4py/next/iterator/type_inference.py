@@ -557,7 +557,28 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return result
 
     def visit_Sym(self, node: ir.Sym, **kwargs) -> Type:
-        return TypeVar.fresh()
+        result = TypeVar.fresh()
+        if node.kind:
+            kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
+            self.constraints.add(
+                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
+            )
+        if node.dtype:
+            assert node.dtype is not None
+            dtype: Primitive | List = Primitive(name=node.dtype[0])
+            if node.dtype[1]:
+                dtype = List(dtype=dtype)
+            self.constraints.add(
+                (
+                    Val(
+                        dtype=dtype,
+                        current_loc=TypeVar.fresh(),
+                        defined_loc=TypeVar.fresh(),
+                    ),
+                    result,
+                )
+            )
+        return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
         if node.id in ir.BUILTINS:
@@ -718,7 +739,12 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_shift(self, node: ir.FunCall, **kwargs) -> Type:
         # Calls to shift are handled as being part of the grammar, not
-        # as function calls, as the type depends on the offset provider
+        # as function calls, as the type depends on the offset provider.
+
+        # Visit arguments such that their type is also inferred (particularly important for
+        # dynamic offsets)
+        self.visit(node.args)
+
         current_loc_in, current_loc_out = _infer_shift_location_types(
             node.args, self.offset_provider, self.constraints
         )

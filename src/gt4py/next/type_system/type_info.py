@@ -18,7 +18,7 @@ from typing import Callable, Iterator, Type, TypeGuard, cast
 import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next.common import Dimension, DimensionKind, GTTypeError
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -300,6 +300,29 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
         case ts.FieldType(dims):
             return dims
     raise GTTypeError(f"Can not extract dimensions from {symbol_type}!")
+
+
+def is_local_field(type_: ts.FieldType) -> bool:
+    """
+    Return if `type_` is a field defined on a local dimension.
+
+    Examples:
+    ---------
+    >>> V = Dimension(value="V")
+    >>> V2E = Dimension(value="V2E", kind=DimensionKind.LOCAL)
+    >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+    True
+    >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
+    False
+    """
+    return any(dim.kind == DimensionKind.LOCAL for dim in type_.dims)
+
+
+def contains_local_field(type_: ts.TypeSpec) -> bool:
+    """Return if primitive constitutens of `type_` contains a field defined on a local dimension."""
+    return any(
+        isinstance(t, ts.FieldType) and is_local_field(t) for t in primitive_constituents(type_)
+    )
 
 
 def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:

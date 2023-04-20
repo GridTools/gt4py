@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Union
+import typing
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -38,6 +39,24 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
+    # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
+    #   type inference.
+    kind: typing.Literal["Iterator", "Value", None] = None
+    dtype: Optional[
+        tuple[str, bool]
+    ] = None  # format: name of primitive type, boolean indicating if it is a list
+
+    @datamodels.validator("kind")
+    def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value not in ["Iterator", "Value"]:
+            raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")
+
+    @datamodels.validator("dtype")
+    def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value[0] not in TYPEBUILTINS:
+            raise ValueError(
+                f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
+            )
 
 
 @noninstantiable
@@ -186,15 +205,15 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
-Sym.__hash__ = Node.__hash__  # type: ignore[assignment]
-Expr.__hash__ = Node.__hash__  # type: ignore[assignment]
-Literal.__hash__ = Node.__hash__  # type: ignore[assignment]
-NoneLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-AxisLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-SymRef.__hash__ = Node.__hash__  # type: ignore[assignment]
-Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
-FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
-FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
-StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]
-FencilDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
+Sym.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Expr.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Literal.__hash__ = Node.__hash__  # type: ignore[method-assign]
+NoneLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+AxisLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
+StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
