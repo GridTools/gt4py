@@ -80,7 +80,7 @@ class GTFNTranslationStep(
             parameter = get_param_description(program_param.id, obj)
             parameters.append(parameter)
 
-            arg = parameter.name
+            arg = f"std::forward<decltype({parameter.name})>({parameter.name})"
 
             # argument conversion expression
             if (
