@@ -77,7 +77,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-        new_body = im.deref_(func_definition.expr)
+        new_body = im.deref(func_definition.expr)
 
         return itir.FunctionDefinition(
             id=func_definition.id,
@@ -92,8 +92,8 @@ class FieldOperatorLowering(NodeTranslator):
         # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
         # In iterator IR we didn't properly specify if this is legal,
         # however after lift-inlining the expressions are transformed back to literals.
-        forward = im.deref_(self.visit(node.forward, **kwargs))
-        init = im.deref_(self.visit(node.init, **kwargs))
+        forward = im.deref(self.visit(node.forward, **kwargs))
+        init = im.deref(self.visit(node.init, **kwargs))
 
         # lower definition function
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
@@ -104,9 +104,9 @@ class FieldOperatorLowering(NodeTranslator):
         new_body = im.let(
             func_definition.params[0].id,
             im.promote_to_const_iterator(func_definition.params[0].id),
-        )(im.deref_(new_body))
+        )(im.deref(new_body))
         definition = itir.Lambda(params=func_definition.params, expr=new_body)
-        body = im.call_(im.call_("scan")(definition, forward, init))(
+        body = im.call(im.call("scan")(definition, forward, init))(
             *(param.id for param in definition.params[1:])
         )
 
@@ -152,12 +152,12 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.Expr:
-        return im.promote_to_lifted_stencil(lambda tuple_: im.tuple_get_(node.index, tuple_))(
+        return im.promote_to_lifted_stencil(lambda tuple_: im.tuple_get(node.index, tuple_))(
             self.visit(node.value, **kwargs)
         )
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.Expr:
-        return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple_(*elts))(
+        return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
             *[self.visit(el, **kwargs) for el in node.elts],
         )
 
@@ -187,15 +187,15 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.Expr:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                shift_offset = im.shift_(offset_name, offset_index)
+                shift_offset = im.shift(offset_name, offset_index)
             case foast.Name(id=offset_name):
                 return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
                 assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift_(
-                    offset_dim.id, im.deref_(self.visit(func_args.args[1], **kwargs))
+                shift_offset = im.shift(
+                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
                 )
             case _:
                 raise FieldOperatorLoweringError("Unexpected shift arguments!")
@@ -222,9 +222,9 @@ class FieldOperatorLowering(NodeTranslator):
             lowered_func = self.visit(node.func, **kwargs)
             lowered_args = [self.visit(arg, **kwargs) for arg in node.args]
             args = [f"__arg{i}" for i in range(len(lowered_args))]
-            return im.lift_(im.lambda__(*args)(im.call_(lowered_func)(*args)))(*lowered_args)
+            return im.lift(im.lambda_(*args)(im.call(lowered_func)(*args)))(*lowered_args)
         elif isinstance(node.func.type, ts.FunctionType):
-            return im.call_(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+            return im.call(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
 
         raise AssertionError(
             f"Call to object of type {type(node.func.type).__name__} not understood."
@@ -236,7 +236,7 @@ class FieldOperatorLowering(NodeTranslator):
 
         # TODO check that we test astype that results in a itir.map_ operation
         return self._map(
-            im.lambda__("it")(im.call_("cast_")("it", str(dtype))),
+            im.lambda_("it")(im.call("cast_")("it", str(dtype))),
             obj,
         )
 
@@ -259,7 +259,7 @@ class FieldOperatorLowering(NodeTranslator):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call_(im.call_("reduce")(op, im.deref_(init_expr)))
+        val = im.call(im.call("reduce")(op, im.deref(init_expr)))
         return im.promote_to_lifted_stencil(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -285,9 +285,9 @@ class FieldOperatorLowering(NodeTranslator):
             source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
                 return im.promote_to_const_iterator(
-                    im.literal_(str(bool(source_type(node.args[0].value))), "bool")
+                    im.literal(str(bool(source_type(node.args[0].value))), "bool")
                 )
-            return im.promote_to_const_iterator(im.literal_(str(node.args[0].value), node_kind))
+            return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
@@ -295,16 +295,16 @@ class FieldOperatorLowering(NodeTranslator):
         # the following constructs work if they are removed by inlining.
         if isinstance(type_, ts.TupleType):
             return im.promote_to_const_iterator(
-                im.make_tuple_(
+                im.make_tuple(
                     *(
-                        im.deref_(self._make_literal(val, type_))
+                        im.deref(self._make_literal(val, type_))
                         for val, type_ in zip(val, type_.types)
                     )
                 )
             )
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
-            return im.promote_to_const_iterator(im.literal_(str(val), typename))
+            return im.promote_to_const_iterator(im.literal(str(val), typename))
         raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
@@ -314,9 +314,9 @@ class FieldOperatorLowering(NodeTranslator):
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call_("map_")(op)
+            op = im.call("map_")(op)
 
-        return im.promote_to_lifted_stencil(im.call_(op))(*lowered_args)
+        return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
 
 
 class FieldOperatorLoweringError(Exception):

@@ -145,7 +145,7 @@ def test_shifted_literal():
     "Test shifting an applied lift of a stencil returning a constant / literal works."
     testee = ir.StencilClosure(
         # λ(x) → ·⟪Iₒ, 1ₒ⟫((↑(λ() → 1))())
-        stencil=im.lambda__("x")(im.deref_(im.shift_("I", 1)(im.lift_(im.lambda__()(1))()))),
+        stencil=im.lambda_("x")(im.deref(im.shift("I", 1)(im.lift(im.lambda_()(1))()))),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -160,7 +160,7 @@ def test_shifted_literal():
 def test_tuple_get_on_closure_input():
     testee = ir.StencilClosure(
         # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
-        stencil=im.lambda__("x")(im.tuple_get_(0, im.deref_(im.shift_("I", 1)("x")))),
+        stencil=im.lambda_("x")(im.tuple_get(0, im.deref(im.shift("I", 1)("x")))),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),

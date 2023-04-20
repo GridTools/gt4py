@@ -101,7 +101,7 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift_(inner_stencil)(*new_args), extracted_args)
+    return (im.lift(inner_stencil)(*new_args), extracted_args)
 
 
 @dataclasses.dataclass
@@ -227,7 +227,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     **kwargs,
                 )
 
-                new_stencil = im.lambda__(*new_arg_exprs.keys())(inlined_call)
-                return im.lift_(new_stencil)(*new_arg_exprs.values())
+                new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
+                return im.lift(new_stencil)(*new_arg_exprs.values())
 
         return node

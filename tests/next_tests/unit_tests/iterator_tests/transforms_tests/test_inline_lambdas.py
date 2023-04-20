@@ -19,31 +19,31 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
 
 test_data = [
-    ("identity1", im.call_(im.lambda__("x")("x"))("y"), im.ref("y")),
-    ("identity2", im.call_(im.lambda__("x")("x"))(im.plus_("y", "y")), im.plus_("y", "y")),
-    ("unused_param", im.call_(im.lambda__("x", "y")("x"))("x", "y"), im.ref("x")),
+    ("identity1", im.call(im.lambda_("x")("x"))("y"), im.ref("y")),
+    ("identity2", im.call(im.lambda_("x")("x"))(im.plus("y", "y")), im.plus("y", "y")),
+    ("unused_param", im.call(im.lambda_("x", "y")("x"))("x", "y"), im.ref("x")),
     (
         "composed_addition",
-        im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("y", "y")),
+        im.call(im.lambda_("x")(im.plus("x", "x")))(im.plus("y", "y")),
         {
-            True: im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("y", "y")),  # stays as is
-            False: im.plus_(im.plus_("y", "y"), im.plus_("y", "y")),
+            True: im.call(im.lambda_("x")(im.plus("x", "x")))(im.plus("y", "y")),  # stays as is
+            False: im.plus(im.plus("y", "y"), im.plus("y", "y")),
         },
     ),
     (
         "name_collision",
-        im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "y")),
+        im.call(im.lambda_("x")(im.plus("x", "x")))(im.plus("x", "y")),
         {
-            True: im.call_(im.lambda__("x")(im.plus_("x", "x")))(im.plus_("x", "y")),  # stays as is
-            False: im.plus_(im.plus_("x", "y"), im.plus_("x", "y")),
+            True: im.call(im.lambda_("x")(im.plus("x", "x")))(im.plus("x", "y")),  # stays as is
+            False: im.plus(im.plus("x", "y"), im.plus("x", "y")),
         },
     ),
     (
         "name_shadowing",
-        im.call_(
-            im.lambda__("x")(im.multiplies_(im.call_(im.lambda__("x")(im.plus_("x", 1)))(2), "x"))
-        )(im.plus_("x", "x")),
-        im.multiplies_(im.plus_(2, 1), im.plus_("x", "x")),
+        im.call(im.lambda_("x")(im.multiplies_(im.call(im.lambda_("x")(im.plus("x", 1)))(2), "x")))(
+            im.plus("x", "x")
+        ),
+        im.multiplies_(im.plus(2, 1), im.plus("x", "x")),
     ),
 ]
 

@@ -23,53 +23,53 @@ def inline_lift_test_data():
         # (testee, expected)
         (
             # deref(lift(f)(args...)) -> f(args...)
-            im.deref_(im.lift_("f")("arg")),
-            im.call_("f")("arg"),
+            im.deref(im.lift("f")("arg")),
+            im.call("f")("arg"),
         ),
         (
             # deref(shift(...)(lift(f)(args...))) -> f(shift(...)(args)...)
-            im.deref_(im.shift_("I", 1)(im.lift_("f")("arg"))),
-            im.call_("f")(im.shift_("I", 1)("arg")),
+            im.deref(im.shift("I", 1)(im.lift("f")("arg"))),
+            im.call("f")(im.shift("I", 1)("arg")),
         ),
         (
             # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
-            im.call_("can_deref")(im.lift_("f")("arg1", "arg2")),
-            im.and__(im.call_("can_deref")("arg1"), im.call_("can_deref")("arg2")),
+            im.call("can_deref")(im.lift("f")("arg1", "arg2")),
+            im.and_(im.call("can_deref")("arg1"), im.call("can_deref")("arg2")),
         ),
         (
             # can_deref(shift(...)(lift(f)(args...)) -> and(can_deref(shift(...)(arg[0])), and(can_deref(shift(...)(arg[1])), ...))
-            im.call_("can_deref")(im.shift_("I", 1)(im.lift_("f")("arg1", "arg2"))),
-            im.and__(
-                im.call_("can_deref")(im.shift_("I", 1)("arg1")),
-                im.call_("can_deref")(im.shift_("I", 1)("arg2")),
+            im.call("can_deref")(im.shift("I", 1)(im.lift("f")("arg1", "arg2"))),
+            im.and_(
+                im.call("can_deref")(im.shift("I", 1)("arg1")),
+                im.call("can_deref")(im.shift("I", 1)("arg2")),
             ),
         ),
         (
             # (↑(λ(arg1, arg2) → ·arg1 + ·arg2))((↑(λ(arg1, arg2) → ·arg1 × ·arg2))(a, b), c)
-            im.lift_(
-                im.lambda__(im.sym("arg1"), im.sym("arg2"))(
-                    im.plus_(im.deref_("arg1"), im.deref_("arg2"))
+            im.lift(
+                im.lambda_(im.sym("arg1"), im.sym("arg2"))(
+                    im.plus(im.deref("arg1"), im.deref("arg2"))
                 )
             )(
-                im.lift_(
-                    im.lambda__(im.sym("arg1"), im.sym("arg2"))(
-                        im.multiplies_(im.deref_("arg1"), im.deref_("arg2"))
+                im.lift(
+                    im.lambda_(im.sym("arg1"), im.sym("arg2"))(
+                        im.multiplies_(im.deref("arg1"), im.deref("arg2"))
                     )
                 )(im.ref("a"), im.ref("b")),
                 im.ref("c"),
             ),
             # (↑(λ(a, b, c) → ·a × ·b + ·c))(a, b, c)
-            im.lift_(
-                im.lambda__("a", "b", "c")(
-                    im.plus_(im.multiplies_(im.deref_("a"), im.deref_("b")), im.deref_("c"))
+            im.lift(
+                im.lambda_("a", "b", "c")(
+                    im.plus(im.multiplies_(im.deref("a"), im.deref("b")), im.deref("c"))
                 )
             )(im.ref("a"), im.ref("b"), im.ref("c")),
         ),
         (
             # (↑(λ(arg1, arg2) → ·arg1 + ·arg2))(arg1, (↑(λ(arg1) → ·arg1))(f()))
-            im.lift_(
-                im.lambda__(im.sym("arg1"), im.sym("arg2"))(
-                    im.plus_(im.deref_("arg1"), im.deref_("arg2"))
+            im.lift(
+                im.lambda_(im.sym("arg1"), im.sym("arg2"))(
+                    im.plus(im.deref("arg1"), im.deref("arg2"))
                 )
             )(
                 im.ref("arg1"),
@@ -79,27 +79,27 @@ def inline_lift_test_data():
                 # below. Here we test that if this symbol collides with a symbol of the outer
                 # lifted stencil, i.e. the lambda function above, the collision is properly
                 # resolved.
-                im.lift_(im.lambda__(im.sym("arg1"))(im.deref_("arg1")))(im.call_("f")()),
+                im.lift(im.lambda_(im.sym("arg1"))(im.deref("arg1")))(im.call("f")()),
             ),
             # (↑(λ(arg1, arg1_) → ·arg1 + ·arg1_))(arg1, f())
-            im.lift_(im.lambda__("arg1", "arg1_")(im.plus_(im.deref_("arg1"), im.deref_("arg1_"))))(
-                im.ref("arg1"), im.call_("f")()
+            im.lift(im.lambda_("arg1", "arg1_")(im.plus(im.deref("arg1"), im.deref("arg1_"))))(
+                im.ref("arg1"), im.call("f")()
             ),
         ),
         (
             # similar to the test case above, but the collision is with a symbol from
             # the outer scope
             # λ(arg1) → (↑(λ(arg2) → ·arg2 + arg1))((↑(λ(arg1) → ·arg1))(f()))
-            im.lambda__("arg1")(
-                im.lift_(im.lambda__(im.sym("arg2"))(im.plus_(im.deref_("arg2"), im.ref("arg1"))))(
-                    im.lift_(im.lambda__(im.sym("arg1"))(im.deref_("arg1")))(im.call_("f")())
+            im.lambda_("arg1")(
+                im.lift(im.lambda_(im.sym("arg2"))(im.plus(im.deref("arg2"), im.ref("arg1"))))(
+                    im.lift(im.lambda_(im.sym("arg1"))(im.deref("arg1")))(im.call("f")())
                 )
             ),
             # λ(arg1) → (↑(λ(arg1_) → ·arg1_ + arg1))(f())
-            im.lambda__("arg1")(
-                im.lift_(
-                    im.lambda__(im.sym("arg1_"))(im.plus_(im.deref_("arg1_"), im.ref("arg1")))
-                )(im.call_("f")())
+            im.lambda_("arg1")(
+                im.lift(im.lambda_(im.sym("arg1_"))(im.plus(im.deref("arg1_"), im.ref("arg1"))))(
+                    im.call("f")()
+                )
             ),
         ),
     ]
