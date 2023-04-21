@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator import ir, makers as im
+from gt4py.next.iterator import ir, ir_makers as im
 from gt4py.next.iterator.transforms.trace_shifts import ALL_NEIGHBORS, TraceShifts
 
 

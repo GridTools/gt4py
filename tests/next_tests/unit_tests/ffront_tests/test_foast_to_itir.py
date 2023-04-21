@@ -36,7 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir, makers as im
+from gt4py.next.iterator import ir as itir, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 

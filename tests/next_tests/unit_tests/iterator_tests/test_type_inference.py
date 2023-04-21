@@ -15,7 +15,7 @@
 import numpy as np
 
 from gt4py.next.common import Dimension
-from gt4py.next.iterator import ir, makers as im, type_inference as ti
+from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 
