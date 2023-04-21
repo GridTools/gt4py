@@ -40,9 +40,9 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     program = apply_common_transforms(
         program, offset_provider=offset_provider, force_inline_lift=True
     )
-    program = inline_lambdas.InlineLambdas.apply(
-        program, opcount_preserving=False, force_inline_lift=True
-    )
+    # program = inline_lambdas.InlineLambdas.apply(
+    #     program, opcount_preserving=False, force_inline_lift=True
+    # )
     return program
 
 

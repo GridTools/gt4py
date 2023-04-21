@@ -204,12 +204,17 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         param_names = [str(p.id) for p in node.params]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
+        symbols = {
+            **{param: arg for param, arg in zip(param_names, args)},
+            **self.context.symbol_map
+        }
+
         # Create the SDFG for the function's body
         prev_context = self.context
         context_sdfg = dace.SDFG(func_name)
         context_state = context_sdfg.add_state(f"{func_name}_entry", True)
         symbol_map = {}
-        for param, arg in zip(param_names, args):
+        for param, arg in symbols.items():
             if isinstance(arg, ValueExpr):
                 value = ValueExpr(context_state.add_access(param), arg.dtype)
             else:
@@ -225,9 +230,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         )
         self.context = context
 
-        # Add input, connectivity, and output parameters as arrays
+        # Add input parameters as arrays
         inputs: list[str | tuple[str, dict]] = []
-        for name, arg in zip(param_names, args):
+        for name, arg in symbols.items():
             if isinstance(arg, ValueExpr):
                 dtype = arg.dtype
                 context.body.add_scalar(name, dtype=dtype)
@@ -244,6 +249,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     context.body.add_scalar(index_name, dtype=dace.int64)
                 inputs.append((name, index_names))
 
+        # Add connectivities as arrays
         for name in conn_names:
             shape = (
                 dace.symbol(context.body.temp_data_name() + "__shp", dace.int64),
@@ -308,52 +314,54 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         args = [self.visit(arg) for arg in node.args]
         args = [arg if isinstance(arg, Sequence) else [arg] for arg in args]
         args = list(itertools.chain(*args))
-        func_context, params, results = self.visit(node.fun, args=args)
-        inputs = {}
-        for arg, param in zip(args, params):
+
+        func_context, param_names, func_inputs, results = self.visit(node.fun, args=args)
+
+        nsdfg_inputs = {}
+        for arg, param in zip(args, func_inputs):
             if isinstance(arg, ValueExpr):
-                inputs[param] = create_memlet_full(arg.value.data, self.context.body.arrays[arg.value.data])
+                nsdfg_inputs[param] = create_memlet_full(arg.value.data, self.context.body.arrays[arg.value.data])
             else:
                 assert isinstance(arg, IteratorExpr)
                 field = param[0]
                 indices = param[1]
-                inputs[field] = create_memlet_full(arg.field.data, self.context.body.arrays[arg.field.data])
+                nsdfg_inputs[field] = create_memlet_full(arg.field.data, self.context.body.arrays[arg.field.data])
                 for dim, var in indices.items():
                     store = arg.indices[dim].data
-                    inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
+                    nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         for conn, _ in neighbor_tables:
             var = connectivity_identifier(conn)
-            inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
+            nsdfg_inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
 
-        symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, inputs)
+        symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
 
         nsdfg_node = self.context.state.add_nested_sdfg(
             func_context.body,
             None,
-            inputs=set(inputs.keys()),
+            inputs=set(nsdfg_inputs.keys()),
             outputs=set(r.value.data for r in results),
             symbol_mapping=symbol_mapping
         )
 
-        for arg, param in zip(args, params):
+        for arg, param in zip(args, func_inputs):
             if isinstance(arg, ValueExpr):
-                value_memlet = inputs[param]
+                value_memlet = nsdfg_inputs[param]
                 self.context.state.add_edge(arg.value, None, nsdfg_node, param, value_memlet)
             else:
                 assert isinstance(arg, IteratorExpr)
                 field = param[0]
                 indices = param[1]
-                field_memlet = inputs[field]
+                field_memlet = nsdfg_inputs[field]
                 self.context.state.add_edge(arg.field, None, nsdfg_node, field, field_memlet)
                 for dim, var in indices.items():
                     store = arg.indices[dim]
-                    idx_memlet = inputs[var]
+                    idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
         for conn, _ in neighbor_tables:
             var = connectivity_identifier(conn)
-            memlet = inputs[var]
+            memlet = nsdfg_inputs[var]
             access = self.context.state.add_access(var)
             self.context.state.add_edge(access, None, nsdfg_node, var, memlet)
 
