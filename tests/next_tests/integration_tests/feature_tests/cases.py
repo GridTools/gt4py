@@ -60,7 +60,7 @@ NumericValue: TypeAlias = ScalarValue | np.typing.NDArray[ScalarValue]
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to avoid accidentally testing the wrong backend."""
+    """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
@@ -145,7 +145,8 @@ class UniqueInitializer(DataInitializer):
     """
     Initialize with a unique value in each coordinate point.
 
-    Data initialized with the same instance will also have unique values across data containers.
+    Data initialized with the same instance will also have unique values across
+    data containers.
     """
 
     start: int = 0
@@ -253,8 +254,13 @@ def allocate(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
 ) -> Builder:
-    """Allocate a parameter or return value from a fieldview code object with a fluid interface."""
-    return allocate_.sizes(case.default_sizes).case(case).fieldview_prog(fieldview_prog).name(name)
+    """Allocate a parameter or return value from a fieldview code object."""
+    return (
+        _allocate_from_name.sizes(case.default_sizes)
+        .case(case)
+        .fieldview_prog(fieldview_prog)
+        .name(name)
+    )
 
 
 def get_param_types(
@@ -288,6 +294,7 @@ def extend_sizes(
     sizes: dict[common.Dimension, int],
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> dict[common.Dimension, int]:
+    """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
     if extend:
         for dim, (lower, upper) in extend.items():
@@ -299,7 +306,7 @@ RETURN = "return"
 
 
 @make_builder(zeros={"strategy": ZeroInitializer()}, unique={"strategy": UniqueInitializer()})
-def allocate_(
+def _allocate_from_name(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
@@ -308,12 +315,12 @@ def allocate_(
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
-    """Allocate a field for a parameter or return value of a fieldview program or operator."""
+    """Allocate a parameter or return value of a fieldview code."""
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
     if name in ["out", RETURN] and strategy is None:
         strategy = ZeroInitializer()
-    return _allocate_for(
+    return _allocate_from_type(
         case=case,
         arg_type=arg_type,
         sizes=sizes,
@@ -322,7 +329,7 @@ def allocate_(
     )
 
 
-def _allocate_for(
+def _allocate_from_type(
     case: Case,
     arg_type: ts.TypeSpec,
     sizes: dict[common.Dimension, int],
@@ -330,7 +337,7 @@ def _allocate_for(
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
 ) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
-    """Allocate a field based on the field or scalar type or a (nested) tuple thereof."""
+    """Allocate data based on the type or a (nested) tuple thereof."""
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
@@ -343,7 +350,7 @@ def _allocate_for(
         case ts.TupleType(types=types):
             return tuple(
                 (
-                    _allocate_for(
+                    _allocate_from_type(
                         case=case, arg_type=t, sizes=sizes, dtype=dtype, strategy=strategy
                     )
                     for t in types
@@ -370,11 +377,12 @@ def run(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | NumericValue | tuple, ...], dict[str : common.Field | int | float]]:
+) -> tuple[tuple[common.Field | NumericValue | tuple, ...], dict[str, common.Field | int | float]]:
     """
-    Allocate default params and return values for a fieldview code object given a test case.
+    Allocate default data for a fieldview code object given a test case.
 
-    Meant to reduce boiler plate for simple cases, everything else should rely on `allocate()`.
+    Meant to reduce boiler plate for simple cases, everything else
+    should rely on `allocate()`.
     """
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
@@ -402,8 +410,8 @@ def verify(
     """
     Check the result of executing a fieldview program or operator against ref.
 
-    One of `out` or `nopass_out` must be passed.
-    If `out` is passed it will be used as an argument to the fieldview program and compared against `ref`.
+    One of `out` or `nopass_out` must be passed. If `out` is passed it will be
+    used as an argument to the fieldview program and compared against `ref`.
     Else, `nopass_out` will not be passed and compared to `ref`.
     """
     if out:
@@ -434,10 +442,11 @@ def verify_with_default_data(
     comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
     """
-    Check the result of executing a fieldview code object agains a reference constructed from the inputs.
+    Check the fieldview code against a reference calculation.
 
-    This is a convenience function to reduce boiler plate and not meant to hide logic for complex cases.
-    The `verify` function allowes more fine grained control for such tests.
+    This is a convenience function to reduce boiler plate
+    and is not meant to hide logic for complex cases. The
+    `verify` function allowes more fine grained control for such tests.
     """
     inps, kwfields = get_default_data(case, fieldop)
     ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
