@@ -196,7 +196,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         foo(size, out=out, domain={IDim: (0, size)})
 
     inp = cases.allocate(cartesian_case, bar, "size").strategy(
-        lambda dtype, shape: np.dtype(dtype).type(cartesian_case.default_sizes[IDim])
+        cases.ConstInitializer(cartesian_case.default_sizes[IDim])
     )()
     out = cases.allocate(cartesian_case, bar, "out")()
 
@@ -213,9 +213,9 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
         _scan_scalar(qc, scalar, out=qc)
 
-    qc = cases.allocate(cartesian_case, scan_scalar, "qc").strategy(cases.zeros)()
+    qc = cases.allocate(cartesian_case, scan_scalar, "qc").zeros()()
     scalar = cases.allocate(cartesian_case, scan_scalar, "scalar").strategy(
-        lambda dtype, shape: np.dtype(dtype).type(1)
+        cases.ConstInitializer(1)
     )()
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
@@ -239,7 +239,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     ) -> Field[[IDim, KDim], float]:
         return _scan_tuple_scalar(qc, tuple_scalar)
 
-    qc = cases.allocate(cartesian_case, scan_tuple_scalar, "qc").strategy(cases.zeros)()
+    qc = cases.allocate(cartesian_case, scan_tuple_scalar, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))

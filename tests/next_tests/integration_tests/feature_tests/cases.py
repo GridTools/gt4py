@@ -19,7 +19,7 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Optional, Protocol, TypeAlias
+from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias
 
 import numpy as np
 import pytest
@@ -60,40 +60,99 @@ def no_backend(program: itir.FencilDefinition, *args, **kwargs) -> None:
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-class ScalarInitializer(Protocol):
-    def __call__(self, dtype: str, shape: tuple[int, ...]) -> int | float | np.array:
+class DataInitializer(Protocol):
+    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
         ...
 
-
-class FieldInitializer(Protocol):
-    def __call__(
+    def field(
         self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
     ) -> common.Field:
         ...
 
-
-def zeros(
-    backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
-) -> common.Field:
-    """Initialize a field with all zeros."""
-    return embedded.np_as_located_field(*sizes.keys())(np.zeros(tuple(sizes.values()), dtype=dtype))
-
-
-def unique(
-    backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
-) -> common.Field:
-    """Initialize a field with a unique value in each coordinate."""
-    svals = tuple(sizes.values())
-    return embedded.np_as_located_field(*sizes.keys())(
-        np.arange(np.prod(svals), dtype=dtype).reshape(svals)
-    )
+    def from_case(
+        self,
+        case: Case,
+        fieldview_prog: decorator.FieldOperator | decorator.Program,
+        arg_name: str,
+        tuple_position: tuple[int | tuple, ...] = tuple(),
+    ) -> Self:
+        return self
 
 
-def scalar5(dtype: str, shape: Optional[tuple[int, ...]]) -> int | float | np.array:
-    """Initialize a scalar to the value 5."""
-    if shape:
-        return np.ones(np.prod(shape), dtype=dtype) * 5
-    return np.dtype(dtype).type(5)
+@dataclasses.dataclass
+class ConstInitializer(DataInitializer):
+    """Initialize with a given value accross the coordinate space."""
+
+    value: int | float
+
+    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+        if shape:
+            return np.ones(np.prod(shape), dtype=dtype) * self.value
+        return np.dtype(dtype).type(self.value)
+
+    def field(
+        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+    ) -> common.Field:
+        return embedded.np_as_located_field(*sizes.keys())(
+            (np.ones(tuple(sizes.values())) * self.value).astype(dtype=dtype)
+        )
+
+
+@dataclasses.dataclass
+class ZeroInitializer(DataInitializer):
+    """Initialize with zeros."""
+
+    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+        if shape:
+            return np.zeros(np.prod(shape), dtype=dtype)
+        return np.dtype(dtype).type(0)
+
+    def field(
+        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+    ) -> common.Field:
+        return embedded.np_as_located_field(*sizes.keys())(
+            np.zeros(tuple(sizes.values()), dtype=dtype)
+        )
+
+
+@dataclasses.dataclass
+class UniqueInitializer(DataInitializer):
+    start: int = 0
+
+    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+        start = self.start
+        if shape:
+            n_data = int(np.prod(shape))
+            self.start += n_data
+            return np.arange(start, start + n_data, dtype=dtype)
+        self.start += 1
+        return np.dtype(dtype).type(self.start)
+
+    def field(
+        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+    ) -> common.Field:
+        """Initialize a field with a unique value in each coordinate."""
+        start = self.start
+        svals = tuple(sizes.values())
+        n_data = int(np.prod(svals))
+        self.start += n_data
+        return embedded.np_as_located_field(*sizes.keys())(
+            np.arange(start, start + n_data, dtype=dtype).reshape(svals)
+        )
+
+    def from_case(
+        self,
+        case: Case,
+        fieldview_prog: decorator.FieldOperator | decorator.Program,
+        arg_name: str,
+    ) -> Self:
+        param_types = get_param_types(fieldview_prog)
+        param_sizes = [
+            get_param_size(param_type, sizes=case.default_sizes)
+            for param_type in param_types.values()
+        ]
+        param_index = list(param_types.keys()).index(arg_name)
+        return self.__class__(start=self.start + sum(param_sizes[:param_index]))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -107,33 +166,54 @@ class Builder:
         return self.build(*args, **kwargs)
 
 
-def make_builder(func):
+def make_builder(
+    func: Optional[Callable] = None, **kwargs: dict[str, Any]
+) -> Callable[[Callable], Builder] | Builder:
     """Create a fluid inteface for a function with many arguments."""
 
-    def make_setter(argname):
-        def setter(self, arg):
-            return self.__class__(
-                partial=functools.partial(
-                    self.partial, *self.partial.args, **(self.partial.keywords | {argname: arg})
+    def make_builder_inner(func):
+        def make_setter(argname):
+            def setter(self, arg):
+                return self.__class__(
+                    partial=functools.partial(
+                        self.partial, *self.partial.args, **(self.partial.keywords | {argname: arg})
+                    )
                 )
-            )
 
-        setter.__name__ = argname
-        return setter
+            setter.__name__ = argname
+            return setter
 
-    argspec = inspect.getfullargspec(func)
+        def make_flag_setter(flag_name: str, flag_kwargs):
+            def setter(self):
+                return self.__class__(
+                    partial=functools.partial(
+                        self.partial, *self.partial.args, **(self.partial.keywords | flag_kwargs)
+                    )
+                )
 
-    @dataclasses.dataclass(frozen=True)
-    class NewBuilder(Builder):
-        for argname in argspec.args + argspec.kwonlyargs:
-            locals()[argname] = make_setter(argname)
+            setter.__name__ = flag_name
+            return setter
 
-    func_snake_words = func.__name__.split("_")
-    func_camel_name = "".join(word.capitalize() for word in func_snake_words)
+        argspec = inspect.getfullargspec(func)
 
-    NewBuilder.__name__ = f"{func_camel_name}Builder"
+        @dataclasses.dataclass(frozen=True)
+        class NewBuilder(Builder):
+            for argname in argspec.args + argspec.kwonlyargs:
+                locals()[argname] = make_setter(argname)
 
-    return NewBuilder(functools.partial(func))
+            for flag, flag_kwargs in kwargs.items():
+                locals()[flag] = make_flag_setter(flag, flag_kwargs)
+
+        func_snake_words = func.__name__.split("_")
+        func_camel_name = "".join(word.capitalize() for word in func_snake_words)
+
+        NewBuilder.__name__ = f"{func_camel_name}Builder"
+
+        return NewBuilder(functools.partial(func))
+
+    if func:
+        return make_builder_inner(func)
+    return make_builder_inner
 
 
 def allocate(
@@ -142,18 +222,12 @@ def allocate(
     name: str,
 ) -> Builder:
     """Allocate a parameter or return value from a fieldview code object with a fluid interface."""
-    return (
-        make_builder(allocate_)
-        .sizes(case.default_sizes)
-        .case(case)
-        .fieldview_prog(fieldview_prog)
-        .name(name)
-    )
+    return allocate_.sizes(case.default_sizes).case(case).fieldview_prog(fieldview_prog).name(name)
 
 
 def get_param_types(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> dict[str, ts.FieldType | ts.TupleType | ts.ScalarType]:
+) -> dict[str, ts.TypeSpec]:
     if fieldview_prog.definition is None:
         raise ValueError(
             f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
@@ -164,10 +238,24 @@ def get_param_types(
     }
 
 
+def get_param_size(
+    param_type: ts.TypeSpec, sizes: dict[common.Dimension, int | tuple[int | tuple]]
+) -> int:
+    match param_type:
+        case ts.FieldType(dims=dims):
+            return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
+        case ts.ScalarType(shape=shape):
+            return int(np.prod(shape)) if shape else 1
+        case ts.TupleType(types):
+            return sum([get_param_size(t, sizes=sizes) for t in types])
+        case _:
+            raise TypeError(f"Can not get size for parameter of type {param_type}")
+
+
 def extend_sizes(
-    sizes: dict[common.Dimension, str],
+    sizes: dict[common.Dimension, int],
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> dict[common.Dimension, str]:
+) -> dict[common.Dimension, int]:
     sizes = sizes.copy()
     if extend:
         for dim, (lower, upper) in extend.items():
@@ -178,53 +266,61 @@ def extend_sizes(
 RETURN = "return"
 
 
+@make_builder(zeros={"strategy": ZeroInitializer()}, unique={"strategy": UniqueInitializer()})
 def allocate_(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
     sizes: dict[common.Dimension, int],
-    strategy: Optional[FieldInitializer | ScalarInitializer] = None,
+    strategy: DataInitializer = UniqueInitializer(),
     dtype: Optional[str] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> common.Field | tuple[common.Field, ...] | int | float:
+) -> common.Field | tuple[common.Field | int | float | tuple, ...] | int | float:
     """Allocate a field for a parameter or return value of a fieldview program or operator."""
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
     if name in ["out", RETURN] and strategy is None:
-        strategy = zeros
-    return _allocate_for(case=case, arg_type=arg_type, sizes=sizes, dtype=dtype, strategy=strategy)
+        strategy = ZeroInitializer()
+    return _allocate_for(
+        case=case,
+        arg_type=arg_type,
+        sizes=sizes,
+        dtype=dtype,
+        strategy=strategy.from_case(case=case, fieldview_prog=fieldview_prog, arg_name=name),
+    )
 
 
 def _allocate_for(
     case: Case,
-    arg_type: ts.FieldType | ts.TupleType,
+    arg_type: ts.TypeSpec,
     sizes: dict[common.Dimension, int],
-    strategy: Optional[FieldInitializer | ScalarInitializer] = None,
+    strategy: DataInitializer,
     dtype: Optional[str] = None,
-) -> common.Field | tuple[common.Field, ...] | int | float:
+    tuple_start: Optional[int] = None,
+) -> common.Field | tuple[common.Field | int | float, ...] | int | float:
     """Allocate a field based on the field or scalar type or a (nested) tuple thereof."""
     match arg_type:
-        case ts.FieldType():
-            strategy = strategy or unique
-            return strategy(
+        case ts.FieldType(dims=dims, dtype=arg_dtype):
+            return strategy.field(
                 backend=case.backend,
-                sizes={dim: sizes[dim] for dim in arg_type.dims},
-                dtype=dtype or arg_type.dtype.kind.name.lower(),
+                sizes={dim: sizes[dim] for dim in dims},
+                dtype=dtype or arg_dtype.kind.name.lower(),
             )
-        case ts.ScalarType():
-            strategy = strategy or scalar5
-            return strategy(dtype=dtype or arg_type.kind.name.lower(), shape=arg_type.shape)
-        case ts.TupleType():
+        case ts.ScalarType(kind=kind, shape=shape):
+            return strategy.scalar(dtype=dtype or kind.name.lower(), shape=shape)
+        case ts.TupleType(types=types):
             return tuple(
                 (
                     _allocate_for(
                         case=case, arg_type=t, sizes=sizes, dtype=dtype, strategy=strategy
                     )
-                    for t in arg_type.types
+                    for t in types
                 )
             )
         case _:
-            raise TypeError(f"Can not allocate for type {arg_type}")
+            raise TypeError(
+                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
+            )
 
 
 def run(
@@ -251,7 +347,7 @@ def get_default_data(
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
     if not isinstance(param_types.setdefault(RETURN, types.NoneType), types.NoneType):
-        kwfields = {"out": allocate(case, fieldview_prog, RETURN).strategy(zeros)()}
+        kwfields = {"out": allocate(case, fieldview_prog, RETURN).zeros()()}
     param_types.pop(RETURN)
     inps = tuple(
         allocate(case, fieldview_prog, name)()
