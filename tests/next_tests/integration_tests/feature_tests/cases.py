@@ -192,11 +192,8 @@ class UniqueInitializer(DataInitializer):
 class Builder:
     partial: functools.partial
 
-    def build(self, *args, **kwargs) -> Self:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.partial(*args, **kwargs)
-
-    def __call__(self, *args, **kwargs) -> Any:
-        return self.build(*args, **kwargs)
 
 
 def make_builder(
@@ -231,11 +228,13 @@ def make_builder(
 
         @dataclasses.dataclass(frozen=True)
         class NewBuilder(Builder):
-            for argname in argspec.args + argspec.kwonlyargs:
-                locals()[argname] = make_setter(argname)
+            ...
 
-            for flag, flag_kwargs in kwargs.items():
-                locals()[flag] = make_flag_setter(flag, flag_kwargs)
+        for argname in argspec.args + argspec.kwonlyargs:
+            setattr(NewBuilder, argname, make_setter(argname))
+
+        for flag, flag_kwargs in kwargs.items():
+            setattr(NewBuilder, flag, make_flag_setter(flag, flag_kwargs))
 
         func_snake_words = func.__name__.split("_")
         func_camel_name = "".join(word.capitalize() for word in func_snake_words)
