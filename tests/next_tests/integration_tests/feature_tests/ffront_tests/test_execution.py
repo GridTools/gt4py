@@ -111,9 +111,9 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
     a = cases.allocate(cartesian_case, testee, "inp1").extend({cases.IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "inp2").extend({cases.IDim: (0, 2)})()
-    out_I_float = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, b, out=out_I_float, ref=a[1:] + b[2:])
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=a[1:] + b[2:])
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
