@@ -97,7 +97,7 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     inp = cases.allocate(unstructured_case, testee, "inp")()
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
-    ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[slice(0, None), 0]]
+    ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[:, 0]]
     cases.verify(unstructured_case, testee, inp, out=out, ref=ref)
 
 
