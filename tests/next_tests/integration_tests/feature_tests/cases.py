@@ -31,7 +31,7 @@ from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # import alias for later moving this here; noqa: F401: # fixture
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
     Edge,
     IDim,
     Ioff,
