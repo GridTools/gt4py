@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import multiprocessing
 import multiprocessing as mp
 import os
 from typing import Any, Dict, Optional
@@ -53,7 +52,7 @@ build_settings: Dict[str, Any] = {
         "nvcc": [],
     },
     "extra_link_args": [],
-    "parallel_jobs": multiprocessing.cpu_count(),
+    "parallel_jobs": mp.cpu_count(),
     "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
     "max_async_build_proc": os.environ.get("GT_MAX_ASYNC_BUILD_PROC", mp.cpu_count()),
 }
