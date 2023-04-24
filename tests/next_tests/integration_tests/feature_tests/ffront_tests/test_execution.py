@@ -61,72 +61,70 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def copy(inp: cases.IJKField) -> cases.IJKField:
+    def testee(inp: cases.IJKField) -> cases.IJKField:
         field_tuple = (inp, inp)
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
 
-    cases.verify_with_default_data(cartesian_case, copy, ref=lambda a: a)
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def multicopy(
-        inp1: cases.IJKField, inp2: cases.IJKField
-    ) -> tuple[cases.IJKField, cases.IJKField]:
+    def testee(inp1: cases.IJKField, inp2: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return inp1, inp2
 
-    cases.verify_with_default_data(cartesian_case, multicopy, ref=lambda a, b: (a, b))
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def shift_by_one(inp: cases.IJKField) -> cases.IJKField:
+    def testee(inp: cases.IJKField) -> cases.IJKField:
         return inp(Ioff[1])
 
-    inp = cases.allocate(cartesian_case, shift_by_one, "inp").extend({IDim: (0, 1)})()
-    out = cases.allocate(cartesian_case, shift_by_one, cases.RETURN)()
+    inp = cases.allocate(cartesian_case, testee, "inp").extend({IDim: (0, 1)})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, shift_by_one, inp, out=out, ref=inp[1:])
+    cases.verify(cartesian_case, testee, inp, out=out, ref=inp[1:])
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def shift_by_one(inp: cases.VField) -> cases.EField:
+    def testee(inp: cases.VField) -> cases.EField:
         return inp(E2V[0])
 
-    inp = cases.allocate(unstructured_case, shift_by_one, "inp")()
-    out = cases.allocate(unstructured_case, shift_by_one, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[slice(0, None), 0]]
-    cases.verify(unstructured_case, shift_by_one, inp, out=out, ref=ref)
+    cases.verify(unstructured_case, testee, inp, out=out, ref=ref)
 
 
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
     @field_operator
-    def auto_lift(inp1: cases.IJKField, inp2: cases.IJKField) -> cases.IJKField:
+    def testee(inp1: cases.IJKField, inp2: cases.IJKField) -> cases.IJKField:
         tmp = inp1 + inp2(Ioff[1])
         return tmp(Ioff[1])
 
-    a = cases.allocate(cartesian_case, auto_lift, "inp1").extend({cases.IDim: (0, 1)})()
-    b = cases.allocate(cartesian_case, auto_lift, "inp2").extend({cases.IDim: (0, 2)})()
-    out_I_float = cases.allocate(cartesian_case, auto_lift, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "inp1").extend({cases.IDim: (0, 1)})()
+    b = cases.allocate(cartesian_case, testee, "inp2").extend({cases.IDim: (0, 2)})()
+    out_I_float = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, auto_lift, a, b, out=out_I_float, ref=a[1:] + b[2:])
+    cases.verify(cartesian_case, testee, a, b, out=out_I_float, ref=a[1:] + b[2:])
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def tuples(inp1: cases.IJKFloatField, inp2: cases.IJKFloatField) -> cases.IJKFloatField:
+    def testee(inp1: cases.IJKFloatField, inp2: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = inp1, inp2
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
     cases.verify_with_default_data(
-        cartesian_case, tuples, ref=lambda a, b: (a * 1.3 + b * 5.0) * 3.4
+        cartesian_case, testee, ref=lambda a, b: (a * 1.3 + b * 5.0) * 3.4
     )
 
 
@@ -134,50 +132,50 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @field_operator
-    def scalar_arg(scalar_inp: int) -> cases.VField:
+    def testee(scalar_inp: int) -> cases.VField:
         return broadcast(scalar_inp + 1, (Vertex,))
 
-    inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
-    out = cases.allocate(unstructured_case, scalar_arg, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "scalar_inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
     ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 1)
 
     # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
     #       Explanation: using `verify` here to override `offset_provider`,
     #       which is necessary to avoid domain type deduction clash in GTFN.
-    cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
+    cases.verify(unstructured_case, testee, inp, out=out, ref=ref, offset_provider={})
 
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def scalar_arg_inner(scalar_inp: int) -> cases.VField:
+    def testee_inner(scalar_inp: int) -> cases.VField:
         return broadcast(scalar_inp + 1, (Vertex,))
 
     @field_operator
-    def scalar_arg(scalar_inp: int) -> cases.VField:
-        return scalar_arg_inner(scalar_inp + 1)
+    def testee(scalar_inp: int) -> cases.VField:
+        return testee_inner(scalar_inp + 1)
 
-    inp = cases.allocate(unstructured_case, scalar_arg, "scalar_inp")()
-    out = cases.allocate(unstructured_case, scalar_arg, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "scalar_inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
     ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 2)
 
     # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
     #       Explanation: using `verify` here to override `offset_provider`,
     #       which is necessary to avoid domain type deduction clash in GTFN.
-    cases.verify(unstructured_case, scalar_arg, inp, out=out, ref=ref, offset_provider={})
+    cases.verify(unstructured_case, testee, inp, out=out, ref=ref, offset_provider={})
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def scalar_and_field_args(inp: cases.IJKField, factor: int) -> cases.IJKField:
+    def testee(inp: cases.IJKField, factor: int) -> cases.IJKField:
         tmp = factor * inp
         return tmp(Ioff[1])
 
-    inp = cases.allocate(cartesian_case, scalar_and_field_args, "inp").extend({IDim: (0, 1)})()
-    factor = cases.allocate(cartesian_case, scalar_and_field_args, "factor")()
-    out = cases.allocate(cartesian_case, scalar_and_field_args, cases.RETURN)()
+    inp = cases.allocate(cartesian_case, testee, "inp").extend({IDim: (0, 1)})()
+    factor = cases.allocate(cartesian_case, testee, "factor")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     ref = inp.array()[1:] * factor
 
-    cases.verify(cartesian_case, scalar_and_field_args, inp, factor, out=out, ref=ref)
+    cases.verify(cartesian_case, testee, inp, factor, out=out, ref=ref)
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
@@ -188,39 +186,39 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         )
 
     @field_operator
-    def foo(size: int) -> cases.IField:
+    def testee_op(size: int) -> cases.IField:
         return broadcast(size, (IDim,))
 
     @program
-    def bar(size: int, out: cases.IField):
-        foo(size, out=out, domain={IDim: (0, size)})
+    def testee(size: int, out: cases.IField):
+        testee_op(size, out=out, domain={IDim: (0, size)})
 
-    inp = cases.allocate(cartesian_case, bar, "size").strategy(
+    inp = cases.allocate(cartesian_case, testee, "size").strategy(
         cases.ConstInitializer(cartesian_case.default_sizes[IDim])
     )()
-    out = cases.allocate(cartesian_case, bar, "out")()
+    out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
-    cases.verify(cartesian_case, bar, inp, out=out, ref=np.full_like(out.array(), inp, dtype=int))
+    cases.verify(
+        cartesian_case, testee, inp, out=out, ref=np.full_like(out.array(), inp, dtype=int)
+    )
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @scan_operator(axis=KDim, forward=True, init=(0.0))
-    def _scan_scalar(carry: float, qc_in: float, scalar: float) -> float:
+    def testee_scan(carry: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + carry + scalar
         return qc
 
     @program
-    def scan_scalar(qc: Field[[IDim, KDim], float], scalar: float):
-        _scan_scalar(qc, scalar, out=qc)
+    def testee(qc: Field[[IDim, KDim], float], scalar: float):
+        testee_scan(qc, scalar, out=qc)
 
-    qc = cases.allocate(cartesian_case, scan_scalar, "qc").zeros()()
-    scalar = cases.allocate(cartesian_case, scan_scalar, "scalar").strategy(
-        cases.ConstInitializer(1)
-    )()
+    qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
+    scalar = cases.allocate(cartesian_case, testee, "scalar").strategy(cases.ConstInitializer(1))()
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
 
-    cases.verify(cartesian_case, scan_scalar, qc, scalar, nopass_out=qc, ref=expected)
+    cases.verify(cartesian_case, testee, qc, scalar, nopass_out=qc, ref=expected)
 
 
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
@@ -228,34 +226,34 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
         pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
 
     @scan_operator(axis=KDim, forward=True, init=0.0)
-    def _scan_tuple_scalar(
+    def testee_scan(
         state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
     ) -> float:
         return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
     @field_operator
-    def scan_tuple_scalar(
+    def testee_op(
         qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
     ) -> Field[[IDim, KDim], float]:
-        return _scan_tuple_scalar(qc, tuple_scalar)
+        return testee_scan(qc, tuple_scalar)
 
-    qc = cases.allocate(cartesian_case, scan_tuple_scalar, "qc").zeros()()
+    qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
 
-    cases.verify(cartesian_case, scan_tuple_scalar, qc, tuple_scalar, out=qc, ref=expected)
+    cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def astype_fieldop_int(b: Field[[IDim], float64]) -> Field[[IDim], int64]:
-        d = astype(b, int64)
-        return d
+    def testee(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
+        b = astype(a, int64)
+        return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        astype_fieldop_int,
+        testee,
         ref=lambda a: a.astype(int),
         comparison=lambda a, b: np.all(np.equal(a, b)),
     )
@@ -263,27 +261,27 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def astype_fieldop_bool(b: Field[[IDim], float64]) -> Field[[IDim], bool]:
-        d = astype(b, bool)
-        return d
+    def testee(a: Field[[IDim], float64]) -> Field[[IDim], bool]:
+        b = astype(a, bool)
+        return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        astype_fieldop_bool,
+        testee,
         ref=lambda a: a.astype(bool),
         comparison=lambda a, b: np.all(np.equal(a, b)),
     )
 
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator(backend=cartesian_case.backend)
-    def astype_fieldop_float(b: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
-        d = astype(b, float32)
-        return d
+    @field_operator
+    def testee(a: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
+        b = astype(a, float32)
+        return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        astype_fieldop_float,
+        testee,
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(np.equal(a, b)),
     )

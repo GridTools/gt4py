@@ -346,14 +346,14 @@ def get_default_data(
     """
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
-    if not isinstance(param_types.setdefault(RETURN, types.NoneType), types.NoneType):
-        kwfields = {"out": allocate(case, fieldview_prog, RETURN).zeros()()}
-    param_types.pop(RETURN)
-    inps = tuple(
-        allocate(case, fieldview_prog, name)()
-        for name in get_param_types(fieldview_prog)
-        if name != "out" and name != RETURN
-    )
+    if RETURN in param_types:
+        if not isinstance(param_types[RETURN], types.NoneType):
+            kwfields = {"out": allocate(case, fieldview_prog, RETURN).zeros()()}
+        param_types.pop(RETURN)
+    if "out" in param_types:
+        kwfields = {"out": allocate(case, fieldview_prog, "out").zeros()()}
+        param_types.pop("out")
+    inps = tuple(allocate(case, fieldview_prog, name)() for name in param_types)
     return inps, kwfields
 
 
@@ -385,7 +385,14 @@ def verify(
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
-    assert comparison(ref, out or nopass_out)
+    out_comp = out or nopass_out
+    out_comp_str = str(out_comp)
+    assert out_comp is not None
+    if hasattr(out_comp, "array"):
+        out_comp_str = str(out_comp.array())
+    assert comparison(
+        ref, out_comp
+    ), f"Verification failed:\n\tcomparison={comparison.__name__}(ref, out)\n\tref = {ref}\n\tout = {out_comp_str}"
 
 
 def verify_with_default_data(
