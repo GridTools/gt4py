@@ -93,22 +93,60 @@ def test_cartesian_shift(fieldview_backend):
 
 
 def test_unstructured_shift(reduction_setup, fieldview_backend):
-    Vertex = reduction_setup.Vertex
-    Edge = reduction_setup.Edge
     E2V = reduction_setup.E2V
 
-    a = np_as_located_field(Vertex)(np.zeros(reduction_setup.num_vertices))
+    a = np_as_located_field(Vertex)(np.arange(0, reduction_setup.num_vertices, dtype=np.float64))
     b = np_as_located_field(Edge)(np.zeros(reduction_setup.num_edges))
 
     @field_operator(backend=fieldview_backend)
-    def shift_by_one(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+    def shift_unstructured(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
         return inp(E2V[0])
 
-    shift_by_one(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
+    shift_unstructured(a, out=b, offset_provider={"E2V": reduction_setup.offset_provider["E2V"]})
 
     ref = np.asarray(a)[reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]]
 
     assert np.allclose(b, ref)
+
+
+def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
+    E2V = reduction_setup.E2V
+    C2E = reduction_setup.C2E
+    e2v_table = reduction_setup.offset_provider["E2V"].table[slice(0, None), 0]
+    c2e_table = reduction_setup.offset_provider["C2E"].table[slice(0, None), 0]
+
+    a = np_as_located_field(Vertex)(np.arange(0, reduction_setup.num_vertices, dtype=np.float64))
+    b = np_as_located_field(Cell)(np.zeros(reduction_setup.num_cells))
+
+    @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured_flat(inp: Field[[Vertex], float64]) -> Field[[Cell], float64]:
+        return inp(E2V[0])(C2E[0])
+
+    @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured_intermediate_result(
+        inp: Field[[Vertex], float64]
+    ) -> Field[[Cell], float64]:
+        tmp = inp(E2V[0])
+        return tmp(C2E[0])
+
+    @field_operator(backend=fieldview_backend)
+    def shift_e2v(inp: Field[[Vertex], float64]) -> Field[[Edge], float64]:
+        return inp(E2V[0])
+
+    @field_operator(backend=fieldview_backend)
+    def composed_shift_unstructured(inp: Field[[Vertex], float64]) -> Field[[Cell], float64]:
+        return shift_e2v(inp)(C2E[0])
+
+    ref = np.asarray(a)[e2v_table][c2e_table]
+
+    for field_op in [
+        composed_shift_unstructured_flat,
+        composed_shift_unstructured_intermediate_result,
+        composed_shift_unstructured,
+    ]:
+        field_op(a, out=b, offset_provider=reduction_setup.offset_provider)
+
+        assert np.allclose(b, ref)
 
 
 def test_fold_shifts(fieldview_backend):
@@ -397,8 +435,6 @@ def test_nested_tuple_return(fieldview_backend):
 
 def test_nested_reduction(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
     V2E = rs.V2E
@@ -420,8 +456,6 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
 @pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
     V2E = rs.V2E
@@ -443,8 +477,6 @@ def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
 
 def test_tuple_return_2(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
@@ -470,8 +502,6 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
 @pytest.mark.xfail
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
     E2V = rs.E2V
@@ -641,8 +671,6 @@ def test_ternary_operator_tuple(left, right, fieldview_backend):
 
 def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
