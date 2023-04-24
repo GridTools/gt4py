@@ -106,7 +106,7 @@ class ConstInitializer(DataInitializer):
 
     def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
         if shape:
-            return np.ones(np.prod(shape), dtype=dtype) * self.value
+            return np.full(np.prod(shape), self.value, dtype=dtype)
         return np.dtype(dtype).type(self.value)
 
     def field(
