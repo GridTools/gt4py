@@ -23,7 +23,7 @@ from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias
 
 import numpy as np
 import pytest
-from typing_extensions import Self
+from gt4py.eve.extended_typing import Self
 
 from gt4py.next import common
 from gt4py.next.ffront import decorator, fbuiltins
