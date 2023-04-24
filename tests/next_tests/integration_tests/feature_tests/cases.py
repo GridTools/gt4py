@@ -19,12 +19,12 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Optional, Protocol, Sequence, TypeAlias
+from typing import Any, Callable, Literal, Optional, Protocol, Sequence, TypeAlias
 
 import numpy as np
 import pytest
-from gt4py.eve.extended_typing import Self
 
+from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator, fbuiltins
 from gt4py.next.iterator import embedded, ir as itir
@@ -55,17 +55,36 @@ V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 
-def no_backend(program: itir.FencilDefinition, *args, **kwargs) -> None:
+ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
+NumericValue: TypeAlias = ScalarValue | np.typing.NDArray[ScalarValue]
+
+
+def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to avoid accidentally testing the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 class DataInitializer(Protocol):
-    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+    @typing.overload
+    def scalar(self, dtype: np.typing.DTypeLike, shape: Literal[None]) -> ScalarValue:
+        ...
+
+    @typing.overload
+    def scalar(
+        self, dtype: np.typing.DTypeLike, shape: Sequence[int]
+    ) -> np.typing.NDArray[ScalarValue]:
+        ...
+
+    def scalar(
+        self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]] = None
+    ) -> NumericValue:
         ...
 
     def field(
-        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[common.Dimension, int],
+        dtype: np.typing.DTypeLike,
     ) -> common.Field:
         ...
 
@@ -81,17 +100,20 @@ class DataInitializer(Protocol):
 
 @dataclasses.dataclass
 class ConstInitializer(DataInitializer):
-    """Initialize with a given value accross the coordinate space."""
+    """Initialize with a given value across the coordinate space."""
 
     value: int | float
 
-    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
         if shape:
             return np.ones(np.prod(shape), dtype=dtype) * self.value
         return np.dtype(dtype).type(self.value)
 
     def field(
-        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[common.Dimension, int],
+        dtype: np.typing.DTypeLike,
     ) -> common.Field:
         return embedded.np_as_located_field(*sizes.keys())(
             (np.ones(tuple(sizes.values())) * self.value).astype(dtype=dtype)
@@ -102,13 +124,16 @@ class ConstInitializer(DataInitializer):
 class ZeroInitializer(DataInitializer):
     """Initialize with zeros."""
 
-    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
         if shape:
             return np.zeros(np.prod(shape), dtype=dtype)
         return np.dtype(dtype).type(0)
 
     def field(
-        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[common.Dimension, int],
+        dtype: np.typing.DTypeLike,
     ) -> common.Field:
         return embedded.np_as_located_field(*sizes.keys())(
             np.zeros(tuple(sizes.values()), dtype=dtype)
@@ -117,9 +142,15 @@ class ZeroInitializer(DataInitializer):
 
 @dataclasses.dataclass
 class UniqueInitializer(DataInitializer):
+    """
+    Initialize with a unique value in each coordinate point.
+
+    Data initialized with the same instance will also have unique values across data containers.
+    """
+
     start: int = 0
 
-    def scalar(self, dtype: str, shape: Optional[Sequence[int]]) -> int | float | np.array:
+    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
         start = self.start
         if shape:
             n_data = int(np.prod(shape))
@@ -129,9 +160,11 @@ class UniqueInitializer(DataInitializer):
         return np.dtype(dtype).type(self.start)
 
     def field(
-        self, backend: ppi.ProgramProcessor, sizes: dict[common.Dimension, int], dtype: str
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[common.Dimension, int],
+        dtype: np.typing.DTypeLike,
     ) -> common.Field:
-        """Initialize a field with a unique value in each coordinate."""
         start = self.start
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
@@ -273,9 +306,9 @@ def allocate_(
     name: str,
     sizes: dict[common.Dimension, int],
     strategy: DataInitializer = UniqueInitializer(),
-    dtype: Optional[str] = None,
+    dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> common.Field | tuple[common.Field | int | float | tuple, ...] | int | float:
+) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
     """Allocate a field for a parameter or return value of a fieldview program or operator."""
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
@@ -295,9 +328,9 @@ def _allocate_for(
     arg_type: ts.TypeSpec,
     sizes: dict[common.Dimension, int],
     strategy: DataInitializer,
-    dtype: Optional[str] = None,
+    dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
-) -> common.Field | tuple[common.Field | int | float, ...] | int | float:
+) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
     """Allocate a field based on the field or scalar type or a (nested) tuple thereof."""
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
@@ -338,7 +371,7 @@ def run(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | int | float, ...], dict[str : common.Field | int | float]]:
+) -> tuple[tuple[common.Field | NumericValue | tuple, ...], dict[str : common.Field | int | float]]:
     """
     Allocate default params and return values for a fieldview code object given a test case.
 
