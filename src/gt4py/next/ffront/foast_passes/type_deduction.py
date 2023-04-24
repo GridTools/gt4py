@@ -546,7 +546,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_types = [arg.type for arg in new_args]
         kwarg_types = {name: arg.type for name, arg in new_kwargs.items()}
 
-        func_str_repr: str  # just for error handling
         if isinstance(
             new_func.type,
             (ts.FunctionType, ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
@@ -560,9 +559,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise FieldOperatorTypeDeductionError.from_foast_node(
                     node, msg="Functions can only be called directly!"
                 )
-            func_str_repr = new_func.id
         elif isinstance(new_func.type, ts.FieldType):
-            func_str_repr = str(new_func)
+            pass
         else:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -579,7 +577,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except GTTypeError as err:
             raise FieldOperatorTypeDeductionError.from_foast_node(
-                node, msg=f"Invalid argument types in call to `{func_str_repr}`!"
+                node, msg=f"Invalid argument types in call to `{new_func}`!"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
