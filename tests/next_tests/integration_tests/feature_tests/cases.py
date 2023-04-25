@@ -249,20 +249,6 @@ def make_builder(
     return make_builder_inner
 
 
-def allocate(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
-    name: str,
-) -> Builder:
-    """Allocate a parameter or return value from a fieldview code object."""
-    return (
-        _allocate_from_name.sizes(case.default_sizes)
-        .case(case)
-        .fieldview_prog(fieldview_prog)
-        .name(name)
-    )
-
-
 def get_param_types(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
 ) -> dict[str, ts.TypeSpec]:
@@ -306,16 +292,16 @@ RETURN = "return"
 
 
 @make_builder(zeros={"strategy": ZeroInitializer()}, unique={"strategy": UniqueInitializer()})
-def _allocate_from_name(
+def allocate(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
-    sizes: dict[common.Dimension, int],
+    sizes: Optional[dict[common.Dimension, int]] = None,
     strategy: DataInitializer = UniqueInitializer(),
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
-    """Allocate a parameter or return value of a fieldview code."""
+    """Allocate a parameter or return value from a fieldview code object."""
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
     if name in ["out", RETURN] and strategy is None:
