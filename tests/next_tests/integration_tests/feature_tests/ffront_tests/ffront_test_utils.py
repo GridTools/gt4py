@@ -64,6 +64,7 @@ Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
 
 Vertex = Dimension("Vertex")
 Edge = Dimension("Edge")
+Cell = Dimension("Cell")
 EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 size = 10
@@ -72,10 +73,11 @@ size = 10
 @pytest.fixture
 def reduction_setup():
     num_vertices = 9
-    edge = Dimension("Edge")
-    vertex = Dimension("Vertex")
+    num_cells = 8
     v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
     e2vdim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    c2vdim = Dimension("C2V", kind=DimensionKind.LOCAL)
+    c2edim = Dimension("C2E", kind=DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [
@@ -88,6 +90,32 @@ def reduction_setup():
             [6, 12, 8, 15],  # 6
             [7, 13, 6, 16],
             [8, 14, 7, 17],
+        ]
+    )
+
+    c2v_arr = np.array(
+        [
+            [0, 1, 4, 3],
+            [1, 2, 5, 6],
+            [3, 4, 7, 6],
+            [4, 5, 8, 7],
+            [6, 7, 1, 0],
+            [7, 8, 2, 1],
+            [2, 0, 3, 5],
+            [5, 3, 6, 8],
+        ]
+    )
+
+    c2e_arr = np.array(
+        [
+            [0, 10, 3, 9],
+            [1, 11, 4, 10],
+            [3, 13, 6, 12],
+            [4, 14, 7, 13],
+            [6, 16, 0, 15],
+            [7, 17, 1, 16],
+            [2, 9, 5, 11],
+            [5, 12, 8, 14],
         ]
     )
 
@@ -105,12 +133,15 @@ def reduction_setup():
         [
             "num_vertices",
             "num_edges",
-            "Edge",
-            "Vertex",
+            "num_cells",
             "V2EDim",
             "E2VDim",
+            "C2VDim",
+            "C2EDim",
             "V2E",
             "E2V",
+            "C2V",
+            "C2E",
             "inp",
             "out",
             "offset_provider",
@@ -120,18 +151,23 @@ def reduction_setup():
     )(
         num_vertices=num_vertices,
         num_edges=num_edges,
-        Edge=edge,
-        Vertex=vertex,
+        num_cells=num_cells,
         V2EDim=v2edim,
         E2VDim=e2vdim,
-        V2E=FieldOffset("V2E", source=edge, target=(vertex, v2edim)),
-        E2V=FieldOffset("E2V", source=vertex, target=(edge, e2vdim)),
+        C2VDim=c2vdim,
+        C2EDim=c2edim,
+        V2E=FieldOffset("V2E", source=Edge, target=(Vertex, v2edim)),
+        E2V=FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
+        C2V=FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
+        C2E=FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
         # inp=index_field(edge, dtype=np.int64), # TODO enable once we support index_fields in bindings
-        inp=np_as_located_field(edge)(np.arange(num_edges, dtype=np.int64)),
-        out=np_as_located_field(vertex)(np.zeros([num_vertices], dtype=np.int64)),
+        inp=np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int64)),
+        out=np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
-            "V2E": NeighborTableOffsetProvider(v2e_arr, vertex, edge, 4),
-            "E2V": NeighborTableOffsetProvider(e2v_arr, edge, vertex, 2, has_skip_values=False),
+            "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
+            "C2V": NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
+            "C2E": NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
         },
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
