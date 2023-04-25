@@ -198,7 +198,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             self,
             node: itir.Lambda,
             args: Sequence[ValueExpr | IteratorExpr]
-    ) -> tuple[Context, list[str | tuple[str, ...]], list[ValueExpr]]:
+    ) -> tuple[Context, list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]], list[ValueExpr]]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         param_names = [str(p.id) for p in node.params]
@@ -231,12 +231,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.context = context
 
         # Add input parameters as arrays
-        inputs: list[str | tuple[str, dict]] = []
+        inputs: list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]] = []
         for name, arg in symbols.items():
             if isinstance(arg, ValueExpr):
                 dtype = arg.dtype
                 context.body.add_scalar(name, dtype=dtype)
-                inputs.append(name)
+                inputs.append((name, arg))
             else:
                 assert isinstance(arg, IteratorExpr)
                 ndims = len(arg.indices)
@@ -247,7 +247,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 index_names = {dim: f"__{name}_i_{dim}" for dim in arg.indices.keys()}
                 for _, index_name in index_names.items():
                     context.body.add_scalar(index_name, dtype=dace.int64)
-                inputs.append((name, index_names))
+                inputs.append(((name, index_names), arg))
 
         # Add connectivities as arrays
         for name in conn_names:
@@ -266,6 +266,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         result: ValueExpr = self.visit(node.expr)[0]
         self.context.body.arrays[result.value.data].transient = False
         self.context = prev_context
+
+        for node in context.state.nodes():
+            if isinstance(node, dace.nodes.AccessNode):
+                if context.state.out_degree(node) == 0 and context.state.in_degree(node) == 0:
+                    context.state.remove_node(node)
+
         return context, inputs, [result]
 
     def visit_SymRef(self, node: itir.SymRef) -> list[ValueExpr] | IteratorExpr:
@@ -315,19 +321,19 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         args = [arg if isinstance(arg, Sequence) else [arg] for arg in args]
         args = list(itertools.chain(*args))
 
-        func_context, param_names, func_inputs, results = self.visit(node.fun, args=args)
+        func_context, func_inputs, results = self.visit(node.fun, args=args)
 
         nsdfg_inputs = {}
-        for arg, param in zip(args, func_inputs):
-            if isinstance(arg, ValueExpr):
-                nsdfg_inputs[param] = create_memlet_full(arg.value.data, self.context.body.arrays[arg.value.data])
+        for name, value in func_inputs:
+            if isinstance(value, ValueExpr):
+                nsdfg_inputs[name] = create_memlet_full(value.value.data, self.context.body.arrays[value.value.data])
             else:
-                assert isinstance(arg, IteratorExpr)
-                field = param[0]
-                indices = param[1]
-                nsdfg_inputs[field] = create_memlet_full(arg.field.data, self.context.body.arrays[arg.field.data])
+                assert isinstance(value, IteratorExpr)
+                field = name[0]
+                indices = name[1]
+                nsdfg_inputs[field] = create_memlet_full(value.field.data, self.context.body.arrays[value.field.data])
                 for dim, var in indices.items():
-                    store = arg.indices[dim].data
+                    store = value.indices[dim].data
                     nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
@@ -345,18 +351,18 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             symbol_mapping=symbol_mapping
         )
 
-        for arg, param in zip(args, func_inputs):
-            if isinstance(arg, ValueExpr):
-                value_memlet = nsdfg_inputs[param]
-                self.context.state.add_edge(arg.value, None, nsdfg_node, param, value_memlet)
+        for name, value in func_inputs:
+            if isinstance(value, ValueExpr):
+                value_memlet = nsdfg_inputs[name]
+                self.context.state.add_edge(value.value, None, nsdfg_node, name, value_memlet)
             else:
-                assert isinstance(arg, IteratorExpr)
-                field = param[0]
-                indices = param[1]
+                assert isinstance(value, IteratorExpr)
+                field = name[0]
+                indices = name[1]
                 field_memlet = nsdfg_inputs[field]
-                self.context.state.add_edge(arg.field, None, nsdfg_node, field, field_memlet)
+                self.context.state.add_edge(value.field, None, nsdfg_node, field, field_memlet)
                 for dim, var in indices.items():
-                    store = arg.indices[dim]
+                    store = value.indices[dim]
                     idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
         for conn, _ in neighbor_tables:

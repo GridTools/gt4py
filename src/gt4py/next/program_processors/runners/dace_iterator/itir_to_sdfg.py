@@ -91,7 +91,6 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg = self.visit(closure, array_table=program_sdfg.arrays)
-            closure_sdfg.view()
 
             # Create a new state for the closure.
             last_state = program_sdfg.add_state_after(last_state)
@@ -123,7 +122,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
-        program_sdfg.view()
         program_sdfg.validate()
         return program_sdfg
 
