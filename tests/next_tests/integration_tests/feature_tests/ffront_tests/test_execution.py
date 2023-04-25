@@ -177,14 +177,16 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     def testee(scalar_inp: int) -> cases.VField:
         return broadcast(scalar_inp + 1, (Vertex,))
 
-    inp = cases.allocate(unstructured_case, testee, "scalar_inp")()
-    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
-    ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 1)
-
-    # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
-    #       Explanation: using `verify` here to override `offset_provider`,
-    #       which is necessary to avoid domain type deduction clash in GTFN.
-    cases.verify(unstructured_case, testee, inp, out=out, ref=ref, offset_provider={})
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.full(
+            [unstructured_case.default_sizes[Vertex]],
+            a + 1,
+            dtype=int,
+        ),
+        comparison=lambda a, b: np.all(a == b),
+    )
 
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
@@ -196,14 +198,11 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     def testee(scalar_inp: int) -> cases.VField:
         return testee_inner(scalar_inp + 1)
 
-    inp = cases.allocate(unstructured_case, testee, "scalar_inp")()
-    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
-    ref = np.full([unstructured_case.default_sizes[Vertex]], inp + 2)
-
-    # todo(ricoh): replace with verify_with_default_data once grid type can be set on fielops
-    #       Explanation: using `verify` here to override `offset_provider`,
-    #       which is necessary to avoid domain type deduction clash in GTFN.
-    cases.verify(unstructured_case, testee, inp, out=out, ref=ref, offset_provider={})
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], inp + 2, dtype=int),
+    )
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures

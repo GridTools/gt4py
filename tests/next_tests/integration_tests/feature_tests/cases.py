@@ -199,7 +199,7 @@ class Builder:
 
 def make_builder(
     func: Optional[Callable] = None, **kwargs: dict[str, Any]
-) -> Callable[[Callable], Builder] | Builder:
+) -> Callable[[Callable], Callable[[Any], Builder]] | Callable[[Any], Builder]:
     """Create a fluid inteface for a function with many arguments."""
 
     def make_builder_inner(func):
@@ -207,18 +207,22 @@ def make_builder(
             def setter(self, arg):
                 return self.__class__(
                     partial=functools.partial(
-                        self.partial, *self.partial.args, **(self.partial.keywords | {argname: arg})
+                        self.partial.func,
+                        *self.partial.args,
+                        **(self.partial.keywords | {argname: arg}),
                     )
                 )
 
             setter.__name__ = argname
             return setter
 
-        def make_flag_setter(flag_name: str, flag_kwargs):
+        def make_flag_setter(flag_name: str, flag_kwargs: Any):
             def setter(self):
                 return self.__class__(
                     partial=functools.partial(
-                        self.partial, *self.partial.args, **(self.partial.keywords | flag_kwargs)
+                        self.partial.func,
+                        *self.partial.args,
+                        **(self.partial.keywords | flag_kwargs),
                     )
                 )
 
@@ -242,7 +246,7 @@ def make_builder(
 
         NewBuilder.__name__ = f"{func_camel_name}Builder"
 
-        return NewBuilder(functools.partial(func))
+        return lambda *args, **kwargs: NewBuilder(functools.partial(func, *args, **kwargs))
 
     if func:
         return make_builder_inner(func)
@@ -296,6 +300,7 @@ def allocate(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
+    *,
     sizes: Optional[dict[common.Dimension, int]] = None,
     strategy: DataInitializer = UniqueInitializer(),
     dtype: Optional[np.typing.DTypeLike] = None,
@@ -357,7 +362,7 @@ def run(
     """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
-    fieldview_prog.with_backend(case.backend)(*args, **kwargs)
+    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
 def get_default_data(
@@ -454,6 +459,7 @@ class Case:
     backend: ppi.ProgramProcessor
     offset_provider: dict[str, common.Connectivty | common.Dimension]
     default_sizes: dict[common.Dimension, int]
+    grid_type: common.GridType
 
 
 @pytest.fixture
@@ -471,6 +477,7 @@ def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtu
         fieldview_backend,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
+        grid_type=common.GridType.CARTESIAN,
     )
 
 
@@ -485,4 +492,5 @@ def unstructured_case(
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
         },
+        grid_type=common.GridType.UNSTRUCTURED,
     )
