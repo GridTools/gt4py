@@ -24,6 +24,7 @@ from typing import Any, Callable, Literal, Optional, Protocol, Sequence, TypeAli
 import numpy as np
 import pytest
 
+from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator, fbuiltins
@@ -260,7 +261,7 @@ def get_param_types(
         raise ValueError(
             f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
         )
-    annotations = typing.get_type_hints(fieldview_prog.definition)
+    annotations = xtyping.get_type_hints(fieldview_prog.definition)
     return {
         name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
     }
