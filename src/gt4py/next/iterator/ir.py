@@ -68,6 +68,11 @@ class Literal(Expr):
     value: str
     type: str  # noqa: A003
 
+    @datamodels.validator("type")
+    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
+        if value not in TYPEBUILTINS:
+            raise ValueError(f"{value} is not a valid builtin type.")
+
 
 class NoneLiteral(Expr):
     _none_literal: int = 0
@@ -163,7 +168,9 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+INTEGER_BUILTINS = {"int", "int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float", "float32", "float64"}
+TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 BUILTINS = {
     "cartesian_domain",

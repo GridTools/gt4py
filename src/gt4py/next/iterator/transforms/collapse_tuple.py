@@ -29,14 +29,19 @@ def _get_tuple_size(node: ir.Node) -> int:
 
 @dataclass(frozen=True)
 class CollapseTuple(eve.NodeTranslator):
-    """Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t."""
+    """
+    Simplifies `make_tuple`, `tuple_get` calls.
+
+      - `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
+      - `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1)) -> `e_N`
+    """
 
     ignore_tuple_size: bool
 
     @classmethod
     def apply(cls, node: ir.Node, ignore_tuple_size: bool = False) -> ir.Node:
         """
-        Transform `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> t.
+        Simplifies `make_tuple`, `tuple_get` calls.
 
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
@@ -48,6 +53,7 @@ class CollapseTuple(eve.NodeTranslator):
             isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
             for arg in node.args
         ):
+            # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
             assert isinstance(node.args[0], ir.FunCall)
             first_expr = node.args[0].args[1]
 
@@ -65,7 +71,14 @@ class CollapseTuple(eve.NodeTranslator):
             and node.args[1].fun == ir.SymRef(id="make_tuple")
             and isinstance(node.args[0], ir.Literal)
         ):
-            assert node.args[0].type in ["int", "int32", "int64"]  # TODO
-            return node.args[1].args[int(node.args[0].value)]  # TODO simplify
+            # `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1)) -> `e_N`
+            assert node.args[0].type in ir.INTEGER_BUILTINS
+            make_tuple_call = node.args[1]
+            if (idx := int(node.args[0].value)) < len(make_tuple_call.args):
+                return node.args[1].args[idx]
+            else:
+                raise IndexError(
+                    f"CollapseTuple: Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
+                )
 
         return self.generic_visit(node)
