@@ -19,8 +19,8 @@ from gt4py.next.ffront.fbuiltins import Field, int64, neighbor_sum
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
-def test_sparse_field(reduction_setup, fieldview_backend):
-    Vertex, V2EDim, V2E = reduction_setup.Vertex, reduction_setup.V2EDim, reduction_setup.V2E
+def test_external_local_field(reduction_setup, fieldview_backend):
+    V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
     inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
     ones = np_as_located_field(Edge)(np.ones(reduction_setup.num_edges, dtype=int64))
 
@@ -30,7 +30,7 @@ def test_sparse_field(reduction_setup, fieldview_backend):
     ) -> Field[[Vertex], int64]:
         return neighbor_sum(
             inp * ones(V2E), axis=V2EDim
-        )  # multiplication with shifted `ones` because reduction of sparse field only is not supported
+        )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
     testee(inp, ones, out=reduction_setup.out, offset_provider=reduction_setup.offset_provider)
 
@@ -38,11 +38,13 @@ def test_sparse_field(reduction_setup, fieldview_backend):
     assert np.allclose(ref, reduction_setup.out)
 
 
-def test_sparse_field_only(reduction_setup, fieldview_backend):
+def test_external_local_field_only(reduction_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Reductions over sparse fields only are not supported in gtfn.")
+        pytest.skip(
+            "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
+        )
 
-    Vertex, V2EDim, V2E = reduction_setup.Vertex, reduction_setup.V2EDim, reduction_setup.V2E
+    V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
     inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
 
     @field_operator(backend=fieldview_backend)
