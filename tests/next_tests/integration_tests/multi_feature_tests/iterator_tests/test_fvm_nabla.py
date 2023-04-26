@@ -141,7 +141,7 @@ def nabla(
 def test_compute_zavgS(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -199,7 +199,7 @@ def compute_zavgS2_fencil(
 def test_compute_zavgS2(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     pp = np_as_located_field(Vertex)(setup.input_field)
@@ -237,7 +237,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support tuples")
+        pytest.xfail("TODO: bindings don't support Atlas tables")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
@@ -294,7 +294,7 @@ def nabla2(
 def test_nabla2(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
@@ -375,7 +375,7 @@ def test_nabla_sign(program_processor, lift_mode):
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("test is broken due to bad lift semantics in iterator IR")
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: gtfn bindings don't support unstructured")
+        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     is_pole_edge = np_as_located_field(Edge)(setup.is_pole_edge_field)
