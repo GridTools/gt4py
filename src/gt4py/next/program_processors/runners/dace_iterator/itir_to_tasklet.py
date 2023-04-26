@@ -264,6 +264,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Translate the function's body
         result: ValueExpr = self.visit(node.expr)[0]
+        # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
+        result = self.add_expr_tasklet([(result, "result")], "result", result.dtype, "forward")[0]
         self.context.body.arrays[result.value.data].transient = False
         self.context = prev_context
 
@@ -397,7 +399,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         pairs = [args[i:i+2] for i in range(0, len(args), 2)]
         assert len(pairs) >= 1
         assert all(len(pair) == 2 for pair in pairs)
-        return pairs[0], pairs[1:] if len(pairs) > 1 else None
+        return pairs[-1], list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None
 
     def _make_shift_for_rest(self, rest, iterator):
         return itir.FunCall(
@@ -409,19 +411,19 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
 
-        head, rest = self._split_shift_args(shift.args)
+        tail, rest = self._split_shift_args(shift.args)
         if rest:
             iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
         else:
             iterator = self.visit(node.args[0])
 
-        assert isinstance(head[0], itir.OffsetLiteral)
-        offset = head[0].value
+        assert isinstance(tail[0], itir.OffsetLiteral)
+        offset = tail[0].value
         assert isinstance(offset, str)
         shifted_dim = self.offset_provider[offset].value
 
-        assert isinstance(head[1], itir.OffsetLiteral)
-        shift_amount = head[1].value
+        assert isinstance(tail[1], itir.OffsetLiteral)
+        shift_amount = tail[1].value
         assert isinstance(shift_amount, int)
 
         args = [ValueExpr(iterator.indices[shifted_dim], dace.int64)]
@@ -439,18 +441,18 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _visit_indirect_addressing(self, node: itir.FunCall) -> IteratorExpr:
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
-        head, rest = self._split_shift_args(shift.args)
+        tail, rest = self._split_shift_args(shift.args)
         if rest:
             iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
         else:
             iterator = self.visit(node.args[0])
 
-        assert isinstance(head[0], itir.OffsetLiteral)
-        offset = head[0].value
+        assert isinstance(tail[0], itir.OffsetLiteral)
+        offset = tail[0].value
         assert isinstance(offset, str)
 
-        assert isinstance(head[1], itir.OffsetLiteral)
-        element = head[1].value
+        assert isinstance(tail[1], itir.OffsetLiteral)
+        element = tail[1].value
         assert isinstance(element, int)
 
         table: NeighborTableOffsetProvider = self.offset_provider[offset]

@@ -37,13 +37,14 @@ from gt4py.next.ffront.fbuiltins import (
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_copy(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
-    b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    b_I_float = np_as_located_field(IDim)(np.zeros_like(np.asarray(a_I_float)))
 
     @field_operator(backend=fieldview_backend)
     def copy(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
@@ -58,6 +59,9 @@ def test_copy(fieldview_backend):
 
 
 def test_multicopy(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     inp0 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float32"))
     out0 = np_as_located_field(IDim)(np.zeros((size), dtype=float64))
@@ -174,6 +178,9 @@ def test_fold_shifts(fieldview_backend):
 
 
 def test_tuples(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
@@ -198,6 +205,9 @@ def test_tuples(fieldview_backend):
 
 
 def test_scalar_arg(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: broadcast")
+
     """Test scalar argument being turned into 0-dim field."""
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
@@ -213,6 +223,9 @@ def test_scalar_arg(fieldview_backend):
 
 
 def test_nested_scalar_arg(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: broadcast")
+
     inp = 5.0
     out = np_as_located_field(Vertex)(np.zeros([size]))
 
@@ -233,6 +246,8 @@ def test_nested_scalar_arg(fieldview_backend):
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields and ConstantFields are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: index fields, constant fields")
 
     inp = index_field(Edge, dtype=float64)
     factor = 3.0
@@ -261,6 +276,8 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
         )
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: iterator type inference failure?")
 
     size = 10
     out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
@@ -279,6 +296,9 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
 
 
 def test_scalar_scan(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: scan")
+
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
     qc = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
@@ -301,6 +321,8 @@ def test_scalar_scan(fieldview_backend):
 def test_tuple_scalar_scan(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple arguments")
 
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
@@ -369,6 +391,9 @@ def test_astype_float(fieldview_backend):
 
 
 def test_offset_field(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: offset fields")
+
     a_I_arr = np.random.randn(size, size).astype("float64")
     a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
     a_I_float_1 = np_as_located_field(IDim, KDim)(
@@ -413,6 +438,9 @@ def test_offset_field(fieldview_backend):
 
 
 def test_nested_tuple_return(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
