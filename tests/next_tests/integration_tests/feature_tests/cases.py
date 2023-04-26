@@ -103,7 +103,7 @@ class DataInitializer(Protocol):
 class ConstInitializer(DataInitializer):
     """Initialize with a given value across the coordinate space."""
 
-    value: int | float
+    value: ScalarValue
 
     def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
         if shape:
@@ -313,7 +313,7 @@ def allocate(
     Args:
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
-        name: The name of the input argument to allocate, or `RETURN`
+        name: The name of the input argument to allocate, or ``RETURN``
             for the return value of a field operator.
         sizes: Override for the test case dimension sizes.
             Use with caution.
@@ -384,12 +384,12 @@ def run(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | NumericValue | tuple, ...], dict[str, common.Field | int | float]]:
+) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field | ScalarValue]]:
     """
     Allocate default data for a fieldview code object given a test case.
 
     Meant to reduce boiler plate for simple cases, everything else
-    should rely on `allocate()`.
+    should rely on ``allocate()``.
     """
     param_types = get_param_types(fieldview_prog)
     kwfields: dict[str, Any] = {}
@@ -421,13 +421,13 @@ def verify(
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         *args: positional input arguments to the fieldview code.
-        out: If given will be passed to the fieldview code as `out=` keyword
+        out: If given will be passed to the fieldview code as ``out=`` keyword
             argument. This will hold the results and be used to compare
-            to `ref`.
-        inout: If `out` is not passed it is assumed that the fieldview code
-            does not take an `out` keyword argument, so some of the other
+            to ``ref``.
+        inout: If ``out`` is not passed it is assumed that the fieldview code
+            does not take an ``out`` keyword argument, so some of the other
             arguments must be in/out parameters. Pass the according field
-            or tuple of fields here and they will be compared to `ref` under
+            or tuple of fields here and they will be compared to ``ref`` under
             the assumption that the fieldview code stores it's results in
             them.
         ref: A field or array which will be compared to the results of the
@@ -435,11 +435,11 @@ def verify(
         offset_provied: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
-            `comparison(ref, <out | inout>)` and should return a boolean.
+            ``comparison(ref, <out | inout>)`` and should return a boolean.
 
-    One of `out` or `inout` must be passed. If `out` is passed it will be
-    used as an argument to the fieldview program and compared against `ref`.
-    Else, `inout` will not be passed and compared to `ref`.
+    One of ``out`` or ``inout`` must be passed. If ``out`` is passed it will be
+    used as an argument to the fieldview program and compared against ``ref``.
+    Else, ``inout`` will not be passed and compared to ``ref``.
     """
     if out:
         run(
@@ -473,15 +473,15 @@ def verify_with_default_data(
 
     This is a convenience function to reduce boiler plate
     and is not meant to hide logic for complex cases. The
-    `verify` function allows more fine grained control for such tests.
+    ``verify`` function allows more fine grained control for such tests.
 
     Args:
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
-            of the fieldview code, after applying `.array()` on the fields.
+            of the fieldview code, after applying ``.array()`` on the fields.
         comparison: A comparison function, which will be called as
-            `comparison(ref, <out | inout>)` and should return a boolean.
+            ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
     ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
