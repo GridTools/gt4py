@@ -313,7 +313,7 @@ def allocate(
     Args:
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
-        name: The name of the input argument to allocate, or ``RETURN``
+        name: The name of the input argument to allocate, or `RETURN`
             for the return value of a field operator.
         sizes: Override for the test case dimension sizes.
             Use with caution.
