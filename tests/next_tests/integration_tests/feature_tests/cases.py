@@ -306,7 +306,22 @@ def allocate(
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
-    """Allocate a parameter or return value from a fieldview code object."""
+    """
+    Allocate a parameter or return value from a fieldview code object.
+
+    Args:
+        case: The test case.
+        fieldview_prog: The field operator or program to be verified.
+        name: The name of the input argument to allocate, or ``RETURN``
+            for the return value of a field operator.
+        sizes: Override for the test case dimension sizes.
+            Use with caution.
+        strategy: How to initialize the data.
+        dtype: Override for the dtype in the argument's type hint.
+        extend: Lower and upper size extension per dimension.
+            Useful for shifted fields, which must start off bigger
+            than the output field in the shifted dimension.
+    """
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
     if name in ["out", RETURN] and strategy is None:
@@ -391,19 +406,39 @@ def get_default_data(
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-    *args: common.Field,
+    *args: common.Field | NumericValue,
     out: Optional[common.Field] = None,
-    nopass_out: Optional[common.Field] = None,
-    ref: common.Field,
+    inout: Optional[common.Field | tuple[common.Field, ...]] = None,
+    ref: common.Field | tuple[common.Field | np.typing.NDArray, ...] | np.typing.NDArray,
     offset_provider: Optional[dict[str, common.Connectivty | common.Dimension]] = None,
     comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
     """
     Check the result of executing a fieldview program or operator against ref.
 
-    One of `out` or `nopass_out` must be passed. If `out` is passed it will be
+    Args:
+        case: The test case.
+        fieldview_prog: The field operator or program to be verified.
+        *args: positional input arguments to the fieldview code.
+        out: If given will be passed to the fieldview code as `out=` keyword
+            argument. This will hold the results and be used to compare
+            to `ref`.
+        inout: If `out` is not passed it is assumed that the fieldview code
+            does not take an `out` keyword argument, so some of the other
+            arguments must be in/out parameters. Pass the according field
+            or tuple of fields here and they will be compared to `ref` under
+            the assumption that the fieldview code stores it's results in
+            them.
+        ref: A field or array which will be compared to the results of the
+            fieldview code.
+        offset_provied: An override for the test case's offset_provider.
+            Use with care!
+        comparison: A comparison function, which will be called as
+            `comparison(ref, <out | inout>)` and should return a boolean.
+
+    One of `out` or `inout` must be passed. If `out` is passed it will be
     used as an argument to the fieldview program and compared against `ref`.
-    Else, `nopass_out` will not be passed and compared to `ref`.
+    Else, `inout` will not be passed and compared to `ref`.
     """
     if out:
         run(
@@ -416,7 +451,7 @@ def verify(
     else:
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
-    out_comp = out or nopass_out
+    out_comp = out or inout
     out_comp_str = str(out_comp)
     assert out_comp is not None
     if hasattr(out_comp, "array"):
@@ -438,6 +473,14 @@ def verify_with_default_data(
     This is a convenience function to reduce boiler plate
     and is not meant to hide logic for complex cases. The
     `verify` function allowes more fine grained control for such tests.
+
+    Args:
+        case: The test case.
+        fieldview_prog: The field operator or program to be verified.
+        ref: A callable which will be called with all the input arguments
+            of the fieldview code, after applying `.array()` on the fields.
+        comparison: A comparison function, which will be called as
+            `comparison(ref, <out | inout>)` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
     ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
