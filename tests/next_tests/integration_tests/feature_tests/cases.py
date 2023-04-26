@@ -200,7 +200,7 @@ class Builder:
 def make_builder(
     func: Optional[Callable] = None, **kwargs: dict[str, Any]
 ) -> Callable[[Callable], Callable[[Any], Builder]] | Callable[[Any], Builder]:
-    """Create a fluid inteface for a function with many arguments."""
+    """Create a fluid interface for a function with many arguments."""
 
     def make_builder_inner(func):
         def make_setter(argname):
@@ -472,7 +472,7 @@ def verify_with_default_data(
 
     This is a convenience function to reduce boiler plate
     and is not meant to hide logic for complex cases. The
-    `verify` function allowes more fine grained control for such tests.
+    `verify` function allows more fine grained control for such tests.
 
     Args:
         case: The test case.
