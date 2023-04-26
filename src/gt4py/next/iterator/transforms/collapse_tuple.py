@@ -59,5 +59,13 @@ class CollapseTuple(eve.NodeTranslator):
 
             if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
                 return first_expr
+        if (
+            node.fun == ir.SymRef(id="tuple_get")
+            and isinstance(node.args[1], ir.FunCall)
+            and node.args[1].fun == ir.SymRef(id="make_tuple")
+            and isinstance(node.args[0], ir.Literal)
+        ):
+            assert node.args[0].type in ["int", "int32", "int64"]  # TODO
+            return node.args[1].args[int(node.args[0].value)]  # TODO simplify
 
         return self.generic_visit(node)
