@@ -453,7 +453,7 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
     assert np.allclose(out, expected)
 
 
-@pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
+@pytest.mark.xfail("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
     rs = reduction_setup
     V2EDim = rs.V2EDim
