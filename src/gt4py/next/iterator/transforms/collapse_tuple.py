@@ -33,7 +33,7 @@ class CollapseTuple(eve.NodeTranslator):
     Simplifies `make_tuple`, `tuple_get` calls.
 
       - `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
-      - `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1)) -> `e_N`
+      - `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1))` -> `e_N`
     """
 
     ignore_tuple_size: bool
