@@ -462,6 +462,9 @@ def test_nested_tuple_return(fieldview_backend):
 
 
 def test_nested_reduction(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: reductions")
+
     rs = reduction_setup
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
@@ -483,6 +486,9 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
 
 @pytest.mark.skip("Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: reductions")
+
     rs = reduction_setup
     V2EDim = rs.V2EDim
     E2VDim = rs.E2VDim
@@ -504,6 +510,9 @@ def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
 
 
 def test_tuple_return_2(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: reductions")
+
     rs = reduction_setup
     V2EDim = rs.V2EDim
     V2E = rs.V2E
@@ -529,6 +538,9 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
 
 @pytest.mark.xfail
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: reductions")
+
     rs = reduction_setup
     V2EDim = rs.V2EDim
     V2E = rs.V2E
@@ -565,6 +577,9 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_
 
 
 def test_tuple_arg(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple args")
+
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
@@ -582,6 +597,9 @@ def test_tuple_arg(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(fieldview_backend, forward):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: scan")
+
     init = 1.0
     out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
@@ -604,6 +622,9 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 def test_solve_triag(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Has a bug.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: scans")
+
     shape = (3, 7, 5)
     rng = np.random.default_rng()
     a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
@@ -648,6 +669,9 @@ def test_solve_triag(fieldview_backend):
 
 @pytest.mark.parametrize("left,right", [(2.0, 3.0), (3.0, 2.0)])
 def test_ternary_operator(left, right, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: broadcast")
+    
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
@@ -673,6 +697,9 @@ def test_ternary_operator(left, right, fieldview_backend):
 
 @pytest.mark.parametrize("left,right", [(2.0, 3.0), (3.0, 2.0)])
 def test_ternary_operator_tuple(left, right, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
@@ -698,6 +725,9 @@ def test_ternary_operator_tuple(left, right, fieldview_backend):
 
 
 def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: reductions")
+
     rs = reduction_setup
     V2EDim = rs.V2EDim
     V2E = rs.V2E
@@ -726,6 +756,9 @@ def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
 
 
 def test_ternary_scan(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: scan")
+
     init = 0.0
     a_float = 4
     a = np_as_located_field(KDim)(a_float * np.ones((size,)))
@@ -743,6 +776,9 @@ def test_ternary_scan(fieldview_backend):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(fieldview_backend, forward):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     init = (1.0, (2.0, 3.0))
     out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
     expected = np.arange(1.0, 1.0 + size, 1)
@@ -764,6 +800,9 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_input(fieldview_backend, forward):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple args")
+
     init = 1.0
     inp1 = np_as_located_field(KDim)(np.ones((size,)))
     inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
@@ -929,6 +968,9 @@ def test_domain_tuple(fieldview_backend):
 def test_where_k_offset(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("IndexFields are not supported yet.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: index fields")
+
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)
@@ -956,6 +998,9 @@ def test_undefined_symbols():
 
 
 def test_zero_dims_fields(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: broadcast")
+
     inp = np_as_located_field()(np.array(1.0))
     out = np_as_located_field()(np.array(0.0))
 
@@ -988,6 +1033,9 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
 
 
 def test_tuple_unpacking(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size,)))
     out1 = np_as_located_field(IDim)(np.ones((size,)))
@@ -1018,6 +1066,9 @@ def test_tuple_unpacking(fieldview_backend):
 
 
 def test_tuple_unpacking_star_multi(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.skip("Not supported in DaCe backend: tuple returns")
+
     size = 10
     inp = np_as_located_field(IDim)(np.ones((size,)))
     out = tuple(np_as_located_field(IDim)(np.ones((size,)) * i) for i in range(3 * 4))
