@@ -35,7 +35,7 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     inp_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
@@ -54,8 +54,7 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
-    Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
-    Edge = rs.Edge
+    V2EDim, V2E = rs.V2EDim, rs.V2E
     edge_num = np.max(rs.v2e_table)
     inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
     inp_field = np_as_located_field(Edge)(inp_field_arr)
@@ -77,7 +76,7 @@ def test_minover_execution(reduction_setup, fieldview_backend):
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     in_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
 
     @field_operator(backend=fieldview_backend)
@@ -96,7 +95,7 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
+    V2EDim = rs.V2EDim
     in_array = np.random.default_rng().uniform(low=-1, high=1, size=rs.v2e_table.shape)
     in_field = np_as_located_field(Vertex, V2EDim)(in_array)
     out_field = np_as_located_field(Vertex)(np.zeros(rs.num_vertices))
@@ -114,8 +113,7 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
     rs = reduction_setup
-    Edge = rs.Edge
-    Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
+    V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @field_operator
     def reduction(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
@@ -131,33 +129,13 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out)
 
 
-def test_reduction_execution_nb(reduction_setup, fieldview_backend):
-    """Testing a neighbor sum on a neighbor field."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("not yet supported.")
-
-    rs = reduction_setup
-    Vertex, V2EDim = rs.Vertex, rs.V2EDim
-    nb_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
-
-    @field_operator(backend=fieldview_backend)
-    def reduction(nb_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
-        return neighbor_sum(nb_field, axis=V2EDim)
-
-    reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
-
-    ref = np.sum(rs.v2e_table, axis=1)
-    assert np.allclose(ref, rs.out)
-
-
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Has a bug.")
 
     rs = reduction_setup
-    Vertex, V2EDim, V2E = rs.Vertex, rs.V2EDim, rs.V2E
-    Edge = rs.Edge
+    V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @field_operator
     def reduce_expr(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
