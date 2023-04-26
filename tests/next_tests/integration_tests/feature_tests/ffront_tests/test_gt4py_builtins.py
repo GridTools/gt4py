@@ -173,8 +173,6 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple outputs not supported in gtfn backends")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))

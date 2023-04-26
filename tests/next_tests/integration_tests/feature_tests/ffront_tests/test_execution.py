@@ -232,7 +232,7 @@ def test_nested_scalar_arg(fieldview_backend):
 
 def test_scalar_arg_with_field(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("IndexFields and ConstantFields are not supported yet.")
+        pytest.xfail("IndexFields and ConstantFields are not supported yet.")
 
     inp = index_field(Edge, dtype=float64)
     factor = 3.0
@@ -257,7 +257,7 @@ def test_scalar_arg_with_field(fieldview_backend):
 
 def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip(
+        pytest.xfail(
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
         )
@@ -300,7 +300,7 @@ def test_scalar_scan(fieldview_backend):
 
 def test_tuple_scalar_scan(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Scalar tuple arguments are not supported in gtfn yet.")
+        pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
     size = 10
     KDim = Dimension("K", kind=DimensionKind.VERTICAL)
@@ -575,7 +575,7 @@ def test_fieldop_from_scan(fieldview_backend, forward):
 
 def test_solve_triag(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Has a bug.")
+        pytest.xfail("Transformation passes fail in putting `scan` to the top.")
     shape = (3, 7, 5)
     rng = np.random.default_rng()
     a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
@@ -796,7 +796,7 @@ def test_domain(fieldview_backend):
 
 def test_domain_input_bounds(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("FloorDiv not fully supported in gtfn.")
+        pytest.xfail("FloorDiv not fully supported in gtfn.")
     inp = np_as_located_field(IDim, JDim)(np.ones((size, size), dtype=float64))
     out = np_as_located_field(IDim, JDim)(2 * np.ones((size, size), dtype=float64))
 
@@ -900,7 +900,7 @@ def test_domain_tuple(fieldview_backend):
 
 def test_where_k_offset(fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("IndexFields are not supported yet.")
+        pytest.xfail("IndexFields are not supported yet.")
     a = np_as_located_field(IDim, KDim)(np.ones((size, size)))
     out = np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = index_field(KDim)

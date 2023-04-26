@@ -211,7 +211,7 @@ def test_unpacking():
 
 
 def test_annotated_assignment():
-    pytest.skip("Annotated assignments are not properly supported at the moment.")
+    pytest.xfail("Annotated assignments are not properly supported at the moment.")
 
     def copy_field(inp: Field[[TDim], float64]):
         tmp: Field[[TDim], float64] = inp
