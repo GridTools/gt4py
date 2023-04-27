@@ -101,8 +101,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         match pytype_to_cpptype(node.type):
-            case "int":
-                return node.value + "_c"
             case "float":
                 return self.asfloat(node.value) + "f"
             case "double":
@@ -111,6 +109,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return node.value.lower()
             case _:
                 return node.value
+
+    IntegralConstant = as_fmt("{value}_c")
 
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
@@ -162,7 +162,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Scan = as_fmt("assign({output}, {function}(), {', '.join([init] + inputs)})")
+    Scan = as_fmt(
+        "assign({output}_c, {function}(), {', '.join([init] + [input + '_c' for input in inputs])})"
+    )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )

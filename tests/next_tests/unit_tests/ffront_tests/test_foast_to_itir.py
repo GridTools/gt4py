@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 from gt4py.next.common import DimensionKind, Field
-from gt4py.next.ffront import itir_makers as im, type_specifications as ts_ffront
+from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -36,7 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -117,7 +117,7 @@ def test_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("it")(im.deref_(im.shift_("Ioff", 1)("it"))))("inp")
+    reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("inp")
 
     assert lowered.expr == reference
 
@@ -131,7 +131,7 @@ def test_negative_shift():
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("it")(im.deref_(im.shift_("Ioff", -1)("it"))))("inp")
+    reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))))("inp")
 
     assert lowered.expr == reference
 
@@ -169,13 +169,13 @@ def test_unary_ops():
     reference = im.let(
         itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"),
         im.promote_to_lifted_stencil("plus")(
-            im.promote_to_const_iterator(im.literal_("0", "float64")), "inp"
+            im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
         ),
     )(
         im.let(
             itir.Sym(id="tmp__1", dtype=("float64", False), kind="Iterator"),
             im.promote_to_lifted_stencil("minus")(
-                im.promote_to_const_iterator(im.literal_("0", "float64")), "tmp__0"
+                im.promote_to_const_iterator(im.literal("0", "float64")), "tmp__0"
             ),
         )("tmp__1")
     )
@@ -196,8 +196,8 @@ def test_unpacking():
     lowered = FieldOperatorLowering.apply(parsed)
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
-    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get_(0, x))("__tuple_tmp_0")
-    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get_(1, x))("__tuple_tmp_0")
+    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
+    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(itir.Sym(id="tmp1__0", dtype=("float64", False), kind="Iterator"), tuple_access_0)(
@@ -211,7 +211,7 @@ def test_unpacking():
 
 
 def test_annotated_assignment():
-    pytest.skip("Annotated assignments are not properly supported at the moment.")
+    pytest.xfail("Annotated assignments are not properly supported at the moment.")
 
     def copy_field(inp: Field[[TDim], float64]):
         tmp: Field[[TDim], float64] = inp
@@ -242,7 +242,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("__arg0")(im.call_("identity")("__arg0")))("inp")
+    reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
 
     assert lowered.expr == reference
 
@@ -295,7 +295,7 @@ def test_add_scalar_literal_to_field():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("plus")(
-        im.promote_to_const_iterator(im.literal_("2.0", "float64")), "a"
+        im.promote_to_const_iterator(im.literal("2.0", "float64")), "a"
     )
 
     assert lowered.expr == reference
@@ -312,8 +312,8 @@ def test_add_scalar_literals():
     reference = im.let(
         "tmp__0",
         im.promote_to_lifted_stencil("plus")(
-            im.promote_to_const_iterator(im.literal_("1", "int32")),
-            im.promote_to_const_iterator(im.literal_("1", "int32")),
+            im.promote_to_const_iterator(im.literal("1", "int32")),
+            im.promote_to_const_iterator(im.literal("1", "int32")),
         ),
     )(im.promote_to_lifted_stencil("plus")("a", "tmp__0"))
 
@@ -376,7 +376,7 @@ def test_scalar_and():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("and_")(
-        "a", im.promote_to_const_iterator(im.literal_("False", "bool"))
+        "a", im.promote_to_const_iterator(im.literal("False", "bool"))
     )
 
     assert lowered.expr == reference
@@ -402,8 +402,8 @@ def test_compare_scalars():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("greater")(
-        im.promote_to_const_iterator(im.literal_("3", "int64")),
-        im.promote_to_const_iterator(im.literal_("4", "int64")),
+        im.promote_to_const_iterator(im.literal("3", "int64")),
+        im.promote_to_const_iterator(im.literal("4", "int64")),
     )
 
     assert lowered.expr == reference
@@ -470,10 +470,10 @@ def test_reduction_lowering_simple():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil(
-        im.call_(
-            im.call_("reduce")(
+        im.call(
+            im.call("reduce")(
                 "plus",
-                im.deref_(im.promote_to_const_iterator(im.literal_(value="0", typename="float64"))),
+                im.deref(im.promote_to_const_iterator(im.literal(value="0", typename="float64"))),
             ),
         )
     )(
@@ -491,11 +491,11 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    mapped = im.promote_to_lifted_stencil(im.map__("multiplies"))(
+    mapped = im.promote_to_lifted_stencil(im.map_("multiplies"))(
         im.promote_to_lifted_stencil("make_const_list")(
-            im.promote_to_const_iterator(im.literal_("1.1", "float64"))
+            im.promote_to_const_iterator(im.literal("1.1", "float64"))
         ),
-        im.promote_to_lifted_stencil(im.map__("plus"))("e1_nbh__0", "e2"),
+        im.promote_to_lifted_stencil(im.map_("plus"))("e1_nbh__0", "e2"),
     )
 
     reference = im.let(
@@ -503,11 +503,11 @@ def test_reduction_lowering_expr():
         im.lifted_neighbors("V2E", "e1"),
     )(
         im.promote_to_lifted_stencil(
-            im.call_(
-                im.call_("reduce")(
+            im.call(
+                im.call("reduce")(
                     "plus",
-                    im.deref_(
-                        im.promote_to_const_iterator(im.literal_(value="0", typename="float64"))
+                    im.deref(
+                        im.promote_to_const_iterator(im.literal(value="0", typename="float64"))
                     ),
                 ),
             )
@@ -537,13 +537,13 @@ def test_builtin_int_constructors():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int32")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int32")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
     )
 
     assert lowered.expr == reference
@@ -575,13 +575,13 @@ def test_builtin_float_constructors():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float32")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_(".1", "float64")),
-        im.promote_to_const_iterator(im.literal_(".1", "float32")),
-        im.promote_to_const_iterator(im.literal_(".1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float32")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal(".1", "float64")),
+        im.promote_to_const_iterator(im.literal(".1", "float32")),
+        im.promote_to_const_iterator(im.literal(".1", "float64")),
     )
 
     assert lowered.expr == reference
@@ -595,14 +595,14 @@ def test_builtin_bool_constructors():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_(str(True), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(False), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(True), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(False), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool(0)), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool(5)), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool("True")), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool("False")), "bool")),
+        im.promote_to_const_iterator(im.literal(str(True), "bool")),
+        im.promote_to_const_iterator(im.literal(str(False), "bool")),
+        im.promote_to_const_iterator(im.literal(str(True), "bool")),
+        im.promote_to_const_iterator(im.literal(str(False), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool(0)), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool(5)), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool("True")), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool("False")), "bool")),
     )
 
     assert lowered.expr == reference

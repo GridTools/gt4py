@@ -29,6 +29,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     FencilDefinition,
     FunCall,
     FunctionDefinition,
+    IntegralConstant,
     Lambda,
     Literal,
     OffsetLiteral,
@@ -53,7 +54,7 @@ def pytype_to_cpptype(t: str):
             "float": "double",
             "float32": "float",
             "float64": "double",
-            "int": "int",
+            "int": "long",
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",
@@ -185,6 +186,11 @@ def _collect_offset_definitions(
                 "Elements of offset provider need to be either `Dimension` or `Connectivity`."
             )
     return offset_definitions
+
+
+def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
+    assert node.type in itir.INTEGER_BUILTINS
+    return IntegralConstant(value=int(node.value))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -326,12 +332,67 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
         return result
 
-    def _error_on_illegal_function_calls(self, node: itir.FunCall) -> None:
-        assert isinstance(node.fun, itir.SymRef)
-        if node.fun.id == "shift":
-            raise ValueError("unapplied shift call not supported: {node}")
-        elif node.fun.id == "scan":
-            raise ValueError("scans are only supported at the top level of a stencil closure")
+    def _visit_if_(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert len(node.args) == 3
+        return TernaryExpr(
+            cond=self.visit(node.args[0], **kwargs),
+            true_expr=self.visit(node.args[1], **kwargs),
+            false_expr=self.visit(node.args[2], **kwargs),
+        )
+
+    def _visit_cast_(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert len(node.args) == 2
+        return CastExpr(
+            obj_expr=self.visit(node.args[0], **kwargs),
+            new_dtype=self.visit(node.args[1], **kwargs),
+        )
+
+    def _visit_tuple_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        assert isinstance(node.args[0], itir.Literal)
+        return FunCall(
+            fun=SymRef(id="tuple_get"),
+            args=[
+                _literal_as_integral_constant(node.args[0]),
+                self.visit(node.args[1]),
+            ],
+        )
+
+    def _visit_list_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        # should only reach this for the case of an external sparse field
+        tuple_idx = (
+            _literal_as_integral_constant(node.args[0])
+            if isinstance(node.args[0], itir.Literal)
+            else self.visit(
+                node.args[0]
+            )  # from unroll_reduce we get a `SymRef` which is refering to an `OffsetLiteral` which is lowered to integral_constant
+        )
+        return FunCall(
+            fun=SymRef(id="tuple_get"),
+            args=[
+                tuple_idx,
+                self.visit(node.args[1]),
+            ],
+        )
+
+    def _visit_cartesian_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        sizes, domain_offsets = self._make_domain(node)
+        return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)
+
+    def _visit_unstructured_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
+        sizes, domain_offsets = self._make_domain(node)
+        connectivities = []
+        if "stencil" in kwargs:
+            shift_offsets = self._collect_offset_or_axis_node(itir.OffsetLiteral, kwargs["stencil"])
+            for o in shift_offsets:
+                if o in self.offset_provider and isinstance(
+                    self.offset_provider[o], common.Connectivity
+                ):
+                    connectivities.append(SymRef(id=o))
+        return UnstructuredDomain(
+            tagged_sizes=sizes,
+            tagged_offsets=domain_offsets,
+            connectivities=connectivities,
+        )
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
         if isinstance(node.fun, itir.SymRef):
@@ -347,46 +408,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     lhs=self.visit(node.args[0], **kwargs),
                     rhs=self.visit(node.args[1], **kwargs),
                 )
-            elif node.fun.id == "if_":
-                assert len(node.args) == 3
-                return TernaryExpr(
-                    cond=self.visit(node.args[0], **kwargs),
-                    true_expr=self.visit(node.args[1], **kwargs),
-                    false_expr=self.visit(node.args[2], **kwargs),
-                )
-            elif node.fun.id == "cast_":
-                assert len(node.args) == 2
-                return CastExpr(
-                    obj_expr=self.visit(node.args[0], **kwargs),
-                    new_dtype=self.visit(node.args[1], **kwargs),
-                )
-            elif node.fun.id == "list_get":
-                # should only reach this for the case of an external sparse field
-                return FunCall(
-                    fun=SymRef(id="tuple_get"),
-                    args=[self.visit(node.args[0]), self.visit(node.args[1])],
-                )
-            self._error_on_illegal_function_calls(node)
-            if node.fun.id == "cartesian_domain":
-                sizes, domain_offsets = self._make_domain(node)
-                return CartesianDomain(tagged_sizes=sizes, tagged_offsets=domain_offsets)  # type: ignore
-            elif node.fun.id == "unstructured_domain":
-                sizes, domain_offsets = self._make_domain(node)
-                connectivities = []
-                if "stencil" in kwargs:
-                    shift_offsets = self._collect_offset_or_axis_node(
-                        itir.OffsetLiteral, kwargs["stencil"]
-                    )
-                    for o in shift_offsets:
-                        if o in self.offset_provider and isinstance(
-                            self.offset_provider[o], common.Connectivity
-                        ):
-                            connectivities.append(SymRef(id=o))
-                return UnstructuredDomain(
-                    tagged_sizes=sizes,
-                    tagged_offsets=domain_offsets,
-                    connectivities=connectivities,
-                )  # type: ignore
+            elif hasattr(self, visit_method := f"_visit_{node.fun.id}"):
+                # special handling of applied builtins is handled in `_visit_<builtin>`
+                return getattr(self, visit_method)(node, **kwargs)
+            elif node.fun.id == "shift":
+                raise ValueError("unapplied shift call not supported: {node}")
+            elif node.fun.id == "scan":
+                raise ValueError("scans are only supported at the top level of a stencil closure")
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1
@@ -394,8 +422,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     fun=self.visit(node.fun.fun, **kwargs),
                     args=self.visit(node.args, **kwargs) + self.visit(node.fun.args, **kwargs),
                 )
-            elif node.fun == itir.SymRef(id="shift"):
-                raise ValueError("unapplied shift call not supported: {node}")
         return FunCall(fun=self.visit(node.fun, **kwargs), args=self.visit(node.args, **kwargs))
 
     def visit_FunctionDefinition(
@@ -439,8 +465,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             extracted_functions.append(scan_def)
             scan = Scan(
                 function=SymRef(id=scan_id),
-                output=Literal(value="0", type="int"),
-                inputs=[Literal(value=str(i + 1), type="int") for i, _ in enumerate(node.inputs)],
+                output=0,
+                inputs=[i + 1 for i, _ in enumerate(node.inputs)],
                 init=self.visit(node.stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
@@ -482,13 +508,10 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     compacted_b_args.append(b_arg)
 
             def remap_args(s: Scan) -> Scan:
-                def remap_literal(x: Literal) -> Literal:
-                    return Literal(value=str(index_map[int(x.value)]), type=x.type)
-
                 return Scan(
                     function=s.function,
-                    output=remap_literal(s.output),
-                    inputs=[remap_literal(i) for i in s.inputs],
+                    output=index_map[s.output],
+                    inputs=[index_map[i] for i in s.inputs],
                     init=s.init,
                 )
 

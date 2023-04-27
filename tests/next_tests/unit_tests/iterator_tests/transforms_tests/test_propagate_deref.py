@@ -12,17 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.ffront import itir_makers as im
+from gt4py.next.iterator import ir_makers as im
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 
 
 def test_deref_propagation():
-    testee = im.deref_(
-        im.call_(im.lambda__("inner_it")(im.lift_("stencil")("inner_it")))("outer_it")
-    )
-    expected = im.call_(im.lambda__("inner_it")(im.deref_(im.lift_("stencil")("inner_it"))))(
-        "outer_it"
-    )
+    testee = im.deref(im.call(im.lambda_("inner_it")(im.lift("stencil")("inner_it")))("outer_it"))
+    expected = im.call(im.lambda_("inner_it")(im.deref(im.lift("stencil")("inner_it"))))("outer_it")
 
     actual = PropagateDeref.apply(testee)
     assert actual == expected

@@ -126,8 +126,8 @@ class CommonSubexpressionElimination(NodeTranslator):
 
     Examples:
         >>> x = ir.SymRef(id="x")
-        >>> plus_ = lambda a, b: ir.FunCall(fun=ir.SymRef(id=("plus")), args=[a, b])
-        >>> expr = plus_(plus_(x, x), plus_(x, x))
+        >>> plus = lambda a, b: ir.FunCall(fun=ir.SymRef(id=("plus")), args=[a, b])
+        >>> expr = plus(plus(x, x), plus(x, x))
         >>> print(CommonSubexpressionElimination().visit(expr))
         (λ(_cs_1) → _cs_1 + _cs_1)(x + x)
     """

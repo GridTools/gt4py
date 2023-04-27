@@ -186,10 +186,9 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(neighbors(V2E, non_sparse), deref(inp))
 
 
-def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == type_check.check:
-        pytest.xfail("Partial shifts not properly supported by type inference.")
+def test_sparse_input_field(program_processor, lift_mode):
+    program_processor, validate = program_processor
+
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
     out = np_as_located_field(Vertex)(np.zeros([9]))
@@ -210,10 +209,8 @@ def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
         assert np.allclose(out, ref)
 
 
-def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == type_check.check:
-        pytest.xfail("Partial shifts not properly supported by type inference.")
+def test_sparse_input_field_v2v(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
     non_sparse = np_as_located_field(Edge)(np.zeros(18))
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
@@ -243,8 +240,8 @@ def slice_sparse_stencil(sparse):
     return list_get(1, deref(sparse))
 
 
-def test_slice_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_slice_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -271,8 +268,8 @@ def slice_twice_sparse_stencil(sparse):
 
 
 @pytest.mark.xfail(reason="Field with more than one sparse dimension is not implemented.")
-def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_slice_twice_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -297,8 +294,8 @@ def shift_sliced_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_shift_sliced_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_shift_sliced_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -324,8 +321,8 @@ def slice_shifted_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_slice_shifted_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -379,8 +376,8 @@ def sparse_shifted_stencil(inp):
     return list_get(2, list_get(0, neighbors(V2V, inp)))
 
 
-def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_shift_sparse_input_field(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
@@ -408,8 +405,12 @@ def shift_sparse_stencil2(inp):
     return list_get(1, list_get(3, neighbors(V2E, inp)))
 
 
-def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_shift_sparse_input_field2(program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor == gtfn_cpu.run_gtfn or program_processor == gtfn_cpu.run_gtfn_imperative:
+        pytest.xfail(
+            "Bug in bindings/compilation/caching: only the first program seems to be compiled."
+        )  # observed in `cache.Strategy.PERSISTENT` mode
     inp = index_field(Vertex)
     inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
     out1 = np_as_located_field(Vertex)(np.zeros([9]))
