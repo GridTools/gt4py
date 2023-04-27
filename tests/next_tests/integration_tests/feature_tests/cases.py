@@ -80,7 +80,7 @@ class DataInitializer(Protocol):
 
     def scalar(self, dtype: np.typing.DTypeLike) -> ScalarValue:
         # some unlikely numpy dtypes are picky about arguments
-        return np.dtype(dtype).type(self.scalar_value)  # type: ignore [arg-type, call-overload]
+        return np.dtype(dtype).type(self.scalar_value)  # type: ignore [arg-type]
 
     def field(
         self,
