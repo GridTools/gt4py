@@ -402,9 +402,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     lhs=self.visit(node.args[0], **kwargs),
                     rhs=self.visit(node.args[1], **kwargs),
                 )
-            elif hasattr(self, f"_visit_{node.fun.id}"):
+            elif hasattr(self, visit_method := f"_visit_{node.fun.id}"):
                 # special handling of applied builtins is handled in `_visit_<builtin>`
-                return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
+                return getattr(self, visit_method)(node, **kwargs)
             elif node.fun.id == "shift":
                 raise ValueError("unapplied shift call not supported: {node}")
             elif node.fun.id == "scan":
