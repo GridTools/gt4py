@@ -359,11 +359,17 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def _visit_list_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
         # should only reach this for the case of an external sparse field
-        assert isinstance(node.args[0], itir.Literal)
+        tuple_idx = (
+            _literal_as_integral_constant(node.args[0])
+            if isinstance(node.args[0], itir.Literal)
+            else self.visit(
+                node.args[0]
+            )  # from unroll_reduce we get a `SymRef` which is refering to an `OffsetLiteral` which is lowered to integral_constant
+        )
         return FunCall(
             fun=SymRef(id="tuple_get"),
             args=[
-                _literal_as_integral_constant(node.args[0]),
+                tuple_idx,
                 self.visit(node.args[1]),
             ],
         )
