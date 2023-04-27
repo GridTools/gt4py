@@ -135,7 +135,7 @@ def test_lambda_redef_same_arg_scope():
 
 def test_if_can_deref():
     """
-    Test not subexpression is moved outside an `if` with a condition calling `can_deref`
+    Test no subexpression is moved outside expressions of the form `if_(can_deref(...), ..., ...)`
     """
     # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it)
     testee = im.if_(
