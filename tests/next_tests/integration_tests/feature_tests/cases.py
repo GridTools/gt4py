@@ -193,12 +193,7 @@ class Builder:
         return self.partial(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        try:
-            return getattr(self, name)
-        except AttributeError as attr_err:
-            raise AttributeError(
-                f"{self.__name__} has no setter for argument {name} of function {self.partial.func}"
-            ) from attr_err
+        raise AttributeError(f"No setter for argument {name}.")
 
 
 @typing.overload
@@ -330,7 +325,7 @@ def allocate(
     name: str,
     *,
     sizes: Optional[dict[common.Dimension, int]] = None,
-    strategy: DataInitializer = UniqueInitializer(),
+    strategy: Optional[DataInitializer] = None,
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
 ) -> FieldViewArg:
@@ -352,8 +347,11 @@ def allocate(
     """
     sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
     arg_type = get_param_types(fieldview_prog)[name]
-    if name in ["out", RETURN] and strategy is None:
-        strategy = ZeroInitializer()
+    if strategy is None:
+        if name in ["out", RETURN]:
+            strategy = ZeroInitializer()
+        else:
+            strategy = UniqueInitializer()
     return _allocate_from_type(
         case=case,
         arg_type=arg_type,
