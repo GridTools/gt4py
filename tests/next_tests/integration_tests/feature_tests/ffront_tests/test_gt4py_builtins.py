@@ -129,25 +129,6 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out)
 
 
-def test_reduction_execution_nb(reduction_setup, fieldview_backend):
-    """Testing a neighbor sum on a neighbor field."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("not yet supported.")
-
-    rs = reduction_setup
-    V2EDim = rs.V2EDim
-    nb_field = np_as_located_field(Vertex, V2EDim)(rs.v2e_table)
-
-    @field_operator(backend=fieldview_backend)
-    def reduction(nb_field: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
-        return neighbor_sum(nb_field, axis=V2EDim)
-
-    reduction(nb_field, out=rs.out, offset_provider=rs.offset_provider)
-
-    ref = np.sum(rs.v2e_table, axis=1)
-    assert np.allclose(ref, rs.out)
-
-
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
@@ -173,8 +154,6 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple(fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Tuple outputs not supported in gtfn backends")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))

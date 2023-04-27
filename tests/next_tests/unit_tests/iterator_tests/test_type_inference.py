@@ -15,8 +15,7 @@
 import numpy as np
 
 from gt4py.next.common import Dimension
-from gt4py.next.ffront import itir_makers as im
-from gt4py.next.iterator import ir, type_inference as ti
+from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 
@@ -777,9 +776,9 @@ def test_fencil_definition():
 
 def test_fencil_definition_same_closure_input():
     f1 = ir.FunctionDefinition(
-        id="f1", params=[im.sym("vertex_it")], expr=im.deref_(im.shift_("E2V")("vertex_it"))
+        id="f1", params=[im.sym("vertex_it")], expr=im.deref(im.shift("E2V")("vertex_it"))
     )
-    f2 = ir.FunctionDefinition(id="f2", params=[im.sym("vertex_it")], expr=im.deref_("vertex_it"))
+    f2 = ir.FunctionDefinition(id="f2", params=[im.sym("vertex_it")], expr=im.deref("vertex_it"))
 
     testee = ir.FencilDefinition(
         id="fencil",
@@ -787,8 +786,8 @@ def test_fencil_definition_same_closure_input():
         params=[im.sym("vertex_it"), im.sym("output_edge_it"), im.sym("output_vertex_it")],
         closures=[
             ir.StencilClosure(
-                domain=im.call_("unstructured_domain")(
-                    im.call_("named_range")(
+                domain=im.call("unstructured_domain")(
+                    im.call("named_range")(
                         ir.AxisLiteral(value="Edge"),
                         ir.Literal(value="0", type="int"),
                         ir.Literal(value="10", type="int"),
@@ -799,8 +798,8 @@ def test_fencil_definition_same_closure_input():
                 inputs=[im.ref("vertex_it")],
             ),
             ir.StencilClosure(
-                domain=im.call_("unstructured_domain")(
-                    im.call_("named_range")(
+                domain=im.call("unstructured_domain")(
+                    im.call("named_range")(
                         ir.AxisLiteral(value="Vertex"),
                         ir.Literal(value="0", type="int"),
                         ir.Literal(value="10", type="int"),
