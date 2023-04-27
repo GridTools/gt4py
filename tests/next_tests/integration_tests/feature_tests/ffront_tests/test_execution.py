@@ -79,7 +79,7 @@ def test_cartesian_shift(fieldview_backend):
     a = np_as_located_field(IDim)(np.arange(size + 1, dtype=np.float64))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def shift_by_one(inp: Field[[IDim], float64]) -> Field[[IDim], float64]:
         return inp(Ioff[1])
 
@@ -155,7 +155,7 @@ def test_fold_shifts(fieldview_backend):
     b = np_as_located_field(IDim)(np.ones((size + 2)) * 2)
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def auto_lift(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -178,7 +178,7 @@ def test_tuples(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def tuples(
         inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]
     ) -> Field[[IDim], float64]:
@@ -238,7 +238,7 @@ def test_scalar_arg_with_field(fieldview_backend):
     factor = 3.0
     out = np_as_located_field(Edge)(np.zeros((size,), dtype=np.float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def scalar_and_field_args(
         inp: Field[[Edge], float64], factor: float64
     ) -> Field[[Edge], float64]:
@@ -265,7 +265,7 @@ def test_scalar_in_domain_spec_and_fo_call(fieldview_backend):
     size = 10
     out = np_as_located_field(Vertex)(np.zeros(10, dtype=int))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def foo(size: int) -> Field[[Vertex], int]:
         return broadcast(size, (Vertex,))
 
@@ -417,7 +417,7 @@ def test_nested_tuple_return(fieldview_backend):
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def pack_tuple(
         a: Field[[IDim], float64], b: Field[[IDim], float64]
     ) -> tuple[Field[[IDim], float64], tuple[Field[[IDim], float64], Field[[IDim], float64]]]:
@@ -480,7 +480,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def reduction_tuple(
         a: Field[[Edge], int64], b: Field[[Edge], int64]
     ) -> tuple[Field[[Vertex], int64], Field[[Vertex], int64]]:
@@ -560,7 +560,7 @@ def test_fieldop_from_scan(fieldview_backend, forward):
     if not forward:
         expected = np.flip(expected)
 
-    @field_operator
+    @field_operator(backend=fieldview_backend)
     def add(carry: float, foo: float) -> float:
         return carry + foo
 
@@ -785,7 +785,7 @@ def test_domain(fieldview_backend):
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         return a + a
 
-    @program
+    @program(backend=fieldview_backend)
     def program_domain(inp: Field[[IDim, JDim], float64], out: Field[[IDim, JDim], float64]):
         fieldop_domain(inp, out=out, domain={IDim: (minimum(1, 2), 9), JDim: (4, maximum(5, 6))})
 
@@ -812,7 +812,7 @@ def test_domain_input_bounds(fieldview_backend):
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         return a + a
 
-    @program
+    @program(backend=fieldview_backend)
     def program_domain(
         inp: Field[[IDim, JDim], float64],
         out: Field[[IDim, JDim], float64],
@@ -847,7 +847,7 @@ def test_domain_input_bounds_1(fieldview_backend):
     def fieldop_domain(a: Field[[IDim, JDim], float64]) -> Field[[IDim, JDim], float64]:
         return a + a
 
-    @program
+    @program(backend=fieldview_backend)
     def program_domain(
         a: Field[[IDim, JDim], float64],
         lower_i: int64,
@@ -883,7 +883,7 @@ def test_domain_tuple(fieldview_backend):
     ) -> tuple[Field[[IDim, JDim], float64], Field[[IDim, JDim], float64]]:
         return (a + b, b)
 
-    @program
+    @program(backend=fieldview_backend)
     def program_domain_tuple(
         inp0: Field[[IDim, JDim], float64],
         inp1: Field[[IDim, JDim], float64],
