@@ -86,7 +86,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=inp[1:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
@@ -212,7 +212,7 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, testee, "b")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ref = inp.array()[1:] * b
+    ref = a.array()[1:] * b
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
@@ -244,8 +244,8 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @scan_operator(axis=KDim, forward=True, init=(0.0))
-    def testee_scan(carry: float, qc_in: float, scalar: float) -> float:
-        qc = qc_in + carry + scalar
+    def testee_scan(state: float, qc_in: float, scalar: float) -> float:
+        qc = qc_in + state + scalar
         return qc
 
     @program
