@@ -42,6 +42,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Koff,
     Vertex,
     fieldview_backend,
+    reduction_setup,
 )
 
 
