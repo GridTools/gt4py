@@ -129,8 +129,6 @@ def fen_direct_deref(i_size, j_size, out, inp):
 
 def test_direct_deref(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn:
-        pytest.xfail("extract_fundefs_from_closures() doesn't work for builtins in gtfn")
 
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
