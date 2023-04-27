@@ -246,6 +246,15 @@ class Program:
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
         )
 
+    def with_grid_type(self, grid_type: GridType) -> "Program":
+        return Program(
+            past_node=self.past_node,
+            closure_vars=self.closure_vars,
+            backend=self.backend,
+            definition=self.definition,
+            grid_type=grid_type,
+        )
+
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
         return _get_closure_vars_recursively(self.closure_vars)

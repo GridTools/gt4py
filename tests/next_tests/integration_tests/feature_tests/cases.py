@@ -45,11 +45,12 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-IField: TypeAlias = common.Field[[IDim], int]
-IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], int]
-IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]
-VField: TypeAlias = common.Field[[Vertex], int]
-EField: TypeAlias = common.Field[[Edge], int]
+# mypy does not accept [IDim, ...] as a type
+IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
+IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
+IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
+VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
+EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
 V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
 E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
 V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
@@ -58,6 +59,13 @@ E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 NumericValue: TypeAlias = ScalarValue | np.typing.NDArray[ScalarValue]
+FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl
+FieldViewArg: TypeAlias = FieldValue | NumericValue | tuple["FieldViewArg", ...]
+FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
+ReferenceValue: TypeAlias = (
+    common.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
+)
+OffsetProvider: TypeAlias = dict[str, common.Connectivity | common.Dimension]
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -66,6 +74,10 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 
 
 class DataInitializer(Protocol):
+    @property
+    def scalar_value(self) -> ScalarValue:
+        ...
+
     @typing.overload
     def scalar(self, dtype: np.typing.DTypeLike, shape: Literal[None]) -> ScalarValue:
         ...
@@ -76,17 +88,26 @@ class DataInitializer(Protocol):
     ) -> np.typing.NDArray[ScalarValue]:
         ...
 
+    @typing.overload
     def scalar(
         self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]] = None
     ) -> NumericValue:
         ...
+
+    def scalar(
+        self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]] = None
+    ) -> NumericValue:
+        if shape:
+            return np.full(np.prod(shape), self.scalar_value, dtype=dtype)
+        # some unlikely numpy dtypes are picky about arguments
+        return np.dtype(dtype).type(self.scalar_value)  # type: ignore [arg-type, call-overload]
 
     def field(
         self,
         backend: ppi.ProgramProcessor,
         sizes: dict[common.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> common.Field:
+    ) -> FieldValue:
         ...
 
     def from_case(
@@ -94,7 +115,6 @@ class DataInitializer(Protocol):
         case: Case,
         fieldview_prog: decorator.FieldOperator | decorator.Program,
         arg_name: str,
-        tuple_position: tuple[int | tuple, ...] = tuple(),
     ) -> Self:
         return self
 
@@ -105,19 +125,18 @@ class ConstInitializer(DataInitializer):
 
     value: ScalarValue
 
-    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
-        if shape:
-            return np.full(np.prod(shape), self.value, dtype=dtype)
-        return np.dtype(dtype).type(self.value)
+    @property
+    def scalar_value(self) -> ScalarValue:
+        return self.value
 
     def field(
         self,
         backend: ppi.ProgramProcessor,
         sizes: dict[common.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> common.Field:
+    ) -> FieldValue:
         return embedded.np_as_located_field(*sizes.keys())(
-            (np.ones(tuple(sizes.values())) * self.value).astype(dtype=dtype)
+            np.full(tuple(sizes.values()), self.value, dtype=dtype)
         )
 
 
@@ -125,17 +144,16 @@ class ConstInitializer(DataInitializer):
 class ZeroInitializer(DataInitializer):
     """Initialize with zeros."""
 
-    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
-        if shape:
-            return np.zeros(np.prod(shape), dtype=dtype)
-        return np.dtype(dtype).type(0)
+    @property
+    def scalar_value(self) -> ScalarValue:
+        return np.int64(0)
 
     def field(
         self,
         backend: ppi.ProgramProcessor,
         sizes: dict[common.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> common.Field:
+    ) -> FieldValue:
         return embedded.np_as_located_field(*sizes.keys())(
             np.zeros(tuple(sizes.values()), dtype=dtype)
         )
@@ -152,21 +170,18 @@ class UniqueInitializer(DataInitializer):
 
     start: int = 0
 
-    def scalar(self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]]) -> NumericValue:
+    @property
+    def scalar_value(self) -> ScalarValue:
         start = self.start
-        if shape:
-            n_data = int(np.prod(shape))
-            self.start += n_data
-            return np.arange(start, start + n_data, dtype=dtype)
         self.start += 1
-        return np.dtype(dtype).type(self.start)
+        return np.int64(start)
 
     def field(
         self,
         backend: ppi.ProgramProcessor,
         sizes: dict[common.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> common.Field:
+    ) -> FieldValue:
         start = self.start
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
@@ -197,15 +212,42 @@ class Builder:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.partial(*args, **kwargs)
 
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return getattr(self, name)
+        except AttributeError as attr_err:
+            raise AttributeError(
+                f"{self.__name__} has no setter for argument {name} of function {self.partial.func}"
+            ) from attr_err
+
+
+@typing.overload
+def make_builder(*args: Callable) -> Callable[..., Builder]:
+    ...
+
+
+@typing.overload
+def make_builder(
+    *args: Literal[None], **kwargs: dict[str, Any]
+) -> Callable[[Callable], Callable[..., Builder]]:
+    ...
+
+
+@typing.overload
+def make_builder(
+    *args: Optional[Callable], **kwargs: dict[str, Any]
+) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
+    ...
+
 
 def make_builder(
-    func: Optional[Callable] = None, **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[[Any], Builder]] | Callable[[Any], Builder]:
+    *args: Optional[Callable], **kwargs: dict[str, Any]
+) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
     """Create a fluid interface for a function with many arguments."""
 
-    def make_builder_inner(func):
-        def make_setter(argname):
-            def setter(self, arg):
+    def make_builder_inner(func: Callable) -> Callable[..., Builder]:
+        def make_setter(argname: str) -> Callable[[Builder, Any], Builder]:
+            def setter(self: Builder, arg: Any) -> Builder:
                 return self.__class__(
                     partial=functools.partial(
                         self.partial.func,
@@ -217,8 +259,8 @@ def make_builder(
             setter.__name__ = argname
             return setter
 
-        def make_flag_setter(flag_name: str, flag_kwargs: Any):
-            def setter(self):
+        def make_flag_setter(flag_name: str, flag_kwargs: Any) -> Callable[[Builder], Builder]:
+            def setter(self: Builder) -> Builder:
                 return self.__class__(
                     partial=functools.partial(
                         self.partial.func,
@@ -249,8 +291,10 @@ def make_builder(
 
         return lambda *args, **kwargs: NewBuilder(functools.partial(func, *args, **kwargs))
 
-    if func:
-        return make_builder_inner(func)
+    if 0 < len(args) <= 1 and args[0] is not None:
+        return make_builder_inner(args[0])
+    if len(args) > 1:
+        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received!")
     return make_builder_inner
 
 
@@ -267,9 +311,7 @@ def get_param_types(
     }
 
 
-def get_param_size(
-    param_type: ts.TypeSpec, sizes: dict[common.Dimension, int | tuple[int | tuple]]
-) -> int:
+def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) -> int:
     match param_type:
         case ts.FieldType(dims=dims):
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
@@ -293,6 +335,11 @@ def extend_sizes(
     return sizes
 
 
+#: To allocate the return value of a field operator, we must pass
+#: something that is not an argument name. Currently this is  the
+#: literal string "return" (because it is read from annotations).
+#: This could change if implemented differently. RETURN acts as a
+#: proxy to avoid propagating the change to client code.
 RETURN = "return"
 
 
@@ -306,7 +353,7 @@ def allocate(
     strategy: DataInitializer = UniqueInitializer(),
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
+) -> FieldViewArg:
     """
     Allocate a parameter or return value from a fieldview code object.
 
@@ -343,7 +390,7 @@ def _allocate_from_type(
     strategy: DataInitializer,
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
-) -> common.Field | NumericValue | tuple[common.Field | NumericValue | tuple, ...]:
+) -> FieldViewArg:
     """Allocate data based on the type or a (nested) tuple thereof."""
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
@@ -372,7 +419,7 @@ def _allocate_from_type(
 def run(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-    *args: common.Field,
+    *args: FieldViewArg,
     **kwargs: Any,
 ) -> None:
     """Run fieldview code in the context of a given test case."""
@@ -384,7 +431,7 @@ def run(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field | ScalarValue]]:
+) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
 
@@ -407,11 +454,11 @@ def get_default_data(
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-    *args: common.Field | NumericValue,
-    out: Optional[common.Field] = None,
-    inout: Optional[common.Field | tuple[common.Field, ...]] = None,
-    ref: common.Field | tuple[common.Field | np.typing.NDArray, ...] | np.typing.NDArray,
-    offset_provider: Optional[dict[str, common.Connectivty | common.Dimension]] = None,
+    *args: FieldViewArg,
+    ref: ReferenceValue,
+    out: Optional[FieldViewInout] = None,
+    inout: Optional[FieldViewInout] = None,
+    offset_provider: Optional[OffsetProvider] = None,
     comparison: Callable[[Any, Any], bool] = np.allclose,
 ) -> None:
     """
@@ -421,6 +468,8 @@ def verify(
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         *args: positional input arguments to the fieldview code.
+        ref: A field or array which will be compared to the results of the
+            fieldview code.
         out: If given will be passed to the fieldview code as ``out=`` keyword
             argument. This will hold the results and be used to compare
             to ``ref``.
@@ -430,8 +479,6 @@ def verify(
             or tuple of fields here and they will be compared to ``ref`` under
             the assumption that the fieldview code stores it's results in
             them.
-        ref: A field or array which will be compared to the results of the
-            fieldview code.
         offset_provied: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
@@ -457,9 +504,11 @@ def verify(
     assert out_comp is not None
     if hasattr(out_comp, "array"):
         out_comp_str = str(out_comp.array())
-    assert comparison(
-        ref, out_comp
-    ), f"Verification failed:\n\tcomparison={comparison.__name__}(ref, out)\n\tref = {ref}\n\tout = {out_comp_str}"
+    assert comparison(ref, out_comp), (
+        f"Verification failed:\n"
+        f"\tcomparison={comparison.__name__}(ref, out)\n"
+        f"\tref = {ref}\n\tout = {out_comp_str}"
+    )
 
 
 def verify_with_default_data(
@@ -501,7 +550,7 @@ class Case:
     """Parametrizable components for single feature integration tests."""
 
     backend: ppi.ProgramProcessor
-    offset_provider: dict[str, common.Connectivty | common.Dimension]
+    offset_provider: dict[str, common.Connectivity | common.Dimension]
     default_sizes: dict[common.Dimension, int]
     grid_type: common.GridType
 

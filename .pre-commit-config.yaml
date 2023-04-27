@@ -194,5 +194,18 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
-      tests/.*
+      tests/conftest.py |
+      tests/cartesian_tests/integration_tests/multi_feature_tests/stencil_definitions.py |
+      tests/cartesian_tests/integration_tests/multi_feature_tests/test_code_generation.py |
+      tests/cartesian_tests/integration_tests/multi_feature_tests/utils.py |
+      tests/cartesian_tests/integration_tests/feature_tests/test_call_interface.py |
+      tests/cartesian_tests/unit_tests/frontend_tests/test_gtscript_frontend.py |
+      tests/next_tests/unit_tests/.* |
+      tests/next_tests/integration_tests/multi_feature_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
+      tests/next_tests/past_common_fixtures.py |
+      tests/next_tests/toy_connectivity.py |
       )$

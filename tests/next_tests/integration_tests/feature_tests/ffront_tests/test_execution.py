@@ -94,13 +94,11 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     def testee(inp: cases.VField) -> cases.EField:
         return inp(E2V[0])
 
-    inp = cases.allocate(unstructured_case, testee, "inp")()
-    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
-
-    ref = np.asarray(inp)[unstructured_case.offset_provider["E2V"].table[:, 0]]
-    cases.verify(unstructured_case, testee, inp, out=out, ref=ref)
-
-    assert np.allclose(b, ref)
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: a[unstructured_case.offset_provider["E2V"].table[:, 0]],
+    )
 
 
 def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
@@ -143,7 +141,7 @@ def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
         assert np.allclose(b, ref)
 
 
-def test_fold_shifts(fieldview_backend):
+def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
     @field_operator
@@ -201,7 +199,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], inp + 2, dtype=int),
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int),
     )
 
 
@@ -235,7 +233,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     inp = cases.allocate(cartesian_case, testee, "size").strategy(
-        cases.ConstInitializer(cartesian_case.default_sizes[IDim])
+        cases.ConstInitializer(value=cartesian_case.default_sizes[IDim])
     )()
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
@@ -259,7 +257,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
 
-    cases.verify(cartesian_case, testee, qc, scalar, nopass_out=qc, ref=expected)
+    cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
