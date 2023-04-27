@@ -233,7 +233,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     inp = cases.allocate(cartesian_case, testee, "size").strategy(
-        cases.ConstInitializer(value=cartesian_case.default_sizes[IDim])
+        cases.ConstInitializer(cartesian_case.default_sizes[IDim])
     )()
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
@@ -253,7 +253,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
         testee_scan(qc, scalar, out=qc)
 
     qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
-    scalar = cases.allocate(cartesian_case, testee, "scalar").strategy(cases.ConstInitializer(1))()
+    scalar = 1.0
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
 
