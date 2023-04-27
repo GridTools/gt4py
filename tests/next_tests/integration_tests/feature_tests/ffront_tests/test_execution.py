@@ -61,8 +61,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp: cases.IJKField) -> cases.IJKField:
-        field_tuple = (inp, inp)
+    def testee(a: cases.IJKField) -> cases.IJKField:
+        field_tuple = (a, a)
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
@@ -72,27 +72,27 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
 
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp1: cases.IJKField, inp2: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
-        return inp1, inp2
+    def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
+        return a, b
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp: cases.IJKField) -> cases.IJKField:
-        return inp(Ioff[1])
+    def testee(a: cases.IJKField) -> cases.IJKField:
+        return a(Ioff[1])
 
-    inp = cases.allocate(cartesian_case, testee, "inp").extend({IDim: (0, 1)})()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, inp, out=out, ref=inp[1:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=inp[1:])
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp: cases.VField) -> cases.EField:
-        return inp(E2V[0])
+    def testee(a: cases.VField) -> cases.EField:
+        return a(E2V[0])
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -145,12 +145,12 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
     @field_operator
-    def testee(inp1: cases.IJKField, inp2: cases.IJKField) -> cases.IJKField:
-        tmp = inp1 + inp2(Ioff[1])
+    def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
+        tmp = a + b(Ioff[1])
         return tmp(Ioff[1])
 
-    a = cases.allocate(cartesian_case, testee, "inp1").extend({cases.IDim: (0, 1)})()
-    b = cases.allocate(cartesian_case, testee, "inp2").extend({cases.IDim: (0, 2)})()
+    a = cases.allocate(cartesian_case, testee, "a").extend({cases.IDim: (0, 1)})()
+    b = cases.allocate(cartesian_case, testee, "b").extend({cases.IDim: (0, 2)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a[1:] + b[2:])
@@ -158,8 +158,8 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp1: cases.IJKFloatField, inp2: cases.IJKFloatField) -> cases.IJKFloatField:
-        inps = inp1, inp2
+    def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
+        inps = a, b
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
@@ -172,8 +172,8 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @field_operator
-    def testee(scalar_inp: int) -> cases.VField:
-        return broadcast(scalar_inp + 1, (Vertex,))
+    def testee(a: int) -> cases.VField:
+        return broadcast(a + 1, (Vertex,))
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -189,12 +189,12 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee_inner(scalar_inp: int) -> cases.VField:
-        return broadcast(scalar_inp + 1, (Vertex,))
+    def testee_inner(a: int) -> cases.VField:
+        return broadcast(a + 1, (Vertex,))
 
     @field_operator
-    def testee(scalar_inp: int) -> cases.VField:
-        return testee_inner(scalar_inp + 1)
+    def testee(a: int) -> cases.VField:
+        return testee_inner(a + 1)
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -205,16 +205,16 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(inp: cases.IJKField, factor: int) -> cases.IJKField:
-        tmp = factor * inp
+    def testee(a: cases.IJKField, b: int) -> cases.IJKField:
+        tmp = b * a
         return tmp(Ioff[1])
 
-    inp = cases.allocate(cartesian_case, testee, "inp").extend({IDim: (0, 1)})()
-    factor = cases.allocate(cartesian_case, testee, "factor")()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
+    b = cases.allocate(cartesian_case, testee, "b")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ref = inp.array()[1:] * factor
+    ref = inp.array()[1:] * b
 
-    cases.verify(cartesian_case, testee, inp, factor, out=out, ref=ref)
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
@@ -232,13 +232,13 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     def testee(size: int, out: cases.IField):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
-    inp = cases.allocate(cartesian_case, testee, "size").strategy(
+    size = cases.allocate(cartesian_case, testee, "size").strategy(
         cases.ConstInitializer(cartesian_case.default_sizes[IDim])
     )()
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, inp, out=out, ref=np.full_like(out.array(), inp, dtype=int)
+        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=int)
     )
 
 
