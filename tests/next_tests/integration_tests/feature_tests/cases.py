@@ -52,11 +52,14 @@ IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore
 IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
 EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
+
+# TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
+#   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
+#   by `unstructured_case`.
 V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
 E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
 V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl

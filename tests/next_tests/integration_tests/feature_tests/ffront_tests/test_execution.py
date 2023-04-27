@@ -56,7 +56,12 @@ from next_tests.integration_tests.feature_tests.cases import (
     no_default_backend,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    Cell,
+    fieldview_backend,
+    reduction_setup,
+    size,
+)
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
@@ -232,9 +237,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     def testee(size: int, out: cases.IField):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
-    size = cases.allocate(cartesian_case, testee, "size").strategy(
-        cases.ConstInitializer(cartesian_case.default_sizes[IDim])
-    )()
+    size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
@@ -294,7 +297,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
         cartesian_case,
         testee,
         ref=lambda a: a.astype(int),
-        comparison=lambda a, b: np.all(np.equal(a, b)),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
@@ -308,7 +311,7 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
         cartesian_case,
         testee,
         ref=lambda a: a.astype(bool),
-        comparison=lambda a, b: np.all(np.equal(a, b)),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
@@ -322,7 +325,7 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
         cartesian_case,
         testee,
         ref=lambda a: a.astype(np.float32),
-        comparison=lambda a, b: np.all(np.equal(a, b)),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
