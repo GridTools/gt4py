@@ -144,7 +144,9 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+INTEGER_BUILTINS = {"int", "int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float", "float32", "float64"}
+TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 BUILTINS = {
     "cartesian_domain",

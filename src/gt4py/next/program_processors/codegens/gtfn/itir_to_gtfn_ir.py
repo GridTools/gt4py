@@ -29,6 +29,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     FencilDefinition,
     FunCall,
     FunctionDefinition,
+    IntegralConstant,
     Lambda,
     Literal,
     OffsetLiteral,
@@ -57,7 +58,6 @@ def pytype_to_cpptype(t: str):
             "int32": "std::int32_t",
             "int64": "std::int64_t",
             "bool": "bool",
-            "integral_constant_int": "integral_constant_int",
             "axis_literal": None,  # TODO: domain?
         }[t]
     except KeyError:
@@ -188,6 +188,11 @@ def _collect_offset_definitions(
     return offset_definitions
 
 
+def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
+    assert node.type in itir.INTEGER_BUILTINS
+    return IntegralConstant(value=int(node.value))
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {
@@ -283,9 +288,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
-        if "as_integral_constant" in kwargs and kwargs["as_integral_constant"]:
-            assert node.type in ["int", "int32", "int64"]
-            return Literal(value=node.value, type="integral_constant_int")
         return Literal(value=node.value, type=node.type)
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
@@ -350,17 +352,18 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return FunCall(
             fun=SymRef(id="tuple_get"),
             args=[
-                self.visit(node.args[0], as_integral_constant=True),
+                _literal_as_integral_constant(node.args[0]),
                 self.visit(node.args[1]),
             ],
         )
 
     def _visit_list_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
         # should only reach this for the case of an external sparse field
+        assert isinstance(node.args[0], itir.Literal)
         return FunCall(
             fun=SymRef(id="tuple_get"),
             args=[
-                self.visit(node.args[0], as_integral_constant=True),
+                _literal_as_integral_constant(node.args[0]),
                 self.visit(node.args[1]),
             ],
         )

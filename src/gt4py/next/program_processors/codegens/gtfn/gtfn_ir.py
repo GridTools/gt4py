@@ -51,6 +51,10 @@ class Literal(Expr):
     type: str  # noqa: A003
 
 
+class IntegralConstant(Expr):
+    value: int  # generalize to other types if needed
+
+
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
