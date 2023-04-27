@@ -19,7 +19,7 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Literal, Optional, Protocol, Sequence, TypeAlias
+from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
 
 import numpy as np
 import pytest
@@ -59,9 +59,8 @@ E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
-NumericValue: TypeAlias = ScalarValue | np.typing.NDArray[ScalarValue]
 FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl
-FieldViewArg: TypeAlias = FieldValue | NumericValue | tuple["FieldViewArg", ...]
+FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
 ReferenceValue: TypeAlias = (
     common.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
@@ -79,27 +78,7 @@ class DataInitializer(Protocol):
     def scalar_value(self) -> ScalarValue:
         ...
 
-    @typing.overload
-    def scalar(self, dtype: np.typing.DTypeLike, shape: Literal[None]) -> ScalarValue:
-        ...
-
-    @typing.overload
-    def scalar(
-        self, dtype: np.typing.DTypeLike, shape: Sequence[int]
-    ) -> np.typing.NDArray[ScalarValue]:
-        ...
-
-    @typing.overload
-    def scalar(
-        self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]] = None
-    ) -> NumericValue:
-        ...
-
-    def scalar(
-        self, dtype: np.typing.DTypeLike, shape: Optional[Sequence[int]] = None
-    ) -> NumericValue:
-        if shape:
-            return np.full(np.prod(shape), self.scalar_value, dtype=dtype)
+    def scalar(self, dtype: np.typing.DTypeLike) -> ScalarValue:
         # some unlikely numpy dtypes are picky about arguments
         return np.dtype(dtype).type(self.scalar_value)  # type: ignore [arg-type, call-overload]
 
@@ -400,8 +379,8 @@ def _allocate_from_type(
                 sizes={dim: sizes[dim] for dim in dims},
                 dtype=dtype or arg_dtype.kind.name.lower(),
             )
-        case ts.ScalarType(kind=kind, shape=shape):
-            return strategy.scalar(dtype=dtype or kind.name.lower(), shape=shape)
+        case ts.ScalarType(kind=kind):
+            return strategy.scalar(dtype=dtype or kind.name.lower())
         case ts.TupleType(types=types):
             return tuple(
                 (
