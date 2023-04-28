@@ -634,6 +634,7 @@ def field_operator(
     definition=None,
     *,
     backend=None,
+    grid_type=None
 ):
     """
     Generate an implementation of the field operator from a Python function object.
@@ -652,7 +653,7 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend)
+        return FieldOperator.from_function(definition, backend, grid_type)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
