@@ -460,6 +460,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         cls,
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
+        grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -485,8 +486,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
-            backend=backend,
             definition=definition,
+            backend=backend,
+            grid_type=grid_type,
         )
 
     def __gt_type__(self) -> ts.CallableType:
