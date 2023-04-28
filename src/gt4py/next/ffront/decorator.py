@@ -630,12 +630,7 @@ def field_operator(
     ...
 
 
-def field_operator(
-    definition=None,
-    *,
-    backend=None,
-    grid_type=None
-):
+def field_operator(definition=None, *, backend=None, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
