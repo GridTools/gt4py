@@ -183,7 +183,9 @@ class MutableLocatedField(LocatedField, Protocol):
         ...
 
 
+#: Column range used in column mode (`column_axis != None`) in the current closure execution context.
 context_column_range: cvars.ContextVar[range] = cvars.ContextVar("context_column_range")
+#: Offset provider dict in the current closure execution context.
 context_offset_provider: cvars.ContextVar[OffsetProvider] = cvars.ContextVar(
     "context_offset_provider"
 )
