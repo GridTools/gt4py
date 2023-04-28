@@ -180,6 +180,17 @@ class UniqueInitializer(DataInitializer):
         return self.__class__(start=self.start + sum(param_sizes[:param_index]))
 
 
+@dataclasses.dataclass(frozen=True)
+class Builder:
+    partial: functools.partial
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.partial(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(f"No setter for argument {name}.")
+
+
 @typing.overload
 def make_builder(*args: Callable) -> Callable[..., Builder]:
     ...
@@ -541,17 +552,6 @@ def get_default_data(
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-
-@dataclasses.dataclass(frozen=True)
-class Builder:
-    partial: functools.partial
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.partial(*args, **kwargs)
-
-    def __getattr__(self, name: str) -> Any:
-        raise AttributeError(f"No setter for argument {name}.")
 
 
 @dataclasses.dataclass
