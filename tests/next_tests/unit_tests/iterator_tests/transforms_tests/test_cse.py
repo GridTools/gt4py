@@ -131,3 +131,25 @@ def test_lambda_redef_same_arg_scope():
     )
     actual = CSE().visit(testee)
     assert actual == expected
+
+
+def test_if_can_deref():
+    """
+    Test no subexpression is moved outside expressions of the form `if_(can_deref(...), ..., ...)`
+    """
+    # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it)
+    testee = im.if_(
+        im.call("can_deref")(im.shift("I", 1)("it")),
+        im.deref(im.shift("I", 1)("it")),
+        # use something more involved where a subexpression can still be eliminated
+        im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
+    )
+    # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else (λ(_cs_1) → _cs_1 + _cs_1)(·⟪Iₒ, 1ₒ⟫(it))
+    expected = im.if_(
+        im.call("can_deref")(im.shift("I", 1)("it")),
+        im.deref(im.shift("I", 1)("it")),
+        im.let("_cs_1", im.deref(im.shift("I", 1)("it")))(im.plus("_cs_1", "_cs_1")),
+    )
+
+    actual = CSE().visit(testee)
+    assert actual == expected

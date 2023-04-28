@@ -153,6 +153,20 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out.array())
 
 
+def test_reduction_with_common_expression(reduction_setup, fieldview_backend):
+    rs = reduction_setup
+    V2EDim, V2E = rs.V2EDim, rs.V2E
+
+    @field_operator(backend=fieldview_backend)
+    def testee(flux: Field[[Edge], int64]) -> Field[[Vertex], int64]:
+        return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
+
+    testee(rs.inp, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table * 2, axis=1)
+    assert np.allclose(ref, rs.out.array())
+
+
 def test_conditional_nested_tuple(fieldview_backend):
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))

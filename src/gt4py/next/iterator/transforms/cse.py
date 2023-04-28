@@ -66,6 +66,16 @@ def _is_collectable_expr(node: ir.Node):
     return False
 
 
+def _is_if_can_deref(node: ir.Node):
+    # `if_(can_deref(...), ..., ...)`
+    return (
+        isinstance(node, ir.FunCall)
+        and node.fun == ir.SymRef(id="if_")
+        and isinstance(node.args[0], ir.FunCall)
+        and node.args[0].fun == ir.SymRef(id="can_deref")
+    )
+
+
 @dataclasses.dataclass
 class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
     subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
@@ -75,12 +85,19 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
     @classmethod
     def apply(cls, node: ir.Node):
         obj = cls()
-        obj.visit(node, used_symbol_ids=set(), collected_child_node_ids=set())
+        obj.visit(
+            node, used_symbol_ids=set(), collected_child_node_ids=set(), allow_collection=True
+        )
         # return subexpression in pre-order of the tree, i.e. the nodes closer to the root come
         # first, and skip the root node itself
         return {k: v for k, v in reversed(obj.subexprs.items()) if k is not node}
 
     def visit(self, node, **kwargs):
+        # TODO(tehrengruber): improve this case as we might miss subexpression that could be eliminated
+        # disable collection (for all child nodes) if node matches `if_(can_deref(...), ..., ...)`
+        if _is_if_can_deref(node):
+            kwargs["allow_collection"] = False
+
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 
@@ -101,7 +118,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
 
         # if no symbols are used that are defined in the root node, i.e. the node given to `apply`,
         # we collect the subexpression
-        if not used_symbol_ids and _is_collectable_expr(node):
+        if not used_symbol_ids and _is_collectable_expr(node) and kwargs["allow_collection"]:
             self.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
 
             # propagate to parent that we have collected its child
