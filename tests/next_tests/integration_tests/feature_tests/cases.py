@@ -97,7 +97,7 @@ class DataInitializer(Protocol):
         ...
 
     def from_case(
-        self,
+        self: Self,
         case: Case,
         fieldview_prog: decorator.FieldOperator | decorator.Program,
         arg_name: str,
@@ -126,23 +126,12 @@ class ConstInitializer(DataInitializer):
         )
 
 
-@dataclasses.dataclass
-class ZeroInitializer(DataInitializer):
+@dataclasses.dataclass(init=False)
+class ZeroInitializer(ConstInitializer):
     """Initialize with zeros."""
 
-    @property
-    def scalar_value(self) -> ScalarValue:
-        return np.int64(0)
-
-    def field(
-        self,
-        backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
-        dtype: np.typing.DTypeLike,
-    ) -> FieldValue:
-        return embedded.np_as_located_field(*sizes.keys())(
-            np.zeros(tuple(sizes.values()), dtype=dtype)
-        )
+    def __init__(self):
+        self.value = 0
 
 
 @dataclasses.dataclass
@@ -177,7 +166,7 @@ class UniqueInitializer(DataInitializer):
         )
 
     def from_case(
-        self,
+        self: Self,
         case: Case,
         fieldview_prog: decorator.FieldOperator | decorator.Program,
         arg_name: str,
@@ -210,6 +199,7 @@ def make_builder(
     ...
 
 
+# TODO(ricoh): Think about improving the type hints using `typing.ParamSpec`.
 def make_builder(
     *args: Optional[Callable], **kwargs: dict[str, Any]
 ) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
@@ -229,7 +219,9 @@ def make_builder(
             setter.__name__ = argname
             return setter
 
-        def make_flag_setter(flag_name: str, flag_kwargs: Any) -> Callable[[Builder], Builder]:
+        def make_flag_setter(
+            flag_name: str, flag_kwargs: dict[str, Any]
+        ) -> Callable[[Builder], Builder]:
             def setter(self: Builder) -> Builder:
                 return self.__class__(
                     partial=functools.partial(
@@ -287,6 +279,7 @@ def allocate(
         fieldview_prog: The field operator or program to be verified.
         name: The name of the input argument to allocate, or ``RETURN``
             for the return value of a field operator.
+    Keyword Args:
         sizes: Override for the test case dimension sizes.
             Use with caution.
         strategy: How to initialize the data.
@@ -340,6 +333,7 @@ def verify(
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         *args: positional input arguments to the fieldview code.
+    Keyword Args:
         ref: A field or array which will be compared to the results of the
             fieldview code.
         out: If given will be passed to the fieldview code as ``out=`` keyword
