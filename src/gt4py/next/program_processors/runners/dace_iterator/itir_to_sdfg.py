@@ -18,19 +18,19 @@ import dace
 import sympy
 
 import gt4py.eve as eve
+from gt4py.next import type_inference as next_typing
 from gt4py.next.common import Dimension, DimensionKind
-from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator import type_inference as itir_typing
+from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from .itir_to_tasklet import closure_to_tasklet_sdfg, Context
+from .itir_to_tasklet import closure_to_tasklet_sdfg
 from .utility import (
+    as_dace_type,
     connectivity_identifier,
     create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
-    as_dace_type,
     map_nested_sdfg_symbols,
 )
 
@@ -39,7 +39,7 @@ class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storages: dict[str, ts.TypeSpec]
     offset_provider: dict[str, Any]
-    node_types: dict[int, itir_typing.Type]
+    node_types: dict[int, next_typing.Type]
 
     def __init__(
         self,
@@ -157,7 +157,9 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
-        input_arrays = [(closure_sdfg.arrays[name], name, self.storages[name]) for name in input_names]
+        input_arrays = [
+            (closure_sdfg.arrays[name], name, self.storages[name]) for name in input_names
+        ]
         conn_arrays = [(closure_sdfg.arrays[name], name) for name in conn_names]
 
         context, results = closure_to_tasklet_sdfg(
@@ -170,7 +172,9 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # Map SDFG tasklet arguments to parameters
-        input_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names]
+        input_memlets = [
+            create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names
+        ]
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
         output_memlets = [
             create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names

@@ -19,7 +19,7 @@ import numpy as np
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
-from gt4py.next.iterator.transforms import apply_common_transforms, inline_lambdas
+from gt4py.next.iterator.transforms import apply_common_transforms
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
 
@@ -40,9 +40,6 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     program = apply_common_transforms(
         program, offset_provider=offset_provider, force_inline_lift=True
     )
-    # program = inline_lambdas.InlineLambdas.apply(
-    #     program, opcount_preserving=False, force_inline_lift=True
-    # )
     return program
 
 

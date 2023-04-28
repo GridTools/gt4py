@@ -2,7 +2,7 @@
 
 ## Motivation
 
-The DaCe framework uses a graph representation for computer programs. The graphs can natively express parallel workloads in the form of so-called *maps*. A DaCe map consists of a parallel execution domain, similar to a CUDA grid, and a tasklet, similar to a CUDA kernel body. As such, DaCe maps are also very similar to gt4py's stencil closures at the iterator IR level, as well as to gt4py's field view constructs such as adding two fields.
+The DaCe framework uses a graph representation for computer programs. The graphs can natively express parallel workloads in the form of so-called _maps_. A DaCe map consists of a parallel execution domain, similar to a CUDA grid, and a tasklet, similar to a CUDA kernel body. As such, DaCe maps are also very similar to gt4py's stencil closures at the iterator IR level, as well as to gt4py's field view constructs such as adding two fields.
 
 Due to the similarities, it makes sense to translate gt4py constructs to DaCe graphs. This way, we can leverage DaCe's optimization capabilities to produce fast-running stencil binaries.
 
@@ -14,16 +14,16 @@ The two main gt4py data-parallel constructs are operations on fields in the fiel
 
 In field view, the primary constructs are field operators, which are characterized as a data-flow graph of trivial operations over several fields. For example, adding two fields and then taking the square root of the sum corresponds to a data-flow graph with two nodes, the addition and the square root. The nodes themselves execute a trivial computation, such as adding two numbers for every element of the input fields. The addition node can be translated to a single DaCe map that iterates over the size of the input fields and executes a trivial tasklet with the code `out[i] = a[i] + b[i]`.
 
-Field operators can be more complex than a linear data-flow graph of two nodes, but no matter how large and complex the data-flow graph becomes, the nodes of it will represent simple, fundamental operations such elementwise arithmetic or the application of a connectivity table.  
+Field operators can be more complex than a linear data-flow graph of two nodes, but no matter how large and complex the data-flow graph becomes, the nodes of it will represent simple, fundamental operations such elementwise arithmetic or the application of a connectivity table.
 
 Equivalence table of field view and DaCe constructs:
 
 | Field view                  | DaCe                                   |
-|-----------------------------|----------------------------------------|
-| Program                     | Sequence of *states*                   |
-| Field operator              | Data-flow graph within a *state*       |
-| Operation on entire fields  | Data-parallel *map* over entire fields |
-| Operation on single element | *Tasklet* inside a *map*               |
+| --------------------------- | -------------------------------------- |
+| Program                     | Sequence of _states_                   |
+| Field operator              | Data-flow graph within a _state_       |
+| Operation on entire fields  | Data-parallel _map_ over entire fields |
+| Operation on single element | _Tasklet_ inside a _map_               |
 
 ### Translating ITIR to DaCe maps
 
@@ -32,10 +32,10 @@ In iterator view, the primary constructs are stencils and stencil closures. Sten
 Equivalence table of field view and DaCe constructs:
 
 | Iterator view    | DaCe                                   |
-|------------------|----------------------------------------|
-| Program (fencil) | Sequence of *states*                   |
-| Stencil closure  | Data-parallel *map* over entire domain |
-| Stencil body     | *Tasklet* inside a *map*               |
+| ---------------- | -------------------------------------- |
+| Program (fencil) | Sequence of _states_                   |
+| Stencil closure  | Data-parallel _map_ over entire domain |
+| Stencil body     | _Tasklet_ inside a _map_               |
 
 ### Comparison of the approaches
 
@@ -50,6 +50,7 @@ When **lowering from field view**, DaCe graphs of such properties will be natura
 #### Interfacing with gt4py's design
 
 Currently, gt4py contains two levels of intermediate representations:
+
 - field view ASTs: a thin layer that bridges the field view frontend and the iterator IR core
 - iterator IR: the core IR that serves as a target for all frontends, as a source for all backends, and contains most of gt4py's optimization passes
 
@@ -75,12 +76,12 @@ After a cycle, we have a working implementation of the iterator IR to DaCe SDFG 
 
 **Problem**: When converting iterator IR stencils to SDFG tasklets, the results of every `deref` expression and subsequent expressions on values have to be known. Currently, these types are **hardcoded** as `float64`.
 
-**Solution**: The iterator type inference pass should provide the concrete type of all value-expressions.  
+**Solution**: The iterator type inference pass should provide the concrete type of all value-expressions.
 
 #### Partial suppot for iterator IR grammar
 
 - First order functions: in DaCe SDFG's, first order functions could be represented by associating a nested SDFG (function equivalent in DaCe) with an access node (variable equivalent in DaCe), which is not a thing as far as I know. There is no practical solution to support this in the SDFG lowering, such ITIR will always be rejected and should not be generated from ITIR passes.
-- Lambdas: in DaCe SDFG's, an immediate call to an instantiation of a lambda function can be represented as a nested SDFG. Currently, the DaCe backend does not support this, but the solution should be fairly straightforward. Lambda support is necessary as they are essential for CSE in ITIR. 
+- Lambdas: in DaCe SDFG's, an immediate call to an instantiation of a lambda function can be represented as a nested SDFG. Currently, the DaCe backend does not support this, but the solution should be fairly straightforward. Lambda support is necessary as they are essential for CSE in ITIR.
 
 ### Missing features
 
@@ -106,7 +107,7 @@ Reductions are being reworked for ITIR, potentially also for DaCe, so support is
 
 **Problem**: the current method of using tasklets to represent index manipulation by connectivities introduces additional states into the SDFG which hurts the optimization opportunities.
 
-**Solution**: instead of using inter-state edges, using library nodes specifically for index manipulation could keep the entire stencil closure in a single state, improving optimizations.  The library nodes have to be implemented and added to DaCe.
+**Solution**: instead of using inter-state edges, using library nodes specifically for index manipulation could keep the entire stencil closure in a single state, improving optimizations. The library nodes have to be implemented and added to DaCe.
 
 #### Compile-time strides
 

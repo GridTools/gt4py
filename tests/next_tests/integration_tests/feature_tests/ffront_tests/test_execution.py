@@ -36,8 +36,7 @@ from gt4py.next.ffront.fbuiltins import (
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.iterator.embedded import index_field, np_as_located_field
-from gt4py.next.program_processors.runners import gtfn_cpu
-from gt4py.next.program_processors.runners import dace_iterator
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
@@ -671,7 +670,7 @@ def test_solve_triag(fieldview_backend):
 def test_ternary_operator(left, right, fieldview_backend):
     if fieldview_backend == dace_iterator.run_dace_iterator:
         pytest.skip("Not supported in DaCe backend: broadcast")
-    
+
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
