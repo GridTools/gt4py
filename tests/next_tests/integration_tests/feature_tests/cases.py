@@ -71,9 +71,12 @@ ReferenceValue: TypeAlias = (
 OffsetProvider: TypeAlias = dict[str, common.Connectivity | common.Dimension]
 
 
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+#: To allocate the return value of a field operator, we must pass
+#: something that is not an argument name. Currently this is  the
+#: literal string "return" (because it is read from annotations).
+#: This could change if implemented differently. RETURN acts as a
+#: proxy to avoid propagating the change to client code.
+RETURN = "return"
 
 
 class DataInitializer(Protocol):
@@ -188,17 +191,6 @@ class UniqueInitializer(DataInitializer):
         return self.__class__(start=self.start + sum(param_sizes[:param_index]))
 
 
-@dataclasses.dataclass(frozen=True)
-class Builder:
-    partial: functools.partial
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.partial(*args, **kwargs)
-
-    def __getattr__(self, name: str) -> Any:
-        raise AttributeError(f"No setter for argument {name}.")
-
-
 @typing.overload
 def make_builder(*args: Callable) -> Callable[..., Builder]:
     ...
@@ -276,51 +268,6 @@ def make_builder(
     return make_builder_inner
 
 
-def get_param_types(
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> dict[str, ts.TypeSpec]:
-    if fieldview_prog.definition is None:
-        raise ValueError(
-            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
-        )
-    annotations = xtyping.get_type_hints(fieldview_prog.definition)
-    return {
-        name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
-    }
-
-
-def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) -> int:
-    match param_type:
-        case ts.FieldType(dims=dims):
-            return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
-        case ts.ScalarType(shape=shape):
-            return int(np.prod(shape)) if shape else 1
-        case ts.TupleType(types):
-            return sum([get_param_size(t, sizes=sizes) for t in types])
-        case _:
-            raise TypeError(f"Can not get size for parameter of type {param_type}")
-
-
-def extend_sizes(
-    sizes: dict[common.Dimension, int],
-    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> dict[common.Dimension, int]:
-    """Calculate the sizes per dimension given a set of extensions."""
-    sizes = sizes.copy()
-    if extend:
-        for dim, (lower, upper) in extend.items():
-            sizes[dim] += upper - lower
-    return sizes
-
-
-#: To allocate the return value of a field operator, we must pass
-#: something that is not an argument name. Currently this is  the
-#: literal string "return" (because it is read from annotations).
-#: This could change if implemented differently. RETURN acts as a
-#: proxy to avoid propagating the change to client code.
-RETURN = "return"
-
-
 @make_builder(zeros={"strategy": ZeroInitializer()}, unique={"strategy": UniqueInitializer()})
 def allocate(
     case: Case,
@@ -364,39 +311,6 @@ def allocate(
     )
 
 
-def _allocate_from_type(
-    case: Case,
-    arg_type: ts.TypeSpec,
-    sizes: dict[common.Dimension, int],
-    strategy: DataInitializer,
-    dtype: Optional[np.typing.DTypeLike] = None,
-    tuple_start: Optional[int] = None,
-) -> FieldViewArg:
-    """Allocate data based on the type or a (nested) tuple thereof."""
-    match arg_type:
-        case ts.FieldType(dims=dims, dtype=arg_dtype):
-            return strategy.field(
-                backend=case.backend,
-                sizes={dim: sizes[dim] for dim in dims},
-                dtype=dtype or arg_dtype.kind.name.lower(),
-            )
-        case ts.ScalarType(kind=kind):
-            return strategy.scalar(dtype=dtype or kind.name.lower())
-        case ts.TupleType(types=types):
-            return tuple(
-                (
-                    _allocate_from_type(
-                        case=case, arg_type=t, sizes=sizes, dtype=dtype, strategy=strategy
-                    )
-                    for t in types
-                )
-            )
-        case _:
-            raise TypeError(
-                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
-            )
-
-
 def run(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -407,29 +321,6 @@ def run(
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
-
-
-def get_default_data(
-    case: Case,
-    fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field]]:
-    """
-    Allocate default data for a fieldview code object given a test case.
-
-    Meant to reduce boiler plate for simple cases, everything else
-    should rely on ``allocate()``.
-    """
-    param_types = get_param_types(fieldview_prog)
-    kwfields: dict[str, Any] = {}
-    if RETURN in param_types:
-        if not isinstance(param_types[RETURN], types.NoneType):
-            kwfields = {"out": allocate(case, fieldview_prog, RETURN).zeros()()}
-        param_types.pop(RETURN)
-    if "out" in param_types:
-        kwfields = {"out": allocate(case, fieldview_prog, "out").zeros()()}
-        param_types.pop("out")
-    inps = tuple(allocate(case, fieldview_prog, name)() for name in param_types)
-    return inps, kwfields
 
 
 def verify(
@@ -526,16 +417,6 @@ def verify_with_default_data(
     )
 
 
-@dataclasses.dataclass
-class Case:
-    """Parametrizable components for single feature integration tests."""
-
-    backend: ppi.ProgramProcessor
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
-    default_sizes: dict[common.Dimension, int]
-    grid_type: common.GridType
-
-
 @pytest.fixture
 def no_default_backend():
     """Temporarily switch off default backend for feature tests."""
@@ -568,3 +449,122 @@ def unstructured_case(
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
+
+
+def _allocate_from_type(
+    case: Case,
+    arg_type: ts.TypeSpec,
+    sizes: dict[common.Dimension, int],
+    strategy: DataInitializer,
+    dtype: Optional[np.typing.DTypeLike] = None,
+    tuple_start: Optional[int] = None,
+) -> FieldViewArg:
+    """Allocate data based on the type or a (nested) tuple thereof."""
+    match arg_type:
+        case ts.FieldType(dims=dims, dtype=arg_dtype):
+            return strategy.field(
+                backend=case.backend,
+                sizes={dim: sizes[dim] for dim in dims},
+                dtype=dtype or arg_dtype.kind.name.lower(),
+            )
+        case ts.ScalarType(kind=kind):
+            return strategy.scalar(dtype=dtype or kind.name.lower())
+        case ts.TupleType(types=types):
+            return tuple(
+                (
+                    _allocate_from_type(
+                        case=case, arg_type=t, sizes=sizes, dtype=dtype, strategy=strategy
+                    )
+                    for t in types
+                )
+            )
+        case _:
+            raise TypeError(
+                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
+            )
+
+
+def get_param_types(
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+) -> dict[str, ts.TypeSpec]:
+    if fieldview_prog.definition is None:
+        raise ValueError(
+            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
+        )
+    annotations = xtyping.get_type_hints(fieldview_prog.definition)
+    return {
+        name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
+    }
+
+
+def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) -> int:
+    match param_type:
+        case ts.FieldType(dims=dims):
+            return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
+        case ts.ScalarType(shape=shape):
+            return int(np.prod(shape)) if shape else 1
+        case ts.TupleType(types):
+            return sum([get_param_size(t, sizes=sizes) for t in types])
+        case _:
+            raise TypeError(f"Can not get size for parameter of type {param_type}")
+
+
+def extend_sizes(
+    sizes: dict[common.Dimension, int],
+    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
+) -> dict[common.Dimension, int]:
+    """Calculate the sizes per dimension given a set of extensions."""
+    sizes = sizes.copy()
+    if extend:
+        for dim, (lower, upper) in extend.items():
+            sizes[dim] += upper - lower
+    return sizes
+
+
+def get_default_data(
+    case: Case,
+    fieldview_prog: decorator.FieldOperator | decorator.Program,
+) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field]]:
+    """
+    Allocate default data for a fieldview code object given a test case.
+
+    Meant to reduce boiler plate for simple cases, everything else
+    should rely on ``allocate()``.
+    """
+    param_types = get_param_types(fieldview_prog)
+    kwfields: dict[str, Any] = {}
+    if RETURN in param_types:
+        if not isinstance(param_types[RETURN], types.NoneType):
+            kwfields = {"out": allocate(case, fieldview_prog, RETURN).zeros()()}
+        param_types.pop(RETURN)
+    if "out" in param_types:
+        kwfields = {"out": allocate(case, fieldview_prog, "out").zeros()()}
+        param_types.pop("out")
+    inps = tuple(allocate(case, fieldview_prog, name)() for name in param_types)
+    return inps, kwfields
+
+
+def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    """Temporary default backend to not accidentally test the wrong backend."""
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+@dataclasses.dataclass(frozen=True)
+class Builder:
+    partial: functools.partial
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.partial(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(f"No setter for argument {name}.")
+
+
+@dataclasses.dataclass
+class Case:
+    """Parametrizable components for single feature integration tests."""
+
+    backend: ppi.ProgramProcessor
+    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    default_sizes: dict[common.Dimension, int]
+    grid_type: common.GridType
