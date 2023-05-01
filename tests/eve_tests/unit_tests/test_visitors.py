@@ -12,13 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator import ir_makers as im
-from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
+from __future__ import annotations
+
+from gt4py import eve
 
 
-def test_deref_propagation():
-    testee = im.deref(im.call(im.lambda_("inner_it")(im.lift("stencil")("inner_it")))("outer_it"))
-    expected = im.call(im.lambda_("inner_it")(im.deref(im.lift("stencil")("inner_it"))))("outer_it")
+def test_annex_preservation(compound_node: eve.Node):
+    compound_node.annex.foo = 1
+    compound_node.annex.bar = 2
 
-    actual = PropagateDeref.apply(testee)
-    assert actual == expected
+    class SampleTranslator(eve.NodeTranslator):
+        PRESERVED_ANNEX_ATTRS = ("foo",)
+
+    translated_node = SampleTranslator().visit(compound_node)
+
+    assert translated_node.annex.foo == 1
+    assert not hasattr(translated_node.annex, "bar")

@@ -12,13 +12,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import dataclasses
 from typing import Any, Final, TypeVar
 
 import numpy as np
 
 from gt4py.eve import trees, utils
+from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
@@ -37,6 +41,10 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
+    workflow.ChainableWorkflowMixin[
+        stages.ProgramCall,
+        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+    ],
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
@@ -47,6 +55,7 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         args: tuple[Any, ...],
+        offset_provider: dict[str, Connectivity | Dimension],
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -71,16 +80,30 @@ class GTFNTranslationStep(
             parameter = get_param_description(program_param.id, obj)
             parameters.append(parameter)
 
+            arg = f"std::forward<decltype({parameter.name})>({parameter.name})"
+
             # argument conversion expression
             if (
                 isinstance(parameter.type_, ts.ScalarType)
                 and parameter.name in closure_scalar_parameters
             ):
                 # convert into sid
-                arg_exprs.append(f"gridtools::stencil::global_parameter({parameter.name})")
-            else:
-                # pass as is
-                arg_exprs.append(parameter.name)
+                arg = f"gridtools::stencil::global_parameter({arg})"
+            elif isinstance(parameter.type_, ts.FieldType):
+                for dim in parameter.type_.dims:
+                    if (
+                        isinstance(
+                            dim, fbuiltins.FieldOffset
+                        )  # TODO(havogt): remove support for FieldOffset as Dimension
+                        or dim.kind == common.DimensionKind.LOCAL
+                    ):
+                        # translate sparse dimensions to tuple dtype
+                        dim_name = dim.value
+                        connectivity = offset_provider[dim_name]
+                        assert isinstance(connectivity, Connectivity)
+                        size = connectivity.max_neighbors
+                        arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dim_name}_t, {size}>({arg})"
+            arg_exprs.append(arg)
         return parameters, arg_exprs
 
     def _process_connectivity_args(
@@ -115,7 +138,7 @@ class GTFNTranslationStep(
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
                     f"generated::{connectivity.origin_axis.value}_t, "
                     f"generated::{name}_t, {connectivity.max_neighbors}"
-                    f">({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})"
+                    f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                 )
                 arg_exprs.append(
                     f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
@@ -139,7 +162,9 @@ class GTFNTranslationStep(
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
-        regular_parameters, regular_args_expr = self._process_regular_arguments(program, inp.args)
+        regular_parameters, regular_args_expr = self._process_regular_arguments(
+            program, inp.args, inp.kwargs["offset_provider"]
+        )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
@@ -168,6 +193,7 @@ class GTFNTranslationStep(
             f"""
                     #include <gridtools/fn/backend/naive.hpp>
                     #include <gridtools/stencil/global_parameter.hpp>
+                    #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
                     """.strip(),
@@ -181,18 +207,6 @@ class GTFNTranslationStep(
             language_settings=self.language_settings,
         )
         return module
-
-    def chain(
-        self,
-        step: workflow.Workflow[
-            stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings], T
-        ],
-    ) -> workflow.CombinedStep[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-        T,
-    ]:
-        return workflow.CombinedStep(first=self, second=step)
 
 
 translate_program: Final[

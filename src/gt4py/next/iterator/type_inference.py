@@ -739,7 +739,12 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_shift(self, node: ir.FunCall, **kwargs) -> Type:
         # Calls to shift are handled as being part of the grammar, not
-        # as function calls, as the type depends on the offset provider
+        # as function calls, as the type depends on the offset provider.
+
+        # Visit arguments such that their type is also inferred (particularly important for
+        # dynamic offsets)
+        self.visit(node.args)
+
         current_loc_in, current_loc_out = _infer_shift_location_types(
             node.args, self.offset_provider, self.constraints
         )
