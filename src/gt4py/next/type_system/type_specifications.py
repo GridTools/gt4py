@@ -118,12 +118,13 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
-    args: list[DataType | DeferredType]
-    kwargs: dict[str, DataType | DeferredType]
+    pos_only_args: list[DataType | DeferredType]
+    pos_or_kw_args: dict[str, DataType | DeferredType]
+    kw_only_args: dict[str, DataType | DeferredType]
     returns: DataType | DeferredType | VoidType
 
     def __str__(self):
-        arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
+        arg_strs = [str(arg) for arg in self.pos_only_args]
+        kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"

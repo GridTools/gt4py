@@ -57,6 +57,30 @@ def test_copy(fieldview_backend):
     assert np.allclose(a_I_float, b_I_float)
 
 
+def test_interface_kwargs(fieldview_backend):
+    inp1 = np_as_located_field(IDim)(np.arange(size, dtype=np.float64))
+    inp2 = np_as_located_field(IDim)(np.arange(start=1, stop=size + 1, dtype=np.float64))
+    out = np_as_located_field(IDim)(np.zeros(size))
+
+    @field_operator(backend=fieldview_backend)
+    def foo(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return inp1 + inp2
+
+    @field_operator(backend=fieldview_backend)
+    def bar(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return foo(inp1, inp2=inp2)
+
+    @program
+    def testee(
+        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
+    ):
+        foo(inp1, inp2=inp2, out=out)
+
+    bar(inp1, inp2, out=out, offset_provider={})
+
+    assert np.allclose(np.asarray(out), np.asarray(inp1) + np.asarray(inp2))
+
+
 def test_multicopy(fieldview_backend):
     inp0 = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     inp1 = np_as_located_field(IDim)(np.random.randn(size).astype("float32"))

@@ -136,10 +136,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 foast.Symbol(
                     id=name,
                     type=ts.FunctionType(
-                        args=[
+                        pos_only_args=[
                             ts.DeferredType(constraint=ts.ScalarType)
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        kwargs={},
+                        pos_or_kw_args={},
+                        kw_only_args={},
                         returns=cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
@@ -435,7 +436,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 node,
                 msg=f"{func_name}() expected {len(func_info.args)} positional arguments, {len(node.args)} given!",
             )
-        elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.kwargs):
+        elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.pos_or_kw_args):
             raise FieldOperatorSyntaxError.from_AST(
                 node,
                 msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",

@@ -151,7 +151,7 @@ class _PrettyPrinter(TemplatedGenerator):
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
         return f"{true_expr} if {cond} else {false_expr}"
 
-    Call = as_fmt("{func}({', '.join(args)})")  # TODO: kwargs
+    Call = as_fmt("{func}({', '.join(pos_only_args)})")  # TODO: kwargs!
 
     Assign = as_fmt("{target} = {value}")
 

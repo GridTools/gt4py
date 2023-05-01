@@ -222,11 +222,27 @@ class FieldOperatorLowering(NodeTranslator):
         ):
             # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
-            lowered_args = [self.visit(arg, **kwargs) for arg in node.args]
-            args = [f"__arg{i}" for i in range(len(lowered_args))]
-            return im.lift(im.lambda_(*args)(im.call(lowered_func)(*args)))(*lowered_args)
+            lowered_args, lowered_kwargs = type_info.canonicalize_function_arguments(
+                node.func.type.definition,
+                [self.visit(arg, **kwargs) for arg in node.args],
+                {name: self.visit(arg, **kwargs) for name, arg in node.kwargs.items()},
+                use_signature_ordering=True,
+            )
+            call_args = [f"__arg{i}" for i in range(len(lowered_args))]
+            call_kwargs = [f"__kwarg_{name}" for name in lowered_kwargs.keys()]
+            return im.lift(
+                im.lambda_(*call_args, *call_kwargs)(
+                    im.call(lowered_func)(*call_args, *call_kwargs)
+                )
+            )(*lowered_args, *lowered_kwargs.values())
         elif isinstance(node.func.type, ts.FunctionType):
-            return im.call(self.visit(node.func, **kwargs))(*self.visit(node.args, **kwargs))
+            lowered_args, lowered_kwargs = type_info.canonicalize_function_arguments(
+                node.func.type,
+                self.visit(node.args, **kwargs),
+                self.visit(node.kwargs, **kwargs),
+                use_signature_ordering=True,
+            )
+            return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
 
         raise AssertionError(
             f"Call to object of type {type(node.func.type).__name__} not understood."
