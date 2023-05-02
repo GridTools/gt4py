@@ -15,7 +15,6 @@
 from typing import Any
 
 import dace
-import sympy
 
 import gt4py.eve as eve
 from gt4py.next import type_inference as next_typing
@@ -24,7 +23,13 @@ from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-from .itir_to_tasklet import closure_to_tasklet_sdfg
+from .itir_to_tasklet import (
+    Context,
+    IteratorExpr,
+    PythonTaskletCodegen,
+    ValueExpr,
+    closure_to_tasklet_sdfg,
+)
 from .utility import (
     as_dace_type,
     connectivity_identifier,
@@ -32,6 +37,7 @@ from .utility import (
     create_memlet_full,
     filter_neighbor_tables,
     map_nested_sdfg_symbols,
+    unique_var_name,
 )
 
 
@@ -40,6 +46,7 @@ class ItirToSDFG(eve.NodeVisitor):
     storages: dict[str, ts.TypeSpec]
     offset_provider: dict[str, Any]
     node_types: dict[int, next_typing.Type]
+    unique_id: int
 
     def __init__(
         self,
@@ -52,8 +59,8 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec):
         if isinstance(type_, ts.FieldType):
-            shape = [dace.symbol(sdfg.temp_data_name()) for _ in range(len(type_.dims))]
-            strides = [dace.symbol(sdfg.temp_data_name()) for _ in range(len(type_.dims))]
+            shape = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
+            strides = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
             dtype = as_dace_type(type_.dtype)
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
         elif isinstance(type_, ts.ScalarType):
@@ -151,8 +158,26 @@ class ItirToSDFG(eve.NodeVisitor):
             )
 
         # Get output domain of the closure
-        closure_domain = self._visit_domain(node.domain)
-        map_domain = {f"i_{dim}": f"{lb}:{ub}" for dim, (lb, ub) in closure_domain}
+        program_arg_syms: dict[str, ValueExpr | IteratorExpr] = {}
+        for name, type_ in self.storages.items():
+            if isinstance(type_, ts.ScalarType):
+                dtype = as_dace_type(type_)
+                closure_sdfg.add_symbol(name, dtype)
+                out_name = unique_var_name()
+                closure_sdfg.add_scalar(out_name, dtype, transient=True)
+                out_tasklet = closure_state.add_tasklet(
+                    f"get_{name}", {}, {"__result"}, f"__result = {name}"
+                )
+                access = closure_state.add_access(out_name)
+                value = ValueExpr(access, dtype)
+                memlet = create_memlet_at(out_name, ("0",))
+                closure_state.add_edge(out_tasklet, "__result", access, None, memlet)
+                program_arg_syms[name] = value
+        domain_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
+        closure_domain = self._visit_domain(node.domain, domain_ctx)
+        map_domain = {
+            f"i_{dim}": f"{lb.value.data}:{ub.value.data}" for dim, (lb, ub) in closure_domain
+        }
 
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
@@ -187,7 +212,7 @@ class ItirToSDFG(eve.NodeVisitor):
         array_mapping = {**input_mapping, **output_mapping, **conn_mapping}
         symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, context.body, array_mapping)
 
-        self._add_mapped_nested_sdfg(
+        nsdfg_node, map_entry, map_exit = self._add_mapped_nested_sdfg(
             closure_state,
             sdfg=context.body,
             map_ranges=map_domain,
@@ -196,6 +221,15 @@ class ItirToSDFG(eve.NodeVisitor):
             symbol_mapping=symbol_mapping,
             schedule=dace.ScheduleType.Sequential,
         )
+        for _, (lb, ub) in closure_domain:
+            map_entry.add_in_connector(lb.value.data)
+            map_entry.add_in_connector(ub.value.data)
+            closure_state.add_edge(
+                lb.value, None, map_entry, lb.value.data, create_memlet_at(lb.value.data, ("0",))
+            )
+            closure_state.add_edge(
+                ub.value, None, map_entry, ub.value.data, create_memlet_at(ub.value.data, ("0",))
+            )
 
         return closure_sdfg
 
@@ -264,12 +298,12 @@ class ItirToSDFG(eve.NodeVisitor):
         return nsdfg_node, map_entry, map_exit
 
     def _visit_domain(
-        self, node: itir.FunCall
-    ) -> tuple[tuple[str, tuple[sympy.Basic, sympy.Basic]], ...]:
+        self, node: itir.FunCall, context: Context
+    ) -> tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 
-        bounds: list[tuple[str, tuple[sympy.Basic, sympy.Basic]]] = []
+        bounds: list[tuple[str, tuple[ValueExpr, ValueExpr]]] = []
 
         for named_range in node.args:
             assert isinstance(named_range, itir.FunCall)
@@ -279,9 +313,10 @@ class ItirToSDFG(eve.NodeVisitor):
             assert isinstance(dimension, itir.AxisLiteral)
             lower_bound = named_range.args[1]
             upper_bound = named_range.args[2]
-            sym_lower_bound = dace.symbolic.pystr_to_symbolic(str(lower_bound))
-            sym_upper_bound = dace.symbolic.pystr_to_symbolic(str(upper_bound))
-            bounds.append((dimension.value, (sym_lower_bound, sym_upper_bound)))
+            translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
+            lb = translator.visit(lower_bound)[0]
+            ub = translator.visit(upper_bound)[0]
+            bounds.append((dimension.value, (lb, ub)))
 
         return tuple(sorted(bounds, key=lambda item: item[0]))
 

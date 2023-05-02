@@ -34,6 +34,7 @@ from .utility import (
     create_memlet_full,
     filter_neighbor_tables,
     map_nested_sdfg_symbols,
+    unique_var_name,
 )
 
 
@@ -188,19 +189,16 @@ _GENERAL_BUILTIN_MAPPING: dict[
 
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
-    domain: dict[str, str]
     context: Context
     node_types: dict[int, next_typing.Type]
 
     def __init__(
         self,
         offset_provider: dict[str, Any],
-        domain: dict[str, str],
         context: Context,
         node_types: dict[int, next_typing.Type],
     ):
         self.offset_provider = offset_provider
-        self.domain = domain
         self.context = context
         self.node_types = node_types
 
@@ -256,12 +254,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 assert isinstance(arg, IteratorExpr)
                 ndims = len(arg.indices)
                 shape = tuple(
-                    dace.symbol(context.body.temp_data_name() + "__shp", dace.int64)
-                    for _ in range(ndims)
+                    dace.symbol(unique_var_name() + "__shp", dace.int64) for _ in range(ndims)
                 )
                 strides = tuple(
-                    dace.symbol(context.body.temp_data_name() + "__strd", dace.int64)
-                    for _ in range(ndims)
+                    dace.symbol(unique_var_name() + "__strd", dace.int64) for _ in range(ndims)
                 )
                 dtype = arg.dtype
                 context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
@@ -273,12 +269,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         # Add connectivities as arrays
         for name in conn_names:
             shape = (
-                dace.symbol(context.body.temp_data_name() + "__shp", dace.int64),
-                dace.symbol(context.body.temp_data_name() + "__shp", dace.int64),
+                dace.symbol(unique_var_name() + "__shp", dace.int64),
+                dace.symbol(unique_var_name() + "__shp", dace.int64),
             )
             strides = (
-                dace.symbol(context.body.temp_data_name() + "__strd", dace.int64),
-                dace.symbol(context.body.temp_data_name() + "__strd", dace.int64),
+                dace.symbol(unique_var_name() + "__strd", dace.int64),
+                dace.symbol(unique_var_name() + "__strd", dace.int64),
             )
             dtype = prev_context.body.arrays[name].dtype
             context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
@@ -400,7 +396,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         result_exprs = []
         for result in results:
-            name = self.context.body.temp_data_name() + "_rv"
+            name = unique_var_name()
             self.context.body.add_scalar(name, result.dtype, transient=True)
             result_access = self.context.state.add_access(name)
             result_exprs.append(ValueExpr(result_access, result.dtype))
@@ -522,7 +518,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def add_expr_tasklet(
         self, args: list[tuple[ValueExpr, str]], expr: str, result_type: Any, name: str
     ) -> list[ValueExpr]:
-        result_name = self.context.body.temp_data_name() + "_tl"
+        result_name = unique_var_name()
         self.context.body.add_scalar(result_name, result_type, transient=True)
         result_access = self.context.state.add_access(result_name)
 
@@ -534,18 +530,19 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         )
 
         for arg, internal in args:
+            edges = self.context.state.in_edges(expr_tasklet)
+            used = False
+            for edge in edges:
+                if edge.dst_conn == internal:
+                    used = True
+                    break
+            if used:
+                continue
             memlet = create_memlet_full(arg.value.data, self.context.body.arrays[arg.value.data])
-            self.context.state.add_memlet_path(
-                arg.value, expr_tasklet, memlet=memlet, src_conn=None, dst_conn=internal
-            )
+            self.context.state.add_edge(arg.value, None, expr_tasklet, internal, memlet)
 
-        self.context.state.add_memlet_path(
-            expr_tasklet,
-            result_access,
-            memlet=create_memlet_at(result_access.data, ("0",)),
-            src_conn="__result",
-            dst_conn=None,
-        )
+        memlet = create_memlet_at(result_access.data, ("0",))
+        self.context.state.add_edge(expr_tasklet, "__result", result_access, None, memlet)
 
         return [ValueExpr(result_access, result_type)]
 
@@ -572,11 +569,9 @@ def closure_to_tasklet_sdfg(
         state.add_edge(tasklet, "value", access, None, dace.Memlet(data=name, subset="0"))
     for arr, name, ty in inputs:
         ndim = len(arr.shape)
-        shape = [
-            dace.symbol(f"{body.temp_data_name()}_shp{i}", dtype=dace.int64) for i in range(ndim)
-        ]
+        shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(ndim)]
         stride = [
-            dace.symbol(f"{body.temp_data_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
+            dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
         ]
         assert isinstance(ty, ts.FieldType)
         dims = [dim.value for dim in ty.dims]
@@ -586,17 +581,15 @@ def closure_to_tasklet_sdfg(
         indices = {dim: idx_accesses[dim] for dim, idx in domain.items()}
         symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
     for arr, name in connectivities:
-        shape = [dace.symbol(f"{body.temp_data_name()}_shp{i}", dtype=dace.int64) for i in range(2)]
-        stride = [
-            dace.symbol(f"{body.temp_data_name()}_strd{i}", dtype=dace.int64) for i in range(2)
-        ]
+        shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(2)]
+        stride = [dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(2)]
         body.add_array(name, shape=shape, strides=stride, dtype=arr.dtype)
 
     context = Context(body, state, symbol_map)
 
     args = [itir.SymRef(id=name) for _, name, _ in inputs]
     call = itir.FunCall(fun=node.stencil, args=args)
-    translator = PythonTaskletCodegen(offset_provider, domain, context, node_types)
+    translator = PythonTaskletCodegen(offset_provider, context, node_types)
     outputs = translator.visit(call)
     for output in outputs:
         context.body.arrays[output.value.data].transient = False

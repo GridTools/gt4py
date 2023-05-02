@@ -74,3 +74,12 @@ def map_nested_sdfg_symbols(
         if str(sym) not in symbol_mapping:
             symbol_mapping[str(sym)] = str(sym)
     return symbol_mapping
+
+
+_unique_id = 0
+
+
+def unique_var_name():
+    global _unique_id
+    _unique_id += 1
+    return f"__var_{_unique_id}"
