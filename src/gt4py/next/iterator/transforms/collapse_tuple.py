@@ -37,21 +37,36 @@ class CollapseTuple(eve.NodeTranslator):
     """
 
     ignore_tuple_size: bool
+    collapse_make_tuple_tuple_get: bool
+    collapse_tuple_get_make_tuple: bool
 
     @classmethod
-    def apply(cls, node: ir.Node, ignore_tuple_size: bool = False) -> ir.Node:
+    def apply(
+        cls,
+        node: ir.Node,
+        *,
+        ignore_tuple_size: bool = False,
+        collapse_make_tuple_tuple_get: bool = True,  # these options are mostly for allowing separate testing of the modes
+        collapse_tuple_get_make_tuple: bool = True,
+    ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
 
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        return cls(ignore_tuple_size).visit(node)
+        return cls(
+            ignore_tuple_size, collapse_make_tuple_tuple_get, collapse_tuple_get_make_tuple
+        ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        if node.fun == ir.SymRef(id="make_tuple") and all(
-            isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
-            for arg in node.args
+        if (
+            self.collapse_make_tuple_tuple_get
+            and node.fun == ir.SymRef(id="make_tuple")
+            and all(
+                isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
+                for arg in node.args
+            )
         ):
             # `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
             assert isinstance(node.args[0], ir.FunCall)
@@ -66,7 +81,8 @@ class CollapseTuple(eve.NodeTranslator):
             if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
                 return first_expr
         if (
-            node.fun == ir.SymRef(id="tuple_get")
+            self.collapse_tuple_get_make_tuple
+            and node.fun == ir.SymRef(id="tuple_get")
             and isinstance(node.args[1], ir.FunCall)
             and node.args[1].fun == ir.SymRef(id="make_tuple")
             and isinstance(node.args[0], ir.Literal)
