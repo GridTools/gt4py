@@ -132,6 +132,8 @@ Each test suite should follow the following structure:
 
 Temporarily it may be allowed to split unit tests for a module into multiple `test_<module>_<feature>.py` test modules. This should be taken as a reason to think about splitting the source module though.
 
+Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
+
 TODO: add missing test conventions.
 
 <!--
