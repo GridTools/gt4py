@@ -22,14 +22,14 @@ from gt4py.next.iterator import embedded
 
 
 @contextlib.contextmanager
-def context_column_range(column_range: Optional[range]) -> None:
-    token = embedded.context_column_range.set(None)
+def column_range(column_range: Optional[range]) -> None:
+    token = embedded.column_range.set(None)
     yield
-    embedded.context_column_range.reset(token)
+    embedded.column_range.reset(token)
 
 
 def test_column_ufunc():
-    with context_column_range(None):
+    with column_range(None):
         a = embedded.Column(1, np.asarray(range(0, 3)))
         b = embedded.Column(1, np.asarray(range(3, 6)))
 
@@ -40,7 +40,7 @@ def test_column_ufunc():
 
 
 def test_column_ufunc_with_scalar():
-    with context_column_range(None):
+    with column_range(None):
         a = embedded.Column(1, np.asarray(range(0, 3)))
         res = 1.0 + a
         assert isinstance(res, embedded.Column)
@@ -49,7 +49,7 @@ def test_column_ufunc_with_scalar():
 
 
 def test_column_ufunc_wrong_kstart():
-    with context_column_range(None):
+    with column_range(None):
         a = embedded.Column(1, np.asarray(range(0, 3)))
         wrong_kstart = embedded.Column(2, np.asarray(range(3, 6)))
 
@@ -58,7 +58,7 @@ def test_column_ufunc_wrong_kstart():
 
 
 def test_column_ufunc_wrong_shape():
-    with context_column_range(None):
+    with column_range(None):
         a = embedded.Column(1, np.asarray(range(0, 3)))
         wrong_shape = embedded.Column(1, np.asarray([1, 2]))
 
@@ -67,7 +67,7 @@ def test_column_ufunc_wrong_shape():
 
 
 def test_column_array_function():
-    with context_column_range(None):
+    with column_range(None):
         cond = embedded.Column(1, np.asarray([True, False]))
         a = embedded.Column(1, np.asarray([1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -81,7 +81,7 @@ def test_column_array_function():
 
 
 def test_column_array_function_with_scalar():
-    with context_column_range(None):
+    with column_range(None):
         cond = embedded.Column(1, np.asarray([True, False]))
         a = 1
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -95,7 +95,7 @@ def test_column_array_function_with_scalar():
 
 
 def test_column_array_function_wrong_kstart():
-    with context_column_range(None):
+    with column_range(None):
         cond = embedded.Column(1, np.asarray([True, False]))
         wrong_kstart = embedded.Column(2, np.asarray([1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -105,7 +105,7 @@ def test_column_array_function_wrong_kstart():
 
 
 def test_column_array_function_wrong_shape():
-    with context_column_range(None):
+    with column_range(None):
         cond = embedded.Column(1, np.asarray([True, False]))
         wrong_shape = embedded.Column(2, np.asarray([1, 1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
