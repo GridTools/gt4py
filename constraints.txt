@@ -52,7 +52,7 @@ flake8-eradicate==1.4.0   # via -r requirements-dev.in
 flake8-mutable==1.2.0     # via -r requirements-dev.in
 flake8-pyproject==1.2.3   # via -r requirements-dev.in
 flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
-flask==2.2.3              # via dace
+flask==2.2.5              # via dace
 frozendict==2.3.6         # via gt4py (pyproject.toml)
 gridtools-cpp==2.2.3      # via gt4py (pyproject.toml)
 hypothesis==6.70.2        # via -r requirements-dev.in, gt4py (pyproject.toml)
