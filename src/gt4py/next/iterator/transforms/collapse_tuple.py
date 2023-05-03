@@ -87,7 +87,7 @@ class CollapseTuple(eve.NodeTranslator):
             and node.args[1].fun == ir.SymRef(id="make_tuple")
             and isinstance(node.args[0], ir.Literal)
         ):
-            # `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1)) -> `e_N`
+            # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
             assert node.args[0].type in ir.INTEGER_BUILTINS
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
