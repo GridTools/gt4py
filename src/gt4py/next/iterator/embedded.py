@@ -184,9 +184,9 @@ class MutableLocatedField(LocatedField, Protocol):
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
-column_range: cvars.ContextVar[range] = cvars.ContextVar("column_range")
+column_range_cvar: cvars.ContextVar[range] = cvars.ContextVar("column_range")
 #: Offset provider dict in the current closure execution context.
-offset_provider: cvars.ContextVar[OffsetProvider] = cvars.ContextVar("offset_provider")
+offset_provider_cvar: cvars.ContextVar[OffsetProvider] = cvars.ContextVar("offset_provider")
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
@@ -199,7 +199,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
-        _column_range = column_range.get()
+        _column_range = column_range_cvar.get()
         self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)
 
     def __getitem__(self, i: int) -> Any:
@@ -723,7 +723,7 @@ def _make_tuple(
     *,
     column_axis: Optional[Tag] = None,
 ) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
-    _column_range = column_range.get()
+    _column_range = column_range_cvar.get()
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert _column_range
@@ -772,7 +772,7 @@ class MDIterator:
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets = group_offsets(*offsets)
-        _offset_provider = offset_provider.get()
+        _offset_provider = offset_provider_cvar.get()
         assert _offset_provider is not None
         return MDIterator(
             self.field,
@@ -797,7 +797,7 @@ class MDIterator:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
-        _column_range = column_range.get()
+        _column_range = column_range_cvar.get()
         if self.column_axis is not None:
             assert _column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
@@ -840,7 +840,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        _column_range = column_range.get()
+        _column_range = column_range_cvar.get()
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert _column_range is not None
         new_pos[column_axis] = _column_range.start
@@ -1090,7 +1090,7 @@ class _ConstList(Generic[DT]):
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
     assert isinstance(offset_str, str)
-    _offset_provider = offset_provider.get()
+    _offset_provider = offset_provider_cvar.get()
     assert _offset_provider is not None
     connectivity = _offset_provider[offset_str]
     assert isinstance(connectivity, common.Connectivity)
@@ -1149,7 +1149,7 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
-        _offset_provider = offset_provider.get()
+        _offset_provider = offset_provider_cvar.get()
         assert _offset_provider is not None
         connectivity = _offset_provider[self.list_offset]
         assert isinstance(connectivity, common.Connectivity)
@@ -1299,14 +1299,14 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        _column_range = column_range.get()
+        _column_range = column_range_cvar.get()
         if _column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
-        column_range = _column_range if is_forward else reversed(_column_range)
+        sorted_column_range = _column_range if is_forward else reversed(_column_range)
         state = init
         col = Column(_column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(init)))
-        for i in column_range:
+        for i in sorted_column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
 
@@ -1358,8 +1358,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
         def _closure_runner():
             # Set context variables before executing the closure
-            column_range.set(_column_range)
-            offset_provider.set(_offset_provider)
+            column_range_cvar.set(_column_range)
+            offset_provider_cvar.set(_offset_provider)
 
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
