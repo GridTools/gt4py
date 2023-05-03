@@ -75,8 +75,3 @@ def test_simple_tuple_get_make_tuple():
     testee = im.tuple_get(1, _tup_of_size_2(im.ref("foo"), expected))
     actual = CollapseTuple.apply(testee, collapse_make_tuple_tuple_get=False)
     assert expected == actual
-
-
-def test_oob_tuple_get_make_tuple():
-    with pytest.raises(IndexError, match=r"CollapseTuple:.*out of bounds.*tuple of size 2"):
-        CollapseTuple.apply(im.tuple_get(2, _tup_of_size_2()), collapse_make_tuple_tuple_get=False)

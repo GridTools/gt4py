@@ -33,7 +33,7 @@ class CollapseTuple(eve.NodeTranslator):
     Simplifies `make_tuple`, `tuple_get` calls.
 
       - `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
-      - `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1))` -> `e_N`
+      - `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
     """
 
     ignore_tuple_size: bool
@@ -90,11 +90,9 @@ class CollapseTuple(eve.NodeTranslator):
             # `tuple_get(N, make_tuple(e_0, e_1, ..., e_N, e_N_plus_1)) -> `e_N`
             assert node.args[0].type in ir.INTEGER_BUILTINS
             make_tuple_call = node.args[1]
-            if (idx := int(node.args[0].value)) < len(make_tuple_call.args):
-                return node.args[1].args[idx]
-            else:
-                raise IndexError(
-                    f"CollapseTuple: Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
-                )
-
+            idx = int(node.args[0].value)
+            assert idx < len(
+                make_tuple_call.args
+            ), f"Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
+            return node.args[1].args[idx]
         return self.generic_visit(node)
