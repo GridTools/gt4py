@@ -14,7 +14,7 @@
 
 import pytest
 
-import gt4py.next.iterator.ir_makers as im
+from gt4py.next.iterator import ir, ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 
