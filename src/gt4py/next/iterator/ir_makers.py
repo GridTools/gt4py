@@ -220,6 +220,8 @@ def make_tuple(*args):
 
 def tuple_get(tuple_expr, index):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(tuple_expr, index)``."""
+    if isinstance(index, int):
+        index = literal(str(index), "int")
     return call("tuple_get")(tuple_expr, index)
 
 

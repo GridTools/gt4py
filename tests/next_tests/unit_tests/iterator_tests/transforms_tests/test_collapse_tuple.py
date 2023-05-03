@@ -15,21 +15,16 @@
 import pytest
 
 import gt4py.next.iterator.ir_makers as im
-from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 
-def _tuple_get(i: int, t: ir.Expr) -> ir.Expr:
-    return im.tuple_get(im.literal(str(i), "int"), t)
-
-
-def _tup_of_size_2(first=ir.SymRef(id="first_elem"), second=ir.SymRef(id="second_elem")) -> ir.Expr:
+def _tup_of_size_2(first=im.ref("first_elem"), second=im.ref("second_elem")) -> ir.Expr:
     return im.make_tuple(first, second)
 
 
 def test_simple_make_tuple_tuple_get():
     t = _tup_of_size_2()
-    testee = im.make_tuple(_tuple_get(0, t), _tuple_get(1, t))
+    testee = im.make_tuple(im.tuple_get(0, t), im.tuple_get(1, t))
 
     actual = CollapseTuple.apply(testee, collapse_tuple_get_make_tuple=False)
 
@@ -39,7 +34,7 @@ def test_simple_make_tuple_tuple_get():
 
 def test_nested_make_tuple_tuple_get():
     t = im.call(im.lambda_()(_tup_of_size_2()))()
-    testee = im.make_tuple(_tuple_get(0, t), _tuple_get(1, t))
+    testee = im.make_tuple(im.tuple_get(0, t), im.tuple_get(1, t))
 
     actual = CollapseTuple.apply(testee, collapse_tuple_get_make_tuple=False)
 
@@ -49,7 +44,7 @@ def test_nested_make_tuple_tuple_get():
 def test_different_tuples_make_tuple_tuple_get():
     t0 = im.make_tuple("foo0", "bar0")
     t1 = im.make_tuple("foo1", "bar1")
-    testee = im.make_tuple(_tuple_get(0, t0), _tuple_get(1, t1))
+    testee = im.make_tuple(im.tuple_get(0, t0), im.tuple_get(1, t1))
 
     actual = CollapseTuple.apply(testee, collapse_tuple_get_make_tuple=False)
 
@@ -58,33 +53,30 @@ def test_different_tuples_make_tuple_tuple_get():
 
 def test_incompatible_order_make_tuple_tuple_get():
     t = _tup_of_size_2()
-    testee = ir.FunCall(
-        fun=ir.SymRef(id="make_tuple"),
-        args=[_tuple_get(1, t), _tuple_get(0, t)],
-    )
+    testee = im.make_tuple(im.tuple_get(1, t), im.tuple_get(0, t))
     actual = CollapseTuple.apply(testee, collapse_tuple_get_make_tuple=False)
     assert actual == testee  # did nothing
 
 
 def test_incompatible_size_make_tuple_tuple_get():
-    testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, _tup_of_size_2())])
+    testee = im.make_tuple(im.tuple_get(0, _tup_of_size_2()))
     actual = CollapseTuple.apply(testee, collapse_tuple_get_make_tuple=False)
     assert actual == testee  # did nothing
 
 
 def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
-    testee = ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[_tuple_get(0, _tup_of_size_2())])
+    testee = im.make_tuple(im.tuple_get(0, _tup_of_size_2()))
     actual = CollapseTuple.apply(testee, ignore_tuple_size=True)
     assert actual == _tup_of_size_2()
 
 
 def test_simple_tuple_get_make_tuple():
-    expected = ir.SymRef(id="bar")
-    testee = _tuple_get(1, _tup_of_size_2(ir.SymRef(id="foo"), expected))
+    expected = im.ref("bar")
+    testee = im.tuple_get(1, _tup_of_size_2(im.ref("foo"), expected))
     actual = CollapseTuple.apply(testee, collapse_make_tuple_tuple_get=False)
     assert expected == actual
 
 
 def test_oob_tuple_get_make_tuple():
     with pytest.raises(IndexError, match=r"CollapseTuple:.*out of bounds.*tuple of size 2"):
-        CollapseTuple.apply(_tuple_get(2, _tup_of_size_2()), collapse_make_tuple_tuple_get=False)
+        CollapseTuple.apply(im.tuple_get(2, _tup_of_size_2()), collapse_make_tuple_tuple_get=False)
