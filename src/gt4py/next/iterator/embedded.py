@@ -186,9 +186,7 @@ class MutableLocatedField(LocatedField, Protocol):
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
 column_range: cvars.ContextVar[range] = cvars.ContextVar("column_range")
 #: Offset provider dict in the current closure execution context.
-offset_provider: cvars.ContextVar[OffsetProvider] = cvars.ContextVar(
-    "offset_provider"
-)
+offset_provider: cvars.ContextVar[OffsetProvider] = cvars.ContextVar("offset_provider")
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
