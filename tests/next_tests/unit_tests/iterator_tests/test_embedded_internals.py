@@ -105,10 +105,10 @@ def test_column_array_function_wrong_kstart():
 
 
 def test_column_array_function_wrong_shape():
-    prev_token = embedded.context_column_range.set(None)
-    cond = embedded.Column(1, np.asarray([True, False]))
-    wrong_shape = embedded.Column(2, np.asarray([1, 1, 1]))
-    b = embedded.Column(1, np.asarray([2, 2]))
+    with context_column_range(None):
+        cond = embedded.Column(1, np.asarray([True, False]))
+        wrong_shape = embedded.Column(2, np.asarray([1, 1, 1]))
+        b = embedded.Column(1, np.asarray([2, 2]))
 
-    with pytest.raises(ValueError):
-        np.where(cond, wrong_shape, b)
+        with pytest.raises(ValueError):
+            np.where(cond, wrong_shape, b)
