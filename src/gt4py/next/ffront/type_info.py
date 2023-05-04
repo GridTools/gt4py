@@ -146,7 +146,10 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec):
 
     Example:
     --------
-    >>> _scan_param_promotion(ts.ScalarType(kind=ts.ScalarKind.INT64), ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarKind.FLOAT64))
+    >>> _scan_param_promotion(
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ...     ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     """
 
