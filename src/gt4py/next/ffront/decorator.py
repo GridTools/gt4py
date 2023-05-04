@@ -307,9 +307,6 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        if kwargs:
-            raise NotImplementedError("Keyword-only arguments are not supported yet.")
-
         arg_types = [type_translation.from_value(arg) for arg in args]
         kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 

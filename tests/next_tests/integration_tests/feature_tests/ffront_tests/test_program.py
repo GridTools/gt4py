@@ -243,8 +243,8 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        "- Expected 0-th argument to be of type Field\[\[IDim], float64\],"
-        " but got Field\[\[JDim\], float64\].",
+        "- Expected argument `in_field` to be of type `Field\[\[IDim], float64\]`,"
+        " but got `Field\[\[JDim\], float64\]`.",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -309,5 +309,13 @@ def test_input_kwargs(fieldview_backend):
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    with pytest.raises(GTTypeError, match="got multiple values for argument"):
+    with pytest.raises(ProgramTypeError) as exc_info:
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})
+
+    msgs = [
+        "Got multiple values for argument `a`",
+        "Function takes 4 positional arguments, but 3 were given.",
+        "Missing 1 required positional argument: `c`",
+    ]
+    for msg in msgs:
+        assert re.search(msg, exc_info.value.__cause__.args[0]) is not None

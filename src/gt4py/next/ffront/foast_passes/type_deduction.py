@@ -769,7 +769,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{str(node.func)}`. Expected "
-                f"a field with dtype bool, but got `{mask_type}`.",
+                f"a field with dtype `bool`, but got `{mask_type}`.",
             )
 
         try:

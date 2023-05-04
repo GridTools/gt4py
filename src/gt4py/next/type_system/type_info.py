@@ -601,11 +601,21 @@ def function_signature_incompatibilities_func(
     cargs, ckwargs = canonicalize_function_arguments(func_type, args, kwargs, ignore_errors=True)
 
     # check positional arguments
+    for name in kwargs.keys():
+        if name in func_type.pos_or_kw_args:
+            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
+                name
+            )
+            if args_idx < len(args):
+                # remove the argument here such that later errors stay comprehensible
+                ckwargs.pop(name)
+                yield f"Got multiple values for argument `{name}`."
+
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     num_pos_args = len(cargs) - cargs.count(_UNDEFINED_ARG)
     if num_pos_params != num_pos_args:
         if len(ckwargs) > 0:
-            kwargs_msg = f"positional argument(s) (and {len(ckwargs)} keyword-only argument{'s' if len(ckwargs) != 1 else ''}) "
+            kwargs_msg = f"positional argument{'s' if num_pos_params != 1 else ''} (and {len(ckwargs)} keyword-only argument{'s' if len(ckwargs) != 1 else ''}) "
         else:
             kwargs_msg = ""
         yield f"Function takes {num_pos_params} positional argument{'s' if num_pos_params != 1 else ''}, but {num_pos_args} {kwargs_msg}were given."
@@ -618,14 +628,6 @@ def function_signature_incompatibilities_func(
             missing_positional_args.append(f"`{arg_type}`")
     if missing_positional_args:
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
-
-    for name in kwargs.keys():
-        if name in func_type.pos_or_kw_args:
-            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
-                name
-            )
-            if args_idx < len(args):
-                yield f"Got multiple values for argument {name}."
 
     assert len(cargs) >= num_pos_params
     for i, (a_arg, b_arg) in enumerate(
