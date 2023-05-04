@@ -46,7 +46,8 @@ class CollapseTuple(eve.NodeTranslator):
         node: ir.Node,
         *,
         ignore_tuple_size: bool = False,
-        collapse_make_tuple_tuple_get: bool = True,  # these options are mostly for allowing separate testing of the modes
+        # the following options are mostly for allowing separate testing of the modes
+        collapse_make_tuple_tuple_get: bool = True,
         collapse_tuple_get_make_tuple: bool = True,
     ) -> ir.Node:
         """
