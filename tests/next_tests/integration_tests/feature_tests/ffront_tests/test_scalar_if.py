@@ -85,10 +85,10 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     ) -> cases.IField:
         if condition1:
             result1 = a
-            result2 = a + 1.0
+            result2 = a + 1
         else:
             result1 = b
-            result2 = b + 1.0
+            result2 = b + 1
         return result1 if condition2 else result2
 
     a = cases.allocate(cartesian_case, simple_if, "a")()
