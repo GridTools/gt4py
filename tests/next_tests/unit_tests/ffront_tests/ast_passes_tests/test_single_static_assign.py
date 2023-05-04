@@ -244,7 +244,6 @@ def test_nested_if_chain():
 
 
 def test_if_branch_local():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -273,7 +272,6 @@ def test_if_branch_local():
 
 
 def test_if_only_one_branch():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -296,7 +294,6 @@ def test_if_only_one_branch():
 
 
 def test_if_only_one_branch_other():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -323,7 +320,6 @@ def test_if_only_one_branch_other():
 
 
 def test_if_nested_all_branches_defined():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -368,7 +364,6 @@ def test_if_nested_all_branches_defined():
 
 
 def test_elif_all_branches_defined():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -412,7 +407,6 @@ def test_elif_all_branches_defined():
 
 
 def test_nested_ifs_single_change():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -461,7 +455,6 @@ def test_nested_ifs_single_change():
 
 
 def test_if_one_sided_inside_function():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -488,7 +481,6 @@ def test_if_one_sided_inside_function():
 
 
 def test_if_preservers_definite_assignment_analysis1():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -517,7 +509,6 @@ def test_if_preservers_definite_assignment_analysis1():
 
 
 def test_if_preservers_definite_assignment_analysis2():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -546,7 +537,6 @@ def test_if_preservers_definite_assignment_analysis2():
 
 
 def test_if_preservers_definite_assignment_analysis3():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -643,7 +633,6 @@ def test_broken_if():
 
 
 def test_annotated_assign():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -664,7 +653,6 @@ def test_annotated_assign():
 
 
 def test_if_true_branch_returns():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -699,7 +687,6 @@ def test_if_true_branch_returns():
 
 
 def test_if_false_branch_returns():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -736,7 +723,6 @@ def test_if_false_branch_returns():
 
 
 def test_if_both_branches_return():
-
     result = ast.unparse(
         ssaify_string(
             """
@@ -773,7 +759,6 @@ def test_if_both_branches_return():
 
 
 def test_if_nested_returns():
-
     result = ast.unparse(
         ssaify_string(
             """

@@ -12,8 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable
 import dataclasses
+from typing import Any, Callable
 
 from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
@@ -161,7 +161,9 @@ class FieldOperatorLowering(NodeTranslator):
                 inner_expr = im.let(sym, im.tuple_get_(i, im.ref("__if_stmt_result")))(inner_expr)
 
             # here we assume neither branch returns
-            return im.let("__if_stmt_result", im.if_(im.deref_(cond), true_branch, false_branch))(inner_expr)
+            return im.let("__if_stmt_result", im.if_(im.deref_(cond), true_branch, false_branch))(
+                inner_expr
+            )
         elif return_kind is StmtReturnKind.CONDITIONAL_RETURN:
             common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
             common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())

@@ -186,7 +186,6 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         return self.RhsRenamer.apply(self.versioning, self.name_encoder, node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-
         # For practical purposes, this is sufficient, but really not general at all.
         # However, the algorithm was never intended to be general.
 
@@ -233,7 +232,6 @@ class SingleStaticAssignPass(ast.NodeTransformer):
 
         # ensure both branches conclude with the same unique names
         for name, merged_version in self.versioning:
-
             body_version = body_versioning[name]
             orelse_version = orelse_versioning[name]
 
