@@ -419,9 +419,9 @@ BUILTIN_TYPES: dict[str, Type] = {
     ),
     "if_": FunctionType(
         args=Tuple.from_elems(
-            Val_BOOL_T1, Val(kind=T0, dtype=T1, size=T2), Val(kind=T0, dtype=T1, size=T2)
+            Val_BOOL_T1, Val(kind=T2, dtype=T0, size=T1), Val(kind=T2, dtype=T0, size=T1)
         ),
-        ret=Val(kind=T0, dtype=T1, size=T2),
+        ret=Val(kind=T2, dtype=T0, size=T1),
     ),
     "lift": FunctionType(
         args=Tuple.from_elems(
