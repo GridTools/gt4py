@@ -141,6 +141,13 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_IfStmt(
         self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs
     ) -> itir.Expr:
+        # the lowered if statement doesn't need to be lifted as the condition can only originate
+        #  from a scalar value (and not a field)
+        assert (
+            isinstance(node.condition.type, ts.ScalarType)
+            and node.condition.type.kind == ts.ScalarKind.BOOL
+        )
+
         cond = self.visit(node.condition, **kwargs)
 
         return_kind: StmtReturnKind = deduce_stmt_return_kind(node)
