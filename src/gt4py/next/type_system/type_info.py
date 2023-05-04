@@ -546,39 +546,55 @@ def return_type_field(
 _UNDEFINED_ARG = None
 
 
-def canonicalize_function_arguments(
-    function_type: ts.FunctionType,
-    args: tuple,
+@functools.singledispatch
+def canonicalize_arguments(
+    func_type: ts.CallableType,
+    args: tuple | list,
     kwargs: dict,
     *,
     ignore_errors=False,
     use_signature_ordering=False,
-) -> tuple[tuple, dict]:
-    num_pos_params = len(function_type.pos_only_args) + len(function_type.pos_or_kw_args)
+) -> tuple[list, dict]:
+    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
+
+
+@canonicalize_arguments.register
+def canonicalize_function_arguments(
+    func_type: ts.FunctionType,
+    args: tuple | list,
+    kwargs: dict,
+    *,
+    ignore_errors=False,
+    use_signature_ordering=False,
+) -> tuple[list, dict]:
+    num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [_UNDEFINED_ARG] * max(num_pos_params, len(args))
     ckwargs = {**kwargs}
     for i, arg in enumerate(args):
         cargs[i] = arg
     for name in kwargs.keys():
-        if name in function_type.pos_or_kw_args:
-            args_idx = len(function_type.pos_only_args) + list(
-                function_type.pos_or_kw_args.keys()
-            ).index(name)
-            if cargs[args_idx] is None:
+        if name in func_type.pos_or_kw_args:
+            args_idx = len(func_type.pos_only_args) + list(func_type.pos_or_kw_args.keys()).index(
+                name
+            )
+            if cargs[args_idx] is _UNDEFINED_ARG:
                 cargs[args_idx] = ckwargs.pop(name)
             elif not ignore_errors:
                 raise ValueError(
                     f"Error canonicalizing function arguments. Got multiple values for argument `{name}`."
                 )
+
+    a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
+    invalid_kw_args = (a - b) | (b - a)
+    if invalid_kw_args and (not ignore_errors or use_signature_ordering):
+        # this error can not be ignored as otherwise the invariant that no arguments are dropped
+        # is invalidated.
+        raise ValueError(f"Invalid keyword arguments {', '.join(invalid_kw_args)}.")
+
     if use_signature_ordering:
-        a, b = set(function_type.kw_only_args.keys()), set(ckwargs.keys())
-        invalid_kw_args = (a - b) | (b - a)
-        if invalid_kw_args:
-            # this error can not be ignored as otherwise the invariant that no arguments are dropped
-            # is invalidated.
-            raise ValueError(f"Invalid keyword arguments {', '.join(invalid_kw_args)}.")
-        ckwargs = {k: ckwargs[k] for k in function_type.kw_only_args.keys() if k in ckwargs}
-    return tuple(cargs), ckwargs
+        ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
+
+    return list(cargs), ckwargs
 
 
 @functools.singledispatch
@@ -594,11 +610,11 @@ def function_signature_incompatibilities(
 
 
 @function_signature_incompatibilities.register
-def function_signature_incompatibilities_func(
+def function_signature_incompatibilities_func(  # noqa: C901
     func_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     # canonicalize arguments
-    cargs, ckwargs = canonicalize_function_arguments(func_type, args, kwargs, ignore_errors=True)
+    cargs, ckwargs = canonicalize_arguments(func_type, args, kwargs, ignore_errors=True)
 
     # check positional arguments
     for name in kwargs.keys():

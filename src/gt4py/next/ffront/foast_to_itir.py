@@ -222,8 +222,8 @@ class FieldOperatorLowering(NodeTranslator):
         ):
             # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
-            lowered_args, lowered_kwargs = type_info.canonicalize_function_arguments(
-                node.func.type.definition,
+            lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+                node.func.type,
                 [self.visit(arg, **kwargs) for arg in node.args],
                 {name: self.visit(arg, **kwargs) for name, arg in node.kwargs.items()},
                 use_signature_ordering=True,
@@ -236,7 +236,7 @@ class FieldOperatorLowering(NodeTranslator):
                 )
             )(*lowered_args, *lowered_kwargs.values())
         elif isinstance(node.func.type, ts.FunctionType):
-            lowered_args, lowered_kwargs = type_info.canonicalize_function_arguments(
+            lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
                 node.func.type,
                 self.visit(node.args, **kwargs),
                 self.visit(node.kwargs, **kwargs),

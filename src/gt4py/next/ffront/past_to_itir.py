@@ -142,8 +142,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
-        lowered_args, lowered_kwargs = type_info.canonicalize_function_arguments(
-            node.func.type.definition,
+
+        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+            node.func.type,
             self.visit(node.args, **kwargs),
             self.visit(node_kwargs, **kwargs),
             use_signature_ordering=True,

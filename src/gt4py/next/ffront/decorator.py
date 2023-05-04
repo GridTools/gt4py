@@ -325,9 +325,7 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        args, kwargs = type_info.canonicalize_function_arguments(
-            self.past_node.type.definition, args, kwargs
-        )
+        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
@@ -600,9 +598,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = type_info.canonicalize_function_arguments(
-            self.foast_node.type.definition, args, kwargs
-        )
+        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
