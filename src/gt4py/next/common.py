@@ -37,7 +37,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
-DT = TypeVar("DT", bound="DType")
+DT = TypeVar("DT", bound="Scalar")
 
 Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
 
