@@ -141,7 +141,7 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_IfStmt(
         self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs
     ) -> itir.Expr:
-        # the lowered if statement doesn't need to be lifted as the condition can only originate
+        # the lowered if call doesn't need to be lifted as the condition can only originate
         #  from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
