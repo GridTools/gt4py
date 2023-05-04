@@ -238,12 +238,21 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> "Program":
+    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return Program(
             past_node=self.past_node,
             closure_vars=self.closure_vars,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
+
+    def with_grid_type(self, grid_type: GridType) -> Program:
+        return Program(
+            past_node=self.past_node,
+            closure_vars=self.closure_vars,
+            backend=self.backend,
+            definition=self.definition,
+            grid_type=grid_type,
         )
 
     @functools.cached_property
@@ -460,6 +469,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         cls,
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
+        grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -485,8 +495,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
-            backend=backend,
             definition=definition,
+            backend=backend,
+            grid_type=grid_type,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -628,11 +639,7 @@ def field_operator(
     ...
 
 
-def field_operator(
-    definition=None,
-    *,
-    backend=None,
-):
+def field_operator(definition=None, *, backend=None, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -650,7 +657,7 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend)
+        return FieldOperator.from_function(definition, backend, grid_type)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 

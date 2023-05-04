@@ -76,7 +76,7 @@ def test_floordiv(fieldview_backend):
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip(
+        pytest.xfail(
             "FloorDiv not yet supported."
         )  # see https://github.com/GridTools/gt4py/issues/1136
 
@@ -93,7 +93,7 @@ def test_mod(fieldview_backend):
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip(
+        pytest.xfail(
             "Modulo not properly supported for negative numbers."
         )  # see https://github.com/GridTools/gt4py/issues/1219
 

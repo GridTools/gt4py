@@ -27,10 +27,16 @@ class CollapseListGet(eve.NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         node = self.generic_visit(node)
         if node.fun == ir.SymRef(id="list_get"):
-            offset_index = node.args[0]
             if isinstance(node.args[1], ir.FunCall):
                 if node.args[1].fun == ir.SymRef(id="neighbors"):
                     offset_tag = node.args[1].args[0]
+                    offset_index = (
+                        ir.OffsetLiteral(value=int(node.args[0].value))
+                        if isinstance(node.args[0], ir.Literal)
+                        else node.args[
+                            0
+                        ]  # else-branch: e.g. SymRef from unroll_reduce, TODO(havogt): remove when we replace unroll_reduce by list support in gtfn
+                    )
                     it = node.args[1].args[1]
                     return ir.FunCall(
                         fun=ir.SymRef(id="deref"),

@@ -34,7 +34,7 @@ dependencies = [
   "deepdiff>=5.6.0",
   "devtools>=0.6",
   "frozendict>=2.3",
-  "gridtools-cpp>=2.2.3,==2.*",
+  "gridtools-cpp>=2.3.0,==2.*",
   "importlib-resources>=5.0;python_version<'3.9'",
   "jinja2>=3.0.0",
   "lark>=1.1.2",
@@ -224,7 +224,22 @@ skip_glob = ['*.venv/**', '_local/**']
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
-exclude = ['^setup\.py$', '^build/.*py$', '^ci/*.py$', '^tests/*.py$']
+exclude = [
+  '^setup\.py$',
+  '^build/.*py$',
+  '^ci/*.py$',
+  '^tests/cartesian_tests/*.py$',
+  '^tests/storage_tests/*.py$',
+  '^tests/eve_tests/*.py$',
+  '^tests/next_tests/unit_tests/*.py$',
+  '^tests/next_tests/integration_tests/multi_feature_tests/*.py$',
+  '^tests/next_tests/integration_tests/feature_tests/ffront_tests/*.py$',
+  '^tests/next_tests/integration_tests/feature_tests/iterator_tests/*.py$',
+  '^tests/next_tests/integration_tests/feature_tests/otf_tests/*.py$',
+  '^tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py$',
+  '^tests/next_tests/past_common_fixtures.py$',
+  '^tests/next_tests/toy_connectivity.py$'
+]
 ignore_missing_imports = true
 install_types = true
 namespace_packages = false

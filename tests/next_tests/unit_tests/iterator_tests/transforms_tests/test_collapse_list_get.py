@@ -38,8 +38,8 @@ def test_list_get_neighbors():
                     fun=ir.SymRef(id="shift"),
                     args=[
                         ir.OffsetLiteral(value="foo"),
-                        ir.Literal(value="42", type="int"),
-                    ],  # see https://github.com/GridTools/gt4py/issues/1203
+                        ir.OffsetLiteral(value=42),
+                    ],
                 ),
                 args=[ir.SymRef(id="bar")],
             )

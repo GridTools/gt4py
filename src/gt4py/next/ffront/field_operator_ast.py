@@ -148,7 +148,7 @@ class TernaryExpr(Expr):
 
 
 class Call(Expr):
-    func: Name
+    func: Expr
     args: list[Expr]
     kwargs: dict[str, Expr]
 
