@@ -52,19 +52,20 @@ def test_one_to_one(test_case: str):
 
 
 def test_fieldop():
+    I = Dimension("I")
     @field_operator
-    def foo(inp: Field[[], int64]):
-        return inp
+    def foo(inp1: Field[[I], int64], inp2: Field[[I], int64]):
+        return inp1 + inp2
 
     @field_operator
-    def bar(inp: Field[[], int64]) -> Field[[], int64]:
-        return foo(inp)
+    def bar(inp1: Field[[I], int64], inp2: Field[[I], int64]) -> Field[[I], int64]:
+        return foo(inp1, inp2=inp2)
 
     expected = textwrap.dedent(
         """
         @field_operator
-        def bar(inp: Field[[], int64]) -> Field[[], int64]:
-          return foo(inp)
+        def bar(inp1: Field[[I], int64], inp2: Field[[I], int64]) -> Field[[I], int64]:
+          return foo(inp1, inp2=inp2)
         """
     ).strip()
 
