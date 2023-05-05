@@ -12,8 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import contextlib
-from typing import Optional
+import contextvars as cvars
+import threading
+from typing import Any, Callable, Optional
 
 import numpy as np
 import pytest
@@ -21,26 +22,48 @@ import pytest
 from gt4py.next.iterator import embedded
 
 
-@contextlib.contextmanager
-def column_range_context(column_range: Optional[range]) -> None:
-    token = embedded.column_range_cvar.set(None)
-    yield
-    embedded.column_range_cvar.reset(token)
+def _run_within_context(
+    func: Callable[[], Any],
+    *,
+    column_range: Optional[range] = None,
+    offset_provider: Optional[embedded.OffsetProvider] = None,
+) -> Any:
+    def wrapped_func():
+        embedded.column_range_cvar.set(column_range)
+        embedded.offset_provider_cvar.set(offset_provider)
+        func()
+
+    cvars.copy_context().run(wrapped_func)
 
 
 def test_column_ufunc():
-    with column_range_context(None):
+    def test_func():
         a = embedded.Column(1, np.asarray(range(0, 3)))
         b = embedded.Column(1, np.asarray(range(3, 6)))
-
         res = a + b
+
         assert isinstance(res, embedded.Column)
         assert np.array_equal(res.data, a.data + b.data)
         assert res.kstart == 1
 
+    _run_within_context(test_func)
+
+    def test_func(data_a: int, data_b: int):
+        a = embedded.Column(1, data_a)
+        b = embedded.Column(1, data_b)
+        res = a + b
+
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, a.data + b.data)
+        assert res.kstart == 1
+
+    # Setting an invalid column_range here shouldn't affect other contexts
+    embedded.column_range_cvar.set(range(2, 999))
+    _run_within_context(lambda: test_func(2, 3), column_range=range(0, 3))
+
 
 def test_column_ufunc_with_scalar():
-    with column_range_context(None):
+    def test_func():
         a = embedded.Column(1, np.asarray(range(0, 3)))
         res = 1.0 + a
         assert isinstance(res, embedded.Column)
@@ -49,25 +72,29 @@ def test_column_ufunc_with_scalar():
 
 
 def test_column_ufunc_wrong_kstart():
-    with column_range_context(None):
+    def test_func():
         a = embedded.Column(1, np.asarray(range(0, 3)))
         wrong_kstart = embedded.Column(2, np.asarray(range(3, 6)))
 
         with pytest.raises(ValueError):
             a + wrong_kstart
 
+    _run_within_context(test_func)
+
 
 def test_column_ufunc_wrong_shape():
-    with column_range_context(None):
+    def test_func():
         a = embedded.Column(1, np.asarray(range(0, 3)))
         wrong_shape = embedded.Column(1, np.asarray([1, 2]))
 
         with pytest.raises(ValueError):
             a + wrong_shape
 
+    _run_within_context(test_func)
+
 
 def test_column_array_function():
-    with column_range_context(None):
+    def test_func():
         cond = embedded.Column(1, np.asarray([True, False]))
         a = embedded.Column(1, np.asarray([1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -79,9 +106,11 @@ def test_column_array_function():
         assert np.array_equal(res.data, ref)
         assert res.kstart == 1
 
+    _run_within_context(test_func)
+
 
 def test_column_array_function_with_scalar():
-    with column_range_context(None):
+    def test_func():
         cond = embedded.Column(1, np.asarray([True, False]))
         a = 1
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -93,9 +122,11 @@ def test_column_array_function_with_scalar():
         assert np.array_equal(res.data, ref)
         assert res.kstart == 1
 
+    _run_within_context(test_func)
+
 
 def test_column_array_function_wrong_kstart():
-    with column_range_context(None):
+    def test_func():
         cond = embedded.Column(1, np.asarray([True, False]))
         wrong_kstart = embedded.Column(2, np.asarray([1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
@@ -103,12 +134,43 @@ def test_column_array_function_wrong_kstart():
         with pytest.raises(ValueError):
             np.where(cond, wrong_kstart, b)
 
+    _run_within_context(test_func)
+
 
 def test_column_array_function_wrong_shape():
-    with column_range_context(None):
+    def test_func():
         cond = embedded.Column(1, np.asarray([True, False]))
         wrong_shape = embedded.Column(2, np.asarray([1, 1, 1]))
         b = embedded.Column(1, np.asarray([2, 2]))
 
         with pytest.raises(ValueError):
             np.where(cond, wrong_shape, b)
+
+    _run_within_context(test_func)
+
+
+def test_column_multithread():
+    def test_func(i: int, output: list) -> None:
+        a = embedded.Column(1, -i)
+
+        assert isinstance(a, embedded.Column)
+        assert a.kstart == 1
+        assert all(a.data == -i)
+        assert len(a.data) == i
+
+        output[i] = True
+
+    results = [False] * 4
+    threads = [
+        threading.Thread(
+            target=_run_within_context,
+            args=(lambda i=i: test_func(i, results),),
+            kwargs={"column_range": range(1, i + 1)},
+        )
+        for i in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert all(results)
