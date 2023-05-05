@@ -153,7 +153,8 @@ class _PrettyPrinter(TemplatedGenerator):
 
     def visit_Call(self, node: foast.Call, **kwargs):
         args = self.visit(node.args, **kwargs)
-        kwargs = [f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}" for k, v in node.kwargs.items()]
+        for k, v in node.kwargs.items():
+            args.append(f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}")
         return f"{node.func}({', '.join(args + kwargs)})"
 
     Assign = as_fmt("{target} = {value}")

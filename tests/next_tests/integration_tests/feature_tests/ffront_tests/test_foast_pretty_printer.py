@@ -53,6 +53,7 @@ def test_one_to_one(test_case: str):
 
 def test_fieldop():
     I = Dimension("I")
+
     @field_operator
     def foo(inp1: Field[[I], int64], inp2: Field[[I], int64]):
         return inp1 + inp2
