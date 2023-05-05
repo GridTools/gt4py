@@ -133,8 +133,8 @@ class Context:
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args: list[dace.nodes.AccessNode] = transformer.visit(node_args)
-    internals = [f"{arg.data}_v" for arg in args]
+    args: list[dace.nodes.AccessNode] = [li[0].value for li in transformer.visit(node_args)]
+    internals = [f"{arg[0].value.data}_v" for arg in args]
     expr = "({1} if {0} else {2})".format(*internals)
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)

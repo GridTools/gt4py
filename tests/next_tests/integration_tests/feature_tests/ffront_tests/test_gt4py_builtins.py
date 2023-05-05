@@ -25,13 +25,18 @@ from gt4py.next.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
+from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn or fieldview_backend, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn or fieldview_backend,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -50,7 +55,11 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -72,7 +81,11 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_minover_execution(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -91,7 +104,11 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
 def test_minover_execution_float(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -112,6 +129,8 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
     rs = reduction_setup
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
@@ -133,6 +152,8 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Has a bug.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
 
     rs = reduction_setup
     V2EDim, V2E = rs.V2EDim, rs.V2E
@@ -154,6 +175,8 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
 
 
 def test_reduction_with_common_expression(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
     rs = reduction_setup
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
@@ -168,6 +191,8 @@ def test_reduction_with_common_expression(reduction_setup, fieldview_backend):
 
 
 def test_conditional_nested_tuple(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -201,6 +226,8 @@ def test_conditional_nested_tuple(fieldview_backend):
 
 
 def test_broadcast_simple(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: broadcast")
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 
@@ -214,6 +241,8 @@ def test_broadcast_simple(fieldview_backend):
 
 
 def test_broadcast_scalar(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: broadcast")
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
     @field_operator(backend=fieldview_backend)
@@ -226,6 +255,8 @@ def test_broadcast_scalar(fieldview_backend):
 
 
 def test_broadcast_two_fields(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: broadcast")
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     b_J_int = np_as_located_field(JDim)(np.random.randn(size).astype("int64"))
     out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
@@ -246,6 +277,8 @@ def test_broadcast_two_fields(fieldview_backend):
 
 
 def test_broadcast_shifted(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: broadcast")
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     out_IJ_int = np_as_located_field(IDim, JDim)(np.zeros((size, size), dtype=int64))
 

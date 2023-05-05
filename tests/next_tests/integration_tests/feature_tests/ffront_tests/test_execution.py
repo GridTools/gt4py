@@ -76,7 +76,7 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @field_operator
@@ -165,7 +165,7 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @field_operator
@@ -181,7 +181,7 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
 
 def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: broadcast")
 
     @field_operator
@@ -201,7 +201,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: broadcast")
 
     @field_operator
@@ -220,7 +220,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: index fields, constant fields")
 
     @field_operator
@@ -242,7 +242,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
             "Scalar arguments not supported to be used in both domain specification "
             "and as an argument to a field operator."
         )
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: iterator type inference failure?")
 
     @field_operator
@@ -262,7 +262,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: scan")
 
     @scan_operator(axis=KDim, forward=True, init=(0.0))
@@ -285,7 +285,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: tuple arguments")
 
     @scan_operator(axis=KDim, forward=True, init=0.0)

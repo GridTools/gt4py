@@ -15,11 +15,14 @@
 
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.ffront.fbuiltins import Field, int64, neighbor_sum
+from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
 
 
 def test_external_local_field(reduction_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
     V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
     inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
     ones = np_as_located_field(Edge)(np.ones(reduction_setup.num_edges, dtype=int64))
@@ -43,7 +46,8 @@ def test_external_local_field_only(reduction_setup, fieldview_backend):
         pytest.skip(
             "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
         )
-
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
     V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
     inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
 
