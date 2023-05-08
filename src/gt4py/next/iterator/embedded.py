@@ -772,11 +772,11 @@ class MDIterator:
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets = group_offsets(*offsets)
-        _offset_provider = offset_provider_cvar.get()
-        assert _offset_provider is not None
+        offset_provider = offset_provider_cvar.get()
+        assert offset_provider is not None
         return MDIterator(
             self.field,
-            shift_position(self.pos, *complete_offsets, offset_provider=_offset_provider),
+            shift_position(self.pos, *complete_offsets, offset_provider=offset_provider),
             column_axis=self.column_axis,
         )
 
@@ -1090,9 +1090,9 @@ class _ConstList(Generic[DT]):
 def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
     assert isinstance(offset_str, str)
-    _offset_provider = offset_provider_cvar.get()
-    assert _offset_provider is not None
-    connectivity = _offset_provider[offset_str]
+    offset_provider = offset_provider_cvar.get()
+    assert offset_provider is not None
+    connectivity = offset_provider[offset_str]
     assert isinstance(connectivity, common.Connectivity)
     return _List(
         shifted.deref()
@@ -1149,9 +1149,9 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
-        _offset_provider = offset_provider_cvar.get()
-        assert _offset_provider is not None
-        connectivity = _offset_provider[self.list_offset]
+        offset_provider = offset_provider_cvar.get()
+        assert offset_provider is not None
+        connectivity = offset_provider[self.list_offset]
         assert isinstance(connectivity, common.Connectivity)
         return _List(
             shifted.deref()
