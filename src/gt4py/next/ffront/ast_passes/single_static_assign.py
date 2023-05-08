@@ -124,6 +124,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         * Nested functions aren't supported
         * While loops aren't supported
     """
+
     assignment_tracker: _AssignmentTracker = dataclasses.field(default_factory=_AssignmentTracker)
 
     @classmethod
