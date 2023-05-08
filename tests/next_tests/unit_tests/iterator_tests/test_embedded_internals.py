@@ -12,85 +12,138 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import contextvars as cvars
+import threading
+from typing import Any, Callable, Optional
+
 import numpy as np
 import pytest
 
-from gt4py.next.iterator.embedded import Column
+from gt4py.next.iterator import embedded
+
+
+def _run_within_context(
+    func: Callable[[], Any],
+    *,
+    column_range: Optional[range] = None,
+    offset_provider: Optional[embedded.OffsetProvider] = None,
+) -> Any:
+    def wrapped_func():
+        embedded.column_range_cvar.set(column_range)
+        embedded.offset_provider_cvar.set(offset_provider)
+        func()
+
+    cvars.copy_context().run(wrapped_func)
 
 
 def test_column_ufunc():
-    a = Column(1, np.asarray(range(0, 3)))
-    b = Column(1, np.asarray(range(3, 6)))
+    def test_func():
+        a = embedded.Column(1, np.asarray(range(0, 3)))
+        b = embedded.Column(1, np.asarray(range(3, 6)))
+        res = a + b
 
-    res = a + b
-    assert isinstance(res, Column)
-    assert np.array_equal(res.data, a.data + b.data)
-    assert res.kstart == 1
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, a.data + b.data)
+        assert res.kstart == 1
+
+    _run_within_context(test_func)
+
+    def test_func(data_a: int, data_b: int):
+        a = embedded.Column(1, data_a)
+        b = embedded.Column(1, data_b)
+        res = a + b
+
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, a.data + b.data)
+        assert res.kstart == 1
+
+    # Setting an invalid column_range here shouldn't affect other contexts
+    embedded.column_range_cvar.set(range(2, 999))
+    _run_within_context(lambda: test_func(2, 3), column_range=range(0, 3))
 
 
 def test_column_ufunc_with_scalar():
-    a = Column(1, np.asarray(range(0, 3)))
-    res = 1.0 + a
-    assert isinstance(res, Column)
-    assert np.array_equal(res.data, a.data + 1.0)
-    assert res.kstart == 1
+    def test_func():
+        a = embedded.Column(1, np.asarray(range(0, 3)))
+        res = 1.0 + a
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, a.data + 1.0)
+        assert res.kstart == 1
 
 
 def test_column_ufunc_wrong_kstart():
-    a = Column(1, np.asarray(range(0, 3)))
-    wrong_kstart = Column(2, np.asarray(range(3, 6)))
+    def test_func():
+        a = embedded.Column(1, np.asarray(range(0, 3)))
+        wrong_kstart = embedded.Column(2, np.asarray(range(3, 6)))
 
-    with pytest.raises(ValueError):
-        a + wrong_kstart
+        with pytest.raises(ValueError):
+            a + wrong_kstart
+
+    _run_within_context(test_func)
 
 
 def test_column_ufunc_wrong_shape():
-    a = Column(1, np.asarray(range(0, 3)))
-    wrong_shape = Column(1, np.asarray([1, 2]))
+    def test_func():
+        a = embedded.Column(1, np.asarray(range(0, 3)))
+        wrong_shape = embedded.Column(1, np.asarray([1, 2]))
 
-    with pytest.raises(ValueError):
-        a + wrong_shape
+        with pytest.raises(ValueError):
+            a + wrong_shape
+
+    _run_within_context(test_func)
 
 
 def test_column_array_function():
-    cond = Column(1, np.asarray([True, False]))
-    a = Column(1, np.asarray([1, 1]))
-    b = Column(1, np.asarray([2, 2]))
+    def test_func():
+        cond = embedded.Column(1, np.asarray([True, False]))
+        a = embedded.Column(1, np.asarray([1, 1]))
+        b = embedded.Column(1, np.asarray([2, 2]))
 
-    res = np.where(cond, a, b)
-    ref = np.asarray([1, 2])
+        res = np.where(cond, a, b)
+        ref = np.asarray([1, 2])
 
-    assert isinstance(res, Column)
-    assert np.array_equal(res.data, ref)
-    assert res.kstart == 1
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, ref)
+        assert res.kstart == 1
+
+    _run_within_context(test_func)
 
 
 def test_column_array_function_with_scalar():
-    cond = Column(1, np.asarray([True, False]))
-    a = 1
-    b = Column(1, np.asarray([2, 2]))
+    def test_func():
+        cond = embedded.Column(1, np.asarray([True, False]))
+        a = 1
+        b = embedded.Column(1, np.asarray([2, 2]))
 
-    res = np.where(cond, a, b)
-    ref = np.asarray([1, 2])
+        res = np.where(cond, a, b)
+        ref = np.asarray([1, 2])
 
-    assert isinstance(res, Column)
-    assert np.array_equal(res.data, ref)
-    assert res.kstart == 1
+        assert isinstance(res, embedded.Column)
+        assert np.array_equal(res.data, ref)
+        assert res.kstart == 1
+
+    _run_within_context(test_func)
 
 
 def test_column_array_function_wrong_kstart():
-    cond = Column(1, np.asarray([True, False]))
-    wrong_kstart = Column(2, np.asarray([1, 1]))
-    b = Column(1, np.asarray([2, 2]))
+    def test_func():
+        cond = embedded.Column(1, np.asarray([True, False]))
+        wrong_kstart = embedded.Column(2, np.asarray([1, 1]))
+        b = embedded.Column(1, np.asarray([2, 2]))
 
-    with pytest.raises(ValueError):
-        np.where(cond, wrong_kstart, b)
+        with pytest.raises(ValueError):
+            np.where(cond, wrong_kstart, b)
+
+    _run_within_context(test_func)
 
 
 def test_column_array_function_wrong_shape():
-    cond = Column(1, np.asarray([True, False]))
-    wrong_shape = Column(2, np.asarray([1, 1, 1]))
-    b = Column(1, np.asarray([2, 2]))
+    def test_func():
+        cond = embedded.Column(1, np.asarray([True, False]))
+        wrong_shape = embedded.Column(2, np.asarray([1, 1, 1]))
+        b = embedded.Column(1, np.asarray([2, 2]))
 
-    with pytest.raises(ValueError):
-        np.where(cond, wrong_shape, b)
+        with pytest.raises(ValueError):
+            np.where(cond, wrong_shape, b)
+
+    _run_within_context(test_func)
