@@ -199,8 +199,8 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
-        _column_range = column_range_cvar.get()
-        self.data = data if isinstance(data, np.ndarray) else np.full(len(_column_range), data)
+        column_range = column_range_cvar.get()
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range), data)
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -723,23 +723,23 @@ def _make_tuple(
     *,
     column_axis: Optional[Tag] = None,
 ) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
-    _column_range = column_range_cvar.get()
+    column_range = column_range_cvar.get()
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
-            assert _column_range
+            assert column_range
             # construct a Column of tuples
             column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
             if column_axis_idx is None:
                 column_axis_idx = -1  # field doesn't have the column index, e.g. ContantField
             first = tuple(
-                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, _column_range.start))
+                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, column_range.start))
                 for f in field_or_tuple
             )
             col = Column(
-                _column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(first))
+                column_range.start, np.zeros(len(column_range), dtype=_column_dtype(first))
             )
             col[0] = first
-            for i in _column_range[1:]:
+            for i in column_range[1:]:
                 col[i] = tuple(
                     _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, i))
                     for f in field_or_tuple
@@ -751,8 +751,8 @@ def _make_tuple(
         data = field_or_tuple.field_getitem(indices)
         if column_axis is not None:
             # wraps a vertical slice of an input field into a `Column`
-            assert _column_range is not None
-            return Column(_column_range.start, data)
+            assert column_range is not None
+            return Column(column_range.start, data)
         else:
             return data
 
@@ -797,14 +797,14 @@ class MDIterator:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
-        _column_range = column_range_cvar.get()
+        column_range = column_range_cvar.get()
         if self.column_axis is not None:
-            assert _column_range is not None
+            assert column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(_column_range))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
 
         assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -840,10 +840,10 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        _column_range = column_range_cvar.get()
+        column_range = column_range_cvar.get()
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
-        assert _column_range is not None
-        new_pos[column_axis] = _column_range.start
+        assert column_range is not None
+        new_pos[column_axis] = column_range.start
     it = MDIterator(
         inp,
         new_pos,
@@ -1299,13 +1299,13 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        _column_range = column_range_cvar.get()
-        if _column_range is None:
+        column_range = column_range_cvar.get()
+        if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
-        sorted_column_range = _column_range if is_forward else reversed(_column_range)
+        sorted_column_range = column_range if is_forward else reversed(column_range)
         state = init
-        col = Column(_column_range.start, np.zeros(len(_column_range), dtype=_column_dtype(init)))
+        col = Column(column_range.start, np.zeros(len(column_range), dtype=_column_dtype(init)))
         for i in sorted_column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
@@ -1331,7 +1331,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
         raise RuntimeError("offset_provider not provided")
 
-    _offset_provider = kwargs["offset_provider"]
+    offset_provider = kwargs["offset_provider"]
 
     @runtime.closure.register(EMBEDDED)
     def closure(
@@ -1345,21 +1345,21 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
-        _column_range = None
+        column_range = None
         column: Optional[ColumnDescriptor] = None
         if kwargs.get("column_axis") and kwargs["column_axis"].value in domain:
             column_axis = kwargs["column_axis"]
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            _column_range = column.col_range
+            column_range = column.col_range
 
         out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         def _closure_runner():
             # Set context variables before executing the closure
-            column_range_cvar.set(_column_range)
-            offset_provider_cvar.set(_offset_provider)
+            column_range_cvar.set(column_range)
+            offset_provider_cvar.set(offset_provider)
 
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]

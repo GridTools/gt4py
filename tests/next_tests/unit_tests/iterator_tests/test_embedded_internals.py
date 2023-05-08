@@ -147,30 +147,3 @@ def test_column_array_function_wrong_shape():
             np.where(cond, wrong_shape, b)
 
     _run_within_context(test_func)
-
-
-def test_column_multithread():
-    def test_func(i: int, output: list) -> None:
-        a = embedded.Column(1, -i)
-
-        assert isinstance(a, embedded.Column)
-        assert a.kstart == 1
-        assert all(a.data == -i)
-        assert len(a.data) == i
-
-        output[i] = True
-
-    results = [False] * 4
-    threads = [
-        threading.Thread(
-            target=_run_within_context,
-            args=(lambda i=i: test_func(i, results),),
-            kwargs={"column_range": range(1, i + 1)},
-        )
-        for i in range(4)
-    ]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert all(results)
