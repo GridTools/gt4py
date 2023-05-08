@@ -81,6 +81,7 @@ def _merge_assignment_tracker(a: _AssignmentTracker, b: _AssignmentTracker) -> _
     return _AssignmentTracker({k: max(a.count(k), b.count(k)) for k in common_names})
 
 
+@dataclasses.dataclass
 class SingleStaticAssignPass(ast.NodeTransformer):
     """
     Rename variables in assignments to avoid overwriting.
@@ -123,14 +124,11 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         * Nested functions aren't supported
         * While loops aren't supported
     """
+    assignment_tracker: _AssignmentTracker = dataclasses.field(default_factory=_AssignmentTracker)
 
     @classmethod
     def apply(cls, node: ASTNodeT) -> ASTNodeT:
         return cls().visit(node)
-
-    def __init__(self):
-        super().__init__()
-        self.assignment_tracker: _AssignmentTracker = _AssignmentTracker()
 
     def _rename(self, node: ASTNodeT) -> ASTNodeT:
         for child_node in ast.walk(node):
