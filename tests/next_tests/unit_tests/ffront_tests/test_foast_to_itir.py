@@ -25,6 +25,7 @@ import pytest
 
 from gt4py.next.common import DimensionKind, Field
 from gt4py.next.ffront import type_specifications as ts_ffront
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     FieldOffset,
@@ -146,11 +147,17 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let(itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"), "inp")(
-        im.let(itir.Sym(id="inp__0", dtype=("float64", False), kind="Iterator"), "tmp__0")(
-            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), "inp__0")(
-                "tmp2__0"
-            )
+    reference = im.let(
+        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"), "inp"
+    )(
+        im.let(
+            itir.Sym(id=ssa.unique_name("inp", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp", 0),
+        )(
+            im.let(
+                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("inp", 0),
+            )(ssa.unique_name("tmp2", 0))
         )
     )
 
@@ -167,17 +174,17 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"),
+        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"),
         im.promote_to_lifted_stencil("plus")(
             im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
         ),
     )(
         im.let(
-            itir.Sym(id="tmp__1", dtype=("float64", False), kind="Iterator"),
+            itir.Sym(id=ssa.unique_name("tmp", 1), dtype=("float64", False), kind="Iterator"),
             im.promote_to_lifted_stencil("minus")(
-                im.promote_to_const_iterator(im.literal("0", "float64")), "tmp__0"
+                im.promote_to_const_iterator(im.literal("0", "float64")), ssa.unique_name("tmp", 0)
             ),
-        )("tmp__1")
+        )(ssa.unique_name("tmp", 1))
     )
 
     assert lowered.expr == reference
@@ -200,10 +207,14 @@ def test_unpacking():
     tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
-        im.let(itir.Sym(id="tmp1__0", dtype=("float64", False), kind="Iterator"), tuple_access_0)(
+        im.let(
+            itir.Sym(id=ssa.unique_name("tmp1", 0), dtype=("float64", False), kind="Iterator"),
+            tuple_access_0,
+        )(
             im.let(
-                itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), tuple_access_1
-            )("tmp1__0")
+                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                tuple_access_1,
+            )(ssa.unique_name("tmp1", 0))
         )
     )
 
@@ -220,7 +231,7 @@ def test_annotated_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp__0", "inp")("tmp__0")
+    reference = im.let(ssa.unique_name("tmp", 0), "inp")(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
 
@@ -258,7 +269,7 @@ def test_temp_tuple():
     lowered = FieldOperatorLowering.apply(parsed)
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("a", "b")
-    reference = im.let("tmp__0", tuple_expr)("tmp__0")
+    reference = im.let(ssa.unique_name("tmp", 0), tuple_expr)(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
 
@@ -310,12 +321,12 @@ def test_add_scalar_literals():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        "tmp__0",
+        ssa.unique_name("tmp", 0),
         im.promote_to_lifted_stencil("plus")(
             im.promote_to_const_iterator(im.literal("1", "int32")),
             im.promote_to_const_iterator(im.literal("1", "int32")),
         ),
-    )(im.promote_to_lifted_stencil("plus")("a", "tmp__0"))
+    )(im.promote_to_lifted_stencil("plus")("a", ssa.unique_name("tmp", 0)))
 
     assert lowered.expr == reference
 
@@ -495,11 +506,11 @@ def test_reduction_lowering_expr():
         im.promote_to_lifted_stencil("make_const_list")(
             im.promote_to_const_iterator(im.literal("1.1", "float64"))
         ),
-        im.promote_to_lifted_stencil(im.map_("plus"))("e1_nbh__0", "e2"),
+        im.promote_to_lifted_stencil(im.map_("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
     )
 
     reference = im.let(
-        itir.Sym(id="e1_nbh__0", dtype=("float64", True), kind="Iterator"),
+        itir.Sym(id=ssa.unique_name("e1_nbh", 0), dtype=("float64", True), kind="Iterator"),
         im.lifted_neighbors("V2E", "e1"),
     )(
         im.promote_to_lifted_stencil(

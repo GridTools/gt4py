@@ -14,12 +14,26 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import typing
 
 from gt4py.next.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
 
-def _make_assign(target: str, source: str, location_node: ast.AST):
+ASTNodeT = typing.TypeVar("ASTNodeT", bound=ast.AST)
+
+_UNIQUE_NAME_SEPERATOR = "ᐞ"
+
+
+def unique_name(name: str, num_assignments: int):
+    """Given the name of a variable return a unique name after the given amount of assignments."""
+    if num_assignments >= 0:
+        return f"{name}{_UNIQUE_NAME_SEPERATOR}{num_assignments}"
+    assert num_assignments == -1
+    return name
+
+
+def _make_assign(target: str, source: str, location_node: ast.AST) -> ast.Assign:
     result = ast.Assign(
         targets=[ast.Name(ctx=ast.Store(), id=target)], value=ast.Name(ctx=ast.Load(), id=source)
     )
@@ -28,86 +42,43 @@ def _make_assign(target: str, source: str, location_node: ast.AST):
     return result
 
 
-def is_guaranteed_to_return(node: ast.stmt | list[ast.stmt]) -> bool:
+def _is_guaranteed_to_return(node: ast.stmt | list[ast.stmt]) -> bool:
     if isinstance(node, list):
-        return any(is_guaranteed_to_return(child) for child in node)
+        return any(_is_guaranteed_to_return(child) for child in node)
     if isinstance(node, ast.Return):
         return True
     if isinstance(node, ast.If):
-        return is_guaranteed_to_return(node.body) and is_guaranteed_to_return(node.orelse)
+        return _is_guaranteed_to_return(node.body) and _is_guaranteed_to_return(node.orelse)
     return False
 
 
-class Versioning:
-    """Helper class to keep track of whether versioning (definedness)."""
+@dataclasses.dataclass
+class _AssignmentTracker:
+    """Helper class to keep track of the number of assignments to a variable."""
 
-    # invariant: if a version is an `int`, it's not negative
-    _versions: dict[str, None | int]
-
-    def __init__(self):
-        self._versions = {}
+    _counts: dict[str, int] = dataclasses.field(default_factory=dict)
 
     def define(self, name: str) -> None:
-        if name not in self._versions:
-            self._versions[name] = None
+        if name in self.names():
+            raise ValueError(f"Variable {name} is already defined.")
+        self._counts[name] = -1
 
     def assign(self, name: str) -> None:
-        if self.is_versioned(name):
-            self._versions[name] = typing.cast(int, self._versions[name]) + 1
-        else:
-            self._versions[name] = 0
+        self._counts[name] = self.count(name) + 1
 
-    def is_defined(self, name: str) -> bool:
-        return name in self._versions
+    def count(self, name: str):
+        return self._counts.get(name, -1)
 
-    def is_versioned(self, name: str) -> bool:
-        return self.is_defined(name) and self._versions[name] is not None
+    def names(self):
+        return self._counts.keys()
 
-    def __getitem__(self, name: str) -> None | int:
-        return self._versions[name]
-
-    def __iter__(self) -> typing.Iterator[tuple[str, None | int]]:
-        return iter(self._versions.items())
-
-    def copy(self) -> Versioning:
-        copy = Versioning()
-        copy._versions = {**self._versions}
-        return copy
-
-    @staticmethod
-    def merge(a: Versioning, b: Versioning) -> Versioning:
-        versions_a, version_b = a._versions, b._versions
-        names = set(versions_a.keys()) & set(version_b.keys())
-
-        merged_versioning = Versioning()
-        merged_versions = merged_versioning._versions
-
-        for name in names:
-            merged_versions[name] = Versioning._merge_versions(versions_a[name], version_b[name])
-
-        return merged_versioning
-
-    @staticmethod
-    def _merge_versions(a: None | int, b: None | int) -> None | int:
-        if a is None:
-            return b
-        elif b is None:
-            return a
-        return max(a, b)
+    def copy(self):
+        return _AssignmentTracker({**self._counts})
 
 
-class NameEncoder:
-    """Helper class to encode names of versioned variables."""
-
-    _separator: str
-
-    def __init__(self, separator: str):
-        self._separator = separator
-
-    def encode_name(self, name: str, versions: Versioning) -> str:
-        if versions.is_versioned(name):
-            return f"{name}{self._separator}{versions[name]}"
-        return name
+def _merge_assignment_tracker(a: _AssignmentTracker, b: _AssignmentTracker) -> _AssignmentTracker:
+    common_names = set(a.names()) & set(b.names())
+    return _AssignmentTracker({k: max(a.count(k), b.count(k)) for k in common_names})
 
 
 class SingleStaticAssignPass(ast.NodeTransformer):
@@ -153,99 +124,86 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         * While loops aren't supported
     """
 
-    class RhsRenamer(ast.NodeTransformer):
-        """
-        Rename right hand side names.
-
-        Only read from parent visitor state, should not modify.
-        """
-
-        @classmethod
-        def apply(cls, versioning: Versioning, name_encoder: NameEncoder, node: ast.AST):
-            return cls(versioning, name_encoder).visit(node)
-
-        def __init__(self, versioning: Versioning, name_encoder: NameEncoder):
-            super().__init__()
-            self.versioning: Versioning = versioning
-            self.name_encoder: NameEncoder = name_encoder
-
-        def visit_Name(self, node: ast.Name) -> ast.Name:
-            node.id = self.name_encoder.encode_name(node.id, self.versioning)
-            return node
-
     @classmethod
-    def apply(cls, node: ast.AST) -> ast.AST:
+    def apply(cls, node: ASTNodeT) -> ASTNodeT:
         return cls().visit(node)
 
-    def __init__(self, separator="__"):
+    def __init__(self):
         super().__init__()
-        self.versioning: Versioning = Versioning()
-        self.name_encoder: NameEncoder = NameEncoder(separator)
+        self.assignment_tracker: _AssignmentTracker = _AssignmentTracker()
 
-    def _rename(self, node: ast.AST):
-        return self.RhsRenamer.apply(self.versioning, self.name_encoder, node)
+    def _rename(self, node: ASTNodeT) -> ASTNodeT:
+        for child_node in ast.walk(node):
+            if isinstance(child_node, ast.Name):
+                child_node.id = unique_name(
+                    child_node.id, self.assignment_tracker.count(child_node.id)
+                )
+        return node
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         # For practical purposes, this is sufficient, but really not general at all.
         # However, the algorithm was never intended to be general.
 
-        old_versioning = self.versioning.copy()
+        old_versioning = self.assignment_tracker.copy()
 
         for arg in node.args.args:
-            self.versioning.define(arg.arg)
+            self.assignment_tracker.define(arg.arg)
 
         node.body = [self.visit(stmt) for stmt in node.body]
 
-        self.versioning = old_versioning
+        self.assignment_tracker = old_versioning
         return node
 
     def visit_If(self, node: ast.If) -> ast.If:
-        old_versioning = self.versioning
+        old_versioning = self.assignment_tracker
 
         node.test = self._rename(node.test)
 
-        self.versioning = old_versioning.copy()
+        self.assignment_tracker = old_versioning.copy()
         node.body = [self.visit(el) for el in node.body]
-        body_versioning = self.versioning
-        body_returns = is_guaranteed_to_return(node.body)
+        body_assignment_tracker = self.assignment_tracker
+        body_returns = _is_guaranteed_to_return(node.body)
 
-        self.versioning = old_versioning.copy()
+        self.assignment_tracker = old_versioning.copy()
         node.orelse = [self.visit(el) for el in node.orelse]
-        orelse_versioning = self.versioning
-        orelse_returns = is_guaranteed_to_return(node.orelse)
+        orelse_assignment_tracker = self.assignment_tracker
+        orelse_returns = _is_guaranteed_to_return(node.orelse)
 
         if body_returns and not orelse_returns:
-            self.versioning = orelse_versioning
+            self.assignment_tracker = orelse_assignment_tracker
             return node
 
         if orelse_returns and not body_returns:
-            self.versioning = body_versioning
+            self.assignment_tracker = body_assignment_tracker
             return node
 
         if body_returns and orelse_returns:
-            self.versioning = Versioning()
+            self.assignment_tracker = _AssignmentTracker()
             return node
 
         assert not body_returns and not orelse_returns
 
-        self.versioning = Versioning.merge(body_versioning, orelse_versioning)
+        self.assignment_tracker = _merge_assignment_tracker(
+            body_assignment_tracker, orelse_assignment_tracker
+        )
 
         # ensure both branches conclude with the same unique names
-        for name, merged_version in self.versioning:
-            body_version = body_versioning[name]
-            orelse_version = orelse_versioning[name]
+        for name in self.assignment_tracker.names():
+            assignment_count = self.assignment_tracker.count(name)
+            body_assignment_count = body_assignment_tracker.count(name)
+            orelse_assignment_count = orelse_assignment_tracker.count(name)
 
-            if body_version != merged_version:
+            if body_assignment_count != assignment_count:
                 new_assign = _make_assign(
-                    self.name_encoder.encode_name(name, self.versioning),
-                    self.name_encoder.encode_name(name, body_versioning),
+                    unique_name(name, assignment_count),
+                    unique_name(name, body_assignment_count),
                     node,
                 )
                 node.body.append(new_assign)
-            elif orelse_version != merged_version:
+            elif orelse_assignment_count != assignment_count:
                 new_assign = _make_assign(
-                    self.name_encoder.encode_name(name, self.versioning),
-                    self.name_encoder.encode_name(name, orelse_versioning),
+                    unique_name(name, assignment_count),
+                    unique_name(name, orelse_assignment_count),
                     node,
                 )
                 node.orelse.append(new_assign)
@@ -272,15 +230,15 @@ class SingleStaticAssignPass(ast.NodeTransformer):
             # So we need to use the correct versioning, but also ensure
             # we restore the old versioning afterwards, because no assignment
             # actually happens.
-            old_versioning = self.versioning.copy()
+            old_versioning = self.assignment_tracker.copy()
             node.target = self.visit(node.target)
-            self.versioning = old_versioning
+            self.assignment_tracker = old_versioning
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
         if node.id in TYPE_BUILTIN_NAMES:
             return node
 
-        self.versioning.assign(node.id)
-        node.id = self.name_encoder.encode_name(node.id, self.versioning)
+        self.assignment_tracker.assign(node.id)
+        node.id = unique_name(node.id, self.assignment_tracker.count(node.id))
         return node
