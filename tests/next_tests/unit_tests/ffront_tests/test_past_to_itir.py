@@ -156,14 +156,22 @@ def test_inout_prohibited(identity_def):
         GTTypeError,
         match=(r"Call to function with field as input and output not allowed."),
     ):
-        ProgramLowering.apply(ProgramParser.apply_to_function(inout_field_program))
+        ProgramLowering.apply(
+            ProgramParser.apply_to_function(inout_field_program),
+            function_definitions=[],
+            grid_type=GridType.CARTESIAN,
+        )
 
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
         GTTypeError,
     ) as exc_info:
-        ProgramLowering.apply(ProgramParser.apply_to_function(invalid_call_sig_program_def))
+        ProgramLowering.apply(
+            ProgramParser.apply_to_function(invalid_call_sig_program_def),
+            function_definitions=[],
+            grid_type=GridType.CARTESIAN,
+        )
 
     assert exc_info.match("Invalid call to `identity`")
     # TODO(tehrengruber): re-enable again when call signature check doesn't return

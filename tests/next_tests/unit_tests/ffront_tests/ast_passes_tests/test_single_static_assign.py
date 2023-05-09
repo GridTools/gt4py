@@ -18,7 +18,10 @@
 import ast
 import textwrap
 
-from gt4py.next.ffront.ast_passes.single_static_assign import SingleStaticAssignPass
+from gt4py.next.ffront.ast_passes.single_static_assign import (
+    _UNIQUE_NAME_SEPARATOR as SEP,
+    SingleStaticAssignPass,
+)
 
 
 def ssaify_string(code: str) -> ast.AST:
@@ -36,9 +39,9 @@ def test_sequence():
     )
 
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "tmp__0 = 1"
-    assert lines[1] == "tmp__1 = 2"
-    assert lines[2] == "tmp__2 = 3"
+    assert lines[0] == f"tmp{SEP}0 = 1"
+    assert lines[1] == f"tmp{SEP}1 = 2"
+    assert lines[2] == f"tmp{SEP}2 = 3"
 
 
 def test_self_on_rhs():
@@ -50,8 +53,8 @@ def test_self_on_rhs():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "tmp__0 = 1"
-    assert lines[1] == "tmp__1 = tmp__0 + 1"
+    assert lines[0] == f"tmp{SEP}0 = 1"
+    assert lines[1] == f"tmp{SEP}1 = tmp{SEP}0 + 1"
 
 
 def test_multi_assign():
@@ -62,7 +65,7 @@ def test_multi_assign():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a__0 = a__1 = b__0 = a__2 = b__1 = 1"
+    assert lines[0] == f"a{SEP}0 = a{SEP}1 = b{SEP}0 = a{SEP}2 = b{SEP}1 = 1"
 
 
 def test_external_name_values():
@@ -74,8 +77,8 @@ def test_external_name_values():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a__0 = inp"
-    assert lines[1] == "a__1 = a__0 + inp"
+    assert lines[0] == f"a{SEP}0 = inp"
+    assert lines[1] == f"a{SEP}1 = a{SEP}0 + inp"
 
 
 def test_overwrite_external():
@@ -88,9 +91,9 @@ def test_overwrite_external():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a__0 = inp"
-    assert lines[1] == "inp__0 = a__0 + inp"
-    assert lines[2] == "b__0 = inp__0"
+    assert lines[0] == f"a{SEP}0 = inp"
+    assert lines[1] == f"inp{SEP}0 = a{SEP}0 + inp"
+    assert lines[2] == f"b{SEP}0 = inp{SEP}0"
 
 
 def test_unpacking_swap():
@@ -103,9 +106,9 @@ def test_unpacking_swap():
         """
     )
     lines = ast.unparse(ssa_ast).split("\n")
-    assert lines[0] == "a__0 = 5"
-    assert lines[1] == "b__0 = 1"
-    assert lines[2] == "(b__1, a__1) = (a__0, b__0)"
+    assert lines[0] == f"a{SEP}0 = 5"
+    assert lines[1] == f"b{SEP}0 = 1"
+    assert lines[2] == f"(b{SEP}1, a{SEP}1) = (a{SEP}0, b{SEP}0)"
 
 
 def test_annotated_assign():
@@ -117,7 +120,7 @@ def test_annotated_assign():
             """
         )
     ).splitlines()
-    assert lines[0] == "a__0: int = 5"
+    assert lines[0] == f"a{SEP}0: int = 5"
 
 
 def test_empty_annotated_assign():
@@ -130,9 +133,9 @@ def test_empty_annotated_assign():
             """
         )
     ).splitlines()
-    assert lines[0] == "a__0 = 0"
-    assert lines[1] == "a__1: int"
-    assert lines[2] == "b__0 = a__0"
+    assert lines[0] == f"a{SEP}0 = 0"
+    assert lines[1] == f"a{SEP}1: int"
+    assert lines[2] == f"b{SEP}0 = a{SEP}0"
 
 
 def test_if():
@@ -148,15 +151,15 @@ def test_if():
         )
     ).splitlines()
 
-    assert lines[1] == "    a__0 = 1"
-    assert lines[3] == "    a__0 = 2"
-    assert lines[4] == "a__1 = 3"
+    assert lines[1] == f"    a{SEP}0 = 1"
+    assert lines[3] == f"    a{SEP}0 = 2"
+    assert lines[4] == f"a{SEP}1 = 3"
 
 
 def test_if_variable_condition():
     result = ast.unparse(
         ssaify_string(
-            """
+            f"""
             if b:
                 a = 1
             """
@@ -164,9 +167,9 @@ def test_if_variable_condition():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if b:
-            a__0 = 1
+            a{SEP}0 = 1
         """
     ).strip()
 
@@ -176,7 +179,7 @@ def test_if_variable_condition():
 def test_nested_if():
     result = ast.unparse(
         ssaify_string(
-            """
+            f"""
             if True:
                 a = 1
             else:
@@ -190,18 +193,18 @@ def test_nested_if():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 1
-            a__2 = a__0
+            a{SEP}0 = 1
+            a{SEP}2 = a{SEP}0
         else:
-            a__0 = 2
+            a{SEP}0 = 2
             if True:
-                a__1 = 3
+                a{SEP}1 = 3
             else:
-                a__1 = a__0
-            a__2 = 4
-        a__3 = 5
+                a{SEP}1 = a{SEP}0
+            a{SEP}2 = 4
+        a{SEP}3 = 5
     """
     ).strip()
 
@@ -211,7 +214,7 @@ def test_nested_if():
 def test_nested_if_chain():
     result = ast.unparse(
         ssaify_string(
-            """
+            f"""
             if True:
                 a = 1
             else:
@@ -225,18 +228,18 @@ def test_nested_if_chain():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 1
-            a__2 = a__0
+            a{SEP}0 = 1
+            a{SEP}2 = a{SEP}0
         else:
-            a__0 = 2
+            a{SEP}0 = 2
             if True:
-                a__1 = a__0 + 1
+                a{SEP}1 = a{SEP}0 + 1
             else:
-                a__1 = a__0
-            a__2 = a__1 + 1
-        a__3 = a__2 + 1
+                a{SEP}1 = a{SEP}0
+            a{SEP}2 = a{SEP}1 + 1
+        a{SEP}3 = a{SEP}2 + 1
     """
     ).strip()
 
@@ -246,7 +249,7 @@ def test_nested_if_chain():
 def test_if_branch_local():
     result = ast.unparse(
         ssaify_string(
-            """
+            f"""
             if True:
                 a = 0
                 a = a + 1
@@ -258,13 +261,13 @@ def test_if_branch_local():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 0
-            a__1 = a__0 + 1
+            a{SEP}0 = 0
+            a{SEP}1 = a{SEP}0 + 1
         else:
-            b__0 = 1
-            b__1 = b__0 + 1
+            b{SEP}0 = 1
+            b{SEP}1 = b{SEP}0 + 1
         """
     ).strip()
 
@@ -274,7 +277,7 @@ def test_if_branch_local():
 def test_if_only_one_branch():
     result = ast.unparse(
         ssaify_string(
-            """
+            f"""
             if True:
                 a = 0
             b = a
@@ -283,10 +286,10 @@ def test_if_only_one_branch():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 0
-        b__0 = a
+            a{SEP}0 = 0
+        b{SEP}0 = a
         """
     ).strip()
 
@@ -307,12 +310,12 @@ def test_if_only_one_branch_other():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 0
+            a{SEP}0 = 0
         else:
-            c__0 = 1
-        b__0 = c
+            c{SEP}0 = 1
+        b{SEP}0 = c
         """
     ).strip()
 
@@ -341,22 +344,22 @@ def test_if_nested_all_branches_defined():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
             if True:
-                a__0 = 0
-                a__1 = a__0 + 1
-                a__2 = a__1 + 1
-                a__3 = a__2 + 1
-                a__4 = a__3 + 1
+                a{SEP}0 = 0
+                a{SEP}1 = a{SEP}0 + 1
+                a{SEP}2 = a{SEP}1 + 1
+                a{SEP}3 = a{SEP}2 + 1
+                a{SEP}4 = a{SEP}3 + 1
             else:
-                a__0 = 0
-                a__1 = a__0 + 1
-                a__2 = a__1 + 1
-                a__4 = a__2
+                a{SEP}0 = 0
+                a{SEP}1 = a{SEP}0 + 1
+                a{SEP}2 = a{SEP}1 + 1
+                a{SEP}4 = a{SEP}2
         else:
-            a__0 = 0
-            a__4 = a__0
+            a{SEP}0 = 0
+            a{SEP}4 = a{SEP}0
         """
     ).strip()
 
@@ -384,22 +387,22 @@ def test_elif_all_branches_defined():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = 0
-            a__1 = a__0 + 1
-            a__2 = a__1 + 1
-            a__3 = a__2 + 1
-            a__4 = a__3 + 1
+            a{SEP}0 = 0
+            a{SEP}1 = a{SEP}0 + 1
+            a{SEP}2 = a{SEP}1 + 1
+            a{SEP}3 = a{SEP}2 + 1
+            a{SEP}4 = a{SEP}3 + 1
         else:
             if True:
-                a__0 = 0
-                a__1 = a__0 + 1
-                a__2 = a__1 + 1
+                a{SEP}0 = 0
+                a{SEP}1 = a{SEP}0 + 1
+                a{SEP}2 = a{SEP}1 + 1
             else:
-                a__0 = 0
-                a__2 = a__0
-            a__4 = a__2
+                a{SEP}0 = 0
+                a{SEP}2 = a{SEP}0
+            a{SEP}4 = a{SEP}2
         """
     ).strip()
 
@@ -430,24 +433,24 @@ def test_nested_ifs_single_change():
     )
 
     expected = textwrap.dedent(
-        """
-        a__0 = 0
+        f"""
+        a{SEP}0 = 0
         if True:
-            b__0 = 0
-            a__1 = a__0
+            b{SEP}0 = 0
+            a{SEP}1 = a{SEP}0
         elif True:
             if True:
-                b__0 = 1
-                a__1 = a__0
+                b{SEP}0 = 1
+                a{SEP}1 = a{SEP}0
             elif True:
-                b__0 = 2
-                a__1 = a__0 + 1
+                b{SEP}0 = 2
+                a{SEP}1 = a{SEP}0 + 1
             else:
-                b__0 = 3
-                a__1 = a__0
+                b{SEP}0 = 3
+                a{SEP}1 = a{SEP}0
         else:
-            b__0 = 4
-            a__1 = a__0
+            b{SEP}0 = 4
+            a{SEP}1 = a{SEP}0
         """
     ).strip()
 
@@ -467,13 +470,13 @@ def test_if_one_sided_inside_function():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f(a):
             if True:
-                a__0 = a + 1
+                a{SEP}0 = a + 1
             else:
-                a__0 = a
-            return a__0
+                a{SEP}0 = a
+            return a{SEP}0
         """
     ).strip()
 
@@ -495,12 +498,12 @@ def test_if_preservers_definite_assignment_analysis1():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f():
             if True:
-                a__0 = 1
+                a{SEP}0 = 1
             else:
-                b__0 = 0
+                b{SEP}0 = 0
             return (a, b)
         """
     ).strip()
@@ -523,13 +526,13 @@ def test_if_preservers_definite_assignment_analysis2():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f():
             if True:
-                a__0 = 1
+                a{SEP}0 = 1
             else:
-                a__0 = 0
-            return (a__0, b)
+                a{SEP}0 = 0
+            return (a{SEP}0, b)
         """
     ).strip()
 
@@ -550,14 +553,14 @@ def test_if_preservers_definite_assignment_analysis3():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f():
-            a__0 = 0
+            a{SEP}0 = 0
             if True:
-                a__1 = 1
+                a{SEP}1 = 1
             else:
-                a__1 = a__0
-            return (a__1, b)
+                a{SEP}1 = a{SEP}0
+            return (a{SEP}1, b)
         """
     ).strip()
 
@@ -569,17 +572,17 @@ def test_broken_collisions():
 
     result = ast.unparse(
         ssaify_string(
-            """
-            a = a__0 + 1
-            return a, a__0
+            f"""
+            a = a{SEP}0 + 1
+            return a, a{SEP}0
             """
         )
     )
 
     expected = textwrap.dedent(
-        """
-        a__0 = a__0 + 1
-        return (a__0, a__0)
+        f"""
+        a{SEP}0 = a{SEP}0 + 1
+        return (a{SEP}0, a{SEP}0)
         """
     ).strip()
 
@@ -591,17 +594,17 @@ def test_collision_function_parameters():
 
     result = ast.unparse(
         ssaify_string(
-            """
-            def f(a, a__0):
-                return a__0
+            f"""
+            def f(a, a{SEP}0):
+                return a{SEP}0
             """
         )
     )
 
     expected = textwrap.dedent(
-        """
-        def f(a, a__0):
-            return a__0
+        f"""
+        def f(a, a{SEP}0):
+            return a{SEP}0
         """
     ).strip()
 
@@ -622,9 +625,9 @@ def test_broken_if():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         if True:
-            a__0 = a + 1
+            a{SEP}0 = a + 1
         return a
         """
     ).strip()
@@ -643,9 +646,9 @@ def test_annotated_assign():
     )
 
     expected = textwrap.dedent(
-        """
-        a__0: int
-        a__0 = a + 1
+        f"""
+        a{SEP}0: int
+        a{SEP}0 = a + 1
         """
     ).strip()
 
@@ -670,16 +673,16 @@ def test_if_true_branch_returns():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f(a, b):
             if True:
-                a__0 = a + 1
-                d__0 = 5
-                return a__0
+                a{SEP}0 = a + 1
+                d{SEP}0 = 5
+                return a{SEP}0
             else:
-                b__0 = b + 1
-                e__0 = 6
-            return (a, b__0, d, e__0)
+                b{SEP}0 = b + 1
+                e{SEP}0 = 6
+            return (a, b{SEP}0, d, e{SEP}0)
         """
     ).strip()
 
@@ -705,17 +708,17 @@ def test_if_false_branch_returns():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f(a, b):
-            b__0 = a + 3
+            b{SEP}0 = a + 3
             if True:
-                b__1 = b__0 + 1
-                e__0 = 6
+                b{SEP}1 = b{SEP}0 + 1
+                e{SEP}0 = 6
             else:
-                a__0 = a + 1
-                d__0 = 5
-                return a__0
-            return (a, b__1, d, e__0)
+                a{SEP}0 = a + 1
+                d{SEP}0 = 5
+                return a{SEP}0
+            return (a, b{SEP}1, d, e{SEP}0)
         """
     ).strip()
 
@@ -741,16 +744,16 @@ def test_if_both_branches_return():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
         def f(a, b):
             if True:
-                b__0 = b + 1
-                e__0 = 6
-                return e__0
+                b{SEP}0 = b + 1
+                e{SEP}0 = 6
+                return e{SEP}0
             else:
-                a__0 = a + 1
-                d__0 = 5
-                return a__0
+                a{SEP}0 = a + 1
+                d{SEP}0 = 5
+                return a{SEP}0
             return (a, b, d, e)
         """
     ).strip()
@@ -779,19 +782,19 @@ def test_if_nested_returns():
     )
 
     expected = textwrap.dedent(
-        """
+        f"""
             def f(a, b):
                 if True:
-                    b__0 = b + 1
-                    e__0 = 6
-                    if e__0 == b__0:
-                        return e__0
+                    b{SEP}0 = b + 1
+                    e{SEP}0 = 6
+                    if e{SEP}0 == b{SEP}0:
+                        return e{SEP}0
                     else:
-                        return b__0
+                        return b{SEP}0
                 else:
-                    a__0 = a + 1
-                    d__0 = 5
-                return (a__0, b, d__0, e)
+                    a{SEP}0 = a + 1
+                    d{SEP}0 = 5
+                return (a{SEP}0, b, d{SEP}0, e)
         """
     ).strip()
 
