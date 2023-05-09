@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import ast
+import collections.abc
 import dataclasses
 import typing
 
@@ -22,13 +23,15 @@ from gt4py.next.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 
 ASTNodeT = typing.TypeVar("ASTNodeT", bound=ast.AST)
 
-_UNIQUE_NAME_SEPERATOR = "ᐞ"
+_UNIQUE_NAME_SEPARATOR = "ᐞ"
 
 
-def unique_name(name: str, num_assignments: int):
+# TODO(tehrengruber): use a global mechanism to get uniqueness across multiple passes (not only
+#  the ssa pass).
+def unique_name(name: str, num_assignments: int) -> str:
     """Given the name of a variable return a unique name after the given amount of assignments."""
     if num_assignments >= 0:
-        return f"{name}{_UNIQUE_NAME_SEPERATOR}{num_assignments}"
+        return f"{name}{_UNIQUE_NAME_SEPARATOR}{num_assignments}"
     assert num_assignments == -1
     return name
 
@@ -56,29 +59,31 @@ def _is_guaranteed_to_return(node: ast.stmt | list[ast.stmt]) -> bool:
 class _AssignmentTracker:
     """Helper class to keep track of the number of assignments to a variable."""
 
+    #: mapping from a variable name to the number of times it is assigned to. `-1` signifies it to
+    #:  be defined only, but not assigned to.
     _counts: dict[str, int] = dataclasses.field(default_factory=dict)
 
     def define(self, name: str) -> None:
         if name in self.names():
             raise ValueError(f"Variable {name} is already defined.")
+        # -1 signifies a
         self._counts[name] = -1
 
     def assign(self, name: str) -> None:
         self._counts[name] = self.count(name) + 1
 
-    def count(self, name: str):
+    def count(self, name: str) -> int:
         return self._counts.get(name, -1)
 
-    def names(self):
+    def names(self) -> collections.abc.Set:
         return self._counts.keys()
 
-    def copy(self):
+    def copy(self) -> _AssignmentTracker:
         return _AssignmentTracker({**self._counts})
 
 
 def _merge_assignment_tracker(a: _AssignmentTracker, b: _AssignmentTracker) -> _AssignmentTracker:
-    common_names = set(a.names()) & set(b.names())
-    return _AssignmentTracker({k: max(a.count(k), b.count(k)) for k in common_names})
+    return _AssignmentTracker({k: max(a.count(k), b.count(k)) for k in (a.names() & b.names())})
 
 
 @dataclasses.dataclass
@@ -108,10 +113,10 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     ...     )
     ... ))
     def foo():
-        a__0 = 1
-        a__1 = 2 + a__0
-        a__2 = 3 + a__1
-        return a__2
+        aᐞ0 = 1
+        aᐞ1 = 2 + aᐞ0
+        aᐞ2 = 3 + aᐞ1
+        return aᐞ2
 
     Note that each variable name is assigned only once (per branch) and never updated / overwritten.
 
@@ -143,27 +148,27 @@ class SingleStaticAssignPass(ast.NodeTransformer):
         # For practical purposes, this is sufficient, but really not general at all.
         # However, the algorithm was never intended to be general.
 
-        old_versioning = self.assignment_tracker.copy()
+        prev_assignment_tracker = self.assignment_tracker.copy()
 
         for arg in node.args.args:
             self.assignment_tracker.define(arg.arg)
 
         node.body = [self.visit(stmt) for stmt in node.body]
 
-        self.assignment_tracker = old_versioning
+        self.assignment_tracker = prev_assignment_tracker
         return node
 
     def visit_If(self, node: ast.If) -> ast.If:
-        old_versioning = self.assignment_tracker
+        prev_assignment_tracker = self.assignment_tracker
 
         node.test = self._rename(node.test)
 
-        self.assignment_tracker = old_versioning.copy()
+        self.assignment_tracker = prev_assignment_tracker.copy()
         node.body = [self.visit(el) for el in node.body]
         body_assignment_tracker = self.assignment_tracker
         body_returns = _is_guaranteed_to_return(node.body)
 
-        self.assignment_tracker = old_versioning.copy()
+        self.assignment_tracker = prev_assignment_tracker.copy()
         node.orelse = [self.visit(el) for el in node.orelse]
         orelse_assignment_tracker = self.assignment_tracker
         orelse_returns = _is_guaranteed_to_return(node.orelse)
@@ -225,13 +230,12 @@ class SingleStaticAssignPass(ast.NodeTransformer):
             node.value = self._rename(node.value)
             node.target = self.visit(node.target)
         elif isinstance(node.target, ast.Name):
-            # An empty annotation always applies to the next assignment.
-            # So we need to use the correct versioning, but also ensure
-            # we restore the old versioning afterwards, because no assignment
-            # actually happens.
-            old_versioning = self.assignment_tracker.copy()
+            # An annotated assignment without a value always applies to the next assignment. Ensure
+            # the two have the same name by keeping the assignment tracker as is (after this
+            # statement).
+            prev_assignment_tracker = self.assignment_tracker.copy()
             node.target = self.visit(node.target)
-            self.assignment_tracker = old_versioning
+            self.assignment_tracker = prev_assignment_tracker
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.Name:

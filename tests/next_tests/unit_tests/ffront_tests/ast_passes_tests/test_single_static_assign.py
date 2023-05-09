@@ -19,7 +19,7 @@ import ast
 import textwrap
 
 from gt4py.next.ffront.ast_passes.single_static_assign import (
-    _UNIQUE_NAME_SEPERATOR as SEP,
+    _UNIQUE_NAME_SEPARATOR as SEP,
     SingleStaticAssignPass,
 )
 
