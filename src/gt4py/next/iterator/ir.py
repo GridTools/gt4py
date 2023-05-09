@@ -131,6 +131,7 @@ UNARY_MATH_FP_BUILTINS = {
     "sqrt",
     "exp",
     "log",
+    "log10",
     "gamma",
     "cbrt",
     "floor",

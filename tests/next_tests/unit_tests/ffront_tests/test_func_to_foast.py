@@ -32,7 +32,7 @@ Basic Interface Tests
         - shift
         - neighbor reductions
         - math functions: abs(), max(), min, mod(), sin(), cos(), tan(), arcsin(), arccos(),
-            arctan(), sqrt(), exp(), log(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
+            arctan(), sqrt(), exp(), log(), log10(), isfinite(), isinf(), isnan(), floor(), ceil(), trunc()
     - evaluation test cases
 """
 import re

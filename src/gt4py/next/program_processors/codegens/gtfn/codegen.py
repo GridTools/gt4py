@@ -44,6 +44,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "sqrt": "std::sqrt",
         "exp": "std::exp",
         "log": "std::log",
+        "log10": "std::log10",
         "gamma": "std::tgamma",
         "cbrt": "std::cbrt",
         "isfinite": "std::isfinite",

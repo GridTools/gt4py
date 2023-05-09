@@ -29,6 +29,7 @@ from gt4py.next.ffront.fbuiltins import (
     isinf,
     isnan,
     log,
+    log10,
     sin,
     sinh,
     sqrt,
@@ -222,6 +223,20 @@ def test_exp_log(fieldview_backend):
     exp_log_fieldop(a_float, b_I_float, out=out_I_float, offset_provider={})
 
     expected = np.log(a_float) - np.exp(b_I_float)
+    assert np.allclose(expected, out_I_float)
+
+
+def test_log10(fieldview_backend):
+    a_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+    out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
+
+    @field_operator(backend=fieldview_backend)
+    def log10_fieldop(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
+        return log10(inp1)
+
+    log10_fieldop(a_float, out=out_I_float, offset_provider={})
+
+    expected = np.log10(a_float)
     assert np.allclose(expected, out_I_float)
 
 
