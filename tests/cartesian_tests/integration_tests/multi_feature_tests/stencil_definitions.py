@@ -39,6 +39,7 @@ from gt4py.cartesian.gtscript import (
     isinf,
     isnan,
     log,
+    log10,
     mod,
     sin,
     sinh,
@@ -129,7 +130,8 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         tanh_res = tanh(acosh_res)
         atanh_res = atanh(tanh_res)
         sqrt_res = afunc(atanh_res)
-        exp_res = exp(sqrt_res)
+        log10_res = log10(sqrt_res)
+        exp_res = exp(log10_res)
         log_res = log(exp_res)
         gamma_res = gamma(log_res)
         cbrt_res = cbrt(gamma_res)
