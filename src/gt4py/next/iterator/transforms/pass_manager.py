@@ -127,5 +127,6 @@ def apply_common_transforms(
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    #breakpoint()
 
     return ir

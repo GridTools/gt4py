@@ -96,7 +96,8 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         # TODO(tehrengruber): improve this case as we might miss subexpression that could be eliminated
         # disable collection (for all child nodes) if node matches `if_(can_deref(...), ..., ...)`
         if _is_if_can_deref(node):
-            kwargs["allow_collection"] = False
+            kwargs["allow_collection"] = node.args[0].args[0]
+            #kwargs["allow_collection"] = False
 
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
@@ -118,7 +119,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
 
         # if no symbols are used that are defined in the root node, i.e. the node given to `apply`,
         # we collect the subexpression
-        if not used_symbol_ids and _is_collectable_expr(node) and kwargs["allow_collection"]:
+        if not used_symbol_ids and _is_collectable_expr(node) and (kwargs["allow_collection"] == True or node == kwargs["allow_collection"]):
             self.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
 
             # propagate to parent that we have collected its child
