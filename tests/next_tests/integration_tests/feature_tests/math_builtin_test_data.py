@@ -308,30 +308,6 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
             ),
         ),
         (
-            "log10",
-            (
-                [
-                    -0.0,
-                    0,
-                    0.0,
-                    0.1,
-                    0.9,
-                    1,
-                    1.0,
-                    2.3,
-                    4,
-                    4.0,
-                    16,
-                    16.0,
-                    34.7,
-                    100,
-                    100.0,
-                    1000,
-                    1337.1337,
-                ],
-            ),
-        ),
-        (
             "gamma",
             # TODO(ben): math.gamma throws when it overflows, maybe should instead yield `np.inf`?
             #  overflows very quickly, already at `173`

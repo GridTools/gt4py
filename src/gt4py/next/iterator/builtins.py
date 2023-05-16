@@ -264,11 +264,6 @@ def log(*args):
 
 
 @builtin_dispatch
-def log10(*args):
-    raise BackendNotSelectedError()
-
-
-@builtin_dispatch
 def gamma(*args):
     raise BackendNotSelectedError()
 
@@ -385,7 +380,6 @@ UNARY_MATH_FP_BUILTINS = {
     "sqrt",
     "exp",
     "log",
-    "log10",
     "gamma",
     "cbrt",
     "floor",

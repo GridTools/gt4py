@@ -116,7 +116,6 @@ arctanh = _unary_math_builtin
 sqrt = _unary_math_builtin
 exp = _unary_math_builtin
 log = _unary_math_builtin
-log10 = _unary_math_builtin
 gamma = _unary_math_builtin
 cbrt = _unary_math_builtin
 floor = _unary_math_builtin
@@ -139,7 +138,6 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "sqrt",
     "exp",
     "log",
-    "log10",
     "gamma",
     "cbrt",
     "floor",
