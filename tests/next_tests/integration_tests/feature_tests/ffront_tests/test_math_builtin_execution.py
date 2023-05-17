@@ -113,6 +113,8 @@ def make_builtin_field_operator(builtin_name: str):
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(fieldview_backend, builtin_name: str, inputs):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)

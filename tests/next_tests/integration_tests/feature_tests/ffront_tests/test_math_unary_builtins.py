@@ -60,6 +60,8 @@ def test_arithmetic(fieldview_backend):
 
 
 def test_power(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
@@ -75,7 +77,11 @@ def test_floordiv(fieldview_backend):
     a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.xfail(
             "FloorDiv not yet supported."
         )  # see https://github.com/GridTools/gt4py/issues/1136
@@ -92,7 +98,11 @@ def test_mod(fieldview_backend):
     a_I_int = np_as_located_field(IDim)(np.asarray(range(10), dtype="int64") - 5)
     out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
 
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.xfail(
             "Modulo not properly supported for negative numbers."
         )  # see https://github.com/GridTools/gt4py/issues/1219
@@ -187,6 +197,8 @@ def test_unary_not(fieldview_backend):
 
 
 def test_basic_trig(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -209,6 +221,8 @@ def test_basic_trig(fieldview_backend):
 
 
 def test_exp_log(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     a_float = np_as_located_field(IDim)(np.ones((size)))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -226,6 +240,8 @@ def test_exp_log(fieldview_backend):
 
 
 def test_roots(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     a_float = np_as_located_field(IDim)(np.ones((size)))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -243,6 +259,8 @@ def test_roots(fieldview_backend):
 
 
 def test_is_values(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     out_bool_1 = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     out_bool_2 = np_as_located_field(IDim)(np.zeros((size,), dtype=bool))
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
@@ -274,6 +292,8 @@ def test_is_values(fieldview_backend):
 
 
 def test_rounding_funs(fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     a_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     b_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = np_as_located_field(IDim)(np.random.randn(size).astype("float64"))

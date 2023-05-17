@@ -82,7 +82,7 @@ _MATH_BUILTINS_MAPPING = {
     "trunc": "math.trunc({})",
     "minimum": "min({}, {})",
     "maximum": "max({}, {})",
-    "fmod": "math.fmod({}, {})",
+    "fmod": "fmod({}, {})",
     "power": "math.pow({}, {})",
     "float": "dace.float64({})",
     "float32": "dace.float32({})",
@@ -105,7 +105,7 @@ _MATH_BUILTINS_MAPPING = {
     "or_": "({} | {})",
     "xor_": "({} ^ {})",
     "mod": "({} % {})",
-    "not_": "~{}",
+    "not_": "(not {})",  # ~ is not bitwise in numpy
 }
 
 
