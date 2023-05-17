@@ -127,8 +127,8 @@ def callable_type_info_cases():
     scanop_type = gt4py.next.ffront.type_specifications.ScanOperatorType(
         axis=KDim,
         definition=ts.FunctionType(
-            pos_only_args=[float_type, int_type, int_type],
-            pos_or_kw_args={},
+            pos_only_args=[],
+            pos_or_kw_args={"carry": float_type, "a": int_type, "b": int_type},
             kw_only_args={},
             returns=float_type,
         ),
@@ -136,8 +136,8 @@ def callable_type_info_cases():
     tuple_scanop_type = gt4py.next.ffront.type_specifications.ScanOperatorType(
         axis=KDim,
         definition=ts.FunctionType(
-            pos_only_args=[float_type, ts.TupleType(types=[int_type, int_type])],
-            pos_or_kw_args={},
+            pos_only_args=[],
+            pos_or_kw_args={"carry": float_type, "a": ts.TupleType(types=[int_type, int_type])},
             kw_only_args={},
             returns=float_type,
         ),
@@ -287,7 +287,7 @@ def callable_type_info_cases():
             scanop_type,
             [],
             {},
-            [r"Scan operator takes 2 arguments, but 0 were given."],
+            [r"Scan operator takes 2 positional arguments, but 0 were given."],
             ts.FieldType(dims=[KDim], dtype=float_type),
         ),
         (
@@ -298,8 +298,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
-                r"Expected 1-th argument to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
+                r"Expected argument `a` to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
+                r"Expected argument `b` to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
             ],
             ts.FieldType(dims=[KDim], dtype=float_type),
         ),
@@ -361,7 +361,7 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected 0-th argument to be of type `tuple\[Field\[\[I, J, K\], int64\], "
+                r"Expected argument `a` to be of type `tuple\[Field\[\[I, J, K\], int64\], "
                 r"Field\[\[\.\.\.\], int64\]\]`, but got `tuple\[Field\[\[I, J, K\], int64\]\]`."
             ],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),

@@ -28,8 +28,11 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
 def promote_zero_dims(
     function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[list, dict]:
-    """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    args, kwargs = type_info.canonicalize_arguments(function_type, args, kwargs, ignore_errors=True)
+    """
+    Promote arg types to zero dimensional fields if compatible and required by function signature.
+
+    This function expects to arguments to already be canonicalized using `canonicalize_arguments`.
+    """
 
     def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec):
         def _as_field(arg_el: ts.TypeSpec, path: tuple):
@@ -130,9 +133,22 @@ def function_signature_incompatibilities_fieldop(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
+    args, kwargs = type_info.canonicalize_arguments(
+        fieldop_type.definition, args, kwargs, ignore_errors=True
+    )
+
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            fieldop_type.definition, args, kwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
+
     new_args, new_kwargs = promote_zero_dims(fieldop_type.definition, args, kwargs)
     yield from type_info.function_signature_incompatibilities_func(
-        fieldop_type.definition, new_args, new_kwargs
+        fieldop_type.definition, new_args, new_kwargs, skip_canonicalization=True
     )
 
 
@@ -181,18 +197,24 @@ def function_signature_incompatibilities_scanop(
         return
 
     scan_pass_type: ts.FunctionType = scanop_type.definition
+    assert len(scan_pass_type.pos_only_args) == 0
 
     # canonicalize function arguments
-    try:
-        (_, *args), kwargs = type_info.canonicalize_arguments(scan_pass_type, (None, *args), kwargs)
-    except ValueError as e:
-        yield e.args[0]
-        return
+    args, kwargs = type_info.canonicalize_arguments(scanop_type, args, kwargs, ignore_errors=True)
 
-    if len(args) != len(scan_pass_type.pos_or_kw_args) - 1:
-        yield f"Scan operator takes {len(scan_pass_type.pos_or_kw_args) - 1} positional " f"arguments, but {len(args)} were given."
+    # check for structural errors
+    num_pos_args = len(args) - args.count(type_info.UNDEFINED_ARG)
+    if num_pos_args != len(scan_pass_type.pos_or_kw_args) - 1:
+        yield f"Scan operator takes {len(scan_pass_type.pos_or_kw_args) - 1} positional arguments, but {num_pos_args} were given."
         return
-    # proper error message handled by `canonicalize_arguments` above
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            scan_pass_type, [None, *args], kwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
     assert kwargs.keys() == scan_pass_type.kw_only_args.keys()
 
     # ensure the dimensions of all arguments can be promoted to a common list of dimensions
@@ -226,8 +248,11 @@ def function_signature_incompatibilities_scanop(
         returns=ts.DeferredType(constraint=None),
     )
 
-    yield from type_info.function_signature_incompatibilities(
-        function_type, *promote_zero_dims(function_type, args, kwargs)
+    yield from type_info.function_signature_incompatibilities_func(
+        function_type,
+        *promote_zero_dims(function_type, args, kwargs),
+        skip_canonicalization=True,
+        skip_structural_checks=True,
     )
 
 
@@ -235,9 +260,22 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
+    args, kwargs = type_info.canonicalize_arguments(
+        program_type.definition, args, kwargs, ignore_errors=True
+    )
+
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            program_type.definition, args, kwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
+
     new_args, new_kwargs = promote_zero_dims(program_type.definition, args, kwargs)
     yield from type_info.function_signature_incompatibilities_func(
-        program_type.definition, new_args, new_kwargs
+        program_type.definition, new_args, new_kwargs, skip_canonicalization=True
     )
 
 
