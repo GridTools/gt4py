@@ -67,7 +67,7 @@ pip install -r ./gt4py/requirements-dev.txt
 and then build the docs with
 
 ```bash
-cd gt4py/docs
+cd gt4py/docs/user/cartesian
 make html  # run 'make help' for a list of targets
 ```
 
