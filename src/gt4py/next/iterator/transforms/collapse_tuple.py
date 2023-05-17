@@ -77,6 +77,7 @@ class CollapseTuple(eve.NodeTranslator):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
                 if not (int(v.args[0].value) == i and v.args[1] == first_expr):
+                    # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
             if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
