@@ -119,7 +119,12 @@ def promote_to_mask_type(
 def deduce_stmt_return_type(
     node: foast.BlockStmt, *, requires_unconditional_return=True
 ) -> ts.TypeSpec | None:
-    """Deduce type of value returned inside a block statement."""
+    """
+    Deduce type of value returned inside a block statement.
+
+    If `requires_unconditional_return` is true the function additionally ensures that the block
+    statement unconditionally returns and raises an `AssertionError` if not.
+    """
     conditional_return_type: ts.TypeSpec | None = None
 
     for stmt in node.stmts:
@@ -170,7 +175,7 @@ def deduce_stmt_return_type(
 
     if requires_unconditional_return:
         # If the node was constructed by the foast parsing we should never get here, but instead
-        # have gotten an error there.
+        # we should have gotten an error there.
         raise AssertionError(
             "Malformed block statement. Expected a return statement in this context, "
             "but none was found. Please submit a bug report."
@@ -377,7 +382,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
 
-    def visit_IfStmt(self, node: foast.IfStmt, **kwargs):
+    def visit_IfStmt(self, node: foast.IfStmt, **kwargs) -> foast.IfStmt:
         symtable = kwargs["symtable"]
 
         new_true_branch = self.visit(node.true_branch, **kwargs)

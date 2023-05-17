@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, Union, no_type_check
+from typing import Any, Generic, TypeVar, Union
 
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
@@ -184,11 +184,11 @@ class IfStmt(Stmt):
     true_branch: BlockStmt
     false_branch: BlockStmt
 
-    @no_type_check
     @datamodels.root_validator
+    @classmethod
     def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
-        common_symbol_names = set(instance.true_branch.annex.symtable.keys()) & set(
-            instance.false_branch.annex.symtable.keys()
+        common_symbol_names = (
+            instance.true_branch.annex.symtable.keys() & instance.false_branch.annex.symtable.keys()
         )
         instance.annex.propagated_symbols = {
             sym_name: Symbol(

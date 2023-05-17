@@ -72,7 +72,9 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
-Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
+Scalar: TypeAlias = (
+    SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64 | np.bool_
+)
 
 
 class SparseTag(Tag):
@@ -470,9 +472,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     elif isinstance(val, LocatedField):
         return val
     val_type = infer_dtype_like_type(val)
-    if np.issubdtype(val_type, np.number) or (
-        isinstance(val_type, type) and issubclass(val_type, bool)
-    ):
+    if isinstance(val, Scalar):  # type: ignore # mypy bug
         return constant_field(val)
     else:
         raise ValueError(

@@ -65,11 +65,11 @@ class FieldOperatorLowering(NodeTranslator):
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
-    uid_generator: UIDGenerator  # TODO(tehrengruber): add default factory
+    uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls(uid_generator=UIDGenerator()).visit(node)
+        return cls().visit(node)
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
