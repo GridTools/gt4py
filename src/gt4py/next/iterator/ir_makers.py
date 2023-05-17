@@ -218,11 +218,9 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(tuple_expr, index):
-    """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(tuple_expr, index)``."""
-    if isinstance(index, int):
-        index = literal(str(index), "int")
-    return call("tuple_get")(tuple_expr, index)
+def tuple_get(index, tuple_expr):
+    """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
+    return call("tuple_get")(index, tuple_expr)
 
 
 def if_(cond, true_val, false_val):
