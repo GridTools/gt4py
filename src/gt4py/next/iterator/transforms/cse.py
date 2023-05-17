@@ -97,8 +97,8 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                     collected_child_node_ids -= node_ids
 
     @staticmethod
-    def merge_states(*states):
-        subexprs = {}
+    def merge_states(*states: State) -> State:
+        subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
         for state in states:
             for subexpr, data in state.subexprs.items():
                 subexprs.setdefault(subexpr, []).extend(data)
