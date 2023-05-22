@@ -165,7 +165,7 @@ def from_value(value: Any) -> ts.TypeSpec:
     #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
-    elif isinstance(value, int):
+    elif isinstance(value, int) and not isinstance(value, bool):
         symbol_type = None
         for candidate_type in [
             ts.ScalarType(kind=ts.ScalarKind.INT32),
