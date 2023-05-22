@@ -102,19 +102,33 @@ class ItirToSDFG(eve.NodeVisitor):
             # Create a new state for the closure.
             last_state = program_sdfg.add_state_after(last_state)
 
+            # Add access nodes for the program parameters to the closure's state in the program.
+            input_accesses = [last_state.add_access(name) for name in input_names]
+            connectivity_accesses = [last_state.add_access(name) for name in connectivity_names]
+            output_accesses = [last_state.add_access(name) for name in output_names]
+
+            # Map symbols by matching outer and inner strides, shapes, while defaulting to same symbol
+            symbol_mapping = {sym: sym for sym in closure_sdfg.free_symbols}
+            for inner_name, access_node in zip(
+                input_names + output_names, input_accesses + output_accesses
+            ):
+                outer_data = program_sdfg.arrays[access_node.data]
+                inner_data = closure_sdfg.arrays[inner_name]
+                for o_sh, i_sh in zip(outer_data.shape, inner_data.shape):
+                    if str(i_sh) in closure_sdfg.free_symbols:
+                        symbol_mapping[str(i_sh)] = o_sh
+                for o_sh, i_sh in zip(outer_data.strides, inner_data.strides):
+                    if str(i_sh) in closure_sdfg.free_symbols:
+                        symbol_mapping[str(i_sh)] = o_sh
+
             # Insert the closure's SDFG as a nested SDFG of the program.
             nsdfg_node = last_state.add_nested_sdfg(
                 sdfg=closure_sdfg,
                 parent=None,
                 inputs=set(input_names) | set(connectivity_names),
                 outputs=set(output_names),
-                symbol_mapping={sym: sym for sym in program_sdfg.free_symbols},
+                symbol_mapping=symbol_mapping,
             )
-
-            # Add access nodes for the program parameters to the closure's state in the program.
-            input_accesses = [last_state.add_access(name) for name in input_names]
-            connectivity_accesses = [last_state.add_access(name) for name in connectivity_names]
-            output_accesses = [last_state.add_access(name) for name in output_names]
 
             # Connect the access nodes to the nested SDFG's inputs via edges.
             for inner_name, access_node in zip(input_names, input_accesses):

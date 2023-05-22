@@ -133,8 +133,8 @@ class Context:
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args: list[dace.nodes.AccessNode] = [li[0].value for li in transformer.visit(node_args)]
-    internals = [f"{arg[0].value.data}_v" for arg in args]
+    args = [it for li in transformer.visit(node_args) for it in li]
+    internals = [f"{arg.value.data}_v" for arg in args]
     expr = "({1} if {0} else {2})".format(*internals)
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)
@@ -252,7 +252,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 inputs.append((name, arg))
             else:
                 assert isinstance(arg, IteratorExpr)
-                ndims = len(arg.indices)
+                ndims = len(arg.dimensions)
                 shape = tuple(
                     dace.symbol(unique_var_name() + "__shp", dace.int64) for _ in range(ndims)
                 )
@@ -408,7 +408,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _visit_deref(self, node: itir.FunCall) -> list[ValueExpr]:
         iterator: IteratorExpr = self.visit(node.args[0])
         sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
-        flat_index = [ValueExpr(x[1], iterator.dtype) for x in sorted_index]
+        flat_index = [
+            ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
+        ]
 
         args: list[ValueExpr] = [ValueExpr(iterator.field, iterator.dtype), *flat_index]
         internals = [f"{arg.value.data}_v" for arg in args]
@@ -567,18 +569,18 @@ def closure_to_tasklet_sdfg(
         access = state.add_access(name)
         idx_accesses[dim] = access
         state.add_edge(tasklet, "value", access, None, dace.Memlet(data=name, subset="0"))
-    for arr, name, ty in inputs:
-        ndim = len(arr.shape)
+    for _, name, ty in inputs:
+        assert isinstance(ty, ts.FieldType)
+        ndim = len(ty.dims)
         shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(ndim)]
         stride = [
             dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
         ]
-        assert isinstance(ty, ts.FieldType)
         dims = [dim.value for dim in ty.dims]
         dtype = as_dace_type(ty.dtype)
         body.add_array(name, shape=shape, strides=stride, dtype=dtype)
         field = state.add_access(name)
-        indices = {dim: idx_accesses[dim] for dim, idx in domain.items()}
+        indices = {dim: idx_accesses[dim] for dim in domain.keys()}
         symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
     for arr, name in connectivities:
         shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(2)]
