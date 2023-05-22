@@ -200,27 +200,27 @@ def function_signature_incompatibilities_scanop(
     assert len(scan_pass_type.pos_only_args) == 0
 
     # canonicalize function arguments
-    args, kwargs = type_info.canonicalize_arguments(scanop_type, args, kwargs, ignore_errors=True)
+    cargs, ckwargs = type_info.canonicalize_arguments(scanop_type, args, kwargs, ignore_errors=True)
 
     # check for structural errors
-    num_pos_args = len(args) - args.count(type_info.UNDEFINED_ARG)
+    num_pos_args = len(cargs) - cargs.count(type_info.UNDEFINED_ARG)
     if num_pos_args != len(scan_pass_type.pos_or_kw_args) - 1:
         yield f"Scan operator takes {len(scan_pass_type.pos_or_kw_args) - 1} positional arguments, but {num_pos_args} were given."
         return
     error_list = list(
         type_info.structural_function_signature_incompatibilities(
-            scan_pass_type, [None, *args], kwargs
+            scan_pass_type, [None, *cargs], ckwargs
         )
     )
     if len(error_list) > 0:
         yield from error_list
         return
-    assert kwargs.keys() == scan_pass_type.kw_only_args.keys()
+    assert ckwargs.keys() == scan_pass_type.kw_only_args.keys()
 
     # ensure the dimensions of all arguments can be promoted to a common list of dimensions
     arg_dims = [
         type_info.extract_dims(el)
-        for arg in [*args, *kwargs.values()]
+        for arg in [*cargs, *ckwargs.values()]
         for el in type_info.primitive_constituents(arg)
     ]
     try:
@@ -232,11 +232,11 @@ def function_signature_incompatibilities_scanop(
 
     # promote parameters
     promoted_params = {}
-    for (name, param), arg in zip(list(scan_pass_type.pos_or_kw_args.items())[1:], args):
+    for (name, param), arg in zip(list(scan_pass_type.pos_or_kw_args.items())[1:], cargs):
         promoted_params[name] = _scan_param_promotion(param, arg)
     promoted_kwparams = {}
     for name, param, arg in zip(
-        kwargs.keys(), scan_pass_type.kw_only_args.values(), kwargs.values()
+        ckwargs.keys(), scan_pass_type.kw_only_args.values(), ckwargs.values()
     ):
         promoted_kwparams[name] = _scan_param_promotion(param, arg)
 
@@ -250,7 +250,7 @@ def function_signature_incompatibilities_scanop(
 
     yield from type_info.function_signature_incompatibilities_func(
         function_type,
-        *promote_zero_dims(function_type, args, kwargs),
+        *promote_zero_dims(function_type, cargs, ckwargs),
         skip_canonicalization=True,
         skip_structural_checks=True,
     )
