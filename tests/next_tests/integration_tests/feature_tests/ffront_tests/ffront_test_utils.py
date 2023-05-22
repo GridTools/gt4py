@@ -27,25 +27,10 @@ from gt4py.next.iterator.embedded import (
     index_field,
     np_as_located_field,
 )
-from gt4py.next.otf.compilation.build_systems import cmake
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 
-run_gtfn_cached_cmake = gtfn_cpu.otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_cached_cmake",
-    otf_workflow=gtfn_cpu.workflow.CachedStep(
-        step=gtfn_cpu.run_gtfn.otf_workflow.replace(
-            compilation=gtfn_cpu.compiler.Compiler(
-                cache_strategy=gtfn_cpu.cache.Strategy.PERSISTENT,
-                builder_factory=cmake.CMakeFactory(cmake_build_type=cmake.BuildType.RELEASE),
-            )
-        ),
-        hash_function=gtfn_cpu.compilation_hash,
-    ),
-)
-
-
-@pytest.fixture(params=[roundtrip.executor, run_gtfn_cached_cmake])
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
 def fieldview_backend(request):
     yield request.param
 
