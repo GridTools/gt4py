@@ -14,6 +14,8 @@
 
 from typing import Callable, Union
 
+import numpy as np
+
 from gt4py.next.iterator import ir as itir
 
 
@@ -68,10 +70,8 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
-    elif isinstance(literal_or_expr, int):
-        return itir.Literal(value=str(literal_or_expr), type="int")
-    elif isinstance(literal_or_expr, float):
-        return itir.Literal(value=str(literal_or_expr), type="float")
+    elif isinstance(literal_or_expr, (int, float, bool)):
+        return literal(literal_or_expr)
     return literal_or_expr
 
 
@@ -220,7 +220,7 @@ def make_tuple(*args):
 
 def tuple_get(index, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(index, tuple_expr)
+    return call("tuple_get")(literal(index, itir.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -271,7 +271,31 @@ def shift(offset, value=None):
     return call(call("shift")(*args))
 
 
-def literal(value: str, typename: str):
+def literal(value: str | bool | int | float, typename: str | None = None):
+    if isinstance(value, str):
+        if typename is None:
+            raise ValueError("Argument `typename` mandatory for `value` of type string.")
+    elif isinstance(value, bool):
+        assert typename in [None, "bool"]
+        typename = "bool"
+        value = str(value)
+    elif isinstance(value, int):
+        if np.iinfo(np.int32).min <= value <= np.iinfo(np.int32).max:
+            typename = "int32"
+        elif np.iinfo(np.int64).min <= value <= np.iinfo(np.int64).max:
+            typename = "int64"
+        else:
+            raise ValueError(
+                f"Value `{value}` is out of range to be representable as `int32` or `int64`."
+            )
+        value = str(value)
+    elif isinstance(value, float):
+        assert typename in [None, "float64"]
+        typename = "float64"
+        value = str(value)
+    else:
+        raise ValueError("Invalid argument.")
+
     return itir.Literal(value=value, type=typename)
 
 

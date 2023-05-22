@@ -16,7 +16,7 @@ from typing import Union
 
 from lark import lark, lexer as lark_lexer, visitors as lark_visitors
 
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir, ir_makers as im
 
 
 GRAMMAR = """
@@ -98,10 +98,10 @@ class ToIrTransformer(lark_visitors.Transformer):
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return ir.Literal(value=value.value, type="int")
+        return im.literal(int(value))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return ir.Literal(value=value.value, type="float")
+        return ir.Literal(value=value.value, type="float64")
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]

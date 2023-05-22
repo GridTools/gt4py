@@ -281,6 +281,22 @@ class Primitive(Type):
         return True
 
 
+class UnionPrimitive(Type):
+    """Union of primitive types."""
+
+    names: tuple[str, ...]
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if isinstance(other, UnionPrimitive):
+            raise AssertionError("`UnionPrimitive` may only appear on one side of a constraint.")
+        if not isinstance(other, Primitive):
+            return False
+
+        return other.name in self.names
+
+
 class Value(Type):
     """Marker for values."""
 
@@ -339,9 +355,16 @@ class LetPolymorphic(Type):
     dtype: Type
 
 
+def _default_constraints():
+    return {
+        (FLOAT_DTYPE, UnionPrimitive(names=("float32", "float64"))),
+        (INT_DTYPE, UnionPrimitive(names=("int32", "int64"))),
+    }
+
+
 BOOL_DTYPE = Primitive(name="bool")
-INT_DTYPE = Primitive(name="int")
-FLOAT_DTYPE = Primitive(name="float")
+INT_DTYPE = TypeVar.fresh()
+FLOAT_DTYPE = TypeVar.fresh()
 AXIS_DTYPE = Primitive(name="axis")
 NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
@@ -546,7 +569,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     offset_provider: Optional[dict[str, Connectivity | Dimension]]
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
-    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
+    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=_default_constraints)
 
     def visit(self, node, **kwargs) -> typing.Any:
         result = super().visit(node, **kwargs)
@@ -652,8 +675,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
             raise TypeError("`tuple_get` requires exactly two arguments.")
-        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        if (
+            not isinstance(node.args[0], ir.Literal)
+            or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
+        ):
+            raise TypeError(
+                f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
+            )
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples

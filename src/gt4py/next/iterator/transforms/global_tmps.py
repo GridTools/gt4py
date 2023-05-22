@@ -238,12 +238,12 @@ def _named_range_with_offsets(
     if lower_offset:
         lower_bound = ir.FunCall(
             fun=ir.SymRef(id="plus"),
-            args=[lower_bound, ir.Literal(value=str(lower_offset), type="int")],
+            args=[lower_bound, ir.Literal(value=str(lower_offset), type=ir.INTEGER_INDEX_BUILTIN)],
         )
     if upper_offset:
         upper_bound = ir.FunCall(
             fun=ir.SymRef(id="plus"),
-            args=[upper_bound, ir.Literal(value=str(upper_offset), type="int")],
+            args=[upper_bound, ir.Literal(value=str(upper_offset), type=ir.INTEGER_INDEX_BUILTIN)],
         )
     return ir.FunCall(
         fun=ir.SymRef(id="named_range"), args=[axis_literal, lower_bound, upper_bound]
@@ -344,8 +344,8 @@ def _unstructured_domain(
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value=axis),
-                    ir.Literal(value="0", type="int"),
-                    ir.Literal(value=str(size), type="int"),
+                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    ir.Literal(value=str(size), type=ir.INTEGER_INDEX_BUILTIN),
                 ],
             )
         ]
