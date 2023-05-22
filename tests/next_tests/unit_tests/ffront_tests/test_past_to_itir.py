@@ -59,7 +59,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int"),
+                        P(itir.Literal, value="0", type=itir.INTEGER_INDEX_BUILTIN),
                         P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
                     ],
                 )
@@ -100,8 +100,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type="int"),
-                        P(itir.Literal, value="2", type="int"),
+                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
                     ],
                 )
             ],
