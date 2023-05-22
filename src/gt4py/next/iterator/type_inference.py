@@ -652,8 +652,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
             raise TypeError("`tuple_get` requires exactly two arguments.")
-        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        if (
+            not isinstance(node.args[0], ir.Literal)
+            or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
+        ):
+            raise TypeError(
+                f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
+            )
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
