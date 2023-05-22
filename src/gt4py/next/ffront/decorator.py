@@ -238,12 +238,21 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> "Program":
+    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return Program(
             past_node=self.past_node,
             closure_vars=self.closure_vars,
             backend=backend,
             definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
+        )
+
+    def with_grid_type(self, grid_type: GridType) -> Program:
+        return Program(
+            past_node=self.past_node,
+            closure_vars=self.closure_vars,
+            backend=self.backend,
+            definition=self.definition,
+            grid_type=grid_type,
         )
 
     @functools.cached_property

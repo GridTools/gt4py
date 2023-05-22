@@ -42,6 +42,7 @@ import pytest
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.common import Field, GTTypeError
 from gt4py.next.ffront import field_operator_ast as foast
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
     astype,
@@ -172,7 +173,7 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
-    assert parsed.body.annex.symtable["tmp__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable[ssa.unique_name("tmp", 0)].type == ts.FieldType(
         dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
