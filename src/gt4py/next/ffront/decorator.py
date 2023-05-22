@@ -548,8 +548,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
         )
         try:
-            result = self._program_cache[hash_]
-            return result
+            return self._program_cache[hash_]
         except KeyError:
             pass
 
@@ -605,13 +604,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        self._program_cache[hash] = Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
             grid_type=self.grid_type,
         )
-        return self._program_cache[hash]
+        return self._program_cache[hash_]
 
     def __call__(
         self,
