@@ -388,7 +388,7 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {"int32", "int64", "float", "float32", "float64", "bool"}
+TYPEBUILTINS = {"int32", "int64", "float32", "float64", "bool"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
