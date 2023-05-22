@@ -30,8 +30,8 @@ def fencil_example():
                 fun=itir.SymRef(id="named_range"),
                 args=[
                     itir.AxisLiteral(value="X"),
-                    itir.Literal(value="0", type="int"),
-                    itir.Literal(value="10", type="int"),
+                    itir.Literal(value="0", type=itir.INTEGER_INDEX_BUILTIN),
+                    itir.Literal(value="10", type=itir.INTEGER_INDEX_BUILTIN),
                 ],
             )
         ],
@@ -43,7 +43,7 @@ def fencil_example():
             itir.FunctionDefinition(
                 id="stencil",
                 params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
-                expr=itir.Literal(value="1", type="float"),
+                expr=itir.Literal(value="1", type="float64"),
             )
         ],
         closures=[
