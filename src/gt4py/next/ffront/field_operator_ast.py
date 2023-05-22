@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, Union
 
-from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
+from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
@@ -177,6 +177,25 @@ class Return(Stmt):
 
 class BlockStmt(Stmt, SymbolTableTrait):
     stmts: list[Stmt]
+
+
+class IfStmt(Stmt):
+    condition: Expr
+    true_branch: BlockStmt
+    false_branch: BlockStmt
+
+    @datamodels.root_validator
+    @classmethod
+    def _collect_common_symbols(cls: type[IfStmt], instance: IfStmt) -> None:
+        common_symbol_names = (
+            instance.true_branch.annex.symtable.keys() & instance.false_branch.annex.symtable.keys()
+        )
+        instance.annex.propagated_symbols = {
+            sym_name: Symbol(
+                id=sym_name, type=ts.DeferredType(constraint=None), location=instance.location
+            )
+            for sym_name in common_symbol_names
+        }
 
 
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
