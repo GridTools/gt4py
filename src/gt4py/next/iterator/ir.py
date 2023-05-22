@@ -68,6 +68,11 @@ class Literal(Expr):
     value: str
     type: str  # noqa: A003
 
+    @datamodels.validator("type")
+    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
+        if value not in TYPEBUILTINS:
+            raise ValueError(f"{value} is not a valid builtin type.")
+
 
 class NoneLiteral(Expr):
     _none_literal: int = 0
