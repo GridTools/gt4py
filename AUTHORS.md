@@ -21,6 +21,7 @@
 - Mariotti, Kean. ETH Zurich - CSCS
 - Müller, Christoph. MeteoSwiss
 - Osuna, Carlos. MeteoSwiss
+- Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss
 - Serafini, Giacomo. MeteoSwiss
 - Szenes, Kalman. ETH Zurich - CSCS
