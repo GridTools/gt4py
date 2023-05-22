@@ -72,7 +72,9 @@ FieldAxis: TypeAlias = (
 )  # TODO Offset should be removed, is sometimes used for sparse dimensions
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
-Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
+Scalar: TypeAlias = (
+    SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64 | np.bool_
+)
 
 
 class SparseTag(Tag):
@@ -198,7 +200,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
+        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
         column_range = column_range_cvar.get()
         self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range), data)
 
@@ -470,7 +472,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     elif isinstance(val, LocatedField):
         return val
     val_type = infer_dtype_like_type(val)
-    if np.issubdtype(val_type, np.number):
+    if isinstance(val, Scalar):  # type: ignore # mypy bug
         return constant_field(val)
     else:
         raise ValueError(
