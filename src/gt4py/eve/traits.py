@@ -59,6 +59,7 @@ class SymbolTableTrait:
                         )
                     self.collected_symbols[symbol_name] = node
 
+            # TODO(egparedes): revisit and generalize mechanism to resolve name collisions.
             if hasattr(node.annex, "propagated_symbols"):
                 # ensure we have no collisions
                 assert not set(self.collected_symbols.keys()) & set(

@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
@@ -126,12 +126,12 @@ class FieldOperatorLowering(NodeTranslator):
         raise AssertionError("Statements must always be visited in the context of a function.")
 
     def visit_Return(
-        self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(
-        self, node: foast.BlockStmt, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         for stmt in reversed(node.stmts):
             inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
@@ -139,7 +139,7 @@ class FieldOperatorLowering(NodeTranslator):
         return inner_expr
 
     def visit_IfStmt(
-        self, node: foast.IfStmt, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
         #  from a scalar value (and not a field)
@@ -197,7 +197,7 @@ class FieldOperatorLowering(NodeTranslator):
         return im.if_(im.deref(cond), true_branch, false_branch)
 
     def visit_Assign(
-        self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
             inner_expr

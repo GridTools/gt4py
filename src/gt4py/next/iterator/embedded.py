@@ -200,7 +200,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
-        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug
+        assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
         column_range = column_range_cvar.get()
         self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range), data)
 
