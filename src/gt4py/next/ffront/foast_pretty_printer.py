@@ -155,7 +155,7 @@ class _PrettyPrinter(TemplatedGenerator):
         args = self.visit(node.args, **kwargs)
         for k, v in node.kwargs.items():
             args.append(f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}")
-        return f"{node.func}({', '.join(args + kwargs)})"
+        return f"{node.func}({', '.join(args)})"
 
     Assign = as_fmt("{target} = {value}")
 
