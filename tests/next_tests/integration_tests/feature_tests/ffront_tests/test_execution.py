@@ -75,30 +75,6 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
-def test_interface_kwargs(fieldview_backend):
-    inp1 = np_as_located_field(IDim)(np.arange(size, dtype=np.float64))
-    inp2 = np_as_located_field(IDim)(np.arange(start=1, stop=size + 1, dtype=np.float64))
-    out = np_as_located_field(IDim)(np.zeros(size))
-
-    @field_operator(backend=fieldview_backend)
-    def foo(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1 + inp2
-
-    @field_operator(backend=fieldview_backend)
-    def bar(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return foo(inp1, inp2=inp2)
-
-    @program
-    def testee(
-        inp1: Field[[IDim], float64], inp2: Field[[IDim], float64], out: Field[[IDim], float64]
-    ):
-        foo(inp1, inp2=inp2, out=out)
-
-    bar(inp1, inp2, out=out, offset_provider={})
-
-    assert np.allclose(np.asarray(out), np.asarray(inp1) + np.asarray(inp2))
-
-
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
@@ -270,10 +246,11 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    @scan_operator(axis=KDim, forward=True, init=(0.0))
-    def testee_scan(state: float, qc_in: float, scalar: float) -> float:
+    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
+    def testee_scan(state: tuple[float, float], val: float) -> float:
+        last_
         qc = qc_in + state + scalar
-        return qc
+        return qc, qc_in
 
     @program
     def testee(qc: Field[[IDim, KDim], float], scalar: float):

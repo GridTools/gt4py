@@ -376,7 +376,6 @@ def test_type_info_basic(symbol_type, expected):
         assert getattr(type_info, key)(symbol_type) == expected[key]
 
 
-# TODO
 @pytest.mark.parametrize("func_type,args,kwargs,expected,return_type", callable_type_info_cases())
 def test_accept_args(
     func_type: ts.TypeSpec,

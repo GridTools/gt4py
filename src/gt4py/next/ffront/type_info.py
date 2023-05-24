@@ -31,11 +31,11 @@ def promote_zero_dims(
     """
     Promote arg types to zero dimensional fields if compatible and required by function signature.
 
-    This function expects to arguments to already be canonicalized using `canonicalize_arguments`.
+    This function expects the arguments to already be canonicalized using `canonicalize_arguments`.
     """
 
-    def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec):
-        def _as_field(arg_el: ts.TypeSpec, path: tuple):
+    def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.TypeSpec:
+        def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
             param_el = reduce(lambda type_, idx: type_.types[idx], path, param)  # type: ignore[attr-defined]
 
             if _is_zero_dim_field(param_el) and type_info.is_number(arg_el):
@@ -72,8 +72,9 @@ def return_type_fieldop(
     return ret_type
 
 
-@type_info.canonicalize_arguments.register
-def canonicalize_program_arguments(
+@type_info.canonicalize_arguments.register(ts_ffront.FieldOperatorType)
+@type_info.canonicalize_arguments.register(ts_ffront.ProgramType)
+def canonicalize_program_or_fieldop_arguments(
     program_type: ts_ffront.ProgramType,
     args: tuple | list,
     kwargs: dict,
@@ -83,24 +84,6 @@ def canonicalize_program_arguments(
 ) -> tuple[list, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
-        args,
-        kwargs,
-        ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
-    )
-
-
-@type_info.canonicalize_arguments.register
-def canonicalize_fieldop_arguments(
-    fieldop_type: ts_ffront.FieldOperatorType,
-    args: tuple | list,
-    kwargs: dict,
-    *,
-    ignore_errors=False,
-    use_signature_ordering=False,
-) -> tuple[list, dict]:
-    return type_info.canonicalize_arguments(
-        fieldop_type.definition,
         args,
         kwargs,
         ignore_errors=ignore_errors,
@@ -152,7 +135,7 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
-def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec):
+def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType | ts.TupleType:
     """
     Promote parameter of a scan pass to match dimensions of respective scan operator argument.
 
@@ -243,8 +226,8 @@ def function_signature_incompatibilities_scanop(
     # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
         pos_only_args=[],
-        pos_or_kw_args=promoted_params,
-        kw_only_args=promoted_kwparams,
+        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
+        kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
         returns=ts.DeferredType(constraint=None),
     )
 
@@ -290,7 +273,7 @@ def return_type_scanop(
     promoted_dims = type_info.promote_dims(
         *(
             type_info.extract_dims(el)
-            for arg in with_args
+            for arg in with_args + list(with_kwargs.values())
             for el in type_info.primitive_constituents(arg)
         ),
         # the vertical axis is always added to the dimension of the returned

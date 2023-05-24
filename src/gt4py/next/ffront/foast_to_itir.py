@@ -286,6 +286,8 @@ class FieldOperatorLowering(NodeTranslator):
         ):
             # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
+            # ITIR has no support for keyword arguments. Instead, we concatenate both positional
+            # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
                 node.func.type,
                 [self.visit(arg, **kwargs) for arg in node.args],
@@ -300,6 +302,8 @@ class FieldOperatorLowering(NodeTranslator):
                 )
             )(*lowered_args, *lowered_kwargs.values())
         elif isinstance(node.func.type, ts.FunctionType):
+            # ITIR has no support for keyword arguments. Instead, we concatenate both positional
+            # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
                 node.func.type,
                 self.visit(node.args, **kwargs),
