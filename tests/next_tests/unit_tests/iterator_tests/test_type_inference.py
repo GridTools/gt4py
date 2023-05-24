@@ -136,11 +136,11 @@ def test_eq():
 def test_if():
     testee = ir.SymRef(id="if_")
     c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
-    t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=0))
+    t = ti.Val(kind=ti.TypeVar(idx=1), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=0))
     expected = ti.FunctionType(args=ti.Tuple.from_elems(c, t, t), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
+    assert ti.pformat(inferred) == "(bool⁰, ItOrVal₁[T₂⁰], ItOrVal₁[T₂⁰]) → ItOrVal₁[T₂⁰]"
 
 
 def test_not():

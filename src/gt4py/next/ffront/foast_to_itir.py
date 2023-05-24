@@ -12,9 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable
+import dataclasses
+from typing import Any, Callable, Optional
 
 from gt4py.eve import NodeTranslator
+from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -22,6 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
+from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.iterator import ir as itir, ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -34,6 +37,7 @@ def promote_to_list(
     return lambda x: x
 
 
+@dataclasses.dataclass
 class FieldOperatorLowering(NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
@@ -60,6 +64,8 @@ class FieldOperatorLowering(NodeTranslator):
     >>> lowered.params
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
+
+    uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
 
     @classmethod
     def apply(cls, node: foast.LocatedNode) -> itir.Expr:
@@ -120,20 +126,78 @@ class FieldOperatorLowering(NodeTranslator):
         raise AssertionError("Statements must always be visited in the context of a function.")
 
     def visit_Return(
-        self, node: foast.Return, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(
-        self, node: foast.BlockStmt, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         for stmt in reversed(node.stmts):
             inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
         assert inner_expr
         return inner_expr
 
+    def visit_IfStmt(
+        self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
+    ) -> itir.Expr:
+        # the lowered if call doesn't need to be lifted as the condition can only originate
+        #  from a scalar value (and not a field)
+        assert (
+            isinstance(node.condition.type, ts.ScalarType)
+            and node.condition.type.kind == ts.ScalarKind.BOOL
+        )
+
+        cond = self.visit(node.condition, **kwargs)
+
+        return_kind: StmtReturnKind = deduce_stmt_return_kind(node)
+
+        common_symbols: dict[str, foast.Symbol] = node.annex.propagated_symbols
+
+        if return_kind is StmtReturnKind.NO_RETURN:
+            # pack the common symbols into a tuple
+            common_symrefs = im.make_tuple(*(im.ref(sym) for sym in common_symbols.keys()))
+
+            # apply both branches and extract the common symbols through the prepared tuple
+            true_branch = self.visit(node.true_branch, inner_expr=common_symrefs, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=common_symrefs, **kwargs)
+
+            # unpack the common symbols' tuple for `inner_expr`
+            for i, sym in enumerate(common_symbols.keys()):
+                inner_expr = im.let(sym, im.tuple_get(i, im.ref("__if_stmt_result")))(inner_expr)
+
+            # here we assume neither branch returns
+            return im.let("__if_stmt_result", im.if_(im.deref(cond), true_branch, false_branch))(
+                inner_expr
+            )
+        elif return_kind is StmtReturnKind.CONDITIONAL_RETURN:
+            common_syms = tuple(im.sym(sym) for sym in common_symbols.keys())
+            common_symrefs = tuple(im.ref(sym) for sym in common_symbols.keys())
+
+            # wrap the inner expression in a lambda function. note that this increases the
+            # operation count if both branches are evaluated.
+            inner_expr_name = self.uid_generator.sequential_id(prefix="__inner_expr")
+            inner_expr_evaluator = im.lambda_(*common_syms)(inner_expr)
+            inner_expr = im.call(inner_expr_name)(*common_symrefs)
+
+            true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+            false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+
+            return im.let(inner_expr_name, inner_expr_evaluator)(
+                im.if_(im.deref(cond), true_branch, false_branch)
+            )
+
+        assert return_kind is StmtReturnKind.UNCONDITIONAL_RETURN
+
+        # note that we do not duplicate `inner_expr` here since if both branches
+        #  return, `inner_expr` is ignored.
+        true_branch = self.visit(node.true_branch, inner_expr=inner_expr, **kwargs)
+        false_branch = self.visit(node.false_branch, inner_expr=inner_expr, **kwargs)
+
+        return im.if_(im.deref(cond), true_branch, false_branch)
+
     def visit_Assign(
-        self, node: foast.Assign, *, inner_expr: itir.Expr | None, **kwargs
+        self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
             inner_expr
