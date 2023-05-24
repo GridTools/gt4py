@@ -174,6 +174,7 @@ def from_value(value: Any) -> ts.TypeSpec:
             min_val, max_val = type_info.arithmetic_bounds(candidate_type)
             if min_val <= value <= max_val:
                 symbol_type = candidate_type
+                break
         if not symbol_type:
             raise common.GTTypeError(
                 f"Value `{value}` is out of range to be representable as `INT32` or `INT64`."
