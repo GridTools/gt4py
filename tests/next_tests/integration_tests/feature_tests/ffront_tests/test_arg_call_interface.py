@@ -169,7 +169,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
 def test_call_scan_operator_from_field_operator(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("Calling scan from field operator fully supported in gtfn.")
+        pytest.xfail("Calling scan from field operator not fully supported in gtfn.")
 
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
@@ -188,7 +188,7 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
         cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", cases.RETURN)
     )
     expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(
-        np.asarray(a) + 2.0 * np.asarray(b), axis=1
+        np.asarray(a) + 2.0 * np.asarray(b), axis=2
     )
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=expected)
@@ -219,7 +219,7 @@ def test_call_scan_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.add.accumulate(np.asarray(a) + 2 * np.asarray(b), axis=1)
+    ref = np.add.accumulate(np.asarray(a) + 2 * np.asarray(b), axis=2)
 
     cases.verify(
         cartesian_case,
