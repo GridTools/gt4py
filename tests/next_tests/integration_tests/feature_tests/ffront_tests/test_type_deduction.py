@@ -18,6 +18,7 @@ import pytest
 
 import gt4py.next.ffront.type_specifications
 from gt4py.next.common import DimensionKind, GTTypeError
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
     Dimension,
@@ -421,11 +422,11 @@ def test_unpack_assign():
 
     parsed = FieldOperatorParser.apply_to_function(unpack_explicit_tuple)
 
-    assert parsed.body.annex.symtable["tmp_a__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable[ssa.unique_name("tmp_a", 0)].type == ts.FieldType(
         dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
-    assert parsed.body.annex.symtable["tmp_b__0"].type == ts.FieldType(
+    assert parsed.body.annex.symtable[ssa.unique_name("tmp_b", 0)].type == ts.FieldType(
         dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -483,7 +484,7 @@ def test_assign_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
 
-    assert parsed.body.annex.symtable["tmp__0"].type == ts.TupleType(
+    assert parsed.body.annex.symtable[ssa.unique_name("tmp", 0)].type == ts.TupleType(
         types=[
             ts.FieldType(
                 dims=[TDim],

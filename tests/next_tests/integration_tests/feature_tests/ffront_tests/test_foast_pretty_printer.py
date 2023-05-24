@@ -18,6 +18,7 @@ import textwrap
 import pytest
 
 from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.decorator import field_operator, scan_operator
 from gt4py.next.ffront.fbuiltins import int64
 from gt4py.next.ffront.foast_pretty_printer import pretty_format
@@ -82,10 +83,10 @@ def test_scanop():
         return inp
 
     expected = textwrap.dedent(
-        """
+        f"""
         @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.0)
         def scan(inp: int64) -> int64:
-          foo__0 = inp
+          {ssa.unique_name("foo", 0)} = inp
           return inp
         """
     ).strip()

@@ -168,7 +168,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         new_body = self._visit_stmts(node.body, self._make_loc(node), **kwargs)
 
-        if deduce_stmt_return_kind(new_body) != StmtReturnKind.UNCONDITIONAL_RETURN:
+        if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Function must return a value, but no return statement was found."
             )
@@ -388,6 +388,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             false_expr=self.visit(node.orelse),
             location=self._make_loc(node),
             type=ts.DeferredType(constraint=ts.DataType),
+        )
+
+    def visit_If(self, node: ast.If, **kwargs) -> foast.IfStmt:
+        loc = self._make_loc(node)
+        return foast.IfStmt(
+            condition=self.visit(node.test, **kwargs),
+            true_branch=self._visit_stmts(node.body, loc, **kwargs),
+            false_branch=self._visit_stmts(node.orelse, loc, **kwargs),
+            location=loc,
         )
 
     def _visit_stmts(
