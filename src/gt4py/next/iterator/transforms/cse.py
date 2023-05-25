@@ -13,8 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import functools
 import operator
-from functools import reduce
 
 from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
@@ -68,24 +68,20 @@ def _is_collectable_expr(node: ir.Node):
     return False
 
 
-def _is_if_can_deref(node: ir.Node):
-    # `if_(can_deref(...), ..., ...)`
-    return (
-        isinstance(node, ir.FunCall)
-        and node.fun == ir.SymRef(id="if_")
-        and isinstance(node.args[0], ir.FunCall)
-        and node.args[0].fun == ir.SymRef(id="can_deref")
-    )
-
-
 @dataclasses.dataclass
 class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
     @dataclasses.dataclass
     class State:
+        #: A dictionary mapping a node to a list of node ids which are equal. Additionally, for
+        #: each (actual) node we store a set of all ids of collected child subexpressions.
         subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
             default_factory=dict
         )
+        # TODO(tehrengruber): Revisit if this makes sense or if we can just recompute the collected
+        #  child node ids and get simpler code.
+        #: The ids of all child subexpressions which are collected.
         collected_child_node_ids: set[int] = dataclasses.field(default_factory=set)
+        #: The ids of all nodes declaring a symbol which are referenced (using a `SymRef`)
         used_symbol_ids: set[int] = dataclasses.field(default_factory=set)
 
         def remove_subexprs(self, nodes: list[ir.Node]):
@@ -96,26 +92,14 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                 for _, collected_child_node_ids in subexpr_data:
                     collected_child_node_ids -= node_ids
 
-    @staticmethod
-    def merge_states(*states: State) -> State:
-        subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
-        for state in states:
-            for subexpr, data in state.subexprs.items():
-                subexprs.setdefault(subexpr, []).extend(data)
-        collected_child_node_ids = reduce(
-            operator.or_, (state.collected_child_node_ids for state in states)
-        )
-        used_symbol_ids = reduce(operator.or_, (state.used_symbol_ids for state in states))
-        return CollectSubexpressions.State(subexprs, collected_child_node_ids, used_symbol_ids)
-
     @classmethod
     def apply(cls, node: ir.Node):
-        subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
+        state = cls.State()
         obj = cls()
-        obj.visit(node, state=cls.State(subexprs))
+        obj.visit(node, state=state)
         # return subexpression in pre-order of the tree, i.e. the nodes closer to the root come
         # first, and skip the root node itself
-        return {k: v for k, v in reversed(subexprs.items()) if k is not node}
+        return {k: v for k, v in reversed(state.subexprs.items()) if k is not node}
 
     def visit(self, node, **kwargs):
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
@@ -125,14 +109,15 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         collected_child_node_ids = set[int]()
         used_symbol_ids = set[int]()
 
-        # Special handling of `if_(can_deref(...), ..., ...)` like expressions that avoids
-        # extracting subexpressions from `if_` calls unless they are used in at least two
-        # of the three arguments.
-        if _is_if_can_deref(node):
+        # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
+        # avoids extracting subexpressions unless they are used in at least two of the three
+        # arguments.
+        if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="if_"):
+            assert len(node.args) == 3
             # collect subexpressions for all arguments to the `if_`
-            arg_states = [self.State() for _ in range(3)]
-            for i, arg in enumerate(node.args):
-                self.visit(arg, state=arg_states[i], **kwargs)
+            arg_states = [self.State() for _ in node.args]
+            for arg, state in zip(node.args, arg_states):
+                self.visit(arg, state=state, **kwargs)
 
             # for each subexpression find in how many of the three arguments they occur
             subexpr_count = {}
@@ -148,12 +133,20 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             for arg_state in arg_states:
                 arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
-            # merge the states of the three arguments and update the state of the parent
-            new_state = self.merge_states(*arg_states)
-            for subexpr, data in new_state.subexprs.items():
+            # merge the states of the three arguments
+            subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
+            for state in arg_states:
+                for subexpr, data in state.subexprs.items():
+                    subexprs.setdefault(subexpr, []).extend(data)
+            collected_child_node_ids = functools.reduce(
+                operator.or_, (state.collected_child_node_ids for state in arg_states)
+            )
+            used_symbol_ids = functools.reduce(
+                operator.or_, (state.used_symbol_ids for state in arg_states)
+            )
+            # propagate collected subexpressions to parent
+            for subexpr, data in subexprs.items():
                 parent_state.subexprs.setdefault(subexpr, []).extend(data)
-            collected_child_node_ids = new_state.collected_child_node_ids
-            used_symbol_ids = new_state.used_symbol_ids
         else:
             super().visit(
                 node,
