@@ -417,7 +417,12 @@ BUILTIN_TYPES: dict[str, Type] = {
         ),
         ret=Val_BOOL_T1,
     ),
-    "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
+    "if_": FunctionType(
+        args=Tuple.from_elems(
+            Val_BOOL_T1, Val(kind=T2, dtype=T0, size=T1), Val(kind=T2, dtype=T0, size=T1)
+        ),
+        ret=Val(kind=T2, dtype=T0, size=T1),
+    ),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(

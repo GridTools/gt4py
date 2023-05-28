@@ -35,7 +35,7 @@ from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403
 
 
 if _sys.version_info >= (3, 9):
@@ -246,7 +246,7 @@ class NonProtocolABCMeta(_typing._ProtocolMeta):
     """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
 
     __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None
+    __subclasshook__ = None  # type: ignore[assignment]
 
 
 _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
@@ -378,7 +378,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
                         return NotImplemented
                 return True
 
-            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined]
+            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined,method-assign]
 
         return cls
 

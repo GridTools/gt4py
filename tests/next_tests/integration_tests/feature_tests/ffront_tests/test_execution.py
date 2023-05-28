@@ -460,7 +460,6 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
     assert np.allclose(ref, rs.out)
 
 
-@pytest.mark.xfail
 def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):
     rs = reduction_setup
     V2EDim = rs.V2EDim
@@ -480,12 +479,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_
         edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
     ) -> Field[[Edge], float64]:
         tup = edge_field(V2E), vertex_field
-        # the shift inside the reduction fails as tup is a tuple of iterators
-        #  (as it contains a local field) which can not be shifted
         red = neighbor_sum(tup[0] + vertex_field, axis=V2EDim)
-        # even if the above is fixed we need to be careful with a subsequent
-        #  shift as the lifted lambda will contain tup as an argument which -
-        #  again - can not be shifted.
         return red(E2V[0])
 
     reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
