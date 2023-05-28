@@ -81,11 +81,11 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case "pybind11":
                 import pybind11
 
-                return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()})"
+                return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()} NO_DEFAULT_PATH)"
             case "gridtools":
                 import gridtools_cpp
 
-                return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()})"
+                return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 

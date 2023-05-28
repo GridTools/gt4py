@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools>=60.6", "wheel", "cython"]
+build-backend = 'setuptools.build_meta'
+requires = ['setuptools>=60.6', 'wheel', 'cython']
 
 # ---- Project description ----
 # -- Standard options (PEP 621) --
@@ -24,29 +24,29 @@ classifiers = [
 ]
 dependencies = [
   "astunparse>=1.6.3;python_version<'3.9'",
-  "attrs>=21.3",
-  "black>=22.3",
-  "boltons>=20.1",
-  "cached-property>=1.5.1",
-  "click>=8.0.0",
-  "cmake>=3.22",
-  "cytoolz>=0.12.0",
-  "deepdiff>=5.6.0",
-  "devtools>=0.6",
-  "frozendict>=2.3",
-  "gridtools-cpp>=2.3.0,==2.*",
+  'attrs>=21.3',
+  'black>=22.3',
+  'boltons>=20.1',
+  'cached-property>=1.5.1',
+  'click>=8.0.0',
+  'cmake>=3.22',
+  'cytoolz>=0.12.0',
+  'deepdiff>=5.6.0',
+  'devtools>=0.6',
+  'frozendict>=2.3',
+  'gridtools-cpp>=2.3.0,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
-  "jinja2>=3.0.0",
-  "lark>=1.1.2",
-  "mako>=1.1",
-  "ninja>=1.10",
-  "numpy>=1.21.2",
-  "packaging>=20.0",
-  "pybind11>=2.5",
-  "setuptools>=65.5.0",
-  "tabulate>=0.8.10",
-  "typing-extensions>=4.2",
-  "xxhash>=1.4.4,<3.1.0"
+  'jinja2>=3.0.0',
+  'lark>=1.1.2',
+  'mako>=1.1',
+  'ninja>=1.10',
+  'numpy>=1.21.2',
+  'packaging>=20.0',
+  'pybind11>=2.5',
+  'setuptools>=65.5.0',
+  'tabulate>=0.8.10',
+  'typing-extensions>=4.2,<4.6.0',
+  'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
 dynamic = ['version']
@@ -65,37 +65,37 @@ readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-cuda = ["cupy"]
-cuda110 = ["cupy-cuda110"]
-cuda111 = ["cupy-cuda111"]
-cuda112 = ["cupy-cuda112"]
-cuda113 = ["cupy-cuda113"]
-cuda114 = ["cupy-cuda114"]
-cuda115 = ["cupy-cuda115"]
-cuda116 = ["cupy-cuda116"]
-cuda117 = ["cupy-cuda117"]
-cuda11x = ["cupy-cuda11x"]
-dace = ["dace>=0.14.2,<0.15", "sympy>=1.7"]
-formatting = ["clang-format>=9.0"]
+cuda = ['cupy']
+cuda110 = ['cupy-cuda110']
+cuda111 = ['cupy-cuda111']
+cuda112 = ['cupy-cuda112']
+cuda113 = ['cupy-cuda113']
+cuda114 = ['cupy-cuda114']
+cuda115 = ['cupy-cuda115']
+cuda116 = ['cupy-cuda116']
+cuda117 = ['cupy-cuda117']
+cuda11x = ['cupy-cuda11x']
+dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
+formatting = ['clang-format>=9.0']
 # Always add all extra packages to 'full' for a simple full gt4py installation
 full = [
-  "clang-format>=9.0",
-  "dace>=0.14.2,<0.15",
-  "hypothesis>=6.0.0",
-  "pytest>=7.0",
-  "sympy>=1.7",
-  "scipy>=1.7.2"
+  'clang-format>=9.0',
+  'dace>=0.14.2,<0.15',
+  'hypothesis>=6.0.0',
+  'pytest>=7.0',
+  'sympy>=1.7',
+  'scipy>=1.7.2'
 ]
-performance = ["scipy>=1.7.2"]
-testing = ["hypothesis>=6.0.0", "pytest>=7.0"]
+performance = ['scipy>=1.7.2']
+testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
 [project.scripts]
-gtpyc = "gt4py.cartesian.cli:gtpyc"
+gtpyc = 'gt4py.cartesian.cli:gtpyc'
 
 [project.urls]
-Documentation = "https://gridtools.github.io/gt4py"
-Homepage = "https://gridtools.github.io/"
-Source = "https://github.com/GridTools/gt4py"
+Documentation = 'https://gridtools.github.io/gt4py'
+Homepage = 'https://gridtools.github.io/'
+Source = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
 # -- black --
@@ -169,7 +169,7 @@ ignore = [
   'W503'  # Line break occurred before a binary operator
 ]
 max-complexity = 15
-max-line-length = 100
+max-line-length = 100  # It should be the same as in `tool.black.line-length` above
 per-file-ignores = ['src/gt4py/eve/extended_typing.py:F401,F405']
 rst-roles = [
   'py:mod, mod',
@@ -214,7 +214,7 @@ known_third_party = [
   'xxhash'
 ]
 lexicographical = true
-line_length = 100
+line_length = 100  # It should be the same as in `tool.black.line-length` above
 lines_after_imports = 2
 profile = 'black'
 sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
@@ -338,7 +338,77 @@ markers = [
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'
 
-# -- Setuptools-specific --
+# -- ruff --
+[tool.ruff]
+ignore = [
+  'E501',
+  'B008',  # Do not perform function calls in argument defaults
+  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
+  'B905'  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
+]
+ignore-init-module-imports = true
+line-length = 100  # It should be the same as in `tool.black.line-length` above
+respect-gitignore = true
+# Rules:
+# E: pycodestyle
+# F: Pyflakes
+# I: isort
+# B: flake8-bugbear
+# A: flake8-builtins
+# T100: flake8-debugger
+# ERA: eradicate
+# NPY: NumPy-specific rules
+# RUF: Ruff-specific rules
+select = ['E', 'F', 'I', 'B', 'A', 'T100', 'ERA', 'NPY', 'RUF']
+show-fixes = true
+# show-source = true
+target-version = 'py310'
+typing-modules = ['gt4py.eve.extended_typing']
+unfixable = []
+
+[tool.ruff.isort]
+combine-as-imports = true
+# force-wrap-aliases = true
+known-first-party = ['gt4py', '__externals__', '__gtscript__']
+known-third-party = [
+  'attr',
+  'black',
+  'boltons',
+  'cached_property',
+  'click',
+  'dace',
+  'devtools',
+  'factory',
+  'hypothesis',
+  'importlib_resources',
+  'jinja2',
+  'mako',
+  'networkx',
+  'numpy',
+  'packaging',
+  'pybind11',
+  'pytest',
+  'pytest_factoryboy',
+  'setuptools',
+  'tabulate',
+  'typing_extensions',
+  'xxhash'
+]
+lines-after-imports = 2
+order-by-type = true
+section-order = ['future', 'standard-library', 'third-party', 'first-party', 'tests', 'local-folder']
+split-on-trailing-comma = false
+
+[tool.ruff.isort.sections]
+'tests' = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
+
+[tool.ruff.mccabe]
+max-complexity = 15
+
+[tool.ruff.per-file-ignores]
+'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
+
+# -- setuptools build backend --
 [tool.setuptools]
 platforms = ['Linux', 'Mac']
 
