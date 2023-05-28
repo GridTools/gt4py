@@ -127,9 +127,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                     subexpr_count[subexpr] += 1
 
             # remove all subexpressions that are not eligible for collection
-            eligible_subexprs = {node.args[0].args[0]} | {
-                subexpr for subexpr, count in subexpr_count.items() if count >= 2
-            }
+            eligible_subexprs = {subexpr for subexpr, count in subexpr_count.items() if count >= 2}
             for arg_state in arg_states:
                 arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
