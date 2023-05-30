@@ -15,6 +15,7 @@
 import dataclasses
 import functools
 import operator
+import typing
 
 from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
@@ -26,13 +27,13 @@ from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 class _NodeReplacer(NodeTranslator):
     expr_map: dict[int, ir.SymRef]
 
-    def visit_Expr(self, node):
+    def visit_Expr(self, node: ir.Node) -> ir.Node:
         if id(node) in self.expr_map:
             return self.expr_map[id(node)]
         return self.generic_visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall):
-        node = self.visit_Expr(node)
+    def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
+        node = typing.cast(ir.FunCall, self.visit_Expr(node))
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
@@ -51,7 +52,7 @@ class _NodeReplacer(NodeTranslator):
         return node
 
 
-def _is_collectable_expr(node: ir.Node):
+def _is_collectable_expr(node: ir.Node) -> bool:
     if isinstance(node, ir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
@@ -84,7 +85,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         #: The ids of all nodes declaring a symbol which are referenced (using a `SymRef`)
         used_symbol_ids: set[int] = dataclasses.field(default_factory=set)
 
-        def remove_subexprs(self, nodes: list[ir.Node]):
+        def remove_subexprs(self, nodes: typing.Iterable[ir.Node]) -> None:
             node_ids_to_remove: set[int] = set()
             for node in nodes:
                 subexpr_data = self.subexprs.pop(node, None)
@@ -96,7 +97,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                     collected_child_node_ids -= node_ids_to_remove
 
     @classmethod
-    def apply(cls, node: ir.Node):
+    def apply(cls, node: ir.Node) -> dict[ir.Node, list[tuple[int, set[int]]]]:
         state = cls.State()
         obj = cls()
         obj.visit(node, state=state)
@@ -104,13 +105,13 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         # first, and skip the root node itself
         return {k: v for k, v in reversed(state.subexprs.items()) if k is not node}
 
-    def visit(self, node, **kwargs):
+    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 
         parent_state = kwargs.pop("state")
-        collected_child_node_ids = set[int]()
-        used_symbol_ids = set[int]()
+        collected_child_node_ids: set[int] = set()
+        used_symbol_ids: set[int] = set()
 
         # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
         # avoids extracting subexpressions unless they are used in at least two of the three
@@ -123,7 +124,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                 self.visit(arg, state=state, **kwargs)
 
             # for each subexpression find in how many of the three arguments they occur
-            subexpr_count = {}
+            subexpr_count: dict[ir.Node, int] = {}
             for arg_state in arg_states:
                 for subexpr in arg_state.subexprs.keys():
                     subexpr_count.setdefault(subexpr, 0)
@@ -174,7 +175,9 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         # TODO(tehrengruber): This is expensive for a large tree. Use something like a "ChainSet".
         parent_state.collected_child_node_ids.update(collected_child_node_ids)
 
-    def visit_SymRef(self, node: ir.SymRef, *, symtable, state, **kwargs):
+    def visit_SymRef(
+        self, node: ir.SymRef, *, symtable: dict[str, ir.Node], state: State, **kwargs
+    ) -> None:
         if node.id in symtable:  # root symbol otherwise
             state.used_symbol_ids.add(id(symtable[node.id]))
 
