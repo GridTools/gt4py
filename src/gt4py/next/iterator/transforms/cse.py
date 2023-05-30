@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import typing
 
 from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
@@ -22,6 +23,8 @@ from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 @dataclasses.dataclass
 class _NodeReplacer(NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ["type"]
+
     expr_map: dict[int, ir.SymRef]
 
     def visit_Expr(self, node):
@@ -136,6 +139,88 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             used_symbol_ids.add(id(symtable[node.id]))
 
 
+def extract_subexpression(
+    node: ir.Expr,
+    predicate: typing.Callable[[ir.Expr, int], bool],
+    uid_generator: UIDGenerator,
+    once_only: bool = False,
+    pre_order: bool = True
+) -> tuple[ir.Expr, dict[ir.Sym, ir.Expr], bool]:
+    """
+    Given an expression extract all subexprs and return a new expr with the subexprs replaced.
+
+    The return value is a triplet of
+    - the new expr with all extracted subexpressions replaced by a reference to a new symbol
+    - a dictionary mapping each new symbol to the respective subexpr that was extracted
+    - a boolean indicating if a subexression was not collected because its parent was already
+      collected.
+
+     Arguments:
+        node: The node to extract from.
+        predicate: If this predicate evaluates to true the respective subexpression is extracted.
+          Takes a subexpression and the number of occurences of the subexpression in the root node
+          as arguments.
+        uid_generator: The uid generator used to generate new symbol names.
+        once_only: If set extraction is stopped after the first expression that is extracted
+        pre_order: Extract in pre- or post-order of the root node.
+
+
+    Examples:
+        >>> import gt4py.next.iterator.ir_makers as im
+        >>> from gt4py.eve.utils import UIDGenerator
+        >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
+        >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
+        >>> new_expr, extracted_subexprs, _ = extract_subexpression(
+        ...                                     expr, predicate, UIDGenerator(prefix="_subexpr"))
+        >>> print(new_expr)
+        _subexpr_1 + (_subexpr_1 + z)
+        >>> for sym, subexpr in extracted_subexprs.items():
+        ...    print(f"`{sym}`: `{subexpr}`")
+        `_subexpr_1`: `x + y`
+    """
+    ignored_children = False
+    extracted = dict[ir.Sym, ir.Expr]()
+
+    # collect expressions
+    subexprs = CollectSubexpressions.apply(node)
+
+    # collect multiple occurrences and map them to fresh symbols
+    expr_map = dict[int, ir.SymRef]()
+    ignored_ids = set()
+    for expr, subexpr_entry in (subexprs.items() if pre_order else reversed(subexprs.items())):
+        if not predicate(expr, len(subexpr_entry)):
+            continue
+
+        eligible_ids = set()
+        for id_, child_ids in subexpr_entry:
+            if id_ in ignored_ids:
+                ignored_children = True
+            else:
+                eligible_ids.add(id_)
+                # since the node id is eligible don't eliminate its children
+                ignored_ids.update(child_ids)
+
+        # if no node ids are eligible, e.g. because the parent was already eliminated or because
+        # the expression occurs only once, skip the elimination
+        if not eligible_ids:
+            continue
+
+        expr_id = uid_generator.sequential_id()
+        extracted[ir.Sym(id=expr_id)] = expr
+        expr_ref = ir.SymRef(id=expr_id)
+        for id_ in eligible_ids:
+            expr_map[id_] = expr_ref
+
+        if once_only:
+            break
+
+    if not expr_map:
+        return node, None, False
+
+    return _NodeReplacer(expr_map).visit(node), extracted, ignored_children
+
+
+
 @dataclasses.dataclass(frozen=True)
 class CommonSubexpressionElimination(NodeTranslator):
     """
@@ -151,7 +236,7 @@ class CommonSubexpressionElimination(NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs"))
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -162,55 +247,27 @@ class CommonSubexpressionElimination(NodeTranslator):
         ]:
             return node
 
-        revisit_node = False
+        new_expr, extracted, ignored_children = extract_subexpression(
+            node,
+            lambda subexpr, num_occurences: num_occurences > 1,
+            self.uids
+        )
 
-        # collect expressions
-        subexprs = CollectSubexpressions.apply(node)
-
-        # collect multiple occurrences and map them to fresh symbols
-        expr_map = dict[int, ir.SymRef]()
-        params = []
-        args = []
-        ignored_ids = set()
-        for expr, subexpr_entry in subexprs.items():
-            if len(subexpr_entry) < 2:
-                continue
-
-            eligible_ids = set()
-            for id_, child_ids in subexpr_entry:
-                if id_ in ignored_ids:
-                    # if the node id is ignored (because its parent is eliminated), but it occurs
-                    # multiple times then we want to visit the final result once more.
-                    revisit_node = True
-                else:
-                    eligible_ids.add(id_)
-                    # since the node id is eligible don't eliminate its children
-                    ignored_ids.update(child_ids)
-
-            # if no node ids are eligible, e.g. because the parent was already eliminated or because
-            # the expression occurs only once, skip the elimination
-            if not eligible_ids:
-                continue
-
-            expr_id = self.uids.sequential_id(prefix="_cs")
-            params.append(ir.Sym(id=expr_id))
-            args.append(expr)
-            expr_ref = ir.SymRef(id=expr_id)
-            for id_ in eligible_ids:
-                expr_map[id_] = expr_ref
-
-        if not expr_map:
+        if not extracted:
             return self.generic_visit(node)
 
         # apply remapping
         result = ir.FunCall(
-            fun=ir.Lambda(params=params, expr=_NodeReplacer(expr_map).visit(node)),
-            args=args,
+            fun=ir.Lambda(params=list(extracted.keys()), expr=new_expr),
+            args=list(extracted.values()),
         )
+
+        # if the node id is ignored (because its parent is eliminated), but it occurs
+        # multiple times then we want to visit the final result once more.
         # TODO(tehrengruber): Instead of revisiting we might be able to replace subexpressions
         #  inside of subexpressions directly. This would require a different order of replacement
         #  (from lower to higher level).
-        if revisit_node:
+        if ignored_children:
             return self.visit(result)
 
         return self.generic_visit(result)
