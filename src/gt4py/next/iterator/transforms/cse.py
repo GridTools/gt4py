@@ -85,12 +85,15 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         used_symbol_ids: set[int] = dataclasses.field(default_factory=set)
 
         def remove_subexprs(self, nodes: list[ir.Node]):
-            node_ids = {node_id for node in nodes for node_id, _ in self.subexprs.get(node, [])}
+            node_ids_to_remove: set[int] = set()
             for node in nodes:
-                del self.subexprs[node]
+                subexpr_data = self.subexprs.pop(node, None)
+                if subexpr_data:
+                    node_ids, _ = zip(*subexpr_data)
+                    node_ids_to_remove |= set(node_ids)
             for subexpr_data in self.subexprs.values():
                 for _, collected_child_node_ids in subexpr_data:
-                    collected_child_node_ids -= node_ids
+                    collected_child_node_ids -= node_ids_to_remove
 
     @classmethod
     def apply(cls, node: ir.Node):
