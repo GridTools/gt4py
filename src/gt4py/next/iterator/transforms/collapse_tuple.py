@@ -19,12 +19,12 @@ from gt4py.next.iterator import ir, type_inference
 
 
 def _get_tuple_size(node: ir.Node) -> int:
-    # TODO(havogt): This fails if the tuple is a SymRef. Use type information from (entire) tree when available.
-    infered_type = type_inference.infer(node)
-    assert isinstance(infered_type, type_inference.Val)
-    dtype = infered_type.dtype
-    assert isinstance(dtype, (type_inference.Tuple, type_inference.EmptyTuple))
-    return len(dtype)
+    assert (
+        hasattr(node.annex, "type")
+        and isinstance(node.annex.type, type_inference.Val)
+        and isinstance(node.annex.type.dtype, type_inference.Tuple)
+    )
+    return len(node.annex.type.dtype)
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,9 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
+        if not hasattr(node.annex, "type"):
+            type_inference.infer_all(node, save_to_annex=True)
+
         return cls(
             ignore_tuple_size, collapse_make_tuple_tuple_get, collapse_tuple_get_make_tuple
         ).visit(node)
