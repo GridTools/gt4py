@@ -969,6 +969,13 @@ def test_fencil_definition_with_function_definitions():
     )
 
 
+def test_save_types_to_annex():
+    testee = im.lambda_("a")(im.plus("a", im.literal("1", "float32")))
+    ti.infer(testee, save_to_annex=True)
+    param_type = testee.params[0].annex.type
+    assert isinstance(param_type, ti.Val) and param_type.dtype.name == "float32"
+
+
 def test_pformat():
     vs = [ti.TypeVar(idx=i) for i in range(5)]
     assert ti.pformat(vs[0]) == "T₀"
