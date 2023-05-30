@@ -144,7 +144,7 @@ def extract_subexpression(
     predicate: typing.Callable[[ir.Expr, int], bool],
     uid_generator: UIDGenerator,
     once_only: bool = False,
-    pre_order: bool = True
+    pre_order: bool = True,
 ) -> tuple[ir.Expr, dict[ir.Sym, ir.Expr], bool]:
     """
     Given an expression extract all subexprs and return a new expr with the subexprs replaced.
@@ -187,7 +187,7 @@ def extract_subexpression(
     # collect multiple occurrences and map them to fresh symbols
     expr_map = dict[int, ir.SymRef]()
     ignored_ids = set()
-    for expr, subexpr_entry in (subexprs.items() if pre_order else reversed(subexprs.items())):
+    for expr, subexpr_entry in subexprs.items() if pre_order else reversed(subexprs.items()):
         if not predicate(expr, len(subexpr_entry)):
             continue
 
@@ -220,7 +220,6 @@ def extract_subexpression(
     return _NodeReplacer(expr_map).visit(node), extracted, ignored_children
 
 
-
 @dataclasses.dataclass(frozen=True)
 class CommonSubexpressionElimination(NodeTranslator):
     """
@@ -236,7 +235,9 @@ class CommonSubexpressionElimination(NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs"))
+    uids: UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_cs")
+    )
 
     collect_all: bool = dataclasses.field(default=False)
 
@@ -248,9 +249,7 @@ class CommonSubexpressionElimination(NodeTranslator):
             return node
 
         new_expr, extracted, ignored_children = extract_subexpression(
-            node,
-            lambda subexpr, num_occurences: num_occurences > 1,
-            self.uids
+            node, lambda subexpr, num_occurences: num_occurences > 1, self.uids
         )
 
         if not extracted:
