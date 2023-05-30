@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import functools
+import operator
 import typing
 
 from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
@@ -27,13 +29,13 @@ class _NodeReplacer(NodeTranslator):
 
     expr_map: dict[int, ir.SymRef]
 
-    def visit_Expr(self, node):
+    def visit_Expr(self, node: ir.Node) -> ir.Node:
         if id(node) in self.expr_map:
             return self.expr_map[id(node)]
         return self.generic_visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall):
-        node = self.visit_Expr(node)
+    def visit_FunCall(self, node: ir.FunCall) -> ir.Node:
+        node = typing.cast(ir.FunCall, self.visit_Expr(node))
         # If we encounter an expression like:
         #  (λ(_cs_1) → (λ(a) → a+a)(_cs_1))(outer_expr)
         # (non-recursively) inline the lambda to obtain:
@@ -52,7 +54,7 @@ class _NodeReplacer(NodeTranslator):
         return node
 
 
-def _is_collectable_expr(node: ir.Node):
+def _is_collectable_expr(node: ir.Node) -> bool:
     if isinstance(node, ir.FunCall):
         # do not collect (and thus deduplicate in CSE) shift(offsets…) calls. Node must still be
         #  visited, to ensure symbol dependencies are recognized correctly.
@@ -69,51 +71,92 @@ def _is_collectable_expr(node: ir.Node):
     return False
 
 
-def _is_if_can_deref(node: ir.Node):
-    # `if_(can_deref(...), ..., ...)`
-    return (
-        isinstance(node, ir.FunCall)
-        and node.fun == ir.SymRef(id="if_")
-        and isinstance(node.args[0], ir.FunCall)
-        and node.args[0].fun == ir.SymRef(id="can_deref")
-    )
-
-
 @dataclasses.dataclass
 class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
-    subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
-        init=False, repr=False, default_factory=dict
-    )
+    @dataclasses.dataclass
+    class State:
+        #: A dictionary mapping a node to a list of node ids which are equal. Additionally, for
+        #: each (actual) node we store a set of all ids of collected child subexpressions.
+        subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
+            default_factory=dict
+        )
+        # TODO(tehrengruber): Revisit if this makes sense or if we can just recompute the collected
+        #  child node ids and get simpler code.
+        #: The ids of all child subexpressions which are collected.
+        collected_child_node_ids: set[int] = dataclasses.field(default_factory=set)
+        #: The ids of all nodes declaring a symbol which are referenced (using a `SymRef`)
+        used_symbol_ids: set[int] = dataclasses.field(default_factory=set)
+
+        def remove_subexprs(self, nodes: typing.Iterable[ir.Node]) -> None:
+            node_ids_to_remove: set[int] = set()
+            for node in nodes:
+                subexpr_data = self.subexprs.pop(node, None)
+                if subexpr_data:
+                    node_ids, _ = zip(*subexpr_data)
+                    node_ids_to_remove |= set(node_ids)
+            for subexpr_data in self.subexprs.values():
+                for _, collected_child_node_ids in subexpr_data:
+                    collected_child_node_ids -= node_ids_to_remove
 
     @classmethod
-    def apply(cls, node: ir.Node):
+    def apply(cls, node: ir.Node) -> dict[ir.Node, list[tuple[int, set[int]]]]:
+        state = cls.State()
         obj = cls()
-        obj.visit(
-            node, used_symbol_ids=set(), collected_child_node_ids=set(), allow_collection=True
-        )
+        obj.visit(node, state=state)
         # return subexpression in pre-order of the tree, i.e. the nodes closer to the root come
         # first, and skip the root node itself
-        return {k: v for k, v in reversed(obj.subexprs.items()) if k is not node}
+        return {k: v for k, v in reversed(state.subexprs.items()) if k is not node}
 
-    def visit(self, node, **kwargs):
-        # TODO(tehrengruber): improve this case as we might miss subexpression that could be eliminated
-        # disable collection (for all child nodes) if node matches `if_(can_deref(...), ..., ...)`
-        if _is_if_can_deref(node):
-            kwargs["allow_collection"] = False
-
+    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 
-        parents_collected_child_node_ids = kwargs.pop("collected_child_node_ids")
-        parents_used_symbol_ids = kwargs.pop("used_symbol_ids")
-        used_symbol_ids = set[int]()
-        collected_child_node_ids = set[int]()
-        super().visit(
-            node,
-            used_symbol_ids=used_symbol_ids,
-            collected_child_node_ids=collected_child_node_ids,
-            **kwargs,
-        )
+        parent_state = kwargs.pop("state")
+        collected_child_node_ids: set[int] = set()
+        used_symbol_ids: set[int] = set()
+
+        # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
+        # avoids extracting subexpressions unless they are used in at least two of the three
+        # arguments.
+        if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="if_"):
+            assert len(node.args) == 3
+            # collect subexpressions for all arguments to the `if_`
+            arg_states = [self.State() for _ in node.args]
+            for arg, state in zip(node.args, arg_states):
+                self.visit(arg, state=state, **kwargs)
+
+            # for each subexpression find in how many of the three arguments they occur
+            subexpr_count: dict[ir.Node, int] = {}
+            for arg_state in arg_states:
+                for subexpr in arg_state.subexprs.keys():
+                    subexpr_count.setdefault(subexpr, 0)
+                    subexpr_count[subexpr] += 1
+
+            # remove all subexpressions that are not eligible for collection
+            eligible_subexprs = {subexpr for subexpr, count in subexpr_count.items() if count >= 2}
+            for arg_state in arg_states:
+                arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
+
+            # merge the states of the three arguments
+            subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
+            for state in arg_states:
+                for subexpr, data in state.subexprs.items():
+                    subexprs.setdefault(subexpr, []).extend(data)
+            collected_child_node_ids = functools.reduce(
+                operator.or_, (state.collected_child_node_ids for state in arg_states)
+            )
+            used_symbol_ids = functools.reduce(
+                operator.or_, (state.used_symbol_ids for state in arg_states)
+            )
+            # propagate collected subexpressions to parent
+            for subexpr, data in subexprs.items():
+                parent_state.subexprs.setdefault(subexpr, []).extend(data)
+        else:
+            super().visit(
+                node,
+                state=self.State(parent_state.subexprs, collected_child_node_ids, used_symbol_ids),
+                **kwargs,
+            )
 
         if isinstance(node, SymbolTableTrait):
             # remove symbols used in child nodes if they are declared in the current node
@@ -121,22 +164,24 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
 
         # if no symbols are used that are defined in the root node, i.e. the node given to `apply`,
         # we collect the subexpression
-        if not used_symbol_ids and _is_collectable_expr(node) and kwargs["allow_collection"]:
-            self.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
+        if not used_symbol_ids and _is_collectable_expr(node):
+            parent_state.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
 
             # propagate to parent that we have collected its child
-            parents_collected_child_node_ids.add(id(node))
+            parent_state.collected_child_node_ids.add(id(node))
 
         # propagate used symbol ids to parent
-        parents_used_symbol_ids.update(used_symbol_ids)
+        parent_state.used_symbol_ids.update(used_symbol_ids)
 
         # propagate to parent which of its children we have collected
         # TODO(tehrengruber): This is expensive for a large tree. Use something like a "ChainSet".
-        parents_collected_child_node_ids.update(collected_child_node_ids)
+        parent_state.collected_child_node_ids.update(collected_child_node_ids)
 
-    def visit_SymRef(self, node: ir.SymRef, *, symtable, used_symbol_ids, **kwargs):
+    def visit_SymRef(
+        self, node: ir.SymRef, *, symtable: dict[str, ir.Node], state: State, **kwargs
+    ) -> None:
         if node.id in symtable:  # root symbol otherwise
-            used_symbol_ids.add(id(symtable[node.id]))
+            state.used_symbol_ids.add(id(symtable[node.id]))
 
 
 def extract_subexpression(
