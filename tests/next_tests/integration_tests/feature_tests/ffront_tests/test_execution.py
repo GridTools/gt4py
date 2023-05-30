@@ -246,11 +246,10 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
-    def testee_scan(state: tuple[float, float], val: float) -> float:
-        last_
+    @scan_operator(axis=KDim, forward=True, init=(0.0))
+    def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
-        return qc, qc_in
+        return qc
 
     @program
     def testee(qc: Field[[IDim, KDim], float], scalar: float):
