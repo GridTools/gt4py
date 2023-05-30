@@ -85,10 +85,10 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     ) -> cases.IField:
         if condition1:
             result1 = a
-            result2 = a + 1
+            result2 = a + 1.
         else:
             result1 = b
-            result2 = b + 1
+            result2 = b + 1.
         return result1 if condition2 else result2
 
     a = cases.allocate(cartesian_case, simple_if, "a")()
@@ -255,10 +255,10 @@ def test_nested_if_stmt_conditinal(cartesian_case, condition1, condition2):
         if condition1:
             tmp1 = inp
             if condition2:
-                return tmp1 + 1
-            result = tmp1 + 2
+                return tmp1 + 1.
+            result = tmp1 + 2.
         else:
-            result = inp + 3
+            result = inp + 3.
         return result
 
     inp = cases.allocate(cartesian_case, nested_if_conditional_return, "inp")()
@@ -293,14 +293,14 @@ def test_nested_if(cartesian_case, condition):
             if not condition:
                 inner = a
             else:
-                inner = a + 1
+                inner = a + 1.
             result = inner
         else:
             result = b
             if condition:
-                another_inner = 3
+                another_inner = 3.
             else:
-                another_inner = 5
+                another_inner = 5.
             result = result + another_inner
         return result
 
@@ -328,13 +328,13 @@ def test_if_without_else(cartesian_case, condition1, condition2):
     def if_without_else(
         a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
-        result = b + 1
+        result = b + 1.
 
         if condition1:
             if not condition2:
                 inner = a
             else:
-                inner = a + 2
+                inner = a + 2.
             result = inner
         return result
 
