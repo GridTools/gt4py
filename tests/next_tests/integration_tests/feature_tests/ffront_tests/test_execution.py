@@ -177,15 +177,15 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @field_operator
-    def testee(a: int) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+    def testee(a: float) -> cases.VField:
+        return broadcast(a + 1., (Vertex,))
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a: np.full(
             [unstructured_case.default_sizes[Vertex]],
-            a + 1,
+            a + 1.,
             dtype=int,
         ),
         comparison=lambda a, b: np.all(a == b),
@@ -194,12 +194,12 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee_inner(a: int) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+    def testee_inner(a: float) -> cases.VField:
+        return broadcast(a + 1., (Vertex,))
 
     @field_operator
     def testee(a: int) -> cases.VField:
-        return testee_inner(a + 1)
+        return testee_inner(a + 1.)
 
     cases.verify_with_default_data(
         unstructured_case,
