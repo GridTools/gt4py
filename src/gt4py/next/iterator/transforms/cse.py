@@ -25,7 +25,7 @@ from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 @dataclasses.dataclass
 class _NodeReplacer(NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ["type"]
+    PRESERVED_ANNEX_ATTRS = ("type",)
 
     expr_map: dict[int, ir.SymRef]
 
@@ -190,7 +190,7 @@ def extract_subexpression(
     uid_generator: UIDGenerator,
     once_only: bool = False,
     pre_order: bool = True,
-) -> tuple[ir.Expr, dict[ir.Sym, ir.Expr], bool]:
+) -> tuple[ir.Expr, typing.Union[dict[ir.Sym, ir.Expr], None], bool]:
     """
     Given an expression extract all subexprs and return a new expr with the subexprs replaced.
 
@@ -233,6 +233,10 @@ def extract_subexpression(
     expr_map = dict[int, ir.SymRef]()
     ignored_ids = set()
     for expr, subexpr_entry in subexprs.items() if pre_order else reversed(subexprs.items()):
+        # just to make mypy happy when calling the predicate. Every subnode and hence subexpression
+        # is an expr anyway.
+        assert isinstance(expr, ir.Expr)
+
         if not predicate(expr, len(subexpr_entry)):
             continue
 
