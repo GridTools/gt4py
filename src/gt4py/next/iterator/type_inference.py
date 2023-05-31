@@ -652,6 +652,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             raise TypeError("`tuple_get` requires exactly two arguments.")
         if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
             raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
