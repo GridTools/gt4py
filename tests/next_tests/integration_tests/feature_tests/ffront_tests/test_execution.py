@@ -163,7 +163,7 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
+    def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
         inps = a, b
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
@@ -177,16 +177,16 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @field_operator
-    def testee(a: int) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+    def testee(a: float64) -> cases.VField:
+        return broadcast(a + 1.0, (Vertex,))
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a: np.full(
             [unstructured_case.default_sizes[Vertex]],
-            a + 1,
-            dtype=int,
+            a + 1.0,
+            dtype=float64,
         ),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -194,23 +194,23 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee_inner(a: int) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+    def testee_inner(a: float64) -> cases.VField:
+        return broadcast(a + 1.0, (Vertex,))
 
     @field_operator
-    def testee(a: int) -> cases.VField:
-        return testee_inner(a + 1)
+    def testee(a: float64) -> cases.VField:
+        return testee_inner(a + 1.0)
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int),
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2.0, dtype=float64),
     )
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(a: cases.IJKField, b: int) -> cases.IJKField:
+    def testee(a: cases.IJKField, b: float64) -> cases.IJKField:
         tmp = b * a
         return tmp(Ioff[1])
 
@@ -230,18 +230,18 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         )
 
     @field_operator
-    def testee_op(size: int) -> cases.IField:
+    def testee_op(size: int64) -> Field[[IDim], int64]:
         return broadcast(size, (IDim,))
 
     @program
-    def testee(size: int, out: cases.IField):
+    def testee(size: int64, out: Field[[IDim], int64]):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=int)
+        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=np.int64)
     )
 
 

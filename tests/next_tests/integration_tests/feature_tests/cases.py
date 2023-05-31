@@ -47,11 +47,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 # mypy does not accept [IDim, ...] as a type
-IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
-IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
-IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
+IField: TypeAlias = common.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
+VField: TypeAlias = common.Field[[Vertex], np.float64]  # type: ignore [valid-type]
+EField: TypeAlias = common.Field[[Edge], np.float64]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
