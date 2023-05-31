@@ -153,6 +153,7 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "multiplies",
     "divides",
     "mod",
+    "floordiv", # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
 BINARY_MATH_COMPARISON_BUILTINS = {
     "eq",
@@ -194,7 +195,6 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
