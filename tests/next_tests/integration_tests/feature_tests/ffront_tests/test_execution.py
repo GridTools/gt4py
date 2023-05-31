@@ -28,6 +28,7 @@ from gt4py.next.ffront.fbuiltins import (
     broadcast,
     float32,
     float64,
+    int32,
     int64,
     maximum,
     minimum,
@@ -230,18 +231,18 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         )
 
     @field_operator
-    def testee_op(size: int64) -> Field[[IDim], int64]:
+    def testee_op(size: int32) -> Field[[IDim], int32]:
         return broadcast(size, (IDim,))
 
     @program
-    def testee(size: int64, out: Field[[IDim], int64]):
+    def testee(size: int32, out: Field[[IDim], int32]):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=np.int64)
+        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=np.int32)
     )
 
 
@@ -771,10 +772,10 @@ def test_domain_input_bounds(fieldview_backend):
     def program_domain(
         inp: Field[[IDim, JDim], float64],
         out: Field[[IDim, JDim], float64],
-        lower_i: int64,
-        upper_i: int64,
-        lower_j: int64,
-        upper_j: int64,
+        lower_i: int32,
+        upper_i: int32,
+        lower_j: int32,
+        upper_j: int32,
     ):
         fieldop_domain(
             inp,
@@ -805,10 +806,10 @@ def test_domain_input_bounds_1(fieldview_backend):
     @program(backend=fieldview_backend)
     def program_domain(
         a: Field[[IDim, JDim], float64],
-        lower_i: int64,
-        upper_i: int64,
-        lower_j: int64,
-        upper_j: int64,
+        lower_i: int32,
+        upper_i: int32,
+        lower_j: int32,
+        upper_j: int32,
     ):
         fieldop_domain(
             a,
@@ -865,7 +866,7 @@ def test_where_k_offset(fieldview_backend):
         a: Field[[IDim, KDim], float64],
         k_index: Field[[KDim], int64],
     ) -> Field[[IDim, KDim], float64]:
-        return where(k_index > 0, a(Koff[-1]), 2.0)
+        return where(k_index > int64(0), a(Koff[-1]), 2.0)
 
     fieldop_where_k_offset(a, k_index, out=out, offset_provider={"Koff": KDim})
 
