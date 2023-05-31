@@ -210,7 +210,7 @@ def test_binary_mod():
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.int32, shape=None),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.INT32, shape=None),
     )
 
 
