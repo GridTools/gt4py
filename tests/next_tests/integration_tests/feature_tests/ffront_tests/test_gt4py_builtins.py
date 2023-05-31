@@ -141,7 +141,7 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     def reduce_expr(edge_f: Field[[Edge], int64]) -> Field[[Vertex], int64]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return 3 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2, axis=V2EDim)
+        return int64(3) * neighbor_sum(-edge_f(V2E) * tmp_nbh * int64(2), axis=V2EDim)
 
     @program(backend=fieldview_backend)
     def fencil(edge_f: Field[[Edge], int64], out: Field[[Vertex], int64]) -> None:

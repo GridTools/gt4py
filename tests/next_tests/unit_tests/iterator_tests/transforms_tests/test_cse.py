@@ -143,14 +143,14 @@ def test_if_can_deref_no_extraction():
         im.call("can_deref")(im.shift("I", 1)("it")),
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
         # use something more involved where a subexpression can still be eliminated
-        im.literal("1", "int"),
+        im.literal("1", "int32"),
     )
     # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
     expected = im.let("_cs_1", im.shift("I", 1)("it"))(
         im.if_(
             im.call("can_deref")("_cs_1"),
             im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
-            im.literal("1", "int"),
+            im.literal("1", "int32"),
         )
     )
 
