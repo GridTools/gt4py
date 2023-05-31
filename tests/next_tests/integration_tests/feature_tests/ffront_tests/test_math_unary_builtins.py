@@ -65,7 +65,7 @@ def test_power(fieldview_backend):
 
     @field_operator(backend=fieldview_backend)
     def pow(inp1: Field[[IDim], float64]) -> Field[[IDim], float64]:
-        return inp1**2
+        return inp1**2.0
 
     pow(a_I_float, out=out_I_float, offset_provider={})
     assert np.allclose(a_I_float.array() ** 2, out_I_float)
