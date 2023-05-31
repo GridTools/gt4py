@@ -20,7 +20,9 @@ from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
 def _get_tuple_size(type_: type_inference.Type) -> int:
-    assert isinstance(type_, it_type_inference.Val) and isinstance(type_.dtype, it_type_inference.Tuple)
+    assert isinstance(type_, it_type_inference.Val) and isinstance(
+        type_.dtype, it_type_inference.Tuple
+    )
     return len(type_.dtype)
 
 
