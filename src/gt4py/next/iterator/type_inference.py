@@ -900,10 +900,9 @@ def _save_types_to_annex(node, types):
         try:
             child_node.annex.type = types[id(child_node)]
         except KeyError:
-            if (
-                not isinstance(child_node, ir.SymRef)
-                or child_node.id in ir.GRAMMAR_BUILTINS
-                or child_node.id in ir.TYPEBUILTINS
+            if not (
+                isinstance(child_node, ir.SymRef)
+                and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
                     f"Expected a type to be inferred for node `{node}`, but none was found."
