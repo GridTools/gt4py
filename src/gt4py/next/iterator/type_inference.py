@@ -920,6 +920,9 @@ def infer_all(
     Infer the types of the child expressions of a given iterator IR expression.
 
     The result is a dictionary mapping the (Python) id of child nodes to their type.
+
+    The `save_to_annex` flag is experimental and should only be used as a last resort when the
+    return dictionary is not enough.
     """
     # Collect preliminary types of all nodes and constraints on them
     inferrer = _TypeInferrer(offset_provider=offset_provider)
