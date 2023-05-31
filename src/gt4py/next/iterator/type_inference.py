@@ -680,6 +680,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             raise TypeError(
                 f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
             )
+        self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
@@ -928,10 +929,9 @@ def _save_types_to_annex(node, types):
         try:
             child_node.annex.type = types[id(child_node)]
         except KeyError:
-            if (
-                not isinstance(child_node, ir.SymRef)
-                or child_node.id in ir.GRAMMAR_BUILTINS
-                or child_node.id in ir.TYPEBUILTINS
+            if not (
+                isinstance(child_node, ir.SymRef)
+                and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
                     f"Expected a type to be inferred for node `{node}`, but none was found."
@@ -948,6 +948,9 @@ def infer_all(
     Infer the types of the child expressions of a given iterator IR expression.
 
     The result is a dictionary mapping the (Python) id of child nodes to their type.
+
+    The `save_to_annex` flag is experimental and should only be used as a last resort when the
+    return dictionary is not enough.
     """
     # Collect preliminary types of all nodes and constraints on them
     inferrer = _TypeInferrer(offset_provider=offset_provider)
