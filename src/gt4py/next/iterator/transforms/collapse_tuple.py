@@ -15,11 +15,12 @@
 from dataclasses import dataclass
 
 from gt4py import eve
-from gt4py.next.iterator import ir, type_inference
+from gt4py.next import type_inference
+from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
 def _get_tuple_size(type_: type_inference.Type) -> int:
-    assert isinstance(type_, type_inference.Val) and isinstance(type_.dtype, type_inference.Tuple)
+    assert isinstance(type_, it_type_inference.Val) and isinstance(type_.dtype, it_type_inference.Tuple)
     return len(type_.dtype)
 
 
@@ -54,7 +55,7 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        node_types = type_inference.infer_all(node)
+        node_types = it_type_inference.infer_all(node)
 
         return cls(
             ignore_tuple_size,
