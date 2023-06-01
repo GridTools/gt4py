@@ -13,12 +13,43 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from . import common, ffront, iterator, program_processors, type_inference
+from .common import Dimension, DimensionKind, Field
+from .ffront import fbuiltins
+from .ffront.decorator import field_operator, program, scan_operator
+from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here
+from .ffront.fbuiltins import FieldOffset
+from .iterator.embedded import (
+    NeighborTableOffsetProvider,
+    StridedNeighborOffsetProvider,
+    index_field,
+    np_as_located_field,
+)
 
 
-__all__ = [
-    "common",
-    "ffront",
-    "iterator",
-    "program_processors",
-    "type_inference",
-]
+__all__ = (
+    [  # submodules
+        "common",
+        "ffront",
+        "iterator",
+        "program_processors",
+        "type_inference",
+    ]
+    + [  # from common
+        "Dimension",
+        "DimensionKind",
+        "Field",
+    ]
+    + [  # from iterator
+        "NeighborTableOffsetProvider",
+        "StridedNeighborOffsetProvider",
+        "index_field",
+        "np_as_located_field",
+    ]
+    + [  # from ffront
+        "FieldOffset",
+        "field_operator",
+        "program",
+        "scan_operator",
+    ]
+    + fbuiltins.__all__
+)
