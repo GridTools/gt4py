@@ -13,16 +13,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
-from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.ffront.fbuiltins import (
+from gt4py.next import (
     Field,
     broadcast,
+    field_operator,
     float64,
     int64,
     max_over,
     min_over,
     neighbor_sum,
+    program,
     where,
 )
 

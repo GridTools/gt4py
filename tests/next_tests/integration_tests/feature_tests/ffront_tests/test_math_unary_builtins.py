@@ -13,15 +13,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import (
+from gt4py.next import (
     Field,
     cbrt,
     ceil,
     cos,
     cosh,
     exp,
+    field_operator,
     float64,
     floor,
     int64,
