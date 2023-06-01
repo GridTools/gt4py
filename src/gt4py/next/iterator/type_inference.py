@@ -924,22 +924,23 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         )
 
 
-def _save_types_to_annex(node, types):
+def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
-            child_node.annex.type = types[id(child_node)]
+            child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
         except KeyError:
             if not (
                 isinstance(child_node, ir.SymRef)
                 and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
-                    f"Expected a type to be inferred for node `{node}`, but none was found."
+                    f"Expected a type to be inferred for node `{child_node}`, but none was found."
                 )
 
 
 def infer_all(
     node: ir.Node,
+    *,
     offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
     reindex: bool = True,
     save_to_annex=False,
@@ -965,7 +966,10 @@ def infer_all(
     if reindex:
         unified_types = reindex_vars(list(unified_types))
 
-    result = {id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)}
+    result = {
+        id_: unified_type
+        for id_, unified_type in zip(collected_types.keys(), unified_types, strict=True)
+    }
 
     if save_to_annex:
         _save_types_to_annex(node, result)

@@ -818,7 +818,7 @@ def test_fencil_definition_same_closure_input():
             np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
         )
     }
-    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider=offset_provider)
 
     # validate locations of fencil params
     fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
