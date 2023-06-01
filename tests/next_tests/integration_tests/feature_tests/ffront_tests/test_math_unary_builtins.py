@@ -24,6 +24,7 @@ from gt4py.next.ffront.fbuiltins import (
     exp,
     float64,
     floor,
+    int32,
     int64,
     isfinite,
     isinf,
@@ -72,8 +73,8 @@ def test_power(fieldview_backend):
 
 
 def test_floordiv(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype("int64"))
-    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    a_I_int = np_as_located_field(IDim)(np.random.randn(size).astype(int32))
+    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int32))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail(
@@ -81,7 +82,7 @@ def test_floordiv(fieldview_backend):
         )  # see https://github.com/GridTools/gt4py/issues/1136
 
     @field_operator(backend=fieldview_backend)
-    def floorDiv(inp1: Field[[IDim], int64]) -> Field[[IDim], int64]:
+    def floorDiv(inp1: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return inp1 // 2
 
     floorDiv(a_I_int, out=out_I_int, offset_provider={})
@@ -89,8 +90,8 @@ def test_floordiv(fieldview_backend):
 
 
 def test_mod(fieldview_backend):
-    a_I_int = np_as_located_field(IDim)(np.asarray(range(10), dtype="int64") - 5)
-    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int64))
+    a_I_int = np_as_located_field(IDim)(np.asarray(range(10), dtype=int32) - 5)
+    out_I_int = np_as_located_field(IDim)(np.zeros((size,), dtype=int32))
 
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail(
@@ -98,7 +99,7 @@ def test_mod(fieldview_backend):
         )  # see https://github.com/GridTools/gt4py/issues/1219
 
     @field_operator(backend=fieldview_backend)
-    def mod_fieldop(inp1: Field[[IDim], int64]) -> Field[[IDim], int64]:
+    def mod_fieldop(inp1: Field[[IDim], int32]) -> Field[[IDim], int32]:
         return inp1 % 2
 
     mod_fieldop(a_I_int, out=out_I_int, offset_provider={})
