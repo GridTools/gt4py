@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.common import Dimension, Field
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
+from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -38,12 +38,9 @@ def test_invalid_syntax_error_empty_return():
         return  # <-- this line triggers the syntax error
 
     with pytest.raises(
-        f2f.FieldOperatorSyntaxError,
+        f2f.CompilationError,
         match=(
-            r"Invalid Field Operator Syntax: "
-            r"Empty return not allowed \(test_func_to_foast_error_line_number.py, line "
-            + str(line + 3)
-            + r"\)"
+            r".*return.*"
         ),
     ) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -65,7 +62,7 @@ def test_wrong_caret_placement_bug():
 
         return inp
 
-    with pytest.raises(f2f.FieldOperatorSyntaxError) as exc_info:
+    with pytest.raises(f2f.CompilationError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_line_syntax_error)
 
     exc = exc_info.value
@@ -99,7 +96,7 @@ def test_syntax_error_without_function():
     """Dialect parsers report line numbers correctly when applied to `SourceDefinition`."""
 
     source_definition = src_utils.SourceDefinition(
-        starting_line=62,
+        starting_line=61,
         source="""
             def invalid_python_syntax():
                 # This function contains a python syntax error

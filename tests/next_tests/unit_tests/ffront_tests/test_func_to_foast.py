@@ -54,7 +54,7 @@ from gt4py.next.ffront.fbuiltins import (
     where,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
+from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.builtins import (
     and_,
@@ -76,6 +76,7 @@ from gt4py.next.iterator.builtins import (
 )
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.type_system.type_translation import TypingError
+from gt4py.next.errors import *
 
 
 DEREF = itir.SymRef(id=deref.fun.__name__)
@@ -106,8 +107,7 @@ def test_untyped_arg():
         return inp
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match="Untyped parameters not allowed!",
+        MissingParameterTypeError
     ):
         _ = FieldOperatorParser.apply_to_function(untyped)
 
@@ -146,8 +146,8 @@ def test_invalid_syntax_no_return():
         tmp = inp  # noqa
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match="Function must return a value, but no return statement was found\.",
+        CompilationError,
+        match=".*return.*",
     ):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
@@ -160,7 +160,7 @@ def test_invalid_assign_to_expr():
         tmp[-1] = inp2
         return tmp
 
-    with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names! \(.*\)"):
+    with pytest.raises(CompilationError, match=r".*assign.*"):
         _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
@@ -219,8 +219,8 @@ def test_bool_and():
         return a and b
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`and`/`or` operator not allowed!"),
+        UnsupportedPythonFeatureError,
+        match=r".*and.*or.*",
     ):
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
@@ -230,8 +230,8 @@ def test_bool_or():
         return a or b
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`and`/`or` operator not allowed!"),
+        UnsupportedPythonFeatureError,
+        match=r".*and.*or.*",
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
 
@@ -265,7 +265,7 @@ def test_scalar_cast():
         tmp = int64(1)
         return int32(tmp)
 
-    with pytest.raises(FieldOperatorSyntaxError, match=(r"only takes literal arguments!")):
+    with pytest.raises(CompilationError, match=r".*literal.*"):
         _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
 
 

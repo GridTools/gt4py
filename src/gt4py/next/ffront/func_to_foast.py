@@ -27,7 +27,8 @@ from gt4py.next.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnchainComparesPass,
 )
-from gt4py.next.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from gt4py.next.ffront.dialect_parser import DialectParser
+from gt4py.next.errors import *
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
@@ -35,10 +36,6 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-
-
-class FieldOperatorSyntaxError(DialectSyntaxError):
-    dialect_name = "Field Operator"
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -75,12 +72,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     >>>
     >>> try:                # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
-    ... except FieldOperatorSyntaxError as err:
+    ... except CompilationError as err:
     ...     print(f"Error at [{err.lineno}, {err.offset}] in {err.filename})")
     Error at [2, 5] in ...gt4py.next.ffront.func_to_foast.FieldOperatorParser[...]>)
     """
-
-    syntax_error_cls = FieldOperatorSyntaxError
 
     @classmethod
     def _preprocess_definition_ast(cls, definition_ast: ast.AST) -> ast.AST:
@@ -150,6 +145,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return result, to_be_inserted.keys()
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
+        loc = self.get_location(node)
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self.get_location(node)
         )
@@ -168,30 +164,27 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Function must return a value, but no return statement was found."
-            )
+            raise CompilationError(loc, "function is expected to return a value, return statement not found")
 
         return foast.FunctionDefinition(
             id=node.name,
             params=self.visit(node.args, **kwargs),
             body=new_body,
             closure_vars=closure_var_symbols,
-            location=self.get_location(node),
+            location=loc,
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> foast.DataSymbol:
+        loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
+            raise MissingParameterTypeError(loc, node.arg)
         new_type = type_translation.from_type_hint(annotation)
         if not isinstance(new_type, ts.DataType):
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Only arguments of type DataType are allowed."
-            )
-        return foast.DataSymbol(id=node.arg, location=self.get_location(node), type=new_type)
+            raise InvalidParameterTypeError(loc, node.arg, new_type)
+        return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -228,7 +221,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
 
         if not isinstance(target, ast.Name):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
+            raise CompilationError(self.get_location(node), "can only assign to names")
         new_value = self.visit(node.value)
         constraint_type: Type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
@@ -250,7 +243,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Can only assign to names!")
+            raise CompilationError(self.get_location(node), "can only assign to names")
 
         if node.annotation is not None:
             assert isinstance(
@@ -291,9 +284,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         try:
             index = self._match_index(node.slice)
         except ValueError:
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="""Only index is supported in subscript!"""
-            )
+            raise CompilationError(self.get_location(node.slice), "expected an integral index") from None
 
         return foast.Subscript(
             value=self.visit(node.value),
@@ -312,9 +303,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
+        loc = self.get_location(node)
         if not node.value:
-            raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
-        return foast.Return(value=self.visit(node.value), location=self.get_location(node))
+            raise CompilationError(loc, "must return a value, not None")
+        return foast.Return(value=self.visit(node.value), location=loc)
 
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
@@ -378,7 +370,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return dialect_ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
-        raise FieldOperatorSyntaxError.from_AST(node, msg="`and`/`or` operator not allowed!")
+        raise UnsupportedPythonFeatureError(self.get_location(node), "logical operators `and`, `or`")
 
     def visit_IfExp(self, node: ast.IfExp, **kwargs) -> foast.TernaryExpr:
         return foast.TernaryExpr(
@@ -407,15 +399,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
+        loc = self.get_location(node)
         if len(node.ops) != 1 or len(node.comparators) != 1:
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Comparison chains not allowed, run a preprocessing pass!"
-            )
+            # Remove comparison chains in a preprocessing pass
+            # TODO: maybe add a note to the error about preprocessing passes?
+            raise UnsupportedPythonFeatureError(loc, "comparison chains")
         return foast.Compare(
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
             right=self.visit(node.comparators[0]),
-            location=self.get_location(node),
+            location=loc,
         )
 
     def visit_Gt(self, node: ast.Gt, **kwargs) -> foast.CompareOperator:
@@ -437,36 +430,23 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_function(self, node: ast.Call):
+        loc = self.get_location(node)
         func_name = self._func_name(node)
         func_info = getattr(fbuiltins, func_name).__gt_type__()
         if not len(node.args) == len(func_info.args):
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{func_name}() expected {len(func_info.args)} positional arguments, {len(node.args)} given!",
-            )
+            raise IncorrectArgumentCountError(loc, len(func_info.args), len(node.args))
         elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.kwargs):
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
-            )
+            raise UnexpectedKeywordArgError(loc, ", ".join(unexpected_kwargs))
 
     def _verify_builtin_type_constructor(self, node: ast.Call):
+        loc = self.get_location(node)
         if not len(node.args) == 1:
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() expected 1 positional argument, {len(node.args)} given!",
-            )
+            raise IncorrectArgumentCountError(loc, 1, len(node.args))
         elif node.keywords:
             unexpected_kwargs = set(k.arg for k in node.keywords)
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
-            )
+            raise UnexpectedKeywordArgError(loc, ", ".join(unexpected_kwargs))
         elif not isinstance(node.args[0], ast.Constant):
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() only takes literal arguments!",
-            )
+            raise CompilationError(self.get_location(node.args[0]), "expected a literal expression")
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
@@ -489,15 +469,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
+        loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)
         except common.GTTypeError as e:
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg=f"Constants of type {type(node.value)} are not permitted."
-            ) from e
+            raise CompilationError(loc, f"constants of type {type(node.value)} are not permitted") from None
 
         return foast.Constant(
             value=node.value,
-            location=self.get_location(node),
+            location=loc,
             type=type_,
         )

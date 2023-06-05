@@ -36,19 +36,19 @@ def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
-        filename = str(pathlib.Path(inspect.getabsfile(func)).resolve()) or MISSING_FILENAME
-        source = textwrap.dedent(inspect.getsource(func))
-        starting_line = (
-            inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
+        filename = str(pathlib.Path(inspect.getabsfile(func)).resolve())
+        if not filename:
+            raise ValueError("Can not create field operator from a function that is not in a source file!")
+        source_lines, line_offset = inspect.getsourcelines(func)
+        source_code = textwrap.dedent(inspect.getsource(func))
+        column_offset = min(
+            [len(line) - len(line.lstrip()) for line in source_lines if line.lstrip()],
+            default=0
         )
-    except OSError as err:
-        if filename.endswith(MISSING_FILENAME):
-            message = "Can not create field operator from a function that is not in a source file!"
-        else:
-            message = f"Can not get source code of passed function ({func})"
-        raise ValueError(message) from err
+        return SourceDefinition(source_code, filename, line_offset - 1, column_offset)
 
-    return SourceDefinition(source, filename, starting_line)
+    except OSError as err:
+        raise ValueError(f"Can not get source code of passed function ({func})") from err
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -119,7 +119,8 @@ class SourceDefinition:
 
     source: str
     filename: str = MISSING_FILENAME
-    starting_line: int = 1
+    starting_line: int = 0
+    starting_column: int = 0
 
     def __iter__(self) -> Iterator:
         yield self.source

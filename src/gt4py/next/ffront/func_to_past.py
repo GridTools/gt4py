@@ -23,28 +23,21 @@ from gt4py.next.ffront import (
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.dialect_parser import DialectParser, DialectSyntaxError
+from gt4py.next.ffront.dialect_parser import DialectParser
+from gt4py.next.errors import CompilationError, MissingParameterTypeError, InvalidParameterTypeError
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.type_system import type_specifications as ts, type_translation
-
-
-class ProgramSyntaxError(DialectSyntaxError):
-    dialect_name = "Program"
 
 
 @dataclass(frozen=True, kw_only=True)
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
-    syntax_error_cls = ProgramSyntaxError
-
     @classmethod
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
-        if "return" in annotations and not isinstance(None, annotations["return"]):
-            raise ProgramSyntaxError("Program should not have a return value!")
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
 
@@ -72,14 +65,13 @@ class ProgramParser(DialectParser[past.Program]):
         return [self.visit_arg(arg) for arg in node.args]
 
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
+        loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
-            raise ProgramSyntaxError.from_AST(node, msg="Untyped parameters not allowed!")
+            raise MissingParameterTypeError(loc, node.arg)
         new_type = type_translation.from_type_hint(annotation)
         if not isinstance(new_type, ts.DataType):
-            raise ProgramSyntaxError.from_AST(
-                node, msg="Only arguments of type DataType are allowed."
-            )
-        return past.DataSymbol(id=node.arg, location=self.get_location(node), type=new_type)
+            raise InvalidParameterTypeError(loc, node.arg, new_type)
+        return past.DataSymbol(id=node.arg, location=loc, type=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
@@ -133,15 +125,16 @@ class ProgramParser(DialectParser[past.Program]):
         )
 
     def visit_Call(self, node: ast.Call) -> past.Call:
+        loc = self.get_location(node)
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise ProgramSyntaxError.from_AST(node, msg="Functions can only be called directly!")
+            raise CompilationError(loc, "functions must be referenced by their name in function calls")
 
         return past.Call(
             func=new_func,
             args=[self.visit(arg) for arg in node.args],
             kwargs={arg.arg: self.visit(arg.value) for arg in node.keywords},
-            location=self.get_location(node),
+            location=loc,
         )
 
     def visit_Subscript(self, node: ast.Subscript) -> past.Subscript:
@@ -167,12 +160,13 @@ class ProgramParser(DialectParser[past.Program]):
         )
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
+        loc = self.get_location(node)
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(
-                value=-node.operand.value, type=symbol_type, location=self.get_location(node)
+                value=-node.operand.value, type=symbol_type, location=loc
             )
-        raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
+        raise CompilationError(loc, "unary operators are only applicable to literals")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)

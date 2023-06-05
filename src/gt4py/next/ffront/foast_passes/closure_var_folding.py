@@ -18,6 +18,7 @@ from typing import Any
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import FrozenNamespace
+from gt4py.next.errors import *
 
 
 @dataclass
@@ -50,22 +51,12 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         return node
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs) -> foast.Constant:
-        # TODO: fix import form parent module by restructuring exception classis
-        from gt4py.next.ffront.func_to_foast import FieldOperatorSyntaxError
-
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
-            # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
-            raise FieldOperatorSyntaxError.from_location(
-                msg="Constant does not have the attribute specified by the AST.",
-                location=node.location,
-            )
-        # TODO: use proper exception type (requires refactoring `FieldOperatorSyntaxError`)
-        raise FieldOperatorSyntaxError.from_location(
-            msg="Attribute can only be used on constants.", location=node.location
-        )
+            raise MissingAttributeError(node.location, node.attr)
+        raise CompilationError(node.location, "attribute access only applicable to constants")
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs
