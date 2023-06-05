@@ -13,7 +13,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
 from functools import reduce
 
 import numpy as np
@@ -63,7 +62,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
         field_tuple = (a, a)
         field_0 = field_tuple[0]
@@ -74,7 +73,7 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return a, b
 
@@ -82,7 +81,7 @@ def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
         return a(Ioff[1])
 
@@ -93,7 +92,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
@@ -115,24 +114,24 @@ def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
     )
     b = gtx.np_as_located_field(Cell)(np.zeros(reduction_setup.num_cells))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def composed_shift_unstructured_flat(
         inp: gtx.Field[[Vertex], float64]
     ) -> gtx.Field[[Cell], float64]:
         return inp(E2V[0])(C2E[0])
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def composed_shift_unstructured_intermediate_result(
         inp: gtx.Field[[Vertex], float64]
     ) -> gtx.Field[[Cell], float64]:
         tmp = inp(E2V[0])
         return tmp(C2E[0])
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def shift_e2v(inp: gtx.Field[[Vertex], float64]) -> gtx.Field[[Edge], float64]:
         return inp(E2V[0])
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def composed_shift_unstructured(
         inp: gtx.Field[[Vertex], float64]
     ) -> gtx.Field[[Cell], float64]:
@@ -153,7 +152,7 @@ def test_composed_unstructured_shift(reduction_setup, fieldview_backend):
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
         tmp = a + b(Ioff[1])
         return tmp(Ioff[1])
@@ -166,7 +165,7 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
         scalars = 1.3, float64(5.0), float64("3.4")
@@ -180,7 +179,7 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
 def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
-    @field_operator
+    @gtx.field_operator
     def testee(a: int) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
@@ -197,11 +196,11 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee_inner(a: int) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
-    @field_operator
+    @gtx.field_operator
     def testee(a: int) -> cases.VField:
         return testee_inner(a + 1)
 
@@ -213,7 +212,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: cases.IJKField, b: int) -> cases.IJKField:
         tmp = b * a
         return tmp(Ioff[1])
@@ -233,11 +232,11 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
             "and as an argument to a field operator."
         )
 
-    @field_operator
+    @gtx.field_operator
     def testee_op(size: int) -> cases.IField:
         return broadcast(size, (IDim,))
 
-    @program
+    @gtx.program
     def testee(size: int, out: cases.IField):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
@@ -250,12 +249,12 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    @scan_operator(axis=KDim, forward=True, init=(0.0))
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
         return qc
 
-    @program
+    @gtx.program
     def testee(qc: gtx.Field[[IDim, KDim], float], scalar: float):
         testee_scan(qc, scalar, out=qc)
 
@@ -271,13 +270,13 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
-    @scan_operator(axis=KDim, forward=True, init=0.0)
+    @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
         state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
     ) -> float:
         return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
-    @field_operator
+    @gtx.field_operator
     def testee_op(
         qc: gtx.Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
     ) -> gtx.Field[[IDim, KDim], float]:
@@ -292,7 +291,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], int64]:
         b = astype(a, int64)
         return b
@@ -306,7 +305,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
         return b
@@ -320,7 +319,7 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
-    @field_operator
+    @gtx.field_operator
     def testee(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], np.float32]:
         b = astype(a, float32)
         return b
@@ -347,7 +346,7 @@ def test_offset_field(fieldview_backend):
     out_I_float = gtx.np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
     out_I_float_1 = gtx.np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def offset_index_field_fo(
         a: gtx.Field[[IDim, KDim], float64],
         offset_field: gtx.Field[[IDim, KDim], int64],
@@ -363,7 +362,7 @@ def test_offset_field(fieldview_backend):
         offset_provider={"Ioff": IDim, "Koff": KDim},
     )
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def offset_index_int_fo(
         a: gtx.Field[[IDim, KDim], float64]
     ) -> gtx.Field[[IDim, KDim], float64]:
@@ -384,7 +383,7 @@ def test_nested_tuple_return(fieldview_backend):
     b_I_float = gtx.np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = gtx.np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def pack_tuple(
         a: gtx.Field[[IDim], float64], b: gtx.Field[[IDim], float64]
     ) -> tuple[
@@ -392,7 +391,7 @@ def test_nested_tuple_return(fieldview_backend):
     ]:
         return (a, (a, b))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def combine(
         a: gtx.Field[[IDim], float64], b: gtx.Field[[IDim], float64]
     ) -> gtx.Field[[IDim], float64]:
@@ -413,7 +412,7 @@ def test_nested_reduction(reduction_setup, fieldview_backend):
 
     out = gtx.np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def testee(inp: gtx.Field[[Edge], int64]) -> gtx.Field[[Edge], int64]:
         tmp = neighbor_sum(inp(V2E), axis=V2EDim)
         return neighbor_sum(tmp(E2V), axis=E2VDim)
@@ -434,7 +433,7 @@ def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
 
     out = gtx.np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def testee(inp: gtx.Field[[Edge], int64]) -> gtx.Field[[Edge], int64]:
         tmp = inp(V2E)
         tmp2 = tmp(E2V)
@@ -451,7 +450,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
     V2EDim = rs.V2EDim
     V2E = rs.V2E
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def reduction_tuple(
         a: gtx.Field[[Edge], int64], b: gtx.Field[[Edge], int64]
     ) -> tuple[gtx.Field[[Vertex], int64], gtx.Field[[Vertex], int64]]:
@@ -459,7 +458,7 @@ def test_tuple_return_2(reduction_setup, fieldview_backend):
         b = neighbor_sum(b(V2E), axis=V2EDim)
         return a, b
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def combine_tuple(
         a: gtx.Field[[Edge], int64], b: gtx.Field[[Edge], int64]
     ) -> gtx.Field[[Vertex], int64]:
@@ -486,7 +485,7 @@ def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_
     b = gtx.np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
     out = gtx.np_as_located_field(Edge)(np.zeros((num_edges,)))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def reduce_tuple_element(
         edge_field: gtx.Field[[Edge], float64], vertex_field: gtx.Field[[Vertex], float64]
     ) -> gtx.Field[[Edge], float64]:
@@ -508,7 +507,7 @@ def test_tuple_arg(fieldview_backend):
     b_I_float = gtx.np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = gtx.np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def unpack_tuple(
         inp: tuple[
             tuple[gtx.Field[[IDim], float64], gtx.Field[[IDim], float64]],
@@ -530,11 +529,11 @@ def test_fieldop_from_scan(fieldview_backend, forward):
     if not forward:
         expected = np.flip(expected)
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def add(carry: float, foo: float) -> float:
         return carry + foo
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float) -> float:
         return add(carry, 1.0)
 
@@ -563,17 +562,17 @@ def test_solve_triag(fieldview_backend):
     matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
     expected = np.linalg.solve(matrices, d_np)
 
-    @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
         state: tuple[float, float], a: float, b: float, c: float, d: float
     ) -> tuple[float, float]:
         return (c / (b - a * state[0]), (d - a * state[1]) / (b - a * state[0]))
 
-    @scan_operator(axis=KDim, forward=False, init=0.0)
+    @gtx.scan_operator(axis=KDim, forward=False, init=0.0)
     def tridiag_backward(x_kp1: float, cp: float, dp: float) -> float:
         return dp - cp * x_kp1
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def solve_tridiag(
         a: gtx.Field[[IDim, JDim, KDim], float],
         b: gtx.Field[[IDim, JDim, KDim], float],
@@ -594,7 +593,7 @@ def test_ternary_operator(left, right, fieldview_backend):
     b_I_float = gtx.np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
     out_I_float = gtx.np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: gtx.Field[[IDim], float], b: gtx.Field[[IDim], float], left: float, right: float
     ) -> gtx.Field[[IDim], float]:
@@ -604,7 +603,7 @@ def test_ternary_operator(left, right, fieldview_backend):
     e = np.asarray(a_I_float) if left < right else np.asarray(b_I_float)
     assert np.allclose(e, out_I_float)
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def ternary_field_op_scalars(left: float, right: float) -> gtx.Field[[IDim], float]:
         return broadcast(3.0, (IDim,)) if left > right else broadcast(4.0, (IDim,))
 
@@ -620,7 +619,7 @@ def test_ternary_operator_tuple(left, right, fieldview_backend):
     out_I_float = gtx.np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
     out_I_float_1 = gtx.np_as_located_field(IDim)(np.zeros((size,), dtype=float64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def ternary_field_op(
         a: gtx.Field[[IDim], float], b: gtx.Field[[IDim], float], left: float, right: float
     ) -> tuple[gtx.Field[[IDim], float], gtx.Field[[IDim], float]]:
@@ -651,7 +650,7 @@ def test_ternary_builtin_neighbor_sum(reduction_setup, fieldview_backend):
     b = gtx.np_as_located_field(Edge)(2 * np.ones((num_edges,)))
     out = gtx.np_as_located_field(Vertex)(np.zeros((num_vertices,)))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def ternary_reduce(
         a: gtx.Field[[Edge], float], b: gtx.Field[[Edge], float]
     ) -> gtx.Field[[Vertex], float]:
@@ -676,7 +675,7 @@ def test_ternary_scan(fieldview_backend):
     out = gtx.np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.asarray([i if i <= a_float else a_float + 1 for i in range(1, size + 1)])
 
-    @scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
+    @gtx.scan_operator(axis=KDim, forward=True, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
 
@@ -693,7 +692,7 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):
     if not forward:
         expected = np.flip(expected)
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(
         carry: tuple[float, tuple[float, float]]
     ) -> tuple[float, tuple[float, float]]:
@@ -721,7 +720,7 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
         ]
     )
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
         return carry + a[0] + a[1]
 
@@ -733,12 +732,12 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):
 def test_docstring():
     a_I_float = gtx.np_as_located_field(IDim)(np.random.randn(size).astype("float64"))
 
-    @field_operator
+    @gtx.field_operator
     def fieldop_with_docstring(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
         """My docstring."""
         return a
 
-    @program
+    @gtx.program
     def test_docstring(a: gtx.Field[[IDim], float64]):
         """My docstring."""
         fieldop_with_docstring(a, out=a)
@@ -753,11 +752,11 @@ def test_domain(fieldview_backend):
     expected = np.array(out)
     expected[1:9, 4:6] = 1 + 1
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_domain(a: gtx.Field[[IDim, JDim], float64]) -> gtx.Field[[IDim, JDim], float64]:
         return a + a
 
-    @program(backend=fieldview_backend)
+    @gtx.program(backend=fieldview_backend)
     def program_domain(
         inp: gtx.Field[[IDim, JDim], float64], out: gtx.Field[[IDim, JDim], float64]
     ):
@@ -782,11 +781,11 @@ def test_domain_input_bounds(fieldview_backend):
     expected = np.array(out)
     expected[lower_i:upper_i, lower_j:upper_j] = 1 + 1
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_domain(a: gtx.Field[[IDim, JDim], float64]) -> gtx.Field[[IDim, JDim], float64]:
         return a + a
 
-    @program(backend=fieldview_backend)
+    @gtx.program(backend=fieldview_backend)
     def program_domain(
         inp: gtx.Field[[IDim, JDim], float64],
         out: gtx.Field[[IDim, JDim], float64],
@@ -817,11 +816,11 @@ def test_domain_input_bounds_1(fieldview_backend):
     expected = np.array(a_IJ_float)
     expected[lower_i:upper_i, lower_j:upper_j] = 1 + 1
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_domain(a: gtx.Field[[IDim, JDim], float64]) -> gtx.Field[[IDim, JDim], float64]:
         return a + a
 
-    @program(backend=fieldview_backend)
+    @gtx.program(backend=fieldview_backend)
     def program_domain(
         a: gtx.Field[[IDim, JDim], float64],
         lower_i: int64,
@@ -851,13 +850,13 @@ def test_domain_tuple(fieldview_backend):
     expected1 = np.array(out1)
     expected1[1:9, 4:6] = np.asarray(inp1)[1:9, 4:6]
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_domain_tuple(
         a: gtx.Field[[IDim, JDim], float64], b: gtx.Field[[IDim, JDim], float64]
     ) -> tuple[gtx.Field[[IDim, JDim], float64], gtx.Field[[IDim, JDim], float64]]:
         return (a + b, b)
 
-    @program(backend=fieldview_backend)
+    @gtx.program(backend=fieldview_backend)
     def program_domain_tuple(
         inp0: gtx.Field[[IDim, JDim], float64],
         inp1: gtx.Field[[IDim, JDim], float64],
@@ -879,7 +878,7 @@ def test_where_k_offset(fieldview_backend):
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros((size, size)))
     k_index = gtx.index_field(KDim)
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_where_k_offset(
         a: gtx.Field[[IDim, KDim], float64],
         k_index: gtx.Field[[KDim], int64],
@@ -896,7 +895,7 @@ def test_where_k_offset(fieldview_backend):
 def test_undefined_symbols():
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
 
-        @field_operator
+        @gtx.field_operator
         def return_undefined():
             return undefined_symbol
 
@@ -905,7 +904,7 @@ def test_zero_dims_fields(fieldview_backend):
     inp = gtx.np_as_located_field()(np.array(1.0))
     out = gtx.np_as_located_field()(np.array(0.0))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def implicit_broadcast_scalar(inp: gtx.Field[[], float]):
         return inp
 
@@ -918,13 +917,13 @@ def test_implicit_broadcast_mixed_dims(fieldview_backend):
     inp = gtx.np_as_located_field()(np.array(1.0))
     out = gtx.np_as_located_field(IDim)(np.ones((10,)))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast(
         zero_dim_inp: gtx.Field[[], float], inp: gtx.Field[[IDim], float], scalar: float
     ) -> gtx.Field[[IDim], float]:
         return inp + zero_dim_inp * scalar
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def fieldop_implicit_broadcast_2(inp: gtx.Field[[IDim], float]) -> gtx.Field[[IDim], float]:
         fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
         return fi
@@ -941,7 +940,7 @@ def test_tuple_unpacking(fieldview_backend):
     out3 = gtx.np_as_located_field(IDim)(np.ones((size,)))
     out4 = gtx.np_as_located_field(IDim)(np.ones((size,)))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def unpack(
         inp: gtx.Field[[IDim], float64],
     ) -> tuple[
@@ -983,7 +982,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
         gtx.Field[[IDim], float64],
     ]
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def unpack(
         inp: gtx.Field[[IDim], float64],
     ) -> OutType:
@@ -1005,7 +1004,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
-        @field_operator(backend=fieldview_backend)
+        @gtx.field_operator(backend=fieldview_backend)
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -1016,7 +1015,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
 
-        @field_operator(backend=fieldview_backend)
+        @gtx.field_operator(backend=fieldview_backend)
         def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
             return a
@@ -1030,7 +1029,7 @@ def test_constant_closure_vars(fieldview_backend):
         E=np.float32(2.718),
     )
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def consume_constants(input: gtx.Field[[IDim], np.float32]) -> gtx.Field[[IDim], np.float32]:
         return constants.PI * constants.E * input
 
