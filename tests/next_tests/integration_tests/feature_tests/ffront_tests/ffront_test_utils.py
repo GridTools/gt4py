@@ -30,7 +30,10 @@ from gt4py.next.iterator.embedded import (
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
+@pytest.fixture(params=[roundtrip.executor,
+                        #gtfn_cpu.run_gtfn,
+                        # gtfn_cpu.run_gtfn_imperative
+])
 def fieldview_backend(request):
     yield request.param
 

@@ -107,51 +107,24 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         annotations: dict[str, Any],
     ) -> DialectRootT:
         source, filename, starting_line = source_definition
-        try:
-            line_offset = starting_line - 1
-            definition_ast: ast.AST
-            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
-            definition_ast = ast.increment_lineno(definition_ast, line_offset)
-            line_offset = 0  # line numbers are correct from now on
 
-            definition_ast = RemoveDocstrings.apply(definition_ast)
-            definition_ast = FixMissingLocations.apply(definition_ast)
-            output_ast = cls._postprocess_dialect_ast(
-                cls(
-                    source_definition=source_definition,
-                    closure_vars=closure_vars,
-                    annotations=annotations,
-                ).visit(cls._preprocess_definition_ast(definition_ast)),
-                closure_vars,
-                annotations,
-            )
-        except SyntaxError as err:
-            _ensure_syntax_error_invariants(err)
+        line_offset = starting_line - 1
+        definition_ast: ast.AST
+        definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+        definition_ast = ast.increment_lineno(definition_ast, line_offset)
+        line_offset = 0  # line numbers are correct from now on
 
-            # The ast nodes do not contain information about the path of the
-            #  source file or its contents. We add this information here so
-            #  that raising an error using :func:`DialectSyntaxError.from_AST`
-            #  does not require passing the information on every invocation.
-            if not err.filename:
-                err.filename = filename
-
-            # ensure line numbers are relative to the file (respects `starting_line`)
-            if err.lineno:
-                err.lineno = err.lineno + line_offset
-            if err.end_lineno:
-                err.end_lineno = err.end_lineno + line_offset
-
-            if not err.text:
-                if err.lineno:
-                    source_lineno = err.lineno - starting_line
-                    source_end_lineno = (
-                        (err.end_lineno - starting_line) if err.end_lineno else source_lineno
-                    )
-                    err.text = "\n".join(source.splitlines()[source_lineno : source_end_lineno + 1])
-                else:
-                    err.text = source
-
-            raise err
+        definition_ast = RemoveDocstrings.apply(definition_ast)
+        definition_ast = FixMissingLocations.apply(definition_ast)
+        output_ast = cls._postprocess_dialect_ast(
+            cls(
+                source_definition=source_definition,
+                closure_vars=closure_vars,
+                annotations=annotations,
+            ).visit(cls._preprocess_definition_ast(definition_ast)),
+            closure_vars,
+            annotations,
+        )
 
         return output_ast
 
@@ -178,5 +151,5 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
             msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
         )
 
-    def _make_loc(self, node: ast.AST) -> SourceLocation:
+    def get_location(self, node: ast.AST) -> SourceLocation:
         return SourceLocation.from_AST(node, source=self.source_definition.filename)

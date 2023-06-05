@@ -54,7 +54,7 @@ class ProgramParser(DialectParser[past.Program]):
                 id=name,
                 type=type_translation.from_value(val),
                 namespace=dialect_ast_enums.Namespace.CLOSURE,
-                location=self._make_loc(node),
+                location=self.get_location(node),
             )
             for name, val in self.closure_vars.items()
         ]
@@ -65,7 +65,7 @@ class ProgramParser(DialectParser[past.Program]):
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             closure_vars=closure_symbols,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[past.DataSymbol]:
@@ -79,7 +79,7 @@ class ProgramParser(DialectParser[past.Program]):
             raise ProgramSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        return past.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
+        return past.DataSymbol(id=node.arg, location=self.get_location(node), type=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
@@ -119,17 +119,17 @@ class ProgramParser(DialectParser[past.Program]):
             op=self.visit(node.op),
             left=self.visit(node.left),
             right=self.visit(node.right),
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Name(self, node: ast.Name) -> past.Name:
-        return past.Name(id=node.id, location=self._make_loc(node))
+        return past.Name(id=node.id, location=self.get_location(node))
 
     def visit_Dict(self, node: ast.Dict) -> past.Dict:
         return past.Dict(
             keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
             values_=[self.visit(param) for param in node.values],
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Call(self, node: ast.Call) -> past.Call:
@@ -141,20 +141,20 @@ class ProgramParser(DialectParser[past.Program]):
             func=new_func,
             args=[self.visit(arg) for arg in node.args],
             kwargs={arg.arg: self.visit(arg.value) for arg in node.keywords},
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Subscript(self, node: ast.Subscript) -> past.Subscript:
         return past.Subscript(
             value=self.visit(node.value),
             slice_=self.visit(node.slice),
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Tuple(self, node: ast.Tuple) -> past.TupleExpr:
         return past.TupleExpr(
             elts=[self.visit(item) for item in node.elts],
-            location=self._make_loc(node),
+            location=self.get_location(node),
             type=ts.DeferredType(constraint=ts.TupleType),
         )
 
@@ -163,17 +163,17 @@ class ProgramParser(DialectParser[past.Program]):
             lower=self.visit(node.lower) if node.lower is not None else None,
             upper=self.visit(node.upper) if node.upper is not None else None,
             step=self.visit(node.step) if node.step is not None else None,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(
-                value=-node.operand.value, type=symbol_type, location=self._make_loc(node)
+                value=-node.operand.value, type=symbol_type, location=self.get_location(node)
             )
         raise ProgramSyntaxError.from_AST(node, msg="Unary operators can only be used on literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)
-        return past.Constant(value=node.value, type=symbol_type, location=self._make_loc(node))
+        return past.Constant(value=node.value, type=symbol_type, location=self.get_location(node))

@@ -151,7 +151,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
-            self.closure_vars, self._make_loc(node)
+            self.closure_vars, self.get_location(node)
         )
         for name in self.closure_vars.keys():
             if name in skip_names:
@@ -161,11 +161,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     id=name,
                     type=ts.DeferredType(constraint=None),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
-                    location=self._make_loc(node),
+                    location=self.get_location(node),
                 )
             )
 
-        new_body = self._visit_stmts(node.body, self._make_loc(node), **kwargs)
+        new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
             raise FieldOperatorSyntaxError.from_AST(
@@ -177,7 +177,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             params=self.visit(node.args, **kwargs),
             body=new_body,
             closure_vars=closure_var_symbols,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
@@ -191,7 +191,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Only arguments of type DataType are allowed."
             )
-        return foast.DataSymbol(id=node.arg, location=self._make_loc(node), type=new_type)
+        return foast.DataSymbol(id=node.arg, location=self.get_location(node), type=new_type)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -207,10 +207,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         foast.Starred(
                             id=foast.DataSymbol(
                                 id=self.visit(elt.value).id,
-                                location=self._make_loc(elt),
+                                location=self.get_location(elt),
                                 type=ts.DeferredType(constraint=ts.DataType),
                             ),
-                            location=self._make_loc(elt),
+                            location=self.get_location(elt),
                             type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
@@ -218,13 +218,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     new_targets.append(
                         foast.DataSymbol(
                             id=self.visit(elt).id,
-                            location=self._make_loc(elt),
+                            location=self.get_location(elt),
                             type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
 
             return foast.TupleTargetAssign(
-                targets=new_targets, value=self.visit(node.value), location=self._make_loc(node)
+                targets=new_targets, value=self.visit(node.value), location=self.get_location(node)
             )
 
         if not isinstance(target, ast.Name):
@@ -241,11 +241,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.Assign(
             target=foast.DataSymbol(
                 id=target.id,
-                location=self._make_loc(target),
+                location=self.get_location(target),
                 type=ts.DeferredType(constraint=constraint_type),
             ),
             value=new_value,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
@@ -265,11 +265,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.Assign(
             target=foast.Symbol[ts.FieldType](
                 id=node.target.id,
-                location=self._make_loc(node.target),
+                location=self.get_location(node.target),
                 type=target_type,
             ),
             value=self.visit(node.value) if node.value else None,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     @staticmethod
@@ -298,33 +298,33 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.Subscript(
             value=self.visit(node.value),
             index=index,
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         return foast.Attribute(
-            value=self.visit(node.value), attr=node.attr, location=self._make_loc(node)
+            value=self.visit(node.value), attr=node.attr, location=self.get_location(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts], location=self._make_loc(node)
+            elts=[self.visit(item) for item in node.elts], location=self.get_location(node)
         )
 
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         if not node.value:
             raise FieldOperatorSyntaxError.from_AST(node, msg="Empty return not allowed")
-        return foast.Return(value=self.visit(node.value), location=self._make_loc(node))
+        return foast.Return(value=self.visit(node.value), location=self.get_location(node))
 
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
-        return foast.Name(id=node.id, location=self._make_loc(node))
+        return foast.Name(id=node.id, location=self.get_location(node))
 
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
         return foast.UnaryOp(
-            op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
+            op=self.visit(node.op), operand=self.visit(node.operand), location=self.get_location(node)
         )
 
     def visit_UAdd(self, node: ast.UAdd, **kwargs) -> dialect_ast_enums.UnaryOperator:
@@ -344,7 +344,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.op),
             left=self.visit(node.left),
             right=self.visit(node.right),
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Add(self, node: ast.Add, **kwargs) -> dialect_ast_enums.BinaryOperator:
@@ -385,12 +385,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             condition=self.visit(node.test),
             true_expr=self.visit(node.body),
             false_expr=self.visit(node.orelse),
-            location=self._make_loc(node),
+            location=self.get_location(node),
             type=ts.DeferredType(constraint=ts.DataType),
         )
 
     def visit_If(self, node: ast.If, **kwargs) -> foast.IfStmt:
-        loc = self._make_loc(node)
+        loc = self.get_location(node)
         return foast.IfStmt(
             condition=self.visit(node.test, **kwargs),
             true_branch=self._visit_stmts(node.body, loc, **kwargs),
@@ -415,7 +415,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             op=self.visit(node.ops[0]),
             left=self.visit(node.left),
             right=self.visit(node.comparators[0]),
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Gt(self, node: ast.Gt, **kwargs) -> foast.CompareOperator:
@@ -485,7 +485,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             func=self.visit(node.func, **kwargs),
             args=[self.visit(arg, **kwargs) for arg in node.args],
             kwargs={keyword.arg: self.visit(keyword.value, **kwargs) for keyword in node.keywords},
-            location=self._make_loc(node),
+            location=self.get_location(node),
         )
 
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
@@ -498,6 +498,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         return foast.Constant(
             value=node.value,
-            location=self._make_loc(node),
+            location=self.get_location(node),
             type=type_,
         )
