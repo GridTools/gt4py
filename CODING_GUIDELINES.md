@@ -25,13 +25,6 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 - We use [`black`][black] and [`isort`][isort] for source code and imports formatting, which may work differently than indicated by the guidelines in section [_3. Python Style Rules_](https://google.github.io/styleguide/pyguide.html#3-python-style-rules). For example, maximum line length is set to 100 instead of 79 (although docstring lines should still be limited to 79).
 - According to subsection [_2.19 Power Features_](https://google.github.io/styleguide/pyguide.html#219-power-features), direct use of _power features_ (e.g. custom metaclasses, import hacks, reflection) should be avoided, but standard library classes that internally use these power features are accepted. Following the same spirit, we allow the use of power features in infrastructure code with similar functionality and scope as the Python standard library.
 - According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing), symbols from `typing` and `collections.abc` modules used in type annotations _"can be imported directly to keep common annotations concise and match standard typing practices"_. Following the same spirit, we allow symbols to be imported directly from third-party or internal modules when they only contain a collection of frequently used typying definitions.
-- Imports [_2.2 Imports_](https://google.github.io/styleguide/pyguide.html#22-imports):
-  - Importing individual classes and functions is allowed if they are to be used in DSL code and the DSL does not allow them to be qualified.
-  - Importing individual classes and functions is allowed in order to explicitly re-export them (via `__all__`). Each module which is allowed to re-export code objects has to be documented here with a reason.
-    - `gt4py.next` reexports FieldView classes and helpers in order to create a `numpy` like user experience.
-  - `from path.to.submodule import *` is **only** allowed in order to re-export the contents of a submodule if:
-    - the submodule in question defines `__all__` and
-    - the submodule in question exports many public API objects (example: `gt4py.next.ffront.fbuiltins`).
 
 ### Common questions
 
@@ -52,6 +45,11 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
   except ResourceException:
      pass
   ```
+
+- where to `import from gt4py.next` or `import gt4py.next as gtx`?
+
+  - Client code (like tests, doctests and examples) should use the above style for public FieldView API
+  - Library code should always import the defining module and use qualified names.
 
 ### Docstrings
 
@@ -87,12 +85,6 @@ __all__ = ["func_a", "CONST_B"]
 Try to keep sections and items logically ordered, add section separator comments to make section boundaries explicit when needed. If there is not a single evident logical order, pick the order you consider best or use alphabetical order.
 
 Consider configuration files as another type of source code and apply the same criteria, using comments when possible for better readability.
-
-### Import conventions
-
-- Library code should import the defining module of a code object, unless a proxy is provided specifically for some reason
-- Test, doctest and example code should import the designated public API module (if exists) and use code objects from there
-- Test, doctest and example code should import public API objects from the designated public API module (if exists) if they are used in DSL code.
 
 ### Ignoring QA errors
 
