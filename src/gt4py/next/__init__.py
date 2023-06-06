@@ -14,7 +14,7 @@
 """
 GT4Py-NEXT - Performance portable and composable weather & climate stencils.
 
-This module deviates from the project style guide in the following way:
+This module deviates from the project coding style (Google Python style) in the following way:
 
 [style guide link](https://google.github.io/styleguide/pyguide.html#22-imports):
 
@@ -37,7 +37,8 @@ from .iterator.embedded import (
 )
 
 
-__all__ = [  # submodules
+__all__ = [
+      # submodules
     "common",
     "ffront",
     "iterator",
