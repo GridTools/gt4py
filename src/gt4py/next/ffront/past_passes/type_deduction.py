@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.errors import *
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -145,8 +146,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         # check both types compatible
         for arg in (left, right):
             if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
-                raise ProgramTypeError.from_past_node(
-                    arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
+                raise CompilationError(
+                    arg.location, f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
         left_type = cast(ts.ScalarType, left.type)
@@ -158,17 +159,17 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
             right_type
         ):
-            raise ProgramTypeError.from_past_node(
-                arg,
-                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+            raise CompilationError(
+                arg.location,
+                f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
             )
 
         try:
             return type_info.promote(left_type, right_type)
         except GTTypeError as ex:
-            raise ProgramTypeError.from_past_node(
-                node,
-                msg=f"Could not promote `{left_type}` and `{right_type}` to common type"
+            raise CompilationError(
+                node.location,
+                f"Could not promote `{left_type}` and `{right_type}` to common type"
                 f" in call to `{node.op}`.",
             ) from ex
 
@@ -228,8 +229,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         except GTTypeError as ex:
-            raise ProgramTypeError.from_past_node(
-                node, msg=f"Invalid call to `{node.func.id}`."
+            raise CompilationError(
+                node.location, f"Invalid call to `{node.func.id}`."
             ) from ex
 
         return past.Call(
@@ -243,41 +244,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise ProgramTypeError.from_past_node(
-                node, msg=f"Undeclared or untyped symbol `{node.id}`."
+            raise CompilationError(
+                node.location, f"Undeclared or untyped symbol `{node.id}`."
             )
 
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)
-
-
-class ProgramTypeError(GTTypeError):
-    """Exception for problematic type deductions that originate in user code."""
-
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno=0,
-        offset=0,
-        filename=None,
-        end_lineno=None,
-        end_offset=None,
-        text=None,
-    ):
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_past_node(
-        cls,
-        node: past.LocatedNode,
-        *,
-        msg: str = "",
-    ):
-        return cls(
-            msg,
-            lineno=node.location.line,
-            offset=node.location.column,
-            filename=node.location.source,
-            end_lineno=node.location.end_line,
-            end_offset=node.location.end_column,
-        )

@@ -23,6 +23,7 @@ from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
+from gt4py.next.errors import *
 
 from next_tests.past_common_fixtures import (
     IDim,
@@ -165,7 +166,7 @@ def test_inout_prohibited(identity_def):
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
-        GTTypeError,
+        CompilationError,
     ) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),

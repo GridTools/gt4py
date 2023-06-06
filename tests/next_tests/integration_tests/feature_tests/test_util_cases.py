@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from gt4py.next import common
+from gt4py.next.errors import *
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.program_processors.runners import roundtrip
 
@@ -88,7 +89,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
 
-    with pytest.raises(common.GTTypeError):
+    with pytest.raises(CompilationError):
         cases.verify(cartesian_case, addition, a, b, out=out, ref=a.array() + b.array())
 
 

@@ -20,8 +20,8 @@ import numpy as np
 import pytest
 
 from gt4py.next.common import Field, GTTypeError
+from gt4py.next.errors import *
 from gt4py.next.ffront.decorator import field_operator, program
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
@@ -237,7 +237,7 @@ def test_wrong_argument_type(fieldview_backend, copy_program_def):
 
     copy_program = program(copy_program_def, backend=fieldview_backend)
 
-    with pytest.raises(ProgramTypeError) as exc_info:
+    with pytest.raises(ValueError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
@@ -309,5 +309,5 @@ def test_input_kwargs(fieldview_backend):
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    with pytest.raises(GTTypeError, match="got multiple values for argument"):
+    with pytest.raises(ValueError, match="got multiple values for argument"):
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})

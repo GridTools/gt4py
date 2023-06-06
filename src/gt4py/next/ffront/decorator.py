@@ -47,13 +47,14 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
     ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
 )
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction, ProgramTypeError
+from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.errors import *
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
@@ -101,7 +102,7 @@ def _canonicalize_args(
     for param_i, param in enumerate(node_params):
         if param.id in new_kwargs:
             if param_i < len(args):
-                raise ProgramTypeError(f"got multiple values for argument {param.id}.")
+                raise ValueError(f"got multiple values for argument {param.id}.")
             new_args.append(kwargs[param.id])
             new_kwargs.pop(param.id)
         elif param_i < len(args):
@@ -330,9 +331,7 @@ class Program:
                 raise_exception=True,
             )
         except GTTypeError as err:
-            raise ProgramTypeError.from_past_node(
-                self.past_node, msg=f"Invalid argument types in call to `{self.past_node.id}`!"
-            ) from err
+            raise ValueError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
