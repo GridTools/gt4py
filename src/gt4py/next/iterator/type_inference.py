@@ -589,14 +589,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if node.id in ir.BUILTINS:
             if node.id in BUILTIN_TYPES:
                 return freshen(BUILTIN_TYPES[node.id])
-            elif node.id in (
-                "make_tuple",
-                "tuple_get",
-                "shift",
-                "cartesian_domain",
-                "unstructured_domain",
-                "cast_",
-            ):
+            elif node.id in ir.GRAMMAR_BUILTINS:
                 raise TypeError(
                     f"Builtin '{node.id}' is only allowed as applied/called function by the type "
                     f"inference."
@@ -659,6 +652,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             raise TypeError("`tuple_get` requires exactly two arguments.")
         if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
             raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
@@ -902,15 +896,34 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         )
 
 
+def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
+    for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
+        try:
+            child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
+        except KeyError:
+            if not (
+                isinstance(child_node, ir.SymRef)
+                and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
+            ):
+                raise AssertionError(
+                    f"Expected a type to be inferred for node `{child_node}`, but none was found."
+                )
+
+
 def infer_all(
     node: ir.Node,
+    *,
     offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
     reindex: bool = True,
+    save_to_annex=False,
 ) -> dict[int, Type]:
     """
     Infer the types of the child expressions of a given iterator IR expression.
 
     The result is a dictionary mapping the (Python) id of child nodes to their type.
+
+    The `save_to_annex` flag should only be used as a last resort when the  return dictionary is
+    not enough.
     """
     # Collect preliminary types of all nodes and constraints on them
     inferrer = _TypeInferrer(offset_provider=offset_provider)
@@ -925,15 +938,24 @@ def infer_all(
     if reindex:
         unified_types = reindex_vars(list(unified_types))
 
-    return {id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)}
+    result = {
+        id_: unified_type
+        for id_, unified_type in zip(collected_types.keys(), unified_types, strict=True)
+    }
+
+    if save_to_annex:
+        _save_types_to_annex(node, result)
+
+    return result
 
 
 def infer(
     expr: ir.Node,
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
+    save_to_annex: bool = False,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    inferred_types = infer_all(expr, offset_provider)
+    inferred_types = infer_all(expr, offset_provider=offset_provider, save_to_annex=save_to_annex)
     return inferred_types[id(expr)]
 
 
