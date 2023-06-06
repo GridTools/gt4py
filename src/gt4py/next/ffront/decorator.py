@@ -239,21 +239,10 @@ class Program:
             )
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
-        )
+        return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=self.backend,
-            definition=self.definition,
-            grid_type=grid_type,
-        )
+        return dataclasses.replace(self, grid_type=grid_type)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
