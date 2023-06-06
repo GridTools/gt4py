@@ -33,6 +33,7 @@ from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+    Cell,
     Edge,
     IDim,
     Ioff,
@@ -48,18 +49,25 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 # mypy does not accept [IDim, ...] as a type
 IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
+KField: TypeAlias = common.Field[[KDim], np.int64]  # type: ignore [valid-type]
+IJField: TypeAlias = common.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
+IKField: TypeAlias = common.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
 IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
 EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
+CField: TypeAlias = common.Field[[Cell], np.int64]  # type: ignore [valid-type]
+EmptyField: TypeAlias = common.Field[[], np.int64]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
 #   by `unstructured_case`.
 V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
 E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
+C2EDim = common.Dimension("C2E", kind=common.DimensionKind.LOCAL)
 V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = fbuiltins.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl
@@ -451,6 +459,7 @@ def unstructured_case(
         default_sizes={
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
+            Cell: reduction_setup.num_cells,
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
