@@ -30,7 +30,6 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
-from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import gtfn_cpu
