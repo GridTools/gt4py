@@ -124,25 +124,7 @@ class GTError:
     ...
 
 
-class GTRuntimeError(GTError, RuntimeError):
-    """Base class for GridTools run-time errors."""
-
-    ...
-
-
-class GTSyntaxError(GTError, SyntaxError):
-    """Base class for GridTools syntax errors."""
-
-    ...
-
-
 class GTTypeError(GTError, TypeError):
     """Base class for GridTools type errors."""
-
-    ...
-
-
-class GTValueError(GTError, ValueError):
-    """Base class for GridTools value errors."""
 
     ...

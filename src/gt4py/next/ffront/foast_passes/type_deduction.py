@@ -16,7 +16,7 @@ from typing import Optional, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next.common import DimensionKind, GTSyntaxError, GTTypeError
+from gt4py.next.common import DimensionKind, GTTypeError
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
     fbuiltins,

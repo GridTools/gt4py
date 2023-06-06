@@ -55,13 +55,13 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
     try:
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
-        raise common.GTValueError(
+        raise ValueError(
             f"Unexpected error when parsing provided source code (\n{source}\n)"
         ) from err
 
     assert mod_st.get_type() == "module"
     if len(children := mod_st.get_children()) != 1:
-        raise common.GTValueError(
+        raise ValueError(
             f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
         )
 
