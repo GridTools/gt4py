@@ -46,7 +46,7 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
-    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -413,6 +413,7 @@ class NativeFunction(enum.Enum):
     SQRT = enum.auto()
     EXP = enum.auto()
     LOG = enum.auto()
+    LOG10 = enum.auto()
     GAMMA = enum.auto()
     CBRT = enum.auto()
 
@@ -448,6 +449,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.SQRT: 1,
     NativeFunction.EXP: 1,
     NativeFunction.LOG: 1,
+    NativeFunction.LOG10: 1,
     NativeFunction.GAMMA: 1,
     NativeFunction.CBRT: 1,
     NativeFunction.ISFINITE: 1,

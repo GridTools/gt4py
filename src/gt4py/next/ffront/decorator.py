@@ -239,21 +239,10 @@ class Program:
             )
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
-        )
+        return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=self.backend,
-            definition=self.definition,
-            grid_type=grid_type,
-        )
+        return dataclasses.replace(self, grid_type=grid_type)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -506,22 +495,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=backend,
-            grid_type=self.grid_type,
-        )
+        return dataclasses.replace(self, backend=backend)
 
-    def with_grid_type(self, grid_type: GridType):
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=self.backend,
-            grid_type=grid_type,
-        )
+    def with_grid_type(self, grid_type: GridType) -> FieldOperator:
+        return dataclasses.replace(self, grid_type=grid_type)
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
