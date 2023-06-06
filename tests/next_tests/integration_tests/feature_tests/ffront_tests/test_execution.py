@@ -34,9 +34,9 @@ from gt4py.next.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.errors import *
 
 from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import (
@@ -875,7 +875,7 @@ def test_where_k_offset(fieldview_backend):
 
 
 def test_undefined_symbols():
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+    with pytest.raises(CompilationError, match="Undeclared symbol"):
 
         @field_operator
         def return_undefined():
@@ -982,7 +982,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        CompilationError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
@@ -994,7 +994,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
     with pytest.raises(
-        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
+        CompilationError, match=(r"Assignment value must be of type tuple!")
     ):
 
         @field_operator(backend=fieldview_backend)

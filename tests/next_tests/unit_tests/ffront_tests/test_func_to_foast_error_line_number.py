@@ -22,6 +22,7 @@ from gt4py.next.common import Dimension, Field
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from gt4py.next.errors import *
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -126,7 +127,7 @@ def test_fo_type_deduction_error():
     def field_operator_with_undeclared_symbol():
         return undeclared_symbol
 
-    with pytest.raises(type_deduction.FieldOperatorTypeDeductionError) as exc_info:
+    with pytest.raises(CompilationError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)
 
     exc = exc_info.value

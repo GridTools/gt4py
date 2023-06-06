@@ -53,7 +53,7 @@ from gt4py.next.ffront.fbuiltins import (
     int64,
     where,
 )
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+from gt4py.next.errors import *
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.builtins import (
@@ -186,7 +186,7 @@ def test_clashing_annotated_assignment():
         tmp: Field[[TDim], "int64"] = inp
         return tmp
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
+    with pytest.raises(CompilationError, match="type inconsistency"):
         _ = FieldOperatorParser.apply_to_function(clashing)
 
 
@@ -276,7 +276,7 @@ def test_conditional_wrong_mask_type():
         return where(a, a, a)
 
     msg = r"Expected a field with dtype bool."
-    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+    with pytest.raises(CompilationError, match=msg):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
 
 
@@ -289,7 +289,7 @@ def test_conditional_wrong_arg_type():
         return where(mask, a, b)
 
     msg = r"Could not promote scalars of different dtype \(not implemented\)."
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+    with pytest.raises(CompilationError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -299,7 +299,7 @@ def test_ternary_with_field_condition():
     def ternary_with_field_condition(cond: Field[[], bool]):
         return 1 if cond else 2
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
+    with pytest.raises(CompilationError, match=r"should be .* `bool`"):
         _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
 
 
@@ -426,8 +426,8 @@ def test_zero_dims_ternary():
     ):
         return a if cond == 1 else b
 
-    msg = r"Could not deduce type"
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+    msg = r"Incompatible datatypes in operator `==`"
+    with pytest.raises(CompilationError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
 
     assert re.search(msg, exc_info.value.args[0]) is not None
