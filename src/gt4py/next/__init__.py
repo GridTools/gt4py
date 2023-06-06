@@ -26,26 +26,26 @@ from .iterator.embedded import (
 )
 
 
-__all__ = (
-    [  # submodules
-        "common",
-        "ffront",
-        "iterator",
-        "program_processors",
-        "type_inference",
-    ]
-    + ["Dimension", "DimensionKind", "Field", "GridType"]  # from common
-    + [  # from iterator
-        "NeighborTableOffsetProvider",
-        "StridedNeighborOffsetProvider",
-        "index_field",
-        "np_as_located_field",
-    ]
-    + [  # from ffront
-        "FieldOffset",
-        "field_operator",
-        "program",
-        "scan_operator",
-    ]
-    + fbuiltins.__all__
-)
+__all__ = [  # submodules
+    "common",
+    "ffront",
+    "iterator",
+    "program_processors",
+    "type_inference",
+    # from common
+    "Dimension",
+    "DimensionKind",
+    "Field",
+    "GridType",
+    # from iterator
+    "NeighborTableOffsetProvider",
+    "StridedNeighborOffsetProvider",
+    "index_field",
+    "np_as_located_field",
+    # from ffront
+    "FieldOffset",
+    "field_operator",
+    "program",
+    "scan_operator",
+    *fbuiltins.__all__,
+]
