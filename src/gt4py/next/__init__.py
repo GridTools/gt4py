@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from . import common, ffront, iterator, program_processors, type_inference
-from .common import Dimension, DimensionKind, Field
+from .common import Dimension, DimensionKind, Field, GridType
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here
@@ -34,11 +34,7 @@ __all__ = (
         "program_processors",
         "type_inference",
     ]
-    + [  # from common
-        "Dimension",
-        "DimensionKind",
-        "Field",
-    ]
+    + ["Dimension", "DimensionKind", "Field", "GridType"]  # from common
     + [  # from iterator
         "NeighborTableOffsetProvider",
         "StridedNeighborOffsetProvider",
