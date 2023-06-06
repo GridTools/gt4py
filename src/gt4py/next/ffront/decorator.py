@@ -495,22 +495,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=backend,
-            grid_type=self.grid_type,
-        )
+        return dataclasses.replace(self, backend=backend)
 
-    def with_grid_type(self, grid_type: GridType):
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=self.backend,
-            grid_type=grid_type,
-        )
+    def with_grid_type(self, grid_type: GridType) -> FieldOperator:
+        return dataclasses.replace(self, grid_type=grid_type)
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
