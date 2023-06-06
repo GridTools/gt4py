@@ -21,11 +21,10 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
+import gt4py.next as gtx
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.program_processors.processor_interface import program_executor
@@ -94,7 +93,7 @@ def ${id}(${','.join(params)}):
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
         dtype = np_dtype(node.dtype)
-        return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
+        return f"{node.id} = gtx.np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -107,7 +106,7 @@ def fencil_generator(
     debug: bool,
     lift_mode: LiftMode,
     use_embedded: bool,
-    offset_provider: dict[str, NeighborTableOffsetProvider],
+    offset_provider: dict[str, gtx.NeighborTableOffsetProvider],
 ) -> Callable:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -151,7 +150,7 @@ def fencil_generator(
         import numpy as np
         {builtins_import}
         from gt4py.next.iterator.runtime import *
-        from gt4py.next.iterator.embedded import np_as_located_field
+        from gt4py.next.iterator.embedded import gtx.np_as_located_field
         """
     )
 
@@ -188,8 +187,8 @@ def fencil_generator(
 def execute_roundtrip(
     ir: itir.Node,
     *args,
-    column_axis: Optional[Dimension] = None,
-    offset_provider: dict[str, NeighborTableOffsetProvider],
+    column_axis: Optional[gtx.Dimension] = None,
+    offset_provider: dict[str, gtx.NeighborTableOffsetProvider],
     debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,

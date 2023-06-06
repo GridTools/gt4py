@@ -15,8 +15,8 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
@@ -82,10 +82,10 @@ def test_anton_toy(program_processor, lift_mode):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp = np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
+    inp = gtx.np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
         rng.normal(size=(shape[0] + 2, shape[1] + 2, shape[2])),
     )
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     ref = naive_lap(inp)
 
     run_processor(
