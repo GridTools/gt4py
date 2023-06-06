@@ -119,13 +119,13 @@ class SourceDefinition:
 
     source: str
     filename: str = MISSING_FILENAME
-    starting_line: int = 0
-    starting_column: int = 0
+    line_offset: int = 0
+    column_offset: int = 0
 
     def __iter__(self) -> Iterator:
         yield self.source
         yield self.filename
-        yield self.starting_line
+        yield self.line_offset
 
     from_function = staticmethod(make_source_definition_from_function)
 

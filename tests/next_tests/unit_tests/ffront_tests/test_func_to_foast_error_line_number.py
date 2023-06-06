@@ -97,7 +97,7 @@ def test_syntax_error_without_function():
     """Dialect parsers report line numbers correctly when applied to `SourceDefinition`."""
 
     source_definition = src_utils.SourceDefinition(
-        starting_line=61,
+        line_offset=61,
         source="""
             def invalid_python_syntax():
                 # This function contains a python syntax error

@@ -35,10 +35,10 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
         return ast.parse(textwrap.dedent(source_definition.source)).body[0]
     except SyntaxError as err:
         err.filename = source_definition.filename
-        err.lineno = err.lineno + source_definition.starting_line if err.lineno is not None else None
-        err.offset = err.offset + source_definition.starting_column if err.offset is not None else None
-        err.end_lineno = err.end_lineno + source_definition.starting_line if err.end_lineno is not None else None
-        err.end_offset = err.end_offset + source_definition.starting_column if err.end_offset is not None else None
+        err.lineno = err.lineno + source_definition.line_offset if err.lineno is not None else None
+        err.offset = err.offset + source_definition.column_offset if err.offset is not None else None
+        err.end_lineno = err.end_lineno + source_definition.line_offset if err.end_lineno is not None else None
+        err.end_offset = err.end_offset + source_definition.column_offset if err.end_offset is not None else None
         raise err
 
 
@@ -96,8 +96,8 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     def get_location(self, node: ast.AST) -> SourceLocation:
         file = self.source_definition.filename
-        line_offset = self.source_definition.starting_line
-        col_offset = self.source_definition.starting_column
+        line_offset = self.source_definition.line_offset
+        col_offset = self.source_definition.column_offset
 
         line = node.lineno + line_offset if node.lineno is not None else None
         end_line = node.end_lineno + line_offset if node.end_lineno is not None else None
