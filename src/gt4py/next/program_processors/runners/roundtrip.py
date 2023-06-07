@@ -150,7 +150,7 @@ def fencil_generator(
         import numpy as np
         {builtins_import}
         from gt4py.next.iterator.runtime import *
-        from gt4py.next.iterator.embedded import gtx.np_as_located_field
+        from gt4py.next.iterator.embedded import np_as_located_field
         """
     )
 
