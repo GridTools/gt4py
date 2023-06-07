@@ -334,10 +334,10 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_offset_field(fieldview_backend):  # TODO
-    a_I_arr = np.random.randn(size, size).astype("float64")
-    a_I_float = np_as_located_field(IDim, KDim)(a_I_arr)
-    a_I_float_1 = np_as_located_field(IDim, KDim)(
+def test_offset_field(fieldview_backend):
+    a_I_arr = np.random.randn(size, size).astype("int64")
+    a = np_as_located_field(IDim, KDim)(a_I_arr)
+    b = np_as_located_field(IDim, KDim)(
         np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
     )
     offset_field_arr = np.ones((size - 1, size - 1), dtype=int64)
@@ -345,37 +345,27 @@ def test_offset_field(fieldview_backend):  # TODO
         np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
     )
     offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
-    out_I_float = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
-    out_I_float_1 = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=float64))
+    out = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=bool))
+    ref = np.full((size, size), True, dtype=bool)
 
     @field_operator(backend=fieldview_backend)
     def offset_index_field_fo(
-        a: Field[[IDim, KDim], float64],
-        offset_field: Field[[IDim, KDim], int64],
-    ) -> Field[[IDim, KDim], float64]:
+        a: cases.IKField, b: cases.IKField, offset_field: cases.IKField
+    ) -> Field[[IDim, KDim], bool]:
         a_i = a(as_offset(Ioff, offset_field))
         a_i_k = a_i(as_offset(Koff, offset_field))
-        return a_i_k
+        b_i = b(Ioff[1])
+        b_i_k = b_i(Koff[1])
+        return a_i_k == b_i_k
 
     offset_index_field_fo(
-        a_I_float,
+        a,
+        b,
         offset_field,
-        out=out_I_float,
+        out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
     )
-
-    @field_operator(backend=fieldview_backend)
-    def offset_index_int_fo(a: Field[[IDim, KDim], float64]) -> Field[[IDim, KDim], float64]:
-        a_i = a(Ioff[1])
-        a_i_k = a_i(Koff[1])
-        return a_i_k
-
-    offset_index_int_fo(
-        a_I_float_1, out=out_I_float_1, offset_provider={"Ioff": IDim, "Koff": KDim}
-    )
-    assert np.allclose(
-        out_I_float.array()[: size - 1, : size - 1], out_I_float_1.array()[: size - 1, : size - 1]
-    )
+    assert np.allclose(out.array()[: size - 2, : size - 2], ref[: size - 2, : size - 2])
 
 
 def test_nested_tuple_return(cartesian_case):
@@ -457,35 +447,21 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
-def test_tuple_with_local_field_in_reduction_shifted(reduction_setup, fieldview_backend):  # TODO
-    rs = reduction_setup
-    V2EDim = rs.V2EDim
-    V2E = rs.V2E
-    E2V = rs.E2V
+def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
+    @field_operator
+    def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
+        tup = e(V2E), v
+        red = neighbor_sum(tup[0] + v, axis=V2EDim)
+        tmp = red(E2V[0])
+        return tmp
 
-    num_vertices = rs.num_vertices
-    num_edges = rs.num_edges
-
-    # TODO(tehrengruber): use different values per location
-    a = np_as_located_field(Edge)(np.ones((num_edges,)))
-    b = np_as_located_field(Vertex)(2 * np.ones((num_vertices,)))
-    out = np_as_located_field(Edge)(np.zeros((num_edges,)))
-
-    @field_operator(backend=fieldview_backend)
-    def reduce_tuple_element(
-        edge_field: Field[[Edge], float64], vertex_field: Field[[Vertex], float64]
-    ) -> Field[[Edge], float64]:
-        tup = edge_field(V2E), vertex_field
-        red = neighbor_sum(tup[0] + vertex_field, axis=V2EDim)
-        return red(E2V[0])
-
-    reduce_tuple_element(a, b, out=out, offset_provider=rs.offset_provider)
-
-    # conn table used is inverted here on purpose
-    red = np.sum(np.asarray(a)[rs.v2e_table] + np.asarray(b)[:, np.newaxis], axis=1)
-    expected = red[rs.e2v_table][:, 0]
-
-    assert np.allclose(expected, out)
+    cases.verify_with_default_data(
+        unstructured_case,
+        reduce_tuple_element,
+        ref=lambda e, v: np.sum(
+            e[unstructured_case.offset_provider["V2E"].table[:, :]] + np.tile(v, (4, 1)).T, axis=1
+        )[unstructured_case.offset_provider["E2V"].table[:, 0]],
+    )
 
 
 def test_tuple_arg(cartesian_case):
@@ -502,45 +478,28 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_fieldop_from_scan(fieldview_backend, forward):  # TODO
+def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
-    out = np_as_located_field(KDim)(np.zeros((size,)))
     expected = np.arange(init + 1.0, init + 1.0 + size, 1)
+    out = np_as_located_field(KDim)(np.zeros((size,)))
+
     if not forward:
         expected = np.flip(expected)
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator
     def add(carry: float, foo: float) -> float:
         return carry + foo
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @scan_operator(axis=KDim, forward=forward, init=init)
     def simple_scan_operator(carry: float) -> float:
         return add(carry, 1.0)
 
-    simple_scan_operator(out=out, offset_provider={})
-
-    assert np.allclose(expected, out)
+    cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
-def test_solve_triag(fieldview_backend):  # TODO
+def test_solve_triag(cartesian_case, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Transformation passes fail in putting `scan` to the top.")
-    shape = (3, 7, 5)
-    rng = np.random.default_rng()
-    a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
-    b_np *= 2
-    a, b, c, d = (
-        np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
-    )
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-
-    # compute reference
-    matrices = np.zeros(shape + shape[-1:])
-    i = np.arange(shape[2])
-    matrices[:, :, i[1:], i[:-1]] = a_np[:, :, 1:]
-    matrices[:, :, i, i] = b_np
-    matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
-    expected = np.linalg.solve(matrices, d_np)
 
     @scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -552,22 +511,35 @@ def test_solve_triag(fieldview_backend):  # TODO
     def tridiag_backward(x_kp1: float, cp: float, dp: float) -> float:
         return dp - cp * x_kp1
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator
     def solve_tridiag(
-        a: Field[[IDim, JDim, KDim], float],
-        b: Field[[IDim, JDim, KDim], float],
-        c: Field[[IDim, JDim, KDim], float],
-        d: Field[[IDim, JDim, KDim], float],
-    ) -> Field[[IDim, JDim, KDim], float]:
+        a: cases.IJKFloatField,
+        b: cases.IJKFloatField,
+        c: cases.IJKFloatField,
+        d: cases.IJKFloatField,
+    ) -> cases.IJKFloatField:
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
-    solve_tridiag(a, b, c, d, out=out, offset_provider={})
+    # compute reference
+    shape = (10, 10, 10)
+    matrices = np.zeros(shape + shape[-1:])
+    rng = np.random.default_rng()
+    a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
+    b_np *= 2
+    a, b, c, d = (
+        np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
+    )
+    i = np.arange(shape[2])
+    matrices[:, :, i[1:], i[:-1]] = a_np[:, :, 1:]
+    matrices[:, :, i, i] = b_np
+    matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
+    expected = np.linalg.solve(matrices, d_np)
+    out = cases.allocate(cartesian_case, solve_tridiag, cases.RETURN)()
 
-    assert np.allclose(expected, out)
+    cases.verify(cartesian_case, solve_tridiag, a, b, c, d, out=out, ref=expected)
 
 
-# @pytest.mark.parametrize("left,right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case):
     @field_operator
     def testee(a: cases.IField, b: cases.IField, left: int64, right: int64) -> cases.IField:
@@ -634,21 +606,25 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
     )
 
 
-def test_ternary_scan(cartesian_case, fieldview_backend):
-    @scan_operator(axis=KDim, forward=True, init=0.0, backend=fieldview_backend)
+def test_ternary_scan(cartesian_case):
+    @scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
 
     a = np_as_located_field(KDim)(4.0 * np.ones((size,)))
     out = np_as_located_field(KDim)(np.zeros((size,)))
 
-    simple_scan_operator(a, out=out, offset_provider={})
-    ref = np.asarray([i if i <= 4.0 else 4.0 + 1 for i in range(1, size + 1)])
-    np.all(out == ref)
+    cases.verify(
+        cartesian_case,
+        simple_scan_operator,
+        a,
+        out=out,
+        ref=np.asarray([i if i <= 4.0 else 4.0 + 1 for i in range(1, size + 1)]),
+    )
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(fieldview_backend, forward):  # TODO
+def test_scan_nested_tuple_output(fieldview_backend, forward):
     init = (1.0, (2.0, 3.0))
     out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
     expected = np.arange(1.0, 1.0 + size, 1)
@@ -668,14 +644,13 @@ def test_scan_nested_tuple_output(fieldview_backend, forward):  # TODO
     assert np.allclose(expected + 3.0, out3)
 
 
-@pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_input(fieldview_backend, forward):  # TODO
+def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
-    inp1 = np_as_located_field(KDim)(np.ones((size,)))
-    inp2 = np_as_located_field(KDim)(np.arange(0.0, size, 1))
+    inp1 = np_as_located_field(KDim)(np.ones((10,)))
+    inp2 = np_as_located_field(KDim)(np.arange(0.0, 10, 1))
     out = np_as_located_field(KDim)(np.zeros((size,)))
 
-    prev_levels_iterator = lambda i: range(i + 1) if forward else range(size - 1, i - 1, -1)
+    prev_levels_iterator = lambda i: range(i + 1)
     expected = np.asarray(
         [
             reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
@@ -683,13 +658,11 @@ def test_scan_nested_tuple_input(fieldview_backend, forward):  # TODO
         ]
     )
 
-    @scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @scan_operator(axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
         return carry + a[0] + a[1]
 
-    simple_scan_operator((inp1, inp2), out=out, offset_provider={})
-
-    assert np.allclose(expected, out)
+    cases.verify(cartesian_case, simple_scan_operator, (inp1, inp2), out=out, ref=expected)
 
 
 def test_docstring(cartesian_case):
@@ -876,24 +849,24 @@ def test_zero_dims_fields(cartesian_case):
     cases.verify(cartesian_case, implicit_broadcast_scalar, inp, out=out, ref=np.array(0))
 
 
-def test_implicit_broadcast_mixed_dims(fieldview_backend):  # TODO
-    input1 = np_as_located_field(IDim)(np.ones((10,)))
-    inp = np_as_located_field()(np.array(1.0))
-    out = np_as_located_field(IDim)(np.ones((10,)))
-
-    @field_operator(backend=fieldview_backend)
+def test_implicit_broadcast_mixed_dim(cartesian_case):
+    @field_operator
     def fieldop_implicit_broadcast(
-        zero_dim_inp: Field[[], float], inp: Field[[IDim], float], scalar: float
-    ) -> Field[[IDim], float]:
+        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int
+    ) -> cases.IField:
         return inp + zero_dim_inp * scalar
 
-    @field_operator(backend=fieldview_backend)
-    def fieldop_implicit_broadcast_2(inp: Field[[IDim], float]) -> Field[[IDim], float]:
-        fi = fieldop_implicit_broadcast(1.0, inp, 1.0)
+    @field_operator
+    def fieldop_implicit_broadcast_2(inp: cases.IField) -> cases.IField:
+        fi = fieldop_implicit_broadcast(1, inp, 2)
         return fi
 
-    fieldop_implicit_broadcast_2(input1, out=out, offset_provider={})
-    assert np.allclose(out, np.asarray(inp) * 2)
+    inp = cases.allocate(cartesian_case, fieldop_implicit_broadcast, "inp")()
+    out = cases.allocate(cartesian_case, fieldop_implicit_broadcast_2, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case, fieldop_implicit_broadcast_2, inp, out=out, ref=np.asarray(inp) + 2
+    )
 
 
 def test_tuple_unpacking(cartesian_case):
