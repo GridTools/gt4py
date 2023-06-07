@@ -49,9 +49,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 # mypy does not accept [IDim, ...] as a type
 IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
+IFloatField: TypeAlias = common.Field[[IDim], np.float64]  # type: ignore [valid-type]
 KField: TypeAlias = common.Field[[KDim], np.int64]  # type: ignore [valid-type]
 IJField: TypeAlias = common.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
 IKField: TypeAlias = common.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
+IKFloatField: TypeAlias = common.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
 IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
 VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]

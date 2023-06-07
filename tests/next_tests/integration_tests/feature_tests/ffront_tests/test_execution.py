@@ -257,7 +257,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
         return qc
 
     @program
-    def testee(qc: Field[[IDim, KDim], float], scalar: float):
+    def testee(qc: cases.IKFloatField, scalar: float):
         testee_scan(qc, scalar, out=qc)
 
     qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
@@ -280,8 +280,8 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
     @field_operator
     def testee_op(
-        qc: Field[[IDim, KDim], float], tuple_scalar: tuple[float, tuple[float, float]]
-    ) -> Field[[IDim, KDim], float]:
+        qc: cases.IKFloatField, tuple_scalar: tuple[float, tuple[float, float]]
+    ) -> cases.IKFloatField:
         return testee_scan(qc, tuple_scalar)
 
     qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
@@ -294,7 +294,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(a: Field[[IDim], float64]) -> Field[[IDim], int64]:
+    def testee(a: cases.IFloatField) -> cases.IField:
         b = astype(a, int64)
         return b
 
@@ -308,7 +308,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(a: Field[[IDim], float64]) -> Field[[IDim], bool]:
+    def testee(a: cases.IFloatField) -> Field[[IDim], bool]:
         b = astype(a, bool)
         return b
 
@@ -322,7 +322,7 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     @field_operator
-    def testee(a: Field[[IDim], float64]) -> Field[[IDim], np.float32]:
+    def testee(a: cases.IFloatField) -> Field[[IDim], np.float32]:
         b = astype(a, float32)
         return b
 
@@ -334,7 +334,7 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_offset_field(fieldview_backend):
+def test_offset_field(fieldview_backend, cartesian_case):
     a_I_arr = np.random.randn(size, size).astype("int64")
     a = np_as_located_field(IDim, KDim)(a_I_arr)
     b = np_as_located_field(IDim, KDim)(
@@ -345,10 +345,9 @@ def test_offset_field(fieldview_backend):
         np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
     )
     offset_field = np_as_located_field(IDim, KDim)(offset_field_comp)
-    out = np_as_located_field(IDim, KDim)(np.zeros((size, size), dtype=bool))
     ref = np.full((size, size), True, dtype=bool)
 
-    @field_operator(backend=fieldview_backend)
+    @field_operator(backend=fieldview_backend)  # TODO: test fail without backend specification
     def offset_index_field_fo(
         a: cases.IKField, b: cases.IKField, offset_field: cases.IKField
     ) -> Field[[IDim, KDim], bool]:
@@ -358,6 +357,8 @@ def test_offset_field(fieldview_backend):
         b_i_k = b_i(Koff[1])
         return a_i_k == b_i_k
 
+    out = cases.allocate(cartesian_case, offset_index_field_fo, cases.RETURN)()
+
     offset_index_field_fo(
         a,
         b,
@@ -365,6 +366,7 @@ def test_offset_field(fieldview_backend):
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
     )
+
     assert np.allclose(out.array()[: size - 2, : size - 2], ref[: size - 2, : size - 2])
 
 
@@ -540,21 +542,17 @@ def test_solve_triag(cartesian_case, fieldview_backend):
     cases.verify(cartesian_case, solve_tridiag, a, b, c, d, out=out, ref=expected)
 
 
-def test_ternary_operator(cartesian_case):
+@pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
+def test_ternary_operator(cartesian_case, left, right):
     @field_operator
     def testee(a: cases.IField, b: cases.IField, left: int64, right: int64) -> cases.IField:
         return a if left < right else b
 
     a = cases.allocate(cartesian_case, testee, "a")()
     b = cases.allocate(cartesian_case, testee, "b")()
-    left = 2
-    right = 3
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
-
-    left = 3
-    right = 2
 
     @field_operator
     def testee(left: int64, right: int64) -> cases.IField:
@@ -624,7 +622,9 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(fieldview_backend, forward):
+def test_scan_nested_tuple_output(
+    fieldview_backend, forward
+):  # TODO: cannot test for nested tuples --> ValueError: too many values to unpack (expected 2)
     init = (1.0, (2.0, 3.0))
     out1, out2, out3 = (np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
     expected = np.arange(1.0, 1.0 + size, 1)
@@ -978,11 +978,6 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
 
 def test_constant_closure_vars(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
-
-    # constants = FrozenNamespace(
-    #     PI=np.float32(3.142),
-    #     E=np.float32(2.718),
-    # )
 
     constants = FrozenNamespace(
         PI=np.int64(3),
