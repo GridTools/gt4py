@@ -48,8 +48,7 @@ class FieldOperatorLowering(NodeTranslator):
     Examples
     --------
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> from gt4py.next.ffront.fbuiltins import float64
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next import Field, Dimension, float64
     >>>
     >>> IDim = Dimension("IDim")
     >>> def fieldop(inp: Field[[IDim], "float64"]):

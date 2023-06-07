@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from gt4py.next import common
+import gt4py.next as gtx
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
@@ -100,8 +100,8 @@ def run_processor(
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int
-    origin_axis: common.Dimension = common.Dimension("dummy_origin")
-    neighbor_axis: common.Dimension = common.Dimension("dummy_neighbor")
+    origin_axis: gtx.Dimension = gtx.Dimension("dummy_origin")
+    neighbor_axis: gtx.Dimension = gtx.Dimension("dummy_neighbor")
     index_type: type[int] = int
 
     def mapped_index(_, __) -> int:

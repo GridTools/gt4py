@@ -15,8 +15,8 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next import common
-from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.program_processors.runners import roundtrip
 
 from next_tests.integration_tests.feature_tests import cases
@@ -27,12 +27,12 @@ from next_tests.integration_tests.feature_tests.cases import (  # noqa: F401 # f
 )
 
 
-@field_operator
+@gtx.field_operator
 def addition(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
     return a + b
 
 
-@field_operator
+@gtx.field_operator
 def mixed_args(
     a: cases.IJKField, b: np.float64, c: cases.IJKField
 ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:

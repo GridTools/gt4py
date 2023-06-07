@@ -14,17 +14,16 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import double_roundtrip, roundtrip
 
 
 I = offset("I")
 J = offset("J")
-I_loc = Dimension("I_loc")
-J_loc = Dimension("J_loc")
+I_loc = gtx.Dimension("I_loc")
+J_loc = gtx.Dimension("J_loc")
 
 
 @fundef
@@ -53,8 +52,8 @@ def fencil_swapped(output, input):
 
 
 def test_cartesian_offset_provider():
-    inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
-    out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
+    inp = gtx.np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
+    out = gtx.np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
 
     fencil(out, inp)
     assert out[0][0] == 42
