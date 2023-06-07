@@ -12,21 +12,30 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import numpy as np
+import pytest
 
-from gt4py.next import Field, field_operator, int64, neighbor_sum, program
+import gt4py.next as gtx
+from gt4py.next import int64, neighbor_sum
+from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    Edge,
+    Vertex,
+    fieldview_backend,
+    reduction_setup,
+)
 
 
 def test_external_local_field(reduction_setup, fieldview_backend):
     V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
-    inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
-    ones = np_as_located_field(Edge)(np.ones(reduction_setup.num_edges, dtype=int64))
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
+    ones = gtx.np_as_located_field(Edge)(np.ones(reduction_setup.num_edges, dtype=int64))
 
-    @field_operator(backend=fieldview_backend)
+    @gtx.field_operator(backend=fieldview_backend)
     def testee(
-        inp: Field[[Vertex, V2EDim], int64], ones: Field[[Edge], int64]
-    ) -> Field[[Vertex], int64]:
+        inp: gtx.Field[[Vertex, V2EDim], int64], ones: gtx.Field[[Edge], int64]
+    ) -> gtx.Field[[Vertex], int64]:
         return neighbor_sum(
             inp * ones(V2E), axis=V2EDim
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
@@ -43,11 +52,11 @@ def test_external_local_field_only(reduction_setup, fieldview_backend):
             "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
         )
 
-    V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
-    inp = np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
+    V2EDim = reduction_setup.V2EDim
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
 
-    @field_operator(backend=fieldview_backend)
-    def testee(inp: Field[[Vertex, V2EDim], int64]) -> Field[[Vertex], int64]:
+    @gtx.field_operator(backend=fieldview_backend)
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int64]) -> gtx.Field[[Vertex], int64]:
         return neighbor_sum(inp, axis=V2EDim)
 
     testee(inp, out=reduction_setup.out, offset_provider=reduction_setup.offset_provider)

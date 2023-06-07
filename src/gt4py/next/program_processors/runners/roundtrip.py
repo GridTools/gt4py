@@ -21,10 +21,10 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-import gt4py.next as gtx
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next.iterator import ir as itir
+from gt4py.next import common
+from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.program_processors.processor_interface import program_executor
@@ -106,7 +106,7 @@ def fencil_generator(
     debug: bool,
     lift_mode: LiftMode,
     use_embedded: bool,
-    offset_provider: dict[str, gtx.NeighborTableOffsetProvider],
+    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
 ) -> Callable:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -148,9 +148,9 @@ def fencil_generator(
     header = textwrap.dedent(
         f"""
         import numpy as np
+        import gt4py.next as gtx
         {builtins_import}
         from gt4py.next.iterator.runtime import *
-        from gt4py.next.iterator.embedded import np_as_located_field
         """
     )
 
@@ -187,8 +187,8 @@ def fencil_generator(
 def execute_roundtrip(
     ir: itir.Node,
     *args,
-    column_axis: Optional[gtx.Dimension] = None,
-    offset_provider: dict[str, gtx.NeighborTableOffsetProvider],
+    column_axis: Optional[common.Dimension] = None,
+    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
     debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,

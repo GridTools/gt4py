@@ -135,7 +135,7 @@ def test_fo_type_deduction_error():
     assert (exc.lineno, exc.end_lineno) == (line + 3, line + 3)
 
     assert traceback.format_exception_only(exc)[1:3] == [
-        "    return undeclared_symbol\n",
+        "    return undeclared_symbol  # noqa: F821  # undefined on purpose\n",
         "           ^^^^^^^^^^^^^^^^^\n",
     ]
 

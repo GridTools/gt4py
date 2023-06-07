@@ -159,3 +159,23 @@ def reduction_setup():
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
     )  # type: ignore
+
+
+__all__ = [
+    "fieldview_backend",
+    "reduction_setup",
+    "debug_itir",
+    "DimsType",
+    "DType",
+    "IDim",
+    "JDim",
+    "KDim",
+    "Ioff",
+    "Joff",
+    "Koff",
+    "Vertex",
+    "Edge",
+    "Cell",
+    "EdgeOffset",
+    "size",
+]
