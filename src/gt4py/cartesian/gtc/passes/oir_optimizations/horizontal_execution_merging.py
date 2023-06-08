@@ -235,6 +235,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 nf.SQRT,
                 nf.EXP,
                 nf.LOG,
+                nf.LOG10,
                 nf.GAMMA,
                 nf.CBRT,
             }

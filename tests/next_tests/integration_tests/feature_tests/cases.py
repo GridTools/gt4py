@@ -24,10 +24,11 @@ from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
-from gt4py.next.ffront import decorator, fbuiltins
+from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -48,6 +49,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 # mypy does not accept [IDim, ...] as a type
+
 IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
 IFloatField: TypeAlias = common.Field[[IDim], np.float64]  # type: ignore [valid-type]
 KField: TypeAlias = common.Field[[KDim], np.int64]  # type: ignore [valid-type]
@@ -64,6 +66,7 @@ EmptyField: TypeAlias = common.Field[[], np.int64]  # type: ignore [valid-type]
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
 #   by `unstructured_case`.
+
 V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
 E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
 C2EDim = common.Dimension("C2E", kind=common.DimensionKind.LOCAL)
@@ -72,13 +75,13 @@ E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = fbuiltins.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
-FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl
+FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
 ReferenceValue: TypeAlias = (
-    common.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
+    gtx.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
 )
-OffsetProvider: TypeAlias = dict[str, common.Connectivity | common.Dimension]
+OffsetProvider: TypeAlias = dict[str, common.Connectivity | gtx.Dimension]
 
 
 #: To allocate the return value of a field operator, we must pass
@@ -101,7 +104,7 @@ class DataInitializer(Protocol):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         ...
@@ -128,10 +131,10 @@ class ConstInitializer(DataInitializer):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        return embedded.np_as_located_field(*sizes.keys())(
+        return gtx.np_as_located_field(*sizes.keys())(
             np.full(tuple(sizes.values()), self.value, dtype=dtype)
         )
 
@@ -164,14 +167,14 @@ class UniqueInitializer(DataInitializer):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         start = self.start
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return embedded.np_as_located_field(*sizes.keys())(
+        return gtx.np_as_located_field(*sizes.keys())(
             np.arange(start, start + n_data, dtype=dtype).reshape(svals)
         )
 
@@ -287,10 +290,10 @@ def allocate(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
     *,
-    sizes: Optional[dict[common.Dimension, int]] = None,
+    sizes: Optional[dict[gtx.Dimension, int]] = None,
     strategy: Optional[DataInitializer] = None,
     dtype: Optional[np.typing.DTypeLike] = None,
-    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
+    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
 ) -> FieldViewArg:
     """
     Allocate a parameter or return value from a fieldview code object.
@@ -470,7 +473,7 @@ def unstructured_case(
 def _allocate_from_type(
     case: Case,
     arg_type: ts.TypeSpec,
-    sizes: dict[common.Dimension, int],
+    sizes: dict[gtx.Dimension, int],
     strategy: DataInitializer,
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
@@ -513,7 +516,7 @@ def get_param_types(
     }
 
 
-def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) -> int:
+def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> int:
     match param_type:
         case ts.FieldType(dims=dims):
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
@@ -526,9 +529,9 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) 
 
 
 def extend_sizes(
-    sizes: dict[common.Dimension, int],
-    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> dict[common.Dimension, int]:
+    sizes: dict[gtx.Dimension, int],
+    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
     if extend:
@@ -540,7 +543,7 @@ def extend_sizes(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field]]:
+) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
 
@@ -570,6 +573,6 @@ class Case:
     """Parametrizable components for single feature integration tests."""
 
     backend: ppi.ProgramProcessor
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
-    default_sizes: dict[common.Dimension, int]
+    offset_provider: dict[str, common.Connectivity | gtx.Dimension]
+    default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

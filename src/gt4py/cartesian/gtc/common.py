@@ -173,6 +173,7 @@ class NativeFunction(eve.StrEnum):
     POW = "pow"
     EXP = "exp"
     LOG = "log"
+    LOG10 = "log10"
     GAMMA = "gamma"
     CBRT = "cbrt"
 
@@ -213,6 +214,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.POW: 2,
         NativeFunction.EXP: 1,
         NativeFunction.LOG: 1,
+        NativeFunction.LOG10: 1,
         NativeFunction.GAMMA: 1,
         NativeFunction.CBRT: 1,
         NativeFunction.ISFINITE: 1,
@@ -888,6 +890,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.POW: "power",
         NativeFunction.EXP: "exp",
         NativeFunction.LOG: "log",
+        NativeFunction.LOG10: "log10",
         NativeFunction.GAMMA: "gamma",
         NativeFunction.CBRT: "cbrt",
         NativeFunction.ISFINITE: "isfinite",
