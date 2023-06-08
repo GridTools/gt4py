@@ -461,8 +461,8 @@ def test_tuple_arg(cartesian_case):
     a = cases.allocate(cartesian_case, testee, "a")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(
-        cartesian_case, testee, a, out=out, ref=3 * a[0][0].array() + a[0][1].array() + a[1].array()
+    cases.verify_with_default_data(
+        cartesian_case, testee, ref=lambda a: 3 * a[0][0].array() + a[0][1].array() + a[1].array()
     )
 
 
