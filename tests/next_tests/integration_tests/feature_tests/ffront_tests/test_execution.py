@@ -429,8 +429,8 @@ def test_tuple_return_2(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: [
-            np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1),
-            np.sum(b[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1),
+            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1),
+            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1),
         ],
         comparison=lambda a, tmp: (np.all(a[0] == tmp[0]), np.all(a[1] == tmp[1])),
     )
@@ -448,7 +448,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table[:, :]] + np.tile(v, (4, 1)).T, axis=1
+            e[unstructured_case.offset_provider["V2E"].table] + np.tile(v, (4, 1)).T, axis=1
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -457,9 +457,6 @@ def test_tuple_arg(cartesian_case):
     @gtx.field_operator
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
         return 3 * a[0][0] + a[0][1] + a[1]
-
-    a = cases.allocate(cartesian_case, testee, "a")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify_with_default_data(
         cartesian_case, testee, ref=lambda a: 3 * a[0][0].array() + a[0][1].array() + a[1].array()
@@ -577,9 +574,9 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(b[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)
+            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1)
             if 2 < 3
-            else np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)
+            else np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)
         ),
     )
 
@@ -799,17 +796,10 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
         return where(k_index > 0, a(Koff[-1]), 2)
 
-    a = cases.allocate(cartesian_case, fieldop_where_k_offset, "a")()
-    k_index = cases.allocate(cartesian_case, fieldop_where_k_offset, "k_index")()
-    out = cases.allocate(cartesian_case, fieldop_where_k_offset, cases.RETURN)()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         fieldop_where_k_offset,
-        a,
-        k_index,
-        out=out,
-        ref=np.where(k_index.array() > 0, np.roll(a.array(), 1, axis=1), 2),
+        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
     )
 
 
@@ -857,15 +847,8 @@ def test_tuple_unpacking(cartesian_case):
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
-    inp = cases.allocate(cartesian_case, unpack, "inp")()
-    out = cases.allocate(cartesian_case, unpack, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case,
-        unpack,
-        inp,
-        out=(out[0], out[1], out[2], out[3]),
-        ref=(inp.array() + 2, inp.array() + 3, inp.array() + 5, inp.array() + 7),
+    cases.verify_with_default_data(
+        cartesian_case, unpack, ref=lambda inp: (inp + 2, inp + 3, inp + 5, inp + 7)
     )
 
 
@@ -895,40 +878,22 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
         return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
 
-    inp = cases.allocate(cartesian_case, unpack, "inp")()
-    out = cases.allocate(cartesian_case, unpack, cases.RETURN)()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         unpack,
-        inp,
-        out=(
-            out[0],
-            out[1],
-            out[2],
-            out[3],
-            out[4],
-            out[5],
-            out[6],
-            out[7],
-            out[8],
-            out[9],
-            out[10],
-            out[11],
-        ),
-        ref=(
-            inp.array(),
-            inp.array() + 1,
-            inp.array() + 2,
-            inp.array() + 3,
-            inp.array() + 4,
-            inp.array() + 5,
-            inp.array() + 6,
-            inp.array() + 7,
-            inp.array() + 8,
-            inp.array() + 9,
-            inp.array() + 10,
-            inp.array() + 11,
+        ref=lambda inp: (
+            inp,
+            inp + 1,
+            inp + 2,
+            inp + 3,
+            inp + 4,
+            inp + 5,
+            inp + 6,
+            inp + 7,
+            inp + 8,
+            inp + 9,
+            inp + 10,
+            inp + 11,
         ),
     )
 
