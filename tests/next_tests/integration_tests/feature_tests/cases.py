@@ -424,7 +424,7 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
@@ -434,9 +434,7 @@ def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtu
 
 
 @pytest.fixture
-def unstructured_case(
-    no_default_backend, reduction_setup, fieldview_backend  # noqa: F811 # fixtures
-):
+def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider=reduction_setup.offset_provider,
