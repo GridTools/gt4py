@@ -252,7 +252,6 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
         qc = qc_in + state + scalar
         return qc
 
-
     @gtx.program
     def testee(qc: cases.IKFloatField, scalar: float):
         testee_scan(qc, scalar, out=qc)
@@ -290,7 +289,6 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
-
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> cases.IField:
         b = astype(a, int64)
@@ -305,7 +303,6 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
-
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
@@ -320,7 +317,6 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
-
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], np.float32]:
         b = astype(a, float32)
@@ -438,7 +434,7 @@ def test_tuple_return_2(unstructured_case):
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
         tmp_2 = neighbor_sum(b(V2E), axis=V2EDim)
         return tmp, tmp_2
-      
+
     cases.verify_with_default_data(
         unstructured_case,
         testee,
@@ -542,6 +538,7 @@ def test_solve_triag(cartesian_case, fieldview_backend):
 
     cases.verify(cartesian_case, solve_tridiag, a, b, c, d, out=out, ref=expected)
 
+
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
     @gtx.field_operator
@@ -553,7 +550,7 @@ def test_ternary_operator(cartesian_case, left, right):
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
-    
+
     @gtx.field_operator
     def testee(left: int64, right: int64) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
@@ -602,6 +599,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
             else np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)
         ),
     )
+
 
 def test_ternary_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -730,6 +728,7 @@ def test_domain_input_bounds(cartesian_case, fieldview_backend):
         inout=out.array()[lower_i : int(upper_i / 2)],
         ref=inp.array()[lower_i : int(upper_i / 2)] * 2,
     )
+
 
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
@@ -866,6 +865,7 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
         cartesian_case, fieldop_implicit_broadcast_2, inp, out=out, ref=np.asarray(inp) + 2
     )
 
+
 def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
@@ -884,7 +884,7 @@ def test_tuple_unpacking(cartesian_case):
         out=(out[0], out[1], out[2], out[3]),
         ref=(inp.array() + 2, inp.array() + 3, inp.array() + 5, inp.array() + 7),
     )
-      
+
 
 def test_tuple_unpacking_star_multi(cartesian_case):
     OutType = tuple[

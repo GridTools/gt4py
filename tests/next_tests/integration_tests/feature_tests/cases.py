@@ -50,29 +50,28 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 # mypy does not accept [IDim, ...] as a type
 
-IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
-IFloatField: TypeAlias = common.Field[[IDim], np.float64]  # type: ignore [valid-type]
-KField: TypeAlias = common.Field[[KDim], np.int64]  # type: ignore [valid-type]
-IJField: TypeAlias = common.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
-IKField: TypeAlias = common.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
-IKFloatField: TypeAlias = common.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
-IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
-IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
-CField: TypeAlias = common.Field[[Cell], np.int64]  # type: ignore [valid-type]
-EmptyField: TypeAlias = common.Field[[], np.int64]  # type: ignore [valid-type]
+IField: TypeAlias = gtx.Field[[IDim], np.int64]  # type: ignore [valid-type]
+IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+KField: TypeAlias = gtx.Field[[KDim], np.int64]  # type: ignore [valid-type]
+IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
+IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
+IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
+IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
+IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
+VField: TypeAlias = gtx.Field[[Vertex], np.int64]  # type: ignore [valid-type]
+EField: TypeAlias = gtx.Field[[Edge], np.int64]  # type: ignore [valid-type]
+CField: TypeAlias = gtx.Field[[Cell], np.int64]  # type: ignore [valid-type]
+EmptyField: TypeAlias = gtx.Field[[], np.int64]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
 #   by `unstructured_case`.
-
-V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
-E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
-C2EDim = common.Dimension("C2E", kind=common.DimensionKind.LOCAL)
-V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = fbuiltins.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
