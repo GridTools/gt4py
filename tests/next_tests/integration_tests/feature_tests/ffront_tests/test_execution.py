@@ -397,25 +397,23 @@ def test_nested_reduction(unstructured_case):
 
 
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
-def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
-    rs = reduction_setup
-    V2EDim = rs.V2EDim
-    E2VDim = rs.E2VDim
-    V2E = rs.V2E
-    E2V = rs.E2V
-
-    out = gtx.np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
-
-    @gtx.field_operator(backend=fieldview_backend)
-    def testee(inp: gtx.Field[[Edge], int64]) -> gtx.Field[[Edge], int64]:
+def test_nested_reduction_shift_first(unstructured_case):
+    @gtx.field_operator
+    def testee(inp: cases.EField) -> cases.EField:
         tmp = inp(V2E)
         tmp2 = tmp(E2V)
         return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
 
-    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
-
-    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
-    assert np.allclose(out, expected)
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda inp: np.sum(
+            np.sum(inp[unstructured_case.offset_provider["V2E"].table], axis=1)[
+                unstructured_case.offset_provider["E2V"].table
+            ],
+            axis=1,
+        ),
+    )
 
 
 def test_tuple_return_2(unstructured_case):
@@ -600,27 +598,29 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(
-    forward, cartesian_case
-):  # TODO: cannot test for nested tuples --> ValueError: too many values to unpack (expected 2)
-    init = (1.0, (2.0, 3.0))
+def test_scan_nested_tuple_output(forward, cartesian_case):
+    init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
-    out1, out2, out3 = (gtx.np_as_located_field(KDim)(np.zeros((k_size,))) for _ in range(3))
-    expected = np.arange(1.0, 1.0 + k_size, 1)
+    expected = np.arange(1, 1 + k_size, 1, dtype=int64)
     if not forward:
         expected = np.flip(expected)
 
-    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=cartesian_case.backend)
-    def simple_scan_operator(
-        carry: tuple[float, tuple[float, float]]
-    ) -> tuple[float, tuple[float, float]]:
-        return (carry[0] + 1.0, (carry[1][0] + 1.0, carry[1][1] + 1.0))
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init)
+    def simple_scan_operator(carry: tuple[int, tuple[int, int]]) -> tuple[int, tuple[int, int]]:
+        return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
-    simple_scan_operator(out=(out1, (out2, out3)), offset_provider={})
+    @gtx.program
+    def testee(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
+        simple_scan_operator(out=out)
 
-    assert np.allclose(expected + 1.0, out1)
-    assert np.allclose(expected + 2.0, out2)
-    assert np.allclose(expected + 3.0, out3)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
+        comparison=lambda ref, out: np.all(out[0].array() == ref[0])
+        and np.all(out[1][0].array() == ref[1][0])
+        and np.all(out[1][1].array() == ref[1][1]),
+    )
 
 
 def test_scan_nested_tuple_input(cartesian_case):
@@ -875,7 +875,6 @@ def test_tuple_unpacking_star_multi(cartesian_case):
         *a, a2, a3 = (inp, inp + 1, inp + 2, inp + 3)
         b1, *b, b3 = (inp + 4, inp + 5, inp + 6, inp + 7)
         c1, c2, *c = (inp + 8, inp + 9, inp + 10, inp + 11)
-
         return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
 
     cases.verify_with_default_data(
