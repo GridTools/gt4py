@@ -174,7 +174,10 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
+        args_expr: list[str] = [
+            "gridtools::fn::backend::naive{}",
+            *regular_args_expr,
+        ]  # TODO(ricoh): This is where the backend is hardcoded to cpu
 
         function = interface.Function(program.id, tuple(parameters))
         decl_body = (
@@ -197,7 +200,7 @@ class GTFNTranslationStep(
                     {stencil_src}
                     {decl_src}
                     """.strip(),
-        )
+        )  # TODO(ricoh): This is where the backend header is hardcoded to include the cpu one
 
         module = stages.ProgramSource(
             entry_point=function,
