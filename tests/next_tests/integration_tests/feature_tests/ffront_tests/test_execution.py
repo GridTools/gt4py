@@ -54,10 +54,8 @@ from next_tests.integration_tests.feature_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    Cell,
     fieldview_backend,
     reduction_setup,
-    size,
 )
 
 
@@ -330,41 +328,37 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_offset_field(fieldview_backend, cartesian_case):
-    a_I_arr = np.random.randn(size, size).astype("int64")
-    a = gtx.np_as_located_field(IDim, KDim)(a_I_arr)
-    b = gtx.np_as_located_field(IDim, KDim)(
-        np.append(np.insert(a_I_arr, size, 0, axis=1), [np.array([0] * (size + 1))], axis=0)
-    )
-    offset_field_arr = np.ones((size - 1, size - 1), dtype=int64)
-    offset_field_comp = np.append(
-        np.insert(offset_field_arr, size - 1, 0, axis=1), [np.array([0] * size)], axis=0
+def test_offset_field(cartesian_case):
+    ref = np.full(
+        (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
 
-    offset_field = gtx.np_as_located_field(IDim, KDim)(offset_field_comp)
-    ref = np.full((size, size), True, dtype=bool)
-
-    @gtx.field_operator(backend=fieldview_backend)  # TODO: test fail without backend specification
+    @gtx.field_operator(backend=cartesian_case.backend)
     def offset_index_field_fo(
-        a: cases.IKField, b: cases.IKField, offset_field: cases.IKField
+        a: cases.IKField, offset_field: cases.IKField
     ) -> gtx.Field[[IDim, KDim], bool]:
         a_i = a(as_offset(Ioff, offset_field))
         a_i_k = a_i(as_offset(Koff, offset_field))
-        b_i = b(Ioff[1])
+        b_i = a(Ioff[1])
         b_i_k = b_i(Koff[1])
         return a_i_k == b_i_k
 
     out = cases.allocate(cartesian_case, offset_index_field_fo, cases.RETURN)()
+    a = cases.allocate(cartesian_case, offset_index_field_fo, "a").extend(
+        {IDim: (0, 1), KDim: (0, 1)}
+    )()
+    offset_field = cases.allocate(cartesian_case, offset_index_field_fo, "offset_field").strategy(
+        cases.ConstInitializer(1)
+    )()
 
     offset_index_field_fo(
         a,
-        b,
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
     )
 
-    assert np.allclose(out.array()[: size - 2, : size - 2], ref[: size - 2, : size - 2])
+    assert np.allclose(out.array(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):
@@ -479,8 +473,8 @@ def test_tuple_arg(cartesian_case):
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
-    expected = np.arange(init + 1.0, init + 1.0 + size, 1)
-    out = gtx.np_as_located_field(KDim)(np.zeros((size,)))
+    expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
+    out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
         expected = np.flip(expected)
@@ -496,8 +490,8 @@ def test_fieldop_from_scan(cartesian_case, forward):
     cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
-def test_solve_triag(cartesian_case, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+def test_solve_triag(cartesian_case):
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Transformation passes fail in putting `scan` to the top.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -606,29 +600,31 @@ def test_ternary_scan(cartesian_case):
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
 
-    a = gtx.np_as_located_field(KDim)(4.0 * np.ones((size,)))
-    out = gtx.np_as_located_field(KDim)(np.zeros((size,)))
+    k_size = cartesian_case.default_sizes[KDim]
+    a = gtx.np_as_located_field(KDim)(4.0 * np.ones((k_size,)))
+    out = gtx.np_as_located_field(KDim)(np.zeros((k_size,)))
 
     cases.verify(
         cartesian_case,
         simple_scan_operator,
         a,
         out=out,
-        ref=np.asarray([i if i <= 4.0 else 4.0 + 1 for i in range(1, size + 1)]),
+        ref=np.asarray([i if i <= 4.0 else 4.0 + 1 for i in range(1, k_size + 1)]),
     )
 
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(
-    fieldview_backend, forward
+    forward, cartesian_case
 ):  # TODO: cannot test for nested tuples --> ValueError: too many values to unpack (expected 2)
     init = (1.0, (2.0, 3.0))
-    out1, out2, out3 = (gtx.np_as_located_field(KDim)(np.zeros((size,))) for _ in range(3))
-    expected = np.arange(1.0, 1.0 + size, 1)
+    k_size = cartesian_case.default_sizes[KDim]
+    out1, out2, out3 = (gtx.np_as_located_field(KDim)(np.zeros((k_size,))) for _ in range(3))
+    expected = np.arange(1.0, 1.0 + k_size, 1)
     if not forward:
         expected = np.flip(expected)
 
-    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=fieldview_backend)
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=cartesian_case.backend)
     def simple_scan_operator(
         carry: tuple[float, tuple[float, float]]
     ) -> tuple[float, tuple[float, float]]:
@@ -643,15 +639,16 @@ def test_scan_nested_tuple_output(
 
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
-    inp1 = gtx.np_as_located_field(KDim)(np.ones((size,)))
-    inp2 = gtx.np_as_located_field(KDim)(np.arange(0.0, size, 1))
-    out = gtx.np_as_located_field(KDim)(np.zeros((size,)))
+    k_size = cartesian_case.default_sizes[KDim]
+    inp1 = gtx.np_as_located_field(KDim)(np.ones((k_size,)))
+    inp2 = gtx.np_as_located_field(KDim)(np.arange(0.0, k_size, 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros((k_size,)))
 
     prev_levels_iterator = lambda i: range(i + 1)
     expected = np.asarray(
         [
             reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
-            for i in range(size)
+            for i in range(k_size)
         ]
     )
 
@@ -696,8 +693,8 @@ def test_domain(cartesian_case):
     )
 
 
-def test_domain_input_bounds(cartesian_case, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+def test_domain_input_bounds(cartesian_case):
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
 
     lower_i = 1
@@ -740,7 +737,7 @@ def test_domain_input_bounds_1(cartesian_case):
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
         return a + a
 
-    @gtx.program(backend=fieldview_backend)
+    @gtx.program(backend=cartesian_case.backend)
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
@@ -805,8 +802,8 @@ def test_domain_tuple(cartesian_case):
     )
 
 
-def test_where_k_offset(cartesian_case, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+def test_where_k_offset(cartesian_case):
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("IndexFields are not supported yet.")
 
     @gtx.field_operator
@@ -827,10 +824,10 @@ def test_where_k_offset(cartesian_case, fieldview_backend):
     )
 
 
-def test_undefined_symbols(fieldview_backend):
+def test_undefined_symbols(cartesian_case):
     with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
 
-        @gtx.field_operator(backend=fieldview_backend)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
             return undefined_symbol
 
@@ -950,24 +947,24 @@ def test_tuple_unpacking_star_multi(cartesian_case):
     )
 
 
-def test_tuple_unpacking_too_many_values(fieldview_backend):
+def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
         FieldOperatorTypeDeductionError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
-        @gtx.field_operator(backend=fieldview_backend)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def _star_unpack() -> tuple[int, float64, int]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
 
 
-def test_tuple_unpacking_too_many_values(fieldview_backend):
+def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
         FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
     ):
 
-        @gtx.field_operator(backend=fieldview_backend)
+        @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int, float64, int]:
             a, b, c = 1
             return a
