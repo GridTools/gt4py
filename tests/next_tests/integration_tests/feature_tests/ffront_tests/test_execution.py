@@ -332,29 +332,29 @@ def test_offset_field(cartesian_case):
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
 
-    @gtx.field_operator(backend=cartesian_case.backend)
-    def offset_index_field_fo(
-        a: cases.IKField, offset_field: cases.IKField
-    ) -> gtx.Field[[IDim, KDim], bool]:
+    @gtx.field_operator
+    def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
         a_i = a(as_offset(Ioff, offset_field))
         a_i_k = a_i(as_offset(Koff, offset_field))
         b_i = a(Ioff[1])
         b_i_k = b_i(Koff[1])
         return a_i_k == b_i_k
 
-    out = cases.allocate(cartesian_case, offset_index_field_fo, cases.RETURN)()
-    a = cases.allocate(cartesian_case, offset_index_field_fo, "a").extend(
-        {IDim: (0, 1), KDim: (0, 1)}
-    )()
-    offset_field = cases.allocate(cartesian_case, offset_index_field_fo, "offset_field").strategy(
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1), KDim: (0, 1)})()
+    offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
         cases.ConstInitializer(1)
     )()
 
-    offset_index_field_fo(
+    cases.verify(
+        cartesian_case,
+        testee,
         a,
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
+        ref=np.full_like(offset_field, True, dtype=bool),
+        comparison=lambda out, ref: np.all(out == ref),
     )
 
     assert np.allclose(out.array(), ref)
@@ -372,11 +372,7 @@ def test_nested_tuple_return(cartesian_case):
         packed = pack_tuple(a, b)
         return packed[0] + packed[1][0] + packed[1][1]
 
-    a = cases.allocate(cartesian_case, combine, "a")()
-    b = cases.allocate(cartesian_case, combine, "b")()
-    out = cases.allocate(cartesian_case, combine, cases.RETURN)()
-
-    cases.verify(cartesian_case, combine, a, b, out=out, ref=a.array() + a.array() + b.array())
+    cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
 def test_nested_reduction(unstructured_case):
@@ -854,11 +850,8 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
         fi = fieldop_implicit_broadcast(1, inp, 2)
         return fi
 
-    inp = cases.allocate(cartesian_case, fieldop_implicit_broadcast, "inp")()
-    out = cases.allocate(cartesian_case, fieldop_implicit_broadcast_2, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case, fieldop_implicit_broadcast_2, inp, out=out, ref=np.asarray(inp) + 2
+    cases.verify_with_default_data(
+        cartesian_case, fieldop_implicit_broadcast_2, ref=lambda inp: inp + 2
     )
 
 
@@ -981,9 +974,6 @@ def test_constant_closure_vars(cartesian_case):
     def consume_constants(input: cases.IField) -> cases.IField:
         return constants.PI * constants.E * input
 
-    input = cases.allocate(cartesian_case, consume_constants, "input")()
-    out = cases.allocate(cartesian_case, consume_constants, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case, consume_constants, input, out=out, ref=constants.PI * constants.E * input
+    cases.verify_with_default_data(
+        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )
