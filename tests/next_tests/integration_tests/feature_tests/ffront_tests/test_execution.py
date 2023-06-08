@@ -387,8 +387,8 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)[
-                unstructured_case.offset_provider["E2V"].table[:, :]
+            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
+                unstructured_case.offset_provider["E2V"].table
             ],
             axis=1,
         ),
