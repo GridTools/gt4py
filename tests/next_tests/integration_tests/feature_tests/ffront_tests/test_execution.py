@@ -510,23 +510,16 @@ def test_solve_triag(cartesian_case):
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
-    # compute reference
-    shape = (10, 10, 10)
-    matrices = np.zeros(shape + shape[-1:])
-    rng = np.random.default_rng()
-    a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
-    b_np *= 2
-    a, b, c, d = (
-        gtx.np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
-    )
-    i = np.arange(shape[2])
-    matrices[:, :, i[1:], i[:-1]] = a_np[:, :, 1:]
-    matrices[:, :, i, i] = b_np
-    matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
-    expected = np.linalg.solve(matrices, d_np)
-    out = cases.allocate(cartesian_case, solve_tridiag, cases.RETURN)()
+    def expected(a, b, c, d):
+        shape = tuple(cartesian_case.default_sizes[dim] for dim in [IDim, JDim, KDim])
+        matrices = np.zeros(shape + shape[-1:])
+        i = np.arange(shape[2])
+        matrices[:, :, i[1:], i[:-1]] = a[:, :, 1:]
+        matrices[:, :, i, i] = b
+        matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
+        return np.linalg.solve(matrices, d)
 
-    cases.verify(cartesian_case, solve_tridiag, a, b, c, d, out=out, ref=expected)
+    cases.verify_with_default_data(cartesian_case, solve_tridiag, ref=expected)
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
