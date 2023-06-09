@@ -282,8 +282,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try
     tuple_scalar = (1.0, (1.0, 0.0))
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize, ksize), np.arange(start=1.0, stop=11.0), dtype=float)
-    cases.verify_with_default_data(cartesian_case, testee_op, ref=lambda qc, ksize: expected)
-    # cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
+    cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
