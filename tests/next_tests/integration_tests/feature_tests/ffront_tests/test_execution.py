@@ -243,7 +243,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     )
 
 
-def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
@@ -261,7 +261,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
-def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
@@ -280,9 +280,9 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
-
-    cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
+    expected = np.full((ksize, ksize), np.arange(start=1.0, stop=11.0), dtype=float)
+    cases.verify_with_default_data(cartesian_case, testee_op, ref=lambda qc, ksize: expected)
+    # cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
@@ -386,8 +386,8 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)[
-                unstructured_case.offset_provider["E2V"].table[:, :]
+            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
+                unstructured_case.offset_provider["E2V"].table
             ],
             axis=1,
         ),
@@ -396,25 +396,23 @@ def test_nested_reduction(unstructured_case):
 
 
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
-def test_nested_reduction_shift_first(reduction_setup, fieldview_backend):
-    rs = reduction_setup
-    V2EDim = rs.V2EDim
-    E2VDim = rs.E2VDim
-    V2E = rs.V2E
-    E2V = rs.E2V
-
-    out = gtx.np_as_located_field(Edge)(np.zeros([rs.num_edges], dtype=np.int64))
-
-    @gtx.field_operator(backend=fieldview_backend)
-    def testee(inp: gtx.Field[[Edge], int64]) -> gtx.Field[[Edge], int64]:
+def test_nested_reduction_shift_first(unstructured_case):
+    @gtx.field_operator
+    def testee(inp: cases.EField) -> cases.EField:
         tmp = inp(V2E)
         tmp2 = tmp(E2V)
         return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
 
-    testee(rs.inp, out=out, offset_provider=rs.offset_provider)
-
-    expected = np.sum(np.sum(rs.inp[rs.v2e_table], axis=1)[rs.e2v_table], axis=1)
-    assert np.allclose(out, expected)
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda inp: np.sum(
+            np.sum(inp[unstructured_case.offset_provider["V2E"].table], axis=1)[
+                unstructured_case.offset_provider["E2V"].table
+            ],
+            axis=1,
+        ),
+    )
 
 
 def test_tuple_return_2(unstructured_case):
@@ -428,8 +426,8 @@ def test_tuple_return_2(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: [
-            np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1),
-            np.sum(b[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1),
+            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1),
+            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1),
         ],
         comparison=lambda a, tmp: (np.all(a[0] == tmp[0]), np.all(a[1] == tmp[1])),
     )
@@ -447,7 +445,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table[:, :]] + np.tile(v, (4, 1)).T, axis=1
+            e[unstructured_case.offset_provider["V2E"].table] + np.tile(v, (4, 1)).T, axis=1
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -457,16 +455,13 @@ def test_tuple_arg(cartesian_case):
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
         return 3 * a[0][0] + a[0][1] + a[1]
 
-    a = cases.allocate(cartesian_case, testee, "a")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case, testee, a, out=out, ref=3 * a[0][0].array() + a[0][1].array() + a[1].array()
+    cases.verify_with_default_data(
+        cartesian_case, testee, ref=lambda a: 3 * a[0][0].array() + a[0][1].array() + a[1].array()
     )
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_fieldop_from_scan(cartesian_case, forward):
+def test_fieldop_from_scan(cartesian_case, forward):  # TODO: try again with default
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
     out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
@@ -509,23 +504,16 @@ def test_solve_triag(cartesian_case):
         cp, dp = tridiag_forward(a, b, c, d)
         return tridiag_backward(cp, dp)
 
-    # compute reference
-    shape = (10, 10, 10)
-    matrices = np.zeros(shape + shape[-1:])
-    rng = np.random.default_rng()
-    a_np, b_np, c_np, d_np = (rng.normal(size=shape) for _ in range(4))
-    b_np *= 2
-    a, b, c, d = (
-        gtx.np_as_located_field(IDim, JDim, KDim)(np_arr) for np_arr in [a_np, b_np, c_np, d_np]
-    )
-    i = np.arange(shape[2])
-    matrices[:, :, i[1:], i[:-1]] = a_np[:, :, 1:]
-    matrices[:, :, i, i] = b_np
-    matrices[:, :, i[:-1], i[1:]] = c_np[:, :, :-1]
-    expected = np.linalg.solve(matrices, d_np)
-    out = cases.allocate(cartesian_case, solve_tridiag, cases.RETURN)()
+    def expected(a, b, c, d):
+        shape = tuple(cartesian_case.default_sizes[dim] for dim in [IDim, JDim, KDim])
+        matrices = np.zeros(shape + shape[-1:])
+        i = np.arange(shape[2])
+        matrices[:, :, i[1:], i[:-1]] = a[:, :, 1:]
+        matrices[:, :, i, i] = b
+        matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
+        return np.linalg.solve(matrices, d)
 
-    cases.verify(cartesian_case, solve_tridiag, a, b, c, d, out=out, ref=expected)
+    cases.verify_with_default_data(cartesian_case, solve_tridiag, ref=expected)
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
@@ -555,7 +543,8 @@ def test_ternary_operator(cartesian_case, left, right):
     )
 
 
-def test_ternary_operator_tuple(cartesian_case):
+@pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
+def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
         a: cases.IField, b: cases.IField, left: int64, right: int64
@@ -564,8 +553,6 @@ def test_ternary_operator_tuple(cartesian_case):
 
     a = cases.allocate(cartesian_case, testee, "a")()
     b = cases.allocate(cartesian_case, testee, "b")()
-    left = 2
-    right = 3
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(
@@ -583,9 +570,9 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(b[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)
+            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1)
             if 2 < 3
-            else np.sum(a[unstructured_case.offset_provider["V2E"].table[:, :]], axis=1)
+            else np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)
         ),
     )
 
@@ -609,27 +596,29 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(
-    forward, cartesian_case
-):  # TODO: cannot test for nested tuples --> ValueError: too many values to unpack (expected 2)
-    init = (1.0, (2.0, 3.0))
+def test_scan_nested_tuple_output(forward, cartesian_case):
+    init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
-    out1, out2, out3 = (gtx.np_as_located_field(KDim)(np.zeros((k_size,))) for _ in range(3))
-    expected = np.arange(1.0, 1.0 + k_size, 1)
+    expected = np.arange(1, 1 + k_size, 1, dtype=int64)
     if not forward:
         expected = np.flip(expected)
 
-    @gtx.scan_operator(axis=KDim, forward=forward, init=init, backend=cartesian_case.backend)
-    def simple_scan_operator(
-        carry: tuple[float, tuple[float, float]]
-    ) -> tuple[float, tuple[float, float]]:
-        return (carry[0] + 1.0, (carry[1][0] + 1.0, carry[1][1] + 1.0))
+    @gtx.scan_operator(axis=KDim, forward=forward, init=init)
+    def simple_scan_operator(carry: tuple[int, tuple[int, int]]) -> tuple[int, tuple[int, int]]:
+        return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
-    simple_scan_operator(out=(out1, (out2, out3)), offset_provider={})
+    @gtx.program
+    def testee(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
+        simple_scan_operator(out=out)
 
-    assert np.allclose(expected + 1.0, out1)
-    assert np.allclose(expected + 2.0, out2)
-    assert np.allclose(expected + 3.0, out3)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
+        comparison=lambda ref, out: np.all(out[0].array() == ref[0])
+        and np.all(out[1][0].array() == ref[1][0])
+        and np.all(out[1][1].array() == ref[1][1]),
+    )
 
 
 def test_scan_nested_tuple_input(cartesian_case):
@@ -805,17 +794,10 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
         return where(k_index > 0, a(Koff[-1]), 2)
 
-    a = cases.allocate(cartesian_case, fieldop_where_k_offset, "a")()
-    k_index = cases.allocate(cartesian_case, fieldop_where_k_offset, "k_index")()
-    out = cases.allocate(cartesian_case, fieldop_where_k_offset, cases.RETURN)()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         fieldop_where_k_offset,
-        a,
-        k_index,
-        out=out,
-        ref=np.where(k_index.array() > 0, np.roll(a.array(), 1, axis=1), 2),
+        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
     )
 
 
@@ -863,15 +845,8 @@ def test_tuple_unpacking(cartesian_case):
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
-    inp = cases.allocate(cartesian_case, unpack, "inp")()
-    out = cases.allocate(cartesian_case, unpack, cases.RETURN)()
-
-    cases.verify(
-        cartesian_case,
-        unpack,
-        inp,
-        out=(out[0], out[1], out[2], out[3]),
-        ref=(inp.array() + 2, inp.array() + 3, inp.array() + 5, inp.array() + 7),
+    cases.verify_with_default_data(
+        cartesian_case, unpack, ref=lambda inp: (inp + 2, inp + 3, inp + 5, inp + 7)
     )
 
 
@@ -898,43 +873,24 @@ def test_tuple_unpacking_star_multi(cartesian_case):
         *a, a2, a3 = (inp, inp + 1, inp + 2, inp + 3)
         b1, *b, b3 = (inp + 4, inp + 5, inp + 6, inp + 7)
         c1, c2, *c = (inp + 8, inp + 9, inp + 10, inp + 11)
-
         return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
 
-    inp = cases.allocate(cartesian_case, unpack, "inp")()
-    out = cases.allocate(cartesian_case, unpack, cases.RETURN)()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         unpack,
-        inp,
-        out=(
-            out[0],
-            out[1],
-            out[2],
-            out[3],
-            out[4],
-            out[5],
-            out[6],
-            out[7],
-            out[8],
-            out[9],
-            out[10],
-            out[11],
-        ),
-        ref=(
-            inp.array(),
-            inp.array() + 1,
-            inp.array() + 2,
-            inp.array() + 3,
-            inp.array() + 4,
-            inp.array() + 5,
-            inp.array() + 6,
-            inp.array() + 7,
-            inp.array() + 8,
-            inp.array() + 9,
-            inp.array() + 10,
-            inp.array() + 11,
+        ref=lambda inp: (
+            inp,
+            inp + 1,
+            inp + 2,
+            inp + 3,
+            inp + 4,
+            inp + 5,
+            inp + 6,
+            inp + 7,
+            inp + 8,
+            inp + 9,
+            inp + 10,
+            inp + 11,
         ),
     )
 
