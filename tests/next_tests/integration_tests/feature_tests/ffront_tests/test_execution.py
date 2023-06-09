@@ -52,10 +52,6 @@ from next_tests.integration_tests.feature_tests.cases import (
     cartesian_case,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-    reduction_setup,
-)
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
