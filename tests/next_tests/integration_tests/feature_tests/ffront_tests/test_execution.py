@@ -244,7 +244,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     )
 
 
-def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
@@ -262,7 +262,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
-def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
@@ -281,9 +281,9 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize, ksize), np.arange(start=1, stop=11, step=1).astype(float64))
-
-    cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
+    expected = np.full((ksize, ksize), np.arange(start=1.0, stop=11.0), dtype=float)
+    cases.verify_with_default_data(cartesian_case, testee_op, ref=lambda qc, ksize: expected)
+    # cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
@@ -462,7 +462,7 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_fieldop_from_scan(cartesian_case, forward):
+def test_fieldop_from_scan(cartesian_case, forward):  # TODO: try again with default
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
     out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
@@ -544,7 +544,8 @@ def test_ternary_operator(cartesian_case, left, right):
     )
 
 
-def test_ternary_operator_tuple(cartesian_case):
+@pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
+def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
         a: cases.IField, b: cases.IField, left: int64, right: int64
@@ -553,8 +554,6 @@ def test_ternary_operator_tuple(cartesian_case):
 
     a = cases.allocate(cartesian_case, testee, "a")()
     b = cases.allocate(cartesian_case, testee, "b")()
-    left = 2
-    right = 3
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(
