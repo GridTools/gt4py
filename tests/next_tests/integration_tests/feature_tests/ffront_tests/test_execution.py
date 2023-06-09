@@ -50,7 +50,13 @@ from next_tests.integration_tests.feature_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
+    fieldview_backend,
+    no_default_backend,
     unstructured_case,
+)
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    fieldview_backend,
+    reduction_setup,
 )
 
 
@@ -239,7 +245,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     )
 
 
-def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
+def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
@@ -257,7 +263,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
-def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures # TODO: try again with default
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
@@ -456,7 +462,7 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_fieldop_from_scan(cartesian_case, forward):  # TODO: try again with default
+def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
     out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
