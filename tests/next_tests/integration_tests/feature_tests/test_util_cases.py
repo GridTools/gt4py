@@ -23,7 +23,6 @@ from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
     fieldview_backend,
-    no_default_backend,
 )
 
 

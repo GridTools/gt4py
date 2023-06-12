@@ -29,7 +29,7 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded, ir as itir
+from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -435,16 +435,7 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def no_default_backend():
-    """Temporarily switch off default backend for feature tests."""
-    backup_backend = decorator.DEFAULT_BACKEND
-    decorator.DEFAULT_BACKEND = no_backend
-    yield
-    decorator.DEFAULT_BACKEND = backup_backend
-
-
-@pytest.fixture
-def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
@@ -454,9 +445,7 @@ def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtu
 
 
 @pytest.fixture
-def unstructured_case(
-    no_default_backend, reduction_setup, fieldview_backend  # noqa: F811 # fixtures
-):
+def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider=reduction_setup.offset_provider,
@@ -560,11 +549,6 @@ def get_default_data(
         param_types.pop("out")
     inps = tuple(allocate(case, fieldview_prog, name)() for name in param_types)
     return inps, kwfields
-
-
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 @dataclasses.dataclass

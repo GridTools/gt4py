@@ -13,20 +13,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
 from collections import namedtuple
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next.ffront import decorator
+from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+
+
+def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    """Temporary default backend to not accidentally test the wrong backend."""
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
 def fieldview_backend(request):
+    backup_backend = decorator.DEFAULT_BACKEND
+    decorator.DEFAULT_BACKEND = no_backend
     yield request.param
+    decorator.DEFAULT_BACKEND = backup_backend
 
 
 def debug_itir(tree):
