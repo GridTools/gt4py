@@ -125,7 +125,7 @@ def reduction_setup():
         for e in v2e_arr[v]:
             e2v_arr[e].append(v)
     assert all(len(row) == 2 for row in e2v_arr)
-    e2v_arr = np.asarray(e2v_arr, dtype=np.int32)
+    e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
     yield namedtuple(
         "ReductionSetup",
