@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, float64, int64, max_over, min_over, neighbor_sum, where
+from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -45,8 +45,8 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
     @gtx.field_operator(backend=fieldview_backend)
     def maxover_fieldoperator(
-        inp_field: gtx.Field[[Vertex, V2EDim], int64]
-    ) -> gtx.Field[[Vertex], int64]:
+        inp_field: gtx.Field[[Vertex, V2EDim], int32]
+    ) -> gtx.Field[[Vertex], int32]:
         return max_over(inp_field, axis=V2EDim)
 
     maxover_fieldoperator(inp_field, out=rs.out, offset_provider=rs.offset_provider)
@@ -63,11 +63,11 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     rs = reduction_setup
     V2EDim, V2E = rs.V2EDim, rs.V2E
     edge_num = np.max(rs.v2e_table)
-    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
+    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int32)
     inp_field = gtx.np_as_located_field(Edge)(inp_field_arr)
 
     @gtx.field_operator(backend=fieldview_backend)
-    def maxover_negvals(edge_f: gtx.Field[[Edge], int64]) -> gtx.Field[[Vertex], int64]:
+    def maxover_negvals(edge_f: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
@@ -88,8 +88,8 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
     @gtx.field_operator(backend=fieldview_backend)
     def minover_fieldoperator(
-        input: gtx.Field[[Vertex, V2EDim], int64]
-    ) -> gtx.Field[[Vertex], int64]:
+        input: gtx.Field[[Vertex, V2EDim], int32]
+    ) -> gtx.Field[[Vertex], int32]:
         return min_over(input, axis=V2EDim)
 
     minover_fieldoperator(in_field, out=rs.out, offset_provider=rs.offset_provider)
@@ -127,11 +127,11 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @gtx.field_operator(backend=fieldview_backend)
-    def reduction(edge_f: gtx.Field[[Edge], int64]) -> gtx.Field[[Vertex], int64]:
+    def reduction(edge_f: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     @gtx.program(backend=fieldview_backend)
-    def fencil(edge_f: gtx.Field[[Edge], int64], out: gtx.Field[[Vertex], int64]) -> None:
+    def fencil(edge_f: gtx.Field[[Edge], int32], out: gtx.Field[[Vertex], int32]) -> None:
         reduction(edge_f, out=out)
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
@@ -149,13 +149,13 @@ def test_reduction_expression(reduction_setup, fieldview_backend):
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @gtx.field_operator(backend=fieldview_backend)
-    def reduce_expr(edge_f: gtx.Field[[Edge], int64]) -> gtx.Field[[Vertex], int64]:
+    def reduce_expr(edge_f: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return int64(3) * neighbor_sum(-edge_f(V2E) * tmp_nbh * int64(2), axis=V2EDim)
+        return 3 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2, axis=V2EDim)
 
     @gtx.program(backend=fieldview_backend)
-    def fencil(edge_f: gtx.Field[[Edge], int64], out: gtx.Field[[Vertex], int64]) -> None:
+    def fencil(edge_f: gtx.Field[[Edge], int32], out: gtx.Field[[Vertex], int32]) -> None:
         reduce_expr(edge_f, out=out)
 
     fencil(rs.inp, rs.out, offset_provider=rs.offset_provider)
@@ -169,7 +169,7 @@ def test_reduction_with_common_expression(reduction_setup, fieldview_backend):
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
     @gtx.field_operator(backend=fieldview_backend)
-    def testee(flux: gtx.Field[[Edge], int64]) -> gtx.Field[[Vertex], int64]:
+    def testee(flux: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
     testee(rs.inp, out=rs.out, offset_provider=rs.offset_provider)

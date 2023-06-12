@@ -86,7 +86,8 @@ def reduction_setup():
             [6, 12, 8, 15],  # 6
             [7, 13, 6, 16],
             [8, 14, 7, 17],
-        ]
+        ],
+        dtype=np.int32,
     )
 
     c2v_arr = np.array(
@@ -99,7 +100,8 @@ def reduction_setup():
             [7, 8, 2, 1],
             [2, 0, 3, 5],
             [5, 3, 6, 8],
-        ]
+        ],
+        dtype=np.int32,
     )
 
     c2e_arr = np.array(
@@ -112,7 +114,8 @@ def reduction_setup():
             [7, 17, 1, 16],
             [2, 9, 5, 11],
             [5, 12, 8, 14],
-        ]
+        ],
+        dtype=np.int32,
     )
 
     # create e2v connectivity by inverting v2e
@@ -122,7 +125,7 @@ def reduction_setup():
         for e in v2e_arr[v]:
             e2v_arr[e].append(v)
     assert all(len(row) == 2 for row in e2v_arr)
-    e2v_arr = np.asarray(e2v_arr)
+    e2v_arr = np.asarray(e2v_arr, dtype=np.int32)
 
     yield namedtuple(
         "ReductionSetup",
@@ -157,8 +160,8 @@ def reduction_setup():
         C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
         C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
         # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
-        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int64)),
-        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int64)),
+        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int32)),
+        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
             "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
