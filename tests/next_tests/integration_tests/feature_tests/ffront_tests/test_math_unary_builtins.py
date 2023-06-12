@@ -144,7 +144,7 @@ def test_unary_not(cartesian_case):
     def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
         return not inp1
 
-    cases.verify_with_default_data(cartesian_case, not_fieldop, ref=lambda inp1: not inp1)
+    cases.verify_with_default_data(cartesian_case, not_fieldop, ref=lambda inp1: ~inp1)
 
 
 # Trig builtins
