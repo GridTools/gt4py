@@ -41,8 +41,6 @@ def render_scalar_type(scalar_type: ts.ScalarType) -> str:
             return "double"
         case ts.ScalarKind.STRING:
             return "std::string"
-        case ts.ScalarKind.DIMENSION:
-            raise AssertionError(f"Deprecated type '{scalar_type}' is not supported.")
         case _:
             raise AssertionError(
                 f"Scalar kind '{scalar_type}' is not implemented when it should be."

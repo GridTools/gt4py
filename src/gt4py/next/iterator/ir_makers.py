@@ -12,11 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import typing
 from typing import Callable, Union
 
-import numpy as np
-
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
@@ -53,7 +54,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     return itir.SymRef(id=ref_or_name)
 
 
-def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: Union[str, common.Scalar, itir.Expr]) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -70,9 +71,9 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
-    elif isinstance(literal_or_expr, (int, float, bool)):
-        return literal(literal_or_expr)
-    return literal_or_expr
+    elif isinstance(literal_or_expr, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
+        return literal_from_value(literal_or_expr)  # type: ignore[arg-type] # mypy bug #11673
+    return literal_or_expr  # type: ignore[return-value] # mypy bug #11673
 
 
 def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
@@ -218,9 +219,9 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index, tuple_expr):
+def tuple_get(index: str | int, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(literal(index, itir.INTEGER_INDEX_BUILTIN), tuple_expr)
+    return call("tuple_get")(literal(str(index), itir.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -271,32 +272,40 @@ def shift(offset, value=None):
     return call(call("shift")(*args))
 
 
-def literal(value: str | bool | int | float, typename: str | None = None):
-    if isinstance(value, str):
-        if typename is None:
-            raise ValueError("Argument `typename` mandatory for `value` of type string.")
-    elif isinstance(value, bool):
-        assert typename in [None, "bool"]
-        typename = "bool"
-        value = str(value)
-    elif isinstance(value, int):
-        if np.iinfo(np.int32).min <= value <= np.iinfo(np.int32).max:
-            typename = "int32"
-        elif np.iinfo(np.int64).min <= value <= np.iinfo(np.int64).max:
-            typename = "int64"
-        else:
-            raise ValueError(
-                f"Value `{value}` is out of range to be representable as `int32` or `int64`."
-            )
-        value = str(value)
-    elif isinstance(value, float):
-        assert typename in [None, "float64"]
-        typename = "float64"
-        value = str(value)
-    else:
-        raise ValueError("Invalid argument.")
-
+def literal(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
+
+
+def literal_from_value(val: common.Scalar) -> itir.Literal:
+    """
+    Make a literal node from a value.
+
+    >>> literal_from_value(1.)
+    Literal(value='1.0', type='float64')
+    >>> literal_from_value(1)
+    Literal(value='1', type='int32')
+    >>> literal_from_value(2147483648)
+    Literal(value='2147483648', type='int64')
+    """
+    if not isinstance(val, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
+        raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
+
+    if isinstance(val, typing.SupportsInt):
+        val = int(val)
+    elif isinstance(val, typing.SupportsFloat):
+        val = float(val)
+
+    # At the time this has been written the iterator module has its own type system that is
+    # uncoupled from the one used in the frontend. However since we decided to eventually replace
+    # it with the frontend type system we already use it here (avoiding unnecessary code
+    # duplication).
+    type_spec = type_translation.from_value(val)
+    assert isinstance(type_spec, ts.ScalarType)
+
+    typename = type_spec.kind.name.lower()
+    assert typename in itir.TYPEBUILTINS
+
+    return itir.Literal(value=str(val), type=typename)
 
 
 def neighbors(offset, it):

@@ -77,7 +77,6 @@ class ScalarKind(IntEnum):
     INT64 = 64
     FLOAT32 = 1032
     FLOAT64 = 1064
-    DIMENSION = 2001
     STRING = 3001
 
 
