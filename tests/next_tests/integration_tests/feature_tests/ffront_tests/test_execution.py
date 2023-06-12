@@ -50,7 +50,6 @@ from next_tests.integration_tests.feature_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    fieldview_backend,
     no_default_backend,
     unstructured_case,
 )
@@ -656,9 +655,8 @@ def test_docstring(cartesian_case):
         fieldop_with_docstring(a, out=a)
 
     a = cases.allocate(cartesian_case, test_docstring, "a")()
-    inout = cases.allocate(cartesian_case, fieldop_with_docstring, "a")()
 
-    cases.verify(cartesian_case, test_docstring, a, inout=inout, ref=a)
+    cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
 
 
 def test_domain(cartesian_case):
