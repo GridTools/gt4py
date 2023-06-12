@@ -453,7 +453,6 @@ def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtu
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
             Cell: reduction_setup.num_cells,
-            V2E: (9, 4),
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )

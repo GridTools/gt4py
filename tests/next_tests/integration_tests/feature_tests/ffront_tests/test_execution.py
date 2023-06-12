@@ -51,7 +51,6 @@ from next_tests.integration_tests.feature_tests.cases import (
     Vertex,
     cartesian_case,
     fieldview_backend,
-    no_default_backend,
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
