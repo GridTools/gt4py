@@ -286,11 +286,15 @@ def literal_from_value(val: common.Scalar) -> itir.Literal:
     Literal(value='1', type='int32')
     >>> literal_from_value(2147483648)
     Literal(value='2147483648', type='int64')
+    >>> literal_from_value(True)
+    Literal(value='True', type='bool')
     """
     if not isinstance(val, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
 
-    if isinstance(val, typing.SupportsInt):
+    if isinstance(val, bool):
+        pass
+    elif isinstance(val, typing.SupportsInt):
         val = int(val)
     elif isinstance(val, typing.SupportsFloat):
         val = float(val)
