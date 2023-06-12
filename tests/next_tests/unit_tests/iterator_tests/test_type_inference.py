@@ -818,7 +818,7 @@ def test_fencil_definition_same_closure_input():
             np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
         )
     }
-    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider=offset_provider)
 
     # validate locations of fencil params
     fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
@@ -968,6 +968,13 @@ def test_fencil_definition_with_function_definitions():
         ti.pformat(inferred)
         == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(int32ˢ, int32ˢ, int32ˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
     )
+
+
+def test_save_types_to_annex():
+    testee = im.lambda_("a")(im.plus("a", im.literal("1", "float32")))
+    ti.infer(testee, save_to_annex=True)
+    param_type = testee.params[0].annex.type
+    assert isinstance(param_type, ti.Val) and param_type.dtype.name == "float32"
 
 
 def test_pformat():
