@@ -229,18 +229,22 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         )
 
     @gtx.field_operator
-    def testee_op(size: int32) -> gtx.Field[[IDim], int32]:
+    def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
 
     @gtx.program
-    def testee(size: int32, out: gtx.Field[[IDim], int32]):
+    def testee(size: gtx.IndexType, out: gtx.Field[[IDim], gtx.IndexType]):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=np.int32)
+        cartesian_case,
+        testee,
+        size,
+        out=out,
+        ref=np.full_like(out.array(), size, dtype=gtx.IndexType),
     )
 
 
@@ -690,7 +694,9 @@ def test_domain_input_bounds(cartesian_case):
         return a + a
 
     @gtx.program
-    def program_domain(inp: cases.IField, out: cases.IField, lower_i: int32, upper_i: int32):
+    def program_domain(
+        inp: cases.IField, out: cases.IField, lower_i: gtx.IndexType, upper_i: gtx.IndexType
+    ):
         fieldop_domain(
             inp,
             out=out,
@@ -726,10 +732,10 @@ def test_domain_input_bounds_1(cartesian_case):
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
-        lower_i: int32,
-        upper_i: int32,
-        lower_j: int32,
-        upper_j: int32,
+        lower_i: gtx.IndexType,
+        upper_i: gtx.IndexType,
+        lower_j: gtx.IndexType,
+        upper_j: gtx.IndexType,
     ):
         fieldop_domain(
             a,
@@ -792,7 +798,9 @@ def test_where_k_offset(cartesian_case):
         pytest.xfail("IndexFields are not supported yet.")
 
     @gtx.field_operator
-    def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
+    def fieldop_where_k_offset(
+        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+    ) -> cases.IKField:
         return where(k_index > 0, a(Koff[-1]), 2)
 
     cases.verify_with_default_data(
@@ -802,7 +810,9 @@ def test_where_k_offset(cartesian_case):
     )
 
     @gtx.field_operator
-    def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
+    def fieldop_where_k_offset(
+        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+    ) -> cases.IKField:
         return where(k_index > 0, a(Koff[-1]), 2)
 
     cases.verify_with_default_data(

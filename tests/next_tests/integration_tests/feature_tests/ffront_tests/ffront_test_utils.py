@@ -87,7 +87,7 @@ def reduction_setup():
             [7, 13, 6, 16],
             [8, 14, 7, 17],
         ],
-        dtype=np.int32,
+        dtype=gtx.IndexType,
     )
 
     c2v_arr = np.array(
@@ -101,7 +101,7 @@ def reduction_setup():
             [2, 0, 3, 5],
             [5, 3, 6, 8],
         ],
-        dtype=np.int32,
+        dtype=gtx.IndexType,
     )
 
     c2e_arr = np.array(
@@ -115,7 +115,7 @@ def reduction_setup():
             [2, 9, 5, 11],
             [5, 12, 8, 14],
         ],
-        dtype=np.int32,
+        dtype=gtx.IndexType,
     )
 
     # create e2v connectivity by inverting v2e
