@@ -70,21 +70,14 @@ def test_maxover_execution_negatives(unstructured_case):
         pytest.skip("not yet supported.")
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    edge_num = np.max(v2e_table)
-    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
-    inp_field = gtx.np_as_located_field(Edge)(inp_field_arr)
 
     @gtx.field_operator
     def maxover_negvals(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    cases.verify(
-        unstructured_case,
-        maxover_negvals,
-        inp_field,
-        out=cases.allocate(unstructured_case, maxover_negvals, cases.RETURN)(),
-        ref=np.max(inp_field_arr[v2e_table], axis=1),
+    cases.verify_with_default_data(
+        unstructured_case, maxover_negvals, ref=lambda edge_f: np.max(edge_f[v2e_table], axis=1)
     )
 
 
@@ -94,21 +87,14 @@ def test_minover_execution(unstructured_case):
         pytest.skip("not yet supported.")
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    edge_num = np.max(v2e_table)
-    inp_field_arr = np.arange(-edge_num // 2, edge_num // 2 + 1, 1, dtype=int)
-    inp_field = gtx.np_as_located_field(Edge)(inp_field_arr)
 
     @gtx.field_operator
     def maxover_negvals(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    cases.verify(
-        unstructured_case,
-        maxover_negvals,
-        inp_field,
-        out=cases.allocate(unstructured_case, maxover_negvals, cases.RETURN)(),
-        ref=np.min(inp_field_arr[v2e_table], axis=1),
+    cases.verify_with_default_data(
+        unstructured_case, maxover_negvals, ref=lambda edge_f: np.min(edge_f[v2e_table], axis=1)
     )
 
 
@@ -170,7 +156,7 @@ def test_conditional_nested_tuple(cartesian_case):
 
     @gtx.field_operator
     def conditional_nested_tuple(
-        mask: gtx.Field[[IDim], bool], a: cases.IFloatField, b: cases.IFloatField
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> tuple[
         tuple[cases.IFloatField, cases.IFloatField],
         tuple[cases.IFloatField, cases.IFloatField],
@@ -234,7 +220,7 @@ def test_broadcast_shifted(cartesian_case):
 def test_conditional(cartesian_case):
     @gtx.field_operator
     def conditional(
-        mask: gtx.Field[[IDim], bool], a: cases.IFloatField, b: cases.IFloatField
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> cases.IFloatField:
         return where(mask, a, b)
 
@@ -245,9 +231,7 @@ def test_conditional(cartesian_case):
 
 def test_conditional_promotion(cartesian_case):
     @gtx.field_operator
-    def conditional_promotion(
-        mask: gtx.Field[[IDim], bool], a: cases.IFloatField
-    ) -> cases.IFloatField:
+    def conditional_promotion(mask: cases.IBoolField, a: cases.IFloatField) -> cases.IFloatField:
         return where(mask, a, 10.0)
 
     cases.verify_with_default_data(
@@ -268,14 +252,14 @@ def test_conditional_compareop(cartesian_case):
 def test_conditional_shifted(cartesian_case):
     @gtx.field_operator
     def conditional_shifted(
-        mask: gtx.Field[[IDim], bool], a: cases.IFloatField, b: cases.IFloatField
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> gtx.Field[[IDim], float64]:
         tmp = where(mask, a, b)
         return tmp(Ioff[1])
 
     @gtx.program
     def conditional_program(
-        mask: gtx.Field[[IDim], bool],
+        mask: cases.IBoolField,
         a: cases.IFloatField,
         b: cases.IFloatField,
         out: cases.IFloatField,
@@ -299,17 +283,11 @@ def test_conditional_shifted(cartesian_case):
     )
 
 
-def test_promotion(cartesian_case, unstructured_case):
-    ksize = cartesian_case.default_sizes[KDim]
-    size = unstructured_case.default_sizes[Edge]
-    inp1 = gtx.np_as_located_field(Edge, KDim)(np.ones((size, ksize)))
-    inp2 = gtx.np_as_located_field(KDim)(np.ones((ksize)) * 2)
-    out = gtx.np_as_located_field(Edge, KDim)(np.zeros((size, ksize)))
-
+def test_promotion(unstructured_case):
     @gtx.field_operator
     def promotion(
         inp1: gtx.Field[[Edge, KDim], float64], inp2: gtx.Field[[KDim], float64]
     ) -> gtx.Field[[Edge, KDim], float64]:
         return inp1 / inp2
 
-    cases.verify(unstructured_case, promotion, inp1, inp2, out=out, ref=inp1.array() / inp2.array())
+    cases.verify_with_default_data(unstructured_case, promotion, ref=lambda inp1, inp2: inp1 / inp2)

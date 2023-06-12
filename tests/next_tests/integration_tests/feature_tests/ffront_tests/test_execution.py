@@ -300,7 +300,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
+    def testee(a: cases.IFloatField) -> cases.IBoolField:
         b = astype(a, bool)
         return b
 
