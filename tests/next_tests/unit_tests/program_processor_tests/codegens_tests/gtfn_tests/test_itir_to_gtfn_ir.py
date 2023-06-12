@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next import common
+import gt4py.next as gtx
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, itir_to_gtfn_ir as it2gtfn
 
@@ -29,7 +29,7 @@ def test_funcall_to_op():
     )
 
     actual = it2gtfn.GTFN_lowering(
-        grid_type=common.GridType.CARTESIAN, offset_provider={}, column_axis=None
+        grid_type=gtx.GridType.CARTESIAN, offset_provider={}, column_axis=None
     ).visit(testee)
 
     assert expected == actual
@@ -40,7 +40,7 @@ def test_unapplied_funcall_to_function_object():
     expected = gtfn_ir.SymRef(id="plus")
 
     actual = it2gtfn.GTFN_lowering(
-        grid_type=common.GridType.CARTESIAN, offset_provider={}, column_axis=None
+        grid_type=gtx.GridType.CARTESIAN, offset_provider={}, column_axis=None
     ).visit(testee)
 
     assert expected == actual

@@ -18,9 +18,9 @@ from collections import abc
 from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.next.common import Connectivity, Dimension, DimensionKind
+import gt4py.next as gtx
+from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
@@ -546,9 +546,13 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                 axis = offset_provider[offset]
                 if isinstance(axis, CartesianAxis):
                     continue  # Cartesian shifts don’t change the location type
-                elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
+                elif isinstance(
+                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
+                ):
                     assert (
-                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                        axis.origin_axis.kind
+                        == axis.neighbor_axis.kind
+                        == gtx.DimensionKind.HORIZONTAL
                     )
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
@@ -572,7 +576,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             See `unify` for more information.
     """
 
-    offset_provider: Optional[dict[str, Connectivity | Dimension]]
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]]
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
     constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=_default_constraints)
 
@@ -941,7 +945,7 @@ def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
 def infer_all(
     node: ir.Node,
     *,
-    offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]] = None,
     reindex: bool = True,
     save_to_annex=False,
 ) -> dict[int, Type]:

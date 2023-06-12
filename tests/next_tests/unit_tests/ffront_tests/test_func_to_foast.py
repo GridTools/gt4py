@@ -39,63 +39,37 @@ import re
 
 import pytest
 
+import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next import astype, broadcast, float32, float64, int32, int64, where
+from gt4py.next.common import GTTypeError
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.fbuiltins import (
-    Dimension,
-    astype,
-    broadcast,
-    float32,
-    float64,
-    int32,
-    int64,
-    where,
-)
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
-from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.builtins import (
-    and_,
-    deref,
-    divides,
-    eq,
-    greater,
-    if_,
-    less,
-    lift,
-    make_tuple,
-    minus,
-    multiplies,
-    not_,
-    or_,
-    plus,
-    tuple_get,
-    xor_,
-)
+from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.type_system.type_translation import TypingError
 
 
-DEREF = itir.SymRef(id=deref.fun.__name__)
-PLUS = itir.SymRef(id=plus.fun.__name__)
-MINUS = itir.SymRef(id=minus.fun.__name__)
-MULTIPLIES = itir.SymRef(id=multiplies.fun.__name__)
-DIVIDES = itir.SymRef(id=divides.fun.__name__)
-MAKE_TUPLE = itir.SymRef(id=make_tuple.fun.__name__)
-TUPLE_GET = itir.SymRef(id=tuple_get.fun.__name__)
-IF = itir.SymRef(id=if_.fun.__name__)
-NOT = itir.SymRef(id=not_.fun.__name__)
-GREATER = itir.SymRef(id=greater.fun.__name__)
-LESS = itir.SymRef(id=less.fun.__name__)
-EQ = itir.SymRef(id=eq.fun.__name__)
-AND = itir.SymRef(id=and_.fun.__name__)
-OR = itir.SymRef(id=or_.fun.__name__)
-XOR = itir.SymRef(id=xor_.fun.__name__)
-LIFT = itir.SymRef(id=lift.fun.__name__)
+DEREF = itir.SymRef(id=itb.deref.fun.__name__)
+PLUS = itir.SymRef(id=itb.plus.fun.__name__)
+MINUS = itir.SymRef(id=itb.minus.fun.__name__)
+MULTIPLIES = itir.SymRef(id=itb.multiplies.fun.__name__)
+DIVIDES = itir.SymRef(id=itb.divides.fun.__name__)
+MAKE_TUPLE = itir.SymRef(id=itb.make_tuple.fun.__name__)
+TUPLE_GET = itir.SymRef(id=itb.tuple_get.fun.__name__)
+IF = itir.SymRef(id=itb.if_.fun.__name__)
+NOT = itir.SymRef(id=itb.not_.fun.__name__)
+GREATER = itir.SymRef(id=itb.greater.fun.__name__)
+LESS = itir.SymRef(id=itb.less.fun.__name__)
+EQ = itir.SymRef(id=itb.eq.fun.__name__)
+AND = itir.SymRef(id=itb.and_.fun.__name__)
+OR = itir.SymRef(id=itb.or_.fun.__name__)
+XOR = itir.SymRef(id=itb.xor_.fun.__name__)
+LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
 
 # --- Parsing ---
@@ -115,7 +89,7 @@ def test_untyped_arg():
 def test_mistyped_arg():
     """Field operator parameters must be type annotated."""
 
-    def mistyped(inp: Field):
+    def mistyped(inp: gtx.Field):
         return inp
 
     with pytest.raises(
@@ -128,7 +102,7 @@ def test_mistyped_arg():
 def test_return_type():
     """Return type annotation should be stored on the FieldOperator."""
 
-    def rettype(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
+    def rettype(inp: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return inp
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
@@ -142,7 +116,7 @@ def test_return_type():
 def test_invalid_syntax_no_return():
     """Field operators must end with a return statement."""
 
-    def no_return(inp: Field[[TDim], "float64"]):
+    def no_return(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp  # noqa
 
     with pytest.raises(
@@ -155,7 +129,9 @@ def test_invalid_syntax_no_return():
 def test_invalid_assign_to_expr():
     """Assigning to subscripts disallowed until a usecase can be found."""
 
-    def invalid_assign_to_expr(inp1: Field[[TDim], "float64"], inp2: Field[[TDim], "float64"]):
+    def invalid_assign_to_expr(
+        inp1: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float64"]
+    ):
         tmp = inp1
         tmp[-1] = inp2
         return tmp
@@ -165,7 +141,7 @@ def test_invalid_assign_to_expr():
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[[TDim], "float64"]):
+    def copy_field(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -182,8 +158,8 @@ def test_temp_assignment():
 def test_clashing_annotated_assignment():
     pytest.skip("Annotated assignments are not properly supported at the moment.")
 
-    def clashing(inp: Field[[TDim], "float64"]):
-        tmp: Field[[TDim], "int64"] = inp
+    def clashing(inp: gtx.Field[[TDim], "float64"]):
+        tmp: gtx.Field[[TDim], "int64"] = inp
         return tmp
 
     with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
@@ -191,7 +167,7 @@ def test_clashing_annotated_assignment():
 
 
 def test_binary_pow():
-    def power(inp: Field[[TDim], "float64"]):
+    def power(inp: gtx.Field[[TDim], "float64"]):
         return inp**3
 
     parsed = FieldOperatorParser.apply_to_function(power)
@@ -203,7 +179,7 @@ def test_binary_pow():
 
 
 def test_binary_mod():
-    def modulo(inp: Field[[TDim], "int32"]):
+    def modulo(inp: gtx.Field[[TDim], "int32"]):
         return inp % 3
 
     parsed = FieldOperatorParser.apply_to_function(modulo)
@@ -215,7 +191,7 @@ def test_binary_mod():
 
 
 def test_bool_and():
-    def bool_and(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bool_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a and b
 
     with pytest.raises(
@@ -226,7 +202,7 @@ def test_bool_and():
 
 
 def test_bool_or():
-    def bool_or(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bool_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a or b
 
     with pytest.raises(
@@ -237,7 +213,7 @@ def test_bool_or():
 
 
 def test_bool_xor():
-    def bool_xor(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bool_xor(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a ^ b
 
     parsed = FieldOperatorParser.apply_to_function(bool_xor)
@@ -249,7 +225,7 @@ def test_bool_xor():
 
 
 def test_unary_tilde():
-    def unary_tilde(a: Field[[TDim], "bool"]):
+    def unary_tilde(a: gtx.Field[[TDim], "bool"]):
         return ~a
 
     parsed = FieldOperatorParser.apply_to_function(unary_tilde)
@@ -271,8 +247,8 @@ def test_scalar_cast():
 
 def test_conditional_wrong_mask_type():
     def conditional_wrong_mask_type(
-        a: Field[[TDim], float64],
-    ) -> Field[[TDim], float64]:
+        a: gtx.Field[[TDim], float64],
+    ) -> gtx.Field[[TDim], float64]:
         return where(a, a, a)
 
     msg = r"Expected a field with dtype bool."
@@ -282,10 +258,10 @@ def test_conditional_wrong_mask_type():
 
 def test_conditional_wrong_arg_type():
     def conditional_wrong_arg_type(
-        mask: Field[[TDim], bool],
-        a: Field[[TDim], float32],
-        b: Field[[TDim], float64],
-    ) -> Field[[TDim], float64]:
+        mask: gtx.Field[[TDim], bool],
+        a: gtx.Field[[TDim], float32],
+        b: gtx.Field[[TDim], float64],
+    ) -> gtx.Field[[TDim], float64]:
         return where(mask, a, b)
 
     msg = r"Could not promote scalars of different dtype \(not implemented\)."
@@ -296,7 +272,7 @@ def test_conditional_wrong_arg_type():
 
 
 def test_ternary_with_field_condition():
-    def ternary_with_field_condition(cond: Field[[], bool]):
+    def ternary_with_field_condition(cond: gtx.Field[[], bool]):
         return 1 if cond else 2
 
     with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
@@ -315,7 +291,7 @@ def test_correct_return_type_annotation():
 def test_adr13_wrong_return_type_annotation():
     """See ADR 13."""
 
-    def wrong_return_type_annotation() -> Field[[], float]:
+    def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
     with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
@@ -325,7 +301,7 @@ def test_adr13_wrong_return_type_annotation():
 def test_adr13_fixed_return_type_annotation():
     """See ADR 13."""
 
-    def fixed_return_type_annotation() -> Field[[], float]:
+    def fixed_return_type_annotation() -> gtx.Field[[], float]:
         return broadcast(1.0, ())
 
     FieldOperatorParser.apply_to_function(fixed_return_type_annotation)
@@ -344,7 +320,7 @@ def test_no_implicit_broadcast_in_field_op_call():
 
 
 def test_astype():
-    def astype_fieldop(a: Field[[TDim], "int64"]) -> Field[[TDim], float64]:
+    def astype_fieldop(a: gtx.Field[[TDim], "int64"]) -> gtx.Field[[TDim], float64]:
         return astype(a, float64)
 
     parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
@@ -361,10 +337,9 @@ def test_closure_symbols():
 
     from gt4py.eve.utils import FrozenNamespace
 
-    nonlocals_unreferenced = FrozenNamespace()
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
 
-    def operator_with_refs(inp: Field[[TDim], "float64"], inp2: Field[[TDim], "float32"]):
+    def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
         b = inp2 + nonlocals.np_value
         return a, b
@@ -394,10 +369,10 @@ def test_closure_symbols():
 
 
 def test_wrong_return_type_annotation():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
+    ADim = gtx.Dimension("ADim")
+    BDim = gtx.Dimension("BDim")
 
-    def wrong_return_type_annotation(a: Field[[ADim], float64]) -> Field[[BDim], float64]:
+    def wrong_return_type_annotation(a: gtx.Field[[ADim], float64]) -> gtx.Field[[BDim], float64]:
         return a
 
     with pytest.raises(
@@ -408,7 +383,7 @@ def test_wrong_return_type_annotation():
 
 
 def test_empty_dims_type():
-    def empty_dims() -> Field[[], float]:
+    def empty_dims() -> gtx.Field[[], float]:
         return 1.0
 
     with pytest.raises(
@@ -419,10 +394,10 @@ def test_empty_dims_type():
 
 
 def test_zero_dims_ternary():
-    ADim = Dimension("ADim")
+    ADim = gtx.Dimension("ADim")
 
     def zero_dims_ternary(
-        cond: Field[[], float64], a: Field[[ADim], float64], b: Field[[ADim], float64]
+        cond: gtx.Field[[], float64], a: gtx.Field[[ADim], float64], b: gtx.Field[[ADim], float64]
     ):
         return a if cond == 1 else b
 

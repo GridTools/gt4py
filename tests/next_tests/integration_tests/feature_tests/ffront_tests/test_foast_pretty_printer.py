@@ -17,10 +17,8 @@ import textwrap
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next import Dimension, DimensionKind, Field, field_operator, int64, scan_operator
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.decorator import field_operator, scan_operator
-from gt4py.next.ffront.fbuiltins import int64
 from gt4py.next.ffront.foast_pretty_printer import pretty_format
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 

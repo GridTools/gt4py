@@ -52,7 +52,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next import Field, Dimension
     >>> float64 = float
     >>> IDim = Dimension("IDim")
     >>> def field_op(inp: Field[[IDim], float64]):
