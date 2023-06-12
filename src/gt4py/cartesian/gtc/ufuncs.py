@@ -60,6 +60,7 @@ sqrt: np.ufunc = np.sqrt
 power: np.ufunc = np.power
 exp: np.ufunc = np.exp
 log: np.ufunc = np.log
+log10: np.ufunc = np.log10
 gamma: np.ufunc = gamma_
 cbrt: np.ufunc = np.cbrt
 isfinite: np.ufunc = np.isfinite

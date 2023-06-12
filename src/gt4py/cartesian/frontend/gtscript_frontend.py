@@ -742,6 +742,7 @@ class IRMaker(ast.NodeVisitor):
             "sqrt": nodes.NativeFunction.SQRT,
             "exp": nodes.NativeFunction.EXP,
             "log": nodes.NativeFunction.LOG,
+            "log10": nodes.NativeFunction.LOG10,
             "gamma": nodes.NativeFunction.GAMMA,
             "cbrt": nodes.NativeFunction.CBRT,
             "isfinite": nodes.NativeFunction.ISFINITE,
