@@ -300,7 +300,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> cases.IBoolField:
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
         return b
 
@@ -654,9 +654,8 @@ def test_docstring(cartesian_case):
         fieldop_with_docstring(a, out=a)
 
     a = cases.allocate(cartesian_case, test_docstring, "a")()
-    inout = cases.allocate(cartesian_case, fieldop_with_docstring, "a")()
 
-    cases.verify(cartesian_case, test_docstring, a, inout=inout, ref=a)
+    cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
 
 
 def test_domain(cartesian_case):
