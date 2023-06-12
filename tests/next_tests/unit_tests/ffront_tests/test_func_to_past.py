@@ -17,11 +17,11 @@ import re
 import pytest
 
 import gt4py.eve as eve
+import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next import float64
+from gt4py.next.common import GTTypeError
 from gt4py.next.ffront import program_ast as past
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import float64
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.type_system import type_specifications as ts
@@ -31,7 +31,6 @@ from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
     double_copy_program_def,
-    float64,
     identity_def,
     make_tuple_op,
 )
@@ -39,7 +38,9 @@ from next_tests.past_common_fixtures import (
 
 def test_tuple_constructed_in_out(make_tuple_op):
     def tuple_program(
-        inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
+        inp: gtx.Field[[IDim], float64],
+        out1: gtx.Field[[IDim], float64],
+        out2: gtx.Field[[IDim], float64],
     ):
         make_tuple_op(inp, out=(out1, out2))
 
@@ -107,10 +108,10 @@ def test_double_copy_parsing(double_copy_program_def):
 
 
 def test_undefined_field_program(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
-    def undefined_field_program(in_field: Field[[IDim], "float64"]):
-        identity(in_field, out=out_field)
+    def undefined_field_program(in_field: gtx.Field[[IDim], "float64"]):
+        identity(in_field, out=out_field)  # noqa: F821  # undefined on purpose
 
     with pytest.raises(
         ProgramTypeError,
@@ -156,9 +157,9 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
 
 
 def test_domain_exception_1(identity_def):
-    domain_format_1 = field_operator(identity_def)
+    domain_format_1 = gtx.field_operator(identity_def)
 
-    def domain_format_1_program(in_field: Field[[IDim], float64]):
+    def domain_format_1_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_1(in_field, out=in_field, domain=(0, 2))
 
     with pytest.raises(
@@ -175,9 +176,9 @@ def test_domain_exception_1(identity_def):
 
 
 def test_domain_exception_2(identity_def):
-    domain_format_2 = field_operator(identity_def)
+    domain_format_2 = gtx.field_operator(identity_def)
 
-    def domain_format_2_program(in_field: Field[[IDim], float64]):
+    def domain_format_2_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_2(in_field, out=in_field, domain={IDim: (0, 1, 2)})
 
     with pytest.raises(
@@ -194,9 +195,9 @@ def test_domain_exception_2(identity_def):
 
 
 def test_domain_exception_3(identity_def):
-    domain_format_3 = field_operator(identity_def)
+    domain_format_3 = gtx.field_operator(identity_def)
 
-    def domain_format_3_program(in_field: Field[[IDim], float64]):
+    def domain_format_3_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_3(in_field, domain={IDim: (0, 2)})
 
     with pytest.raises(
@@ -213,9 +214,9 @@ def test_domain_exception_3(identity_def):
 
 
 def test_domain_exception_4(identity_def):
-    domain_format_4 = field_operator(identity_def)
+    domain_format_4 = gtx.field_operator(identity_def)
 
-    def domain_format_4_program(in_field: Field[[IDim], float64]):
+    def domain_format_4_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_4(
             in_field, out=(in_field[0:1], (in_field[0:1], in_field[0:1])), domain={IDim: (0, 1)}
         )
@@ -234,9 +235,9 @@ def test_domain_exception_4(identity_def):
 
 
 def test_domain_exception_5(identity_def):
-    domain_format_5 = field_operator(identity_def)
+    domain_format_5 = gtx.field_operator(identity_def)
 
-    def domain_format_5_program(in_field: Field[[IDim], float64]):
+    def domain_format_5_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_5(in_field, out=in_field, domain={IDim: ("1.0", 9.0)})
 
     with pytest.raises(
@@ -253,9 +254,9 @@ def test_domain_exception_5(identity_def):
 
 
 def test_domain_exception_6(identity_def):
-    domain_format_6 = field_operator(identity_def)
+    domain_format_6 = gtx.field_operator(identity_def)
 
-    def domain_format_6_program(in_field: Field[[IDim], float64]):
+    def domain_format_6_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_6(in_field, out=in_field, domain={})
 
     with pytest.raises(

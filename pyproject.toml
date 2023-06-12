@@ -170,7 +170,10 @@ ignore = [
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above
-per-file-ignores = ['src/gt4py/eve/extended_typing.py:F401,F405']
+per-file-ignores = [
+  'src/gt4py/eve/extended_typing.py:F401,F405',
+  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
+]
 rst-roles = [
   'py:mod, mod',
   'py:func, func',

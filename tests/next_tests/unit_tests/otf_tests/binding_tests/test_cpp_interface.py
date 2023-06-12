@@ -12,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
 import pytest
 
+import gt4py.next as gtx
 import gt4py.next.otf.binding.cpp_interface as cpp
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import format_source
-from gt4py.next.common import Dimension
 from gt4py.next.otf.binding import interface
 
 
@@ -67,14 +66,14 @@ def function_buffer_example():
             interface.Parameter(
                 name="a_buf",
                 type_=ts.FieldType(
-                    dims=[Dimension("foo"), Dimension("bar")],
+                    dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                 ),
             ),
             interface.Parameter(
                 name="b_buf",
                 type_=ts.FieldType(
-                    dims=[Dimension("foo")],
+                    dims=[gtx.Dimension("foo")],
                     dtype=ts.ScalarType(ts.ScalarKind.INT64),
                 ),
             ),
@@ -119,11 +118,11 @@ def function_tuple_example():
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[Dimension("foo"), Dimension("bar")],
+                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                         ts.FieldType(
-                            dims=[Dimension("foo"), Dimension("bar")],
+                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                     ]
