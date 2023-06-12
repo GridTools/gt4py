@@ -50,18 +50,18 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 # mypy does not accept [IDim, ...] as a type
 
-IField: TypeAlias = gtx.Field[[IDim], np.int64]  # type: ignore [valid-type]
+IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
-KField: TypeAlias = gtx.Field[[KDim], np.int64]  # type: ignore [valid-type]
-IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
-IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
+KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
+IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
+IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int32]  # type: ignore [valid-type]
 IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
-IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
+IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = gtx.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = gtx.Field[[Edge], np.int64]  # type: ignore [valid-type]
-CField: TypeAlias = gtx.Field[[Cell], np.int64]  # type: ignore [valid-type]
-EmptyField: TypeAlias = gtx.Field[[], np.int64]  # type: ignore [valid-type]
+VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
+CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
+EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
