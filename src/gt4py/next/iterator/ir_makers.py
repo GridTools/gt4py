@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
 from typing import Callable, Union
 
 from gt4py.next import common
@@ -291,13 +290,6 @@ def literal_from_value(val: common.Scalar) -> itir.Literal:
     """
     if not isinstance(val, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
-
-    if isinstance(val, bool):
-        pass
-    elif isinstance(val, typing.SupportsInt):
-        val = int(val)
-    elif isinstance(val, typing.SupportsFloat):
-        val = float(val)
 
     # At the time this has been written the iterator module has its own type system that is
     # uncoupled from the one used in the frontend. However since we decided to eventually replace
