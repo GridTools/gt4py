@@ -174,11 +174,9 @@ class UniqueInitializer(DataInitializer):
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        if dtype == "bool":
-            f = np.random.choice(a=[False, True], size=(svals))
-        else:
-            f = np.arange(start, start + n_data, dtype=dtype).reshape(svals)
-        return gtx.np_as_located_field(*sizes.keys())(f)
+        return gtx.np_as_located_field(*sizes.keys())(
+            np.arange(start, start + n_data, dtype=dtype).reshape(svals)
+        )
 
     def from_case(
         self: Self,

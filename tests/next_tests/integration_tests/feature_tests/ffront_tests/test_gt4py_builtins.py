@@ -152,8 +152,6 @@ def test_reduction_with_common_expression(unstructured_case):
 
 
 def test_conditional_nested_tuple(cartesian_case):
-    size = cartesian_case.default_sizes[IDim]
-
     @gtx.field_operator
     def conditional_nested_tuple(
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
@@ -163,10 +161,22 @@ def test_conditional_nested_tuple(cartesian_case):
     ]:
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
-    cases.verify_with_default_data(
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    mask = cases.allocate(cartesian_case, conditional_nested_tuple, "mask").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
+    b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
+
+    cases.verify(
         cartesian_case,
         conditional_nested_tuple,
-        ref=lambda mask, a, b: np.where(
+        mask,
+        a,
+        b,
+        out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
+        ref=np.where(
             mask,
             ((a, b), (b, a)),
             ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
@@ -224,9 +234,16 @@ def test_conditional(cartesian_case):
     ) -> cases.IFloatField:
         return where(mask, a, b)
 
-    cases.verify_with_default_data(
-        cartesian_case, conditional, ref=lambda mask, a, b: np.where(mask, a, b)
-    )
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    mask = cases.allocate(cartesian_case, conditional, "mask").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    a = cases.allocate(cartesian_case, conditional, "a")()
+    b = cases.allocate(cartesian_case, conditional, "b")()
+    out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
+
+    cases.verify(cartesian_case, conditional, mask, a, b, out=out, ref=np.where(mask, a, b))
 
 
 def test_conditional_promotion(cartesian_case):
@@ -234,8 +251,16 @@ def test_conditional_promotion(cartesian_case):
     def conditional_promotion(mask: cases.IBoolField, a: cases.IFloatField) -> cases.IFloatField:
         return where(mask, a, 10.0)
 
-    cases.verify_with_default_data(
-        cartesian_case, conditional_promotion, ref=lambda mask, a: np.where(mask, a, 10.0)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    mask = cases.allocate(cartesian_case, conditional_promotion, "mask").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    a = cases.allocate(cartesian_case, conditional_promotion, "a")()
+    out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case, conditional_promotion, mask, a, out=out, ref=np.where(mask, a, 10.0)
     )
 
 
@@ -266,7 +291,8 @@ def test_conditional_shifted(cartesian_case):
     ):
         conditional_shifted(mask, a, b, out=out)
 
-    mask = cases.allocate(cartesian_case, conditional_program, "mask").extend({IDim: (0, 1)})()
+    size = cartesian_case.default_sizes[IDim] + 1
+    mask = gtx.np_as_located_field(IDim)(np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()

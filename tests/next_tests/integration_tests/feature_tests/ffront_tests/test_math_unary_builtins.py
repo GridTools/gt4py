@@ -101,7 +101,16 @@ def test_bit_xor(cartesian_case):
     def binary_xor(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
         return inp1 ^ inp2
 
-    cases.verify_with_default_data(cartesian_case, binary_xor, ref=lambda inp1, inp2: inp1 ^ inp2)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    inp1 = cases.allocate(cartesian_case, binary_xor, "inp1").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    inp2 = cases.allocate(cartesian_case, binary_xor, "inp2").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    out = cases.allocate(cartesian_case, binary_xor, cases.RETURN)()
+    cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1.array() ^ inp2.array())
 
 
 def test_bit_and(cartesian_case):
@@ -109,7 +118,16 @@ def test_bit_and(cartesian_case):
     def bit_and(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
         return inp1 & inp2
 
-    cases.verify_with_default_data(cartesian_case, bit_and, ref=lambda inp1, inp2: inp1 & inp2)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    inp1 = cases.allocate(cartesian_case, bit_and, "inp1").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    inp2 = cases.allocate(cartesian_case, bit_and, "inp2").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    out = cases.allocate(cartesian_case, bit_and, cases.RETURN)()
+    cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1.array() & inp2.array())
 
 
 def test_bit_or(cartesian_case):
@@ -117,7 +135,16 @@ def test_bit_or(cartesian_case):
     def bit_or(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
         return inp1 | inp2
 
-    cases.verify_with_default_data(cartesian_case, bit_or, ref=lambda inp1, inp2: inp1 | inp2)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    inp1 = cases.allocate(cartesian_case, bit_or, "inp1").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    inp2 = cases.allocate(cartesian_case, bit_or, "inp2").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    out = cases.allocate(cartesian_case, bit_or, cases.RETURN)()
+    cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1.array() | inp2.array())
 
 
 # Unary builtins
@@ -136,7 +163,13 @@ def test_unary_invert(cartesian_case):
     def tilde_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
         return ~inp1
 
-    cases.verify_with_default_data(cartesian_case, tilde_fieldop, ref=lambda inp1: ~inp1)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    inp1 = cases.allocate(cartesian_case, tilde_fieldop, "inp1").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    out = cases.allocate(cartesian_case, tilde_fieldop, cases.RETURN)()
+    cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1.array())
 
 
 def test_unary_not(cartesian_case):
@@ -144,7 +177,13 @@ def test_unary_not(cartesian_case):
     def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
         return not inp1
 
-    cases.verify_with_default_data(cartesian_case, not_fieldop, ref=lambda inp1: ~inp1)
+    size = cartesian_case.default_sizes[IDim]
+    bool_field = np.random.choice(a=[False, True], size=(size))
+    inp1 = cases.allocate(cartesian_case, not_fieldop, "inp1").strategy(
+        cases.ConstInitializer(bool_field)
+    )()
+    out = cases.allocate(cartesian_case, not_fieldop, cases.RETURN)()
+    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1.array())
 
 
 # Trig builtins
