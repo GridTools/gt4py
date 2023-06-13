@@ -8,3 +8,4 @@ from .exceptions import (
     UnexpectedKeywordArgError,
     MissingAttributeError
 )
+from . import formatting

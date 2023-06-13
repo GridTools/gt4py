@@ -1,7 +1,8 @@
 import pathlib
 from gt4py.eve import SourceLocation
 
-def get_code_at_location(location: SourceLocation):
+
+def get_source_from_location(location: SourceLocation):
     try:
         source_file = pathlib.Path(location.source)
         source_code = source_file.read_text()

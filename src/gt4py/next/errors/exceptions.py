@@ -1,13 +1,15 @@
 from gt4py.eve import SourceLocation
-from typing import Any
+from typing import Any, Optional
 from . import tools
 
+
 class CompilationError(SyntaxError):
-    def __init__(self, location: SourceLocation, message: str):
-        try:
-            source_code = tools.get_code_at_location(location)
-        except ValueError:
-            source_code = None
+    def __init__(self, location: SourceLocation, message: str, *, snippet: str | bool = True):
+        source_code = None
+        if isinstance(snippet, str):
+            source_code = snippet
+        if snippet is True:
+            source_code = CompilationError.get_source_from_location(location)
         super().__init__(
             message,
             (
@@ -21,7 +23,7 @@ class CompilationError(SyntaxError):
         )
 
     @property
-    def location(self):
+    def location(self) -> SourceLocation:
         return SourceLocation(
             source=self.filename,
             line=self.lineno,
@@ -29,6 +31,13 @@ class CompilationError(SyntaxError):
             end_line=self.end_lineno,
             end_column=self.end_offset
         )
+
+    @staticmethod
+    def get_source_from_location(location: SourceLocation) -> Optional[str]:
+        try:
+            return tools.get_source_from_location(location)
+        except ValueError:
+            return None
 
 
 class UndefinedSymbolError(CompilationError):

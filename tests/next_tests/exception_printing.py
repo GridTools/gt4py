@@ -1,8 +1,8 @@
-from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.errors import *
+import inspect
+from gt4py.eve import SourceLocation
 
-@field_operator
-def testee(a) -> float:
-    return 1
 
-testee(1, offset_provider={})
+frameinfo = inspect.getframeinfo(inspect.currentframe())
+loc = SourceLocation(frameinfo.lineno, 1, frameinfo.filename, end_line=frameinfo.lineno, end_column=5)
+raise CompilationError(loc, "this is an error message")
