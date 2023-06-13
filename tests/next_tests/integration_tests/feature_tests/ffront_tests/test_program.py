@@ -19,10 +19,9 @@ import re
 import numpy as np
 import pytest
 
-from gt4py.next.common import Field, GTTypeError
-from gt4py.next.ffront.decorator import field_operator, program
+from gt4py.next import Field, field_operator, np_as_located_field, program
+from gt4py.next.common import GTTypeError
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 from next_tests.past_common_fixtures import (

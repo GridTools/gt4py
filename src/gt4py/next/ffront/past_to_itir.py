@@ -49,13 +49,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Examples
     --------
     >>> from gt4py.next.ffront.func_to_past import ProgramParser
-    >>> from gt4py.next.iterator.runtime import offset
     >>> from gt4py.next.iterator import ir
-    >>> from gt4py.next.ffront.fbuiltins import Dimension, Field
+    >>> from gt4py.next import Dimension, Field
     >>>
     >>> float64 = float
     >>> IDim = Dimension("IDim")
-    >>> Ioff = offset("Ioff")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
     ...    ...

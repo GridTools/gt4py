@@ -33,7 +33,7 @@ def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> scalar_t = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> print(boolified_type(scalar_t))
     bool
@@ -64,7 +64,7 @@ def construct_tuple_type(
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> mask_type = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
     >>> false_branch_types = [ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
@@ -96,7 +96,7 @@ def promote_to_mask_type(
     the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
     In all other cases, the return type takes the dimensions and dtype of the input type.
 
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
@@ -212,7 +212,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next import Field, Dimension
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> IDim = Dimension("IDim")

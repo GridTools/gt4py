@@ -31,14 +31,14 @@ from devtools import debug
 
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import DimensionKind, GridType, GTTypeError, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError, Scalar
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -213,21 +213,10 @@ class Program:
             )
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
-        )
+        return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=self.backend,
-            definition=self.definition,
-            grid_type=grid_type,
-        )
+        return dataclasses.replace(self, grid_type=grid_type)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -477,22 +466,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=backend,
-            grid_type=self.grid_type,
-        )
+        return dataclasses.replace(self, backend=backend)
 
-    def with_grid_type(self, grid_type: GridType):
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            definition=self.definition,
-            backend=self.backend,
-            grid_type=grid_type,
-        )
+    def with_grid_type(self, grid_type: GridType) -> FieldOperator:
+        return dataclasses.replace(self, grid_type=grid_type)
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
@@ -680,12 +657,13 @@ def scan_operator(
 
     Examples:
         >>> import numpy as np
+        >>> import gt4py.next as gtx
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-        >>> inp = embedded.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = embedded.np_as_located_field(KDim)(np.zeros((10,)))
-        >>> @scan_operator(axis=KDim, forward=True, init=0.)
+        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
+        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP

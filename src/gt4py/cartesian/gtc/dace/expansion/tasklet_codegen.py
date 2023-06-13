@@ -157,6 +157,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
                 common.NativeFunction.POW: "dace.math.pow",
                 common.NativeFunction.EXP: "dace.math.exp",
                 common.NativeFunction.LOG: "dace.math.log",
+                common.NativeFunction.LOG10: "log10",
                 common.NativeFunction.GAMMA: "tgamma",
                 common.NativeFunction.CBRT: "cbrt",
                 common.NativeFunction.ISFINITE: "isfinite",

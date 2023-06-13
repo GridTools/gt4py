@@ -16,16 +16,14 @@ from typing import Tuple
 
 import pytest
 
-from gt4py.next.common import Field
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+import gt4py.next as gtx
+from gt4py.next import float64
 
 
-float64 = float
-IDim = Dimension("IDim")
-Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-JDim = Dimension("JDim")
-Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
+IDim = gtx.Dimension("IDim")
+Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+JDim = gtx.Dimension("JDim")
+Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
@@ -36,7 +34,7 @@ Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
 #  can safely use the field operator decorator inside the fixtures.
 @pytest.fixture
 def identity_def():
-    def identity(in_field: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
+    def identity(in_field: gtx.Field[[IDim], "float64"]) -> gtx.Field[[IDim], "float64"]:
         return in_field
 
     return identity
@@ -44,10 +42,10 @@ def identity_def():
 
 @pytest.fixture
 def make_tuple_op():
-    @field_operator()
+    @gtx.field_operator()
     def make_tuple_op_impl(
-        inp: Field[[IDim], float64]
-    ) -> Tuple[Field[[IDim], float64], Field[[IDim], float64]]:
+        inp: gtx.Field[[IDim], float64]
+    ) -> Tuple[gtx.Field[[IDim], float64], gtx.Field[[IDim], float64]]:
         return inp, inp
 
     return make_tuple_op_impl
@@ -55,9 +53,11 @@ def make_tuple_op():
 
 @pytest.fixture
 def copy_program_def(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
-    def copy_program(in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]):
+    def copy_program(
+        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
+    ):
         identity(in_field, out=out_field)
 
     return copy_program
@@ -65,12 +65,12 @@ def copy_program_def(identity_def):
 
 @pytest.fixture
 def double_copy_program_def(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
     def double_copy_program(
-        in_field: Field[[IDim], "float64"],
-        intermediate_field: Field[[IDim], "float64"],
-        out_field: Field[[IDim], "float64"],
+        in_field: gtx.Field[[IDim], "float64"],
+        intermediate_field: gtx.Field[[IDim], "float64"],
+        out_field: gtx.Field[[IDim], "float64"],
     ):
         identity(in_field, out=intermediate_field)
         identity(intermediate_field, out=out_field)
@@ -80,10 +80,10 @@ def double_copy_program_def(identity_def):
 
 @pytest.fixture
 def copy_restrict_program_def(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
     def copy_restrict_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
     ):
         identity(in_field, out=out_field[1:2])
 
@@ -92,10 +92,10 @@ def copy_restrict_program_def(identity_def):
 
 @pytest.fixture
 def invalid_call_sig_program_def(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
     def invalid_call_sig_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
     ):
         identity(in_field, out_field)
 
@@ -104,10 +104,10 @@ def invalid_call_sig_program_def(identity_def):
 
 @pytest.fixture
 def invalid_out_slice_dims_program_def(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
     def invalid_out_slice_dims_program(
-        in_field: Field[[IDim], "float64"], out_field: Field[[IDim], "float64"]
+        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
     ):
         identity(in_field, out=out_field[1:2, 3:4])
 

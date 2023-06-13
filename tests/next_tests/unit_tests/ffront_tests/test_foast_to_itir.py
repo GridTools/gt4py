@@ -23,31 +23,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from gt4py.next.common import DimensionKind, Field
+import gt4py.next as gtx
+from gt4py.next import float32, float64, int32, int64, neighbor_sum
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.fbuiltins import (
-    Dimension,
-    FieldOffset,
-    float32,
-    float64,
-    int32,
-    int64,
-    neighbor_sum,
-)
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import ir as itir, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-IDim = Dimension("IDim")
-Edge = Dimension("Edge")
-Vertex = Dimension("Vertex")
-Cell = Dimension("Cell")
-V2EDim = Dimension("V2E", DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+IDim = gtx.Dimension("IDim")
+Edge = gtx.Dimension("Edge")
+Vertex = gtx.Dimension("Vertex")
+Cell = gtx.Dimension("Cell")
+V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def debug_itir(tree):
@@ -61,7 +53,7 @@ def debug_itir(tree):
 
 
 def test_copy():
-    def copy_field(inp: Field[[TDim], float64]):
+    def copy_field(inp: gtx.Field[[TDim], float64]):
         return inp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
@@ -72,7 +64,7 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+    def scalar_arg(bar: gtx.Field[[IDim], int64], alpha: int64) -> gtx.Field[[IDim], int64]:
         return alpha * bar
 
     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
@@ -86,7 +78,7 @@ def test_scalar_arg():
 
 
 def test_multicopy():
-    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def multicopy(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
         return inp1, inp2
 
     parsed = FieldOperatorParser.apply_to_function(multicopy)
@@ -98,7 +90,7 @@ def test_multicopy():
 
 
 def test_arithmetic():
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def arithmetic(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
         return inp1 + inp2
 
     parsed = FieldOperatorParser.apply_to_function(arithmetic)
@@ -110,9 +102,9 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: gtx.Field[[IDim], float64]):
         return inp(Ioff[1])
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
@@ -124,9 +116,9 @@ def test_shift():
 
 
 def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: gtx.Field[[IDim], float64]):
         return inp(Ioff[-1])
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
@@ -138,7 +130,7 @@ def test_negative_shift():
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[[TDim], float64]):
+    def copy_field(inp: gtx.Field[[TDim], float64]):
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -165,7 +157,7 @@ def test_temp_assignment():
 
 
 def test_unary_ops():
-    def unary(inp: Field[[TDim], float64]):
+    def unary(inp: gtx.Field[[TDim], float64]):
         tmp = +inp
         tmp = -tmp
         return tmp
@@ -194,8 +186,8 @@ def test_unpacking():
     """Unpacking assigns should get separated."""
 
     def unpacking(
-        inp1: Field[[TDim], float64], inp2: Field[[TDim], float64]
-    ) -> Field[[TDim], float64]:
+        inp1: gtx.Field[[TDim], float64], inp2: gtx.Field[[TDim], float64]
+    ) -> gtx.Field[[TDim], float64]:
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
@@ -224,8 +216,8 @@ def test_unpacking():
 def test_annotated_assignment():
     pytest.xfail("Annotated assignments are not properly supported at the moment.")
 
-    def copy_field(inp: Field[[TDim], float64]):
-        tmp: Field[[TDim], float64] = inp
+    def copy_field(inp: gtx.Field[[TDim], float64]):
+        tmp: gtx.Field[[TDim], float64] = inp
         return tmp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
@@ -240,7 +232,7 @@ def test_call():
     # create something that appears to the lowering like a field operator.
     #  we could also create an actual field operator, but we want to avoid
     #  using such heavy constructs for testing the lowering.
-    field_type = type_translation.from_type_hint(Field[[TDim], float64])
+    field_type = type_translation.from_type_hint(gtx.Field[[TDim], float64])
     identity = SimpleNamespace(
         __gt_type__=lambda: ts_ffront.FieldOperatorType(
             definition=ts.FunctionType(
@@ -249,7 +241,7 @@ def test_call():
         )
     )
 
-    def call(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
+    def call(inp: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return identity(inp)
 
     parsed = FieldOperatorParser.apply_to_function(call)
@@ -263,7 +255,7 @@ def test_call():
 def test_temp_tuple():
     """Returning a temp tuple should work."""
 
-    def temp_tuple(a: Field[[TDim], float64], b: Field[[TDim], int64]):
+    def temp_tuple(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], int64]):
         tmp = a, b
         return tmp
 
@@ -277,7 +269,7 @@ def test_temp_tuple():
 
 
 def test_unary_not():
-    def unary_not(cond: Field[[TDim], "bool"]):
+    def unary_not(cond: gtx.Field[[TDim], "bool"]):
         return not cond
 
     parsed = FieldOperatorParser.apply_to_function(unary_not)
@@ -289,7 +281,7 @@ def test_unary_not():
 
 
 def test_binary_plus():
-    def plus(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def plus(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a + b
 
     parsed = FieldOperatorParser.apply_to_function(plus)
@@ -301,7 +293,7 @@ def test_binary_plus():
 
 
 def test_add_scalar_literal_to_field():
-    def scalar_plus_field(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def scalar_plus_field(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
         return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
@@ -315,7 +307,7 @@ def test_add_scalar_literal_to_field():
 
 
 def test_add_scalar_literals():
-    def scalar_plus_scalar(a: Field[[IDim], "int32"]) -> Field[[IDim], "int32"]:
+    def scalar_plus_scalar(a: gtx.Field[[IDim], "int32"]) -> gtx.Field[[IDim], "int32"]:
         tmp = int32(1) + int32("1")
         return a + tmp
 
@@ -334,7 +326,7 @@ def test_add_scalar_literals():
 
 
 def test_binary_mult():
-    def mult(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def mult(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a * b
 
     parsed = FieldOperatorParser.apply_to_function(mult)
@@ -346,7 +338,7 @@ def test_binary_mult():
 
 
 def test_binary_minus():
-    def minus(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def minus(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a - b
 
     parsed = FieldOperatorParser.apply_to_function(minus)
@@ -358,7 +350,7 @@ def test_binary_minus():
 
 
 def test_binary_div():
-    def division(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def division(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a / b
 
     parsed = FieldOperatorParser.apply_to_function(division)
@@ -370,7 +362,7 @@ def test_binary_div():
 
 
 def test_binary_and():
-    def bit_and(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bit_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a & b
 
     parsed = FieldOperatorParser.apply_to_function(bit_and)
@@ -382,7 +374,7 @@ def test_binary_and():
 
 
 def test_scalar_and():
-    def scalar_and(a: Field[[IDim], "bool"]) -> Field[[IDim], "bool"]:
+    def scalar_and(a: gtx.Field[[IDim], "bool"]) -> gtx.Field[[IDim], "bool"]:
         return a & False
 
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
@@ -396,7 +388,7 @@ def test_scalar_and():
 
 
 def test_binary_or():
-    def bit_or(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bit_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a | b
 
     parsed = FieldOperatorParser.apply_to_function(bit_or)
@@ -423,7 +415,7 @@ def test_compare_scalars():
 
 
 def test_compare_gt():
-    def comp_gt(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def comp_gt(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a > b
 
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
@@ -435,7 +427,7 @@ def test_compare_gt():
 
 
 def test_compare_lt():
-    def comp_lt(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def comp_lt(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a < b
 
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
@@ -447,7 +439,7 @@ def test_compare_lt():
 
 
 def test_compare_eq():
-    def comp_eq(a: Field[[TDim], "int64"], b: Field[[TDim], "int64"]):
+    def comp_eq(a: gtx.Field[[TDim], "int64"], b: gtx.Field[[TDim], "int64"]):
         return a == b
 
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
@@ -460,8 +452,8 @@ def test_compare_eq():
 
 def test_compare_chain():
     def compare_chain(
-        a: Field[[IDim], float64], b: Field[[IDim], float64], c: Field[[IDim], float64]
-    ) -> Field[[IDim], bool]:
+        a: gtx.Field[[IDim], float64], b: gtx.Field[[IDim], float64], c: gtx.Field[[IDim], float64]
+    ) -> gtx.Field[[IDim], bool]:
         return a > b > c
 
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
@@ -476,7 +468,7 @@ def test_compare_chain():
 
 
 def test_reduction_lowering_simple():
-    def reduction(edge_f: Field[[Edge], float64]):
+    def reduction(edge_f: gtx.Field[[Edge], float64]):
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
@@ -497,7 +489,7 @@ def test_reduction_lowering_simple():
 
 
 def test_reduction_lowering_expr():
-    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
+    def reduction(e1: gtx.Field[[Edge], float64], e2: gtx.Field[[Vertex, V2EDim], float64]):
         e1_nbh = e1(V2E)
         return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 
