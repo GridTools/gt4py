@@ -29,7 +29,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_external_local_field(reduction_setup, fieldview_backend):
     V2EDim, V2E = reduction_setup.V2EDim, reduction_setup.V2E
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table, dtype=int32)
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
     ones = gtx.np_as_located_field(Edge)(np.ones(reduction_setup.num_edges, dtype=int32))
 
     @gtx.field_operator(backend=fieldview_backend)
@@ -53,7 +53,7 @@ def test_external_local_field_only(reduction_setup, fieldview_backend):
         )
 
     V2EDim = reduction_setup.V2EDim
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table, dtype=int32)
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(reduction_setup.v2e_table)
 
     @gtx.field_operator(backend=fieldview_backend)
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
