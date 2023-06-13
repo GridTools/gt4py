@@ -52,6 +52,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 IField: TypeAlias = gtx.Field[[IDim], np.int64]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
 KField: TypeAlias = gtx.Field[[KDim], np.int64]  # type: ignore [valid-type]
 IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
 IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
@@ -453,6 +454,7 @@ def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtu
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
             Cell: reduction_setup.num_cells,
+            KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
