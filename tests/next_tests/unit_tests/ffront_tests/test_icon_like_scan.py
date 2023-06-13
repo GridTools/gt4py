@@ -17,10 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Field
-from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import FieldOffset
-from gt4py.next.iterator.embedded import np_as_located_field
+import gt4py.next as gtx
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -28,12 +25,12 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-Cell = Dimension("Cell")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
-Koff = FieldOffset("Koff", KDim, (KDim,))
+Cell = gtx.Dimension("Cell")
+KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 
-@scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
+@gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
     state: tuple[float, float, bool],
     w: float,
@@ -49,13 +46,15 @@ def _scan(
     return (z_q, w, False) if first else (z_q_new, w_new, False)
 
 
-@field_operator
+@gtx.field_operator
 def _solve_nonhydro_stencil_52_like(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float], Field[[Cell, KDim], bool]]:
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+) -> tuple[
+    gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], bool]
+]:
     """No projector required as we write all output of the scan (including dummy field)"""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
@@ -64,13 +63,13 @@ def _solve_nonhydro_stencil_52_like(
     return z_q_res, w_res, dummy
 
 
-@program
+@gtx.program
 def solve_nonhydro_stencil_52_like(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-    dummy: Field[[Cell, KDim], bool],
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+    dummy: gtx.Field[[Cell, KDim], bool],
 ):
     _solve_nonhydro_stencil_52_like(
         z_alpha,
@@ -81,13 +80,13 @@ def solve_nonhydro_stencil_52_like(
     )
 
 
-@field_operator
+@gtx.field_operator
 def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-) -> tuple[Field[[Cell, KDim], float], Field[[Cell, KDim], float]]:
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+) -> tuple[gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float]]:
     """In inlining, relies on CollapseTuple with ignore_tuple_size=True (only working with gtfn)."""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
@@ -96,12 +95,12 @@ def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     return z_q_res, w_res
 
 
-@program
+@gtx.program
 def solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
 ):
     _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
         z_alpha,
@@ -112,13 +111,13 @@ def solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     )
 
 
-@field_operator
+@gtx.field_operator
 def _solve_nonhydro_stencil_52_like_z_q(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-) -> Field[[Cell, KDim], float]:
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+) -> gtx.Field[[Cell, KDim], float]:
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
@@ -126,24 +125,24 @@ def _solve_nonhydro_stencil_52_like_z_q(
     return z_q_res
 
 
-@program
+@gtx.program
 def solve_nonhydro_stencil_52_like_z_q(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-    z_q_out: Field[[Cell, KDim], float],
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+    z_q_out: gtx.Field[[Cell, KDim], float],
 ):
     _solve_nonhydro_stencil_52_like_z_q(z_alpha, z_beta, z_q, w, out=z_q_out[:, 1:])
 
 
-@field_operator
+@gtx.field_operator
 def _solve_nonhydro_stencil_52_like_z_q_tup(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-) -> tuple[Field[[Cell, KDim], float]]:
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+) -> tuple[gtx.Field[[Cell, KDim], float]]:
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
     z_c = z_beta * z_alpha(Koff[1])
     z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
@@ -151,13 +150,13 @@ def _solve_nonhydro_stencil_52_like_z_q_tup(
     return (z_q_res,)
 
 
-@program
+@gtx.program
 def solve_nonhydro_stencil_52_like_z_q_tup(
-    z_alpha: Field[[Cell, KDim], float],
-    z_beta: Field[[Cell, KDim], float],
-    z_q: Field[[Cell, KDim], float],
-    w: Field[[Cell, KDim], float],
-    z_q_out: Field[[Cell, KDim], float],
+    z_alpha: gtx.Field[[Cell, KDim], float],
+    z_beta: gtx.Field[[Cell, KDim], float],
+    z_q: gtx.Field[[Cell, KDim], float],
+    w: gtx.Field[[Cell, KDim], float],
+    z_q_out: gtx.Field[[Cell, KDim], float],
 ):
     _solve_nonhydro_stencil_52_like_z_q_tup(z_alpha, z_beta, z_q, w, out=(z_q_out[:, 1:],))
 
@@ -193,21 +192,21 @@ def test_setup():
     class setup:
         cell_size = 14
         k_size = 10
-        z_alpha = np_as_located_field(Cell, KDim)(
+        z_alpha = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size + 1))
         )
-        z_beta = np_as_located_field(Cell, KDim)(
+        z_beta = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q = np_as_located_field(Cell, KDim)(
+        z_q = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        w = np_as_located_field(Cell, KDim)(
+        w = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
         z_q_ref, w_ref = reference(z_alpha, z_beta, z_q, w)
-        dummy = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
+        dummy = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
 
     return setup()
 

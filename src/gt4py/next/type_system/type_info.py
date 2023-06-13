@@ -66,7 +66,7 @@ def primitive_constituents(
     """
     Return the primitive types contained in a composite type.
 
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> I = Dimension(value="I")
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)

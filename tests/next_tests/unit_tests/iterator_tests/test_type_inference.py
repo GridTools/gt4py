@@ -14,9 +14,8 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 
 
@@ -136,11 +135,11 @@ def test_eq():
 def test_if():
     testee = ir.SymRef(id="if_")
     c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
-    t = ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=0))
+    t = ti.Val(kind=ti.TypeVar(idx=1), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=0))
     expected = ti.FunctionType(args=ti.Tuple.from_elems(c, t, t), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(bool⁰, T₁⁰, T₁⁰) → T₁⁰"
+    assert ti.pformat(inferred) == "(bool⁰, ItOrVal₁[T₂⁰], ItOrVal₁[T₂⁰]) → ItOrVal₁[T₂⁰]"
 
 
 def test_not():
@@ -561,8 +560,8 @@ def test_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         )
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -598,11 +597,11 @@ def test_partial_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         ),
-        "E2C": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        "E2C": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Edge"), gtx.Dimension("Cell"), 1
         ),
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -813,11 +812,15 @@ def test_fencil_definition_same_closure_input():
     )
 
     offset_provider = {
-        "E2V": NeighborTableOffsetProvider(
-            np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
+        "E2V": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 2), dtype=np.int64),
+            gtx.Dimension("Edge"),
+            gtx.Dimension("Vertex"),
+            2,
+            False,
         )
     }
-    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider=offset_provider)
 
     # validate locations of fencil params
     fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
@@ -967,6 +970,13 @@ def test_fencil_definition_with_function_definitions():
         ti.pformat(inferred)
         == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
     )
+
+
+def test_save_types_to_annex():
+    testee = im.lambda_("a")(im.plus("a", im.literal("1", "float32")))
+    ti.infer(testee, save_to_annex=True)
+    param_type = testee.params[0].annex.type
+    assert isinstance(param_type, ti.Val) and param_type.dtype.name == "float32"
 
 
 def test_pformat():

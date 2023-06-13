@@ -200,7 +200,7 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = BUILTIN_NAMES
+__all__ = [*(set(BUILTIN_NAMES) - {"Dimension", "Field"})]
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

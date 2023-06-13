@@ -33,7 +33,7 @@ def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> scalar_t = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> print(boolified_type(scalar_t))
     bool
@@ -64,7 +64,7 @@ def construct_tuple_type(
 
     Examples:
     ---------
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> mask_type = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
     >>> false_branch_types = [ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
@@ -96,7 +96,7 @@ def promote_to_mask_type(
     the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
     In all other cases, the return type takes the dimensions and dtype of the input type.
 
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
@@ -116,18 +116,72 @@ def promote_to_mask_type(
         return input_type
 
 
-def deduce_stmt_return_type(node: foast.BlockStmt) -> ts.TypeSpec:
-    """Deduce type of value returned inside a block statement."""
-    for stmt in node.stmts:
-        if isinstance(stmt, foast.Return):
-            return stmt.value.type
+def deduce_stmt_return_type(
+    node: foast.BlockStmt, *, requires_unconditional_return=True
+) -> Optional[ts.TypeSpec]:
+    """
+    Deduce type of value returned inside a block statement.
 
-    # If the node was constructed by the foast parsing we should never get here, but instead
-    # have gotten an error there.
-    raise AssertionError(
-        "Malformed block statement. Expected a return statement in this context, "
-        "but none was found. Please submit a bug report."
-    )
+    If `requires_unconditional_return` is true the function additionally ensures that the block
+    statement unconditionally returns and raises an `AssertionError` if not.
+    """
+    conditional_return_type: Optional[ts.TypeSpec] = None
+
+    for stmt in node.stmts:
+        is_unconditional_return = False
+        return_type: Optional[ts.TypeSpec]
+
+        if isinstance(stmt, foast.Return):
+            is_unconditional_return = True
+            return_type = stmt.value.type
+        elif isinstance(stmt, foast.IfStmt):
+            return_types = (
+                deduce_stmt_return_type(stmt.true_branch, requires_unconditional_return=False),
+                deduce_stmt_return_type(stmt.false_branch, requires_unconditional_return=False),
+            )
+            # if both branches return
+            if return_types[0] and return_types[1]:
+                if return_types[0] == return_types[1]:
+                    is_unconditional_return = True
+                else:
+                    raise FieldOperatorTypeDeductionError.from_foast_node(
+                        stmt,
+                        msg=f"If statement contains return statements with inconsistent types:"
+                        f"{return_types[0]} != {return_types[1]}",
+                    )
+            return_type = return_types[0] or return_types[1]
+        elif isinstance(stmt, foast.BlockStmt):
+            # just forward to nested BlockStmt
+            return_type = deduce_stmt_return_type(
+                stmt, requires_unconditional_return=requires_unconditional_return
+            )
+        elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
+            return_type = None
+        else:
+            raise AssertionError(f"Nodes of type `{type(stmt).__name__}` not supported.")
+
+        if conditional_return_type and return_type and return_type != conditional_return_type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                stmt,
+                msg=f"If statement contains return statements with inconsistent types:"
+                f"{conditional_return_type} != {conditional_return_type}",
+            )
+
+        if is_unconditional_return:  # found a statement that always returns
+            assert return_type
+            return return_type
+        elif return_type:
+            conditional_return_type = return_type
+
+    if requires_unconditional_return:
+        # If the node was constructed by the foast parsing we should never get here, but instead
+        # we should have gotten an error there.
+        raise AssertionError(
+            "Malformed block statement. Expected a return statement in this context, "
+            "but none was found. Please submit a bug report."
+        )
+
+    return None
 
 
 class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
@@ -158,7 +212,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next import Field, Dimension
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> IDim = Dimension("IDim")
@@ -327,6 +381,48 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
+
+    def visit_IfStmt(self, node: foast.IfStmt, **kwargs) -> foast.IfStmt:
+        symtable = kwargs["symtable"]
+
+        new_true_branch = self.visit(node.true_branch, **kwargs)
+        new_false_branch = self.visit(node.false_branch, **kwargs)
+        new_node = foast.IfStmt(
+            condition=self.visit(node.condition, **kwargs),
+            true_branch=new_true_branch,
+            false_branch=new_false_branch,
+            location=node.location,
+        )
+
+        if not isinstance(new_node.condition.type, ts.ScalarType):
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg="Condition for `if` must be scalar. "
+                f"But got `{new_node.condition.type}` instead.",
+            )
+
+        if new_node.condition.type.kind != ts.ScalarKind.BOOL:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg="Condition for `if` must be of boolean type. "
+                f"But got `{new_node.condition.type}` instead.",
+            )
+
+        for sym in node.annex.propagated_symbols.keys():
+            if (true_type := new_true_branch.annex.symtable[sym].type) != (
+                false_type := new_false_branch.annex.symtable[sym].type
+            ):
+                raise FieldOperatorTypeDeductionError.from_foast_node(
+                    node,
+                    msg=f"Inconsistent types between two branches for variable `{sym}`. "
+                    f"Got types `{true_type}` and `{false_type}.",
+                )
+            # TODO: properly patch symtable (new node?)
+            symtable[sym].type = new_node.annex.propagated_symbols[
+                sym
+            ].type = new_true_branch.annex.symtable[sym].type
+
+        return new_node
 
     def visit_Symbol(
         self,

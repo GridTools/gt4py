@@ -13,26 +13,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
 from collections import namedtuple
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 import pytest
 
-from gt4py.next.common import DimensionKind
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
-from gt4py.next.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    index_field,
-    np_as_located_field,
-)
+import gt4py.next as gtx
+from gt4py.next.ffront import decorator
+from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+
+
+def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    """Temporary default backend to not accidentally test the wrong backend."""
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 @pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
 def fieldview_backend(request):
+    backup_backend = decorator.DEFAULT_BACKEND
+    decorator.DEFAULT_BACKEND = no_backend
     yield request.param
+    decorator.DEFAULT_BACKEND = backup_backend
 
 
 def debug_itir(tree):
@@ -48,17 +51,17 @@ def debug_itir(tree):
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
-Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = FieldOffset("Joff", source=JDim, target=(JDim,))
-Koff = FieldOffset("Koff", source=KDim, target=(KDim,))
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
+Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
-Vertex = Dimension("Vertex")
-Edge = Dimension("Edge")
-Cell = Dimension("Cell")
-EdgeOffset = FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
+Vertex = gtx.Dimension("Vertex")
+Edge = gtx.Dimension("Edge")
+Cell = gtx.Dimension("Cell")
+EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 size = 10
 
@@ -67,10 +70,10 @@ size = 10
 def reduction_setup():
     num_vertices = 9
     num_cells = 8
-    v2edim = Dimension("V2E", kind=DimensionKind.LOCAL)
-    e2vdim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    c2vdim = Dimension("C2V", kind=DimensionKind.LOCAL)
-    c2edim = Dimension("C2E", kind=DimensionKind.LOCAL)
+    v2edim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    e2vdim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+    c2vdim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
+    c2edim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [
@@ -149,19 +152,39 @@ def reduction_setup():
         E2VDim=e2vdim,
         C2VDim=c2vdim,
         C2EDim=c2edim,
-        V2E=FieldOffset("V2E", source=Edge, target=(Vertex, v2edim)),
-        E2V=FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
-        C2V=FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
-        C2E=FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
-        # inp=index_field(edge, dtype=np.int64), # TODO enable once we support index_fields in bindings
-        inp=np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int64)),
-        out=np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int64)),
+        V2E=gtx.FieldOffset("V2E", source=Edge, target=(Vertex, v2edim)),
+        E2V=gtx.FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
+        C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
+        C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
+        # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
+        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int64)),
+        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int64)),
         offset_provider={
-            "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
-            "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
-            "C2V": NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
-            "C2E": NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
+            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
+            "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
+            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
         },
         v2e_table=v2e_arr,
         e2v_table=e2v_arr,
     )  # type: ignore
+
+
+__all__ = [
+    "fieldview_backend",
+    "reduction_setup",
+    "debug_itir",
+    "DimsType",
+    "DType",
+    "IDim",
+    "JDim",
+    "KDim",
+    "Ioff",
+    "Joff",
+    "Koff",
+    "Vertex",
+    "Edge",
+    "Cell",
+    "EdgeOffset",
+    "size",
+]
