@@ -13,16 +13,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
 from functools import reduce
 
 import numpy as np
 import pytest
 
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import Field, float64
+from gt4py.next import Field, field_operator, float64, index_field, np_as_located_field
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
@@ -40,7 +37,6 @@ from next_tests.integration_tests.feature_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    no_default_backend,
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -85,10 +81,10 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     ) -> cases.IField:
         if condition1:
             result1 = a
-            result2 = a + 1.0
+            result2 = a + 1
         else:
             result1 = b
-            result2 = b + 1.0
+            result2 = b + 1
         return result1 if condition2 else result2
 
     a = cases.allocate(cartesian_case, simple_if, "a")()
@@ -255,10 +251,10 @@ def test_nested_if_stmt_conditinal(cartesian_case, condition1, condition2):
         if condition1:
             tmp1 = inp
             if condition2:
-                return tmp1 + 1.0
-            result = tmp1 + 2.0
+                return tmp1 + 1
+            result = tmp1 + 2
         else:
-            result = inp + 3.0
+            result = inp + 3
         return result
 
     inp = cases.allocate(cartesian_case, nested_if_conditional_return, "inp")()
@@ -293,14 +289,14 @@ def test_nested_if(cartesian_case, condition):
             if not condition:
                 inner = a
             else:
-                inner = a + 1.0
+                inner = a + 1
             result = inner
         else:
             result = b
             if condition:
-                another_inner = 3.0
+                another_inner = 3
             else:
-                another_inner = 5.0
+                another_inner = 5
             result = result + another_inner
         return result
 
@@ -328,13 +324,13 @@ def test_if_without_else(cartesian_case, condition1, condition2):
     def if_without_else(
         a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
-        result = b + 1.0
+        result = b + 1
 
         if condition1:
             if not condition2:
                 inner = a
             else:
-                inner = a + 2.0
+                inner = a + 2
             result = inner
         return result
 

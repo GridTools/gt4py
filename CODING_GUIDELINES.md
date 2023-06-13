@@ -46,6 +46,11 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
      pass
   ```
 
+- where to `import from gt4py.next` or `import gt4py.next as gtx`?
+
+  - Client code (like tests, doctests and examples) should use the above style for public FieldView API
+  - Library code should always import the defining module and use qualified names.
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] and some extensions such as [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).

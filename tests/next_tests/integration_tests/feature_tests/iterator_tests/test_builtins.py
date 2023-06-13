@@ -19,6 +19,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -50,7 +51,6 @@ from gt4py.next.iterator.builtins import (
     shift,
     xor_,
 )
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.otf import workflow
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
@@ -74,7 +74,7 @@ IDim = CartesianAxis("IDim")
 
 
 def asfield(*arrays):
-    res = list(map(np_as_located_field(IDim), arrays))
+    res = list(map(gtx.np_as_located_field(IDim), arrays))
     return res
 
 
@@ -251,10 +251,10 @@ def test_can_deref(program_processor, stencil):
 
     Node = CartesianAxis("Node")
 
-    inp = np_as_located_field(Node)(np.ones((1,)))
-    out = np_as_located_field(Node)(np.asarray([0]))
+    inp = gtx.np_as_located_field(Node)(np.ones((1,)))
+    out = gtx.np_as_located_field(Node)(np.asarray([0]))
 
-    no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
+    no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -266,7 +266,7 @@ def test_can_deref(program_processor, stencil):
     if validate:
         assert np.allclose(np.asarray(out), -1.0)
 
-    a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+    a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
     run_processor(
         stencil[{Node: range(1)}],
         program_processor,
@@ -290,10 +290,10 @@ def test_can_deref(program_processor, stencil):
 #         shifted = shift(Neighbor, 0)(inp)
 #         return if_(can_deref(shifted), 1, -1)
 
-#     inp = np_as_located_field(Node)(np.zeros((1,)))
-#     out = np_as_located_field(Node)(np.asarray([0]))
+#     inp = gtx.np_as_located_field(Node)(np.zeros((1,)))
+#     out = gtx.np_as_located_field(Node)(np.asarray([0]))
 
-#     no_neighbor_tbl = NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
+#     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
 #         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, program_processor=program_processor
 #     )
@@ -301,7 +301,7 @@ def test_can_deref(program_processor, stencil):
 #     if validate:
 #         assert np.allclose(np.asarray(out), -1.0)
 
-#     a_neighbor_tbl = NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
+#     a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
 #         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, program_processor=program_processor
 #     )

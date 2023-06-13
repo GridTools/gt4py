@@ -17,11 +17,9 @@ from typing import Optional, Pattern
 import pytest
 
 import gt4py.next.ffront.type_specifications
-from gt4py.next.common import DimensionKind, GTTypeError
-from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.ffront.fbuiltins import (
+from gt4py.next import (
     Dimension,
+    DimensionKind,
     Field,
     FieldOffset,
     astype,
@@ -33,6 +31,9 @@ from gt4py.next.ffront.fbuiltins import (
     neighbor_sum,
     where,
 )
+from gt4py.next.common import GTTypeError
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts

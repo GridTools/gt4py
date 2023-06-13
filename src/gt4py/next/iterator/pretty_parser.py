@@ -98,7 +98,7 @@ class ToIrTransformer(lark_visitors.Transformer):
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal(int(value))
+        return im.literal_from_value(int(value.value))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return ir.Literal(value=value.value, type="float64")

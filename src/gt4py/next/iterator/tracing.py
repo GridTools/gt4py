@@ -17,7 +17,7 @@ import inspect
 from typing import List
 
 from gt4py.eve import Node
-from gt4py.next import iterator
+from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir_makers as im
 from gt4py.next.iterator.ir import (
     AxisLiteral,
@@ -151,8 +151,8 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
-    if isinstance(o, (bool, int, float)):
-        return im.literal(o)
+    if isinstance(o, common.Scalar):
+        return im.literal_from_value(o)
     if isinstance(o, CartesianAxis):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):

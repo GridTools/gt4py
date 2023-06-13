@@ -56,6 +56,7 @@ MATH_BUILTINS = {
     "sqrt",
     "exp",
     "log",
+    "log10",
     "gamma",
     "cbrt",
     "isfinite",
@@ -856,6 +857,11 @@ def exp(x):
 
 def log(x):
     """Return the natural logarithm of x (to base e)."""
+    pass
+
+
+def log10(x):
+    """Return the base-10 logarithm of x."""
     pass
 
 

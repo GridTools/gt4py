@@ -14,9 +14,8 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 
 
@@ -562,8 +561,8 @@ def test_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         )
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -599,11 +598,11 @@ def test_partial_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         ),
-        "E2C": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        "E2C": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Edge"), gtx.Dimension("Cell"), 1
         ),
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -814,8 +813,12 @@ def test_fencil_definition_same_closure_input():
     )
 
     offset_provider = {
-        "E2V": NeighborTableOffsetProvider(
-            np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
+        "E2V": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 2), dtype=np.int64),
+            gtx.Dimension("Edge"),
+            gtx.Dimension("Vertex"),
+            2,
+            False,
         )
     }
     inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider=offset_provider)
