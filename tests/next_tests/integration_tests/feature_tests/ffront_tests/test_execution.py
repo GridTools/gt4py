@@ -24,6 +24,7 @@ from gt4py.next import (
     broadcast,
     float32,
     float64,
+    int32,
     int64,
     maximum,
     minimum,
@@ -175,7 +176,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @gtx.field_operator
-    def testee(a: int) -> cases.VField:
+    def testee(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
     cases.verify_with_default_data(
@@ -184,7 +185,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
         ref=lambda a: np.full(
             [unstructured_case.default_sizes[Vertex]],
             a + 1,
-            dtype=int,
+            dtype=int32,
         ),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -192,23 +193,23 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee_inner(a: int) -> cases.VField:
+    def testee_inner(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
     @gtx.field_operator
-    def testee(a: int) -> cases.VField:
+    def testee(a: int32) -> cases.VField:
         return testee_inner(a + 1)
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int),
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int32),
     )
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee(a: cases.IJKField, b: int) -> cases.IJKField:
+    def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
         return tmp(Ioff[1])
 
@@ -228,18 +229,22 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
         )
 
     @gtx.field_operator
-    def testee_op(size: int) -> cases.IField:
+    def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
 
     @gtx.program
-    def testee(size: int, out: cases.IField):
+    def testee(size: gtx.IndexType, out: gtx.Field[[IDim], gtx.IndexType]):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=int)
+        cartesian_case,
+        testee,
+        size,
+        out=out,
+        ref=np.full_like(out.array(), size, dtype=gtx.IndexType),
     )
 
 
@@ -286,14 +291,14 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> cases.IField:
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
         b = astype(a, int64)
         return b
 
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: a.astype(int),
+        ref=lambda a: a.astype(int64),
         comparison=lambda a, b: np.all(a == b),
     )
 
@@ -518,7 +523,7 @@ def test_solve_triag(cartesian_case):
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
     @gtx.field_operator
-    def testee(a: cases.IField, b: cases.IField, left: int64, right: int64) -> cases.IField:
+    def testee(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
         return a if left < right else b
 
     a = cases.allocate(cartesian_case, testee, "a")()
@@ -528,7 +533,7 @@ def test_ternary_operator(cartesian_case, left, right):
     cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
 
     @gtx.field_operator
-    def testee(left: int64, right: int64) -> cases.IField:
+    def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
     e = np.asarray(a) if left < right else np.asarray(b)
@@ -546,7 +551,7 @@ def test_ternary_operator(cartesian_case, left, right):
 def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
-        a: cases.IField, b: cases.IField, left: int64, right: int64
+        a: cases.IField, b: cases.IField, left: int32, right: int32
     ) -> tuple[cases.IField, cases.IField]:
         return (a, b) if left < right else (b, a)
 
@@ -598,12 +603,14 @@ def test_ternary_scan(cartesian_case):
 def test_scan_nested_tuple_output(forward, cartesian_case):
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
-    expected = np.arange(1, 1 + k_size, 1, dtype=int64)
+    expected = np.arange(1, 1 + k_size, 1, dtype=int32)
     if not forward:
         expected = np.flip(expected)
 
     @gtx.scan_operator(axis=KDim, forward=forward, init=init)
-    def simple_scan_operator(carry: tuple[int, tuple[int, int]]) -> tuple[int, tuple[int, int]]:
+    def simple_scan_operator(
+        carry: tuple[int32, tuple[int32, int32]]
+    ) -> tuple[int32, tuple[int32, int32]]:
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
     @gtx.program
@@ -687,7 +694,9 @@ def test_domain_input_bounds(cartesian_case):
         return a + a
 
     @gtx.program
-    def program_domain(inp: cases.IField, out: cases.IField, lower_i: int64, upper_i: int64):
+    def program_domain(
+        inp: cases.IField, out: cases.IField, lower_i: gtx.IndexType, upper_i: gtx.IndexType
+    ):
         fieldop_domain(
             inp,
             out=out,
@@ -723,10 +732,10 @@ def test_domain_input_bounds_1(cartesian_case):
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
-        lower_i: int64,
-        upper_i: int64,
-        lower_j: int64,
-        upper_j: int64,
+        lower_i: gtx.IndexType,
+        upper_i: gtx.IndexType,
+        lower_j: gtx.IndexType,
+        upper_j: gtx.IndexType,
     ):
         fieldop_domain(
             a,
@@ -789,7 +798,21 @@ def test_where_k_offset(cartesian_case):
         pytest.xfail("IndexFields are not supported yet.")
 
     @gtx.field_operator
-    def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
+    def fieldop_where_k_offset(
+        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+    ) -> cases.IKField:
+        return where(k_index > 0, a(Koff[-1]), 2)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        fieldop_where_k_offset,
+        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
+    )
+
+    @gtx.field_operator
+    def fieldop_where_k_offset(
+        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+    ) -> cases.IKField:
         return where(k_index > 0, a(Koff[-1]), 2)
 
     cases.verify_with_default_data(
@@ -821,7 +844,7 @@ def test_zero_dims_fields(cartesian_case):
 def test_implicit_broadcast_mixed_dim(cartesian_case):
     @gtx.field_operator
     def fieldop_implicit_broadcast(
-        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int
+        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int32
     ) -> cases.IField:
         return inp + zero_dim_inp * scalar
 
@@ -900,7 +923,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
     ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
-        def _star_unpack() -> tuple[int, float64, int]:
+        def _star_unpack() -> tuple[int32, float64, int32]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
 
@@ -911,7 +934,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
     ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
-        def _invalid_unpack() -> tuple[int, float64, int]:
+        def _invalid_unpack() -> tuple[int32, float64, int32]:
             a, b, c = 1
             return a
 
@@ -920,12 +943,12 @@ def test_constant_closure_vars(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(
-        PI=np.int64(3),
-        E=np.int64(2),
+        PI=np.float64(3.142),
+        E=np.float64(2.718),
     )
 
     @gtx.field_operator
-    def consume_constants(input: cases.IField) -> cases.IField:
+    def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(

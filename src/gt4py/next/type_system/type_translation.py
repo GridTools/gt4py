@@ -24,7 +24,7 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
@@ -165,6 +165,21 @@ def from_value(value: Any) -> ts.TypeSpec:
     #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
         symbol_type = value.__gt_type__()
+    elif isinstance(value, int) and not isinstance(value, bool):
+        symbol_type = None
+        for candidate_type in [
+            ts.ScalarType(kind=ts.ScalarKind.INT32),
+            ts.ScalarType(kind=ts.ScalarKind.INT64),
+        ]:
+            min_val, max_val = type_info.arithmetic_bounds(candidate_type)
+            if min_val <= value <= max_val:
+                symbol_type = candidate_type
+                break
+        if not symbol_type:
+            raise common.GTTypeError(
+                f"Value `{value}` is out of range to be representable as `INT32` or `INT64`."
+            )
+        return candidate_type
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
@@ -184,7 +199,7 @@ def from_value(value: Any) -> ts.TypeSpec:
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type
     else:
-        raise common.GTTypeError(f"Impossible to map '{value}' value to a Symbol")
+        raise common.GTTypeError(f"Impossible to map `{value}` value to a Symbol")
 
 
 # TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
