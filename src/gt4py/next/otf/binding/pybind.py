@@ -218,7 +218,6 @@ def create_bindings(
             "gridtools/common/tuple_util.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
-            "gridtools/fn/backend/naive.hpp",
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
@@ -256,7 +255,7 @@ def create_bindings(
 
     return stages.BindingSource(
         src,
-        (interface.LibraryDependency("pybind11", "2.9.2"),),
+        (interface.LibraryDependency("pybind11", "2.9.2", "pybind11::module"),),
     )
 
 

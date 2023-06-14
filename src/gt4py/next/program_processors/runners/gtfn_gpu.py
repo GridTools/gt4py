@@ -12,33 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import annotations
+from typing import Any
 
-import dataclasses
-
-import gt4py.next.type_system.type_specifications as ts
-from gt4py.eve import codegen
 from gt4py.next.otf import languages
+from gt4py.next.program_processors import otf_compile_executor
+from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 
-def format_source(settings: languages.LanguageSettings, source):
-    return codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
-
-
-@dataclasses.dataclass(frozen=True)
-class Parameter:
-    name: str
-    type_: ts.TypeSpec
-
-
-@dataclasses.dataclass(frozen=True)
-class Function:
-    name: str
-    parameters: tuple[Parameter, ...]
-
-
-@dataclasses.dataclass(frozen=True)
-class LibraryDependency:
-    name: str
-    version: str
-    library: str
+gtfn_gpu: otf_compile_executor.OTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+] = otf_compile_executor.OTFCompileExecutor(
+    name="gpu_backend",
+    otf_workflow=gtfn_cpu.run_gtfn.otf_workflow.replace(
+        translation=gtfn_module.GTFNTranslationStep(gtfn_backend=gtfn_module.GTFNBackendKind.GPU)
+    ),
+)

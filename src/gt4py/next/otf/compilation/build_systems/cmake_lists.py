@@ -28,6 +28,7 @@ class FindDependency(eve.Node):
 class LinkDependency(eve.Node):
     name: str
     target: str
+    library: str
 
 
 class CMakeListsFile(eve.Node):
@@ -76,6 +77,8 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         """
     )
 
+    LinkDependency = as_jinja("""target_link_libraries({{target}} PUBLIC {{library}})""")
+
     def visit_FindDependency(self, dep: FindDependency):
         match dep.name:
             case "pybind11":
@@ -89,18 +92,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
-    def visit_LinkDependency(self, dep: LinkDependency):
-        match dep.name:
-            case "pybind11":
-                lib_name = "pybind11::module"
-            case "gridtools":
-                lib_name = "GridTools::fn_naive"
-            case _:
-                raise ValueError("Library {name} is not supported".format(name=dep.name))
-        return "target_link_libraries({target} PUBLIC {lib})".format(
-            target=dep.target, lib=lib_name
-        )
-
 
 def generate_cmakelists_source(
     project_name: str,
@@ -112,10 +103,14 @@ def generate_cmakelists_source(
 
     Assumes the name of the gt4py program to be the same as the project name.
     """
+    findlibs = {(d.name, d.version) for d in dependencies}
     cmakelists_file = CMakeListsFile(
         project_name=project_name,
-        find_deps=[FindDependency(name=d.name, version=d.version) for d in dependencies],
-        link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
+        find_deps=set(FindDependency(name=d[0], version=d[1]) for d in findlibs),
+        link_deps=[
+            LinkDependency(name=d.name, target=project_name, library=d.library)
+            for d in dependencies
+        ],
         source_names=source_names,
         bin_output_suffix=common.python_module_suffix(),
     )

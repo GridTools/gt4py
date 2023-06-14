@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import enum
 from typing import Any, Final, TypeVar
 
 import numpy as np
@@ -39,6 +40,11 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
+class GTFNBackendKind(enum.Enum):
+    NAIVE = 1
+    GPU = 2
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
@@ -50,6 +56,7 @@ class GTFNTranslationStep(
     language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
+    gtfn_backend: GTFNBackendKind = GTFNBackendKind.NAIVE
 
     def _process_regular_arguments(
         self,
@@ -175,9 +182,9 @@ class GTFNTranslationStep(
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         args_expr: list[str] = [
-            "gridtools::fn::backend::naive{}",
+            _gtfn_backend_class(self.gtfn_backend),
             *regular_args_expr,
-        ]  # TODO(ricoh): This is where the backend is hardcoded to cpu
+        ]  # TODO(ricoh): This is where the backend is instantiated
 
         function = interface.Function(program.id, tuple(parameters))
         decl_body = (
@@ -194,17 +201,23 @@ class GTFNTranslationStep(
         source_code = interface.format_source(
             self.language_settings,
             f"""
-                    #include <gridtools/fn/backend/naive.hpp>
+                    {_gtfn_backend_include(self.gtfn_backend)}
                     #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
                     """.strip(),
-        )  # TODO(ricoh): This is where the backend header is hardcoded to include the cpu one
+        )  # TODO(ricoh): This is where the backend header is included
 
         module = stages.ProgramSource(
             entry_point=function,
-            library_deps=(interface.LibraryDependency("gridtools", "master"),),
+            library_deps=(
+                interface.LibraryDependency(
+                    name="gridtools",
+                    version="master",
+                    library=_gtfn_backend_library(self.gtfn_backend),
+                ),
+            ),
             source_code=source_code,
             language=languages.Cpp,
             language_settings=self.language_settings,
@@ -215,3 +228,30 @@ class GTFNTranslationStep(
 translate_program: Final[
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings]
 ] = GTFNTranslationStep()
+
+
+def _gtfn_backend_include(kind: GTFNBackendKind) -> str:
+    match kind:
+        case GTFNBackendKind.NAIVE:
+            return "#include <gridtools/fn/backend/naive.hpp>"
+        case GTFNBackendKind.GPU:
+            return "#include <gridtools/fn/backend/gpu.hpp>"
+    raise ValueError("kind argument must be a GTFNBackendKind!")
+
+
+def _gtfn_backend_class(kind: GTFNBackendKind) -> str:
+    match kind:
+        case GTFNBackendKind.NAIVE:
+            return "gridtools::fn::backend::naive{}"
+        case GTFNBackendKind.GPU:
+            return "gridtools::fn::backend::gpu{}"
+    raise ValueError("kind argument must be a GTFNBackendKind!")
+
+
+def _gtfn_backend_library(kind: GTFNBackendKind) -> str:
+    match kind:
+        case GTFNBackendKind.NAIVE:
+            return "GridTools::fn_naive"
+        case GTFNBackendKind.GPU:
+            return "GridTools::fn_gpu"
+    raise ValueError("kind argument must be a GTFNBackendKind!")
