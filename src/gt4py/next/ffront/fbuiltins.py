@@ -14,6 +14,7 @@
 
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
+from typing import TypeAlias
 
 from numpy import float32, float64, int32, int64
 
@@ -28,6 +29,12 @@ PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
 TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
+
+# Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
+# work.
+IndexType: TypeAlias = int32
+
+TYPE_ALIAS_NAMES = ["IndexType"]
 
 
 @dataclass
@@ -207,7 +214,7 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*(set(BUILTIN_NAMES) - {"Dimension", "Field"})]
+__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

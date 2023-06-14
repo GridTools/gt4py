@@ -34,7 +34,7 @@ def basic_reduction():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
         ),
         args=[
             ir.FunCall(
@@ -51,7 +51,7 @@ def reduction_with_shift_on_second_arg():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
         ),
         args=[
             ir.SymRef(id="x"),
@@ -69,7 +69,7 @@ def reduction_with_incompatible_shifts():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
         ),
         args=[
             ir.FunCall(
@@ -90,7 +90,7 @@ def reduction_with_irrelevant_full_shift():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float")],
+            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
         ),
         args=[
             ir.FunCall(
