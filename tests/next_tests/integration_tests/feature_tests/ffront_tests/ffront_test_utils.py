@@ -70,6 +70,7 @@ size = 10
 def reduction_setup():
     num_vertices = 9
     num_cells = 8
+    k_levels = 10
     v2edim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     e2vdim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
     c2vdim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
@@ -133,6 +134,7 @@ def reduction_setup():
             "num_vertices",
             "num_edges",
             "num_cells",
+            "k_levels",
             "V2EDim",
             "E2VDim",
             "C2VDim",
@@ -151,6 +153,7 @@ def reduction_setup():
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
+        k_levels=k_levels,
         V2EDim=v2edim,
         E2VDim=e2vdim,
         C2VDim=c2vdim,
