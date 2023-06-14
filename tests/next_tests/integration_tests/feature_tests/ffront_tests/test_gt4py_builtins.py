@@ -52,7 +52,7 @@ def test_maxover_execution(unstructured_case):
     @gtx.field_operator
     def maxover_fieldoperator(
         inp_field: gtx.Field[[Vertex, V2EDim], int32]
-    ) -> gtx.Field[[Vertex], int64]:
+    ) -> gtx.Field[[Vertex], int32]:
         return max_over(inp_field, axis=V2EDim)
 
     inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
