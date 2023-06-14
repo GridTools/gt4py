@@ -127,7 +127,9 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     expected = ref_impl(*inputs)
     out = np_as_located_field(IDim)(np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(fieldview_backend)
+    builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(
+        cartesian_case.backend
+    )
 
     builtin_field_op(*inps, out=out, offset_provider={})
 
