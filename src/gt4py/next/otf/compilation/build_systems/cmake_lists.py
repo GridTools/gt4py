@@ -106,7 +106,7 @@ def generate_cmakelists_source(
     findlibs = {(d.name, d.version) for d in dependencies}
     cmakelists_file = CMakeListsFile(
         project_name=project_name,
-        find_deps=set(FindDependency(name=d[0], version=d[1]) for d in findlibs),
+        find_deps=[FindDependency(name=d[0], version=d[1]) for d in findlibs],
         link_deps=[
             LinkDependency(name=d.name, target=project_name, library=d.library)
             for d in dependencies
