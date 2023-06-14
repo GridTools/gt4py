@@ -192,7 +192,8 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
 
     a = cases.allocate(cartesian_case, prog, "a")()
     b = cases.allocate(cartesian_case, prog, "b")()
-    out_a, out_b = cases.allocate(cartesian_case, prog, "out_a")()
+    out_a = cases.allocate(cartesian_case, prog, "out_a")()
+    out_b = cases.allocate(cartesian_case, prog, "out_b")()
 
     cases.verify(
         cartesian_case,
@@ -222,9 +223,8 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
-    out_a, out_b = cases.allocate(cartesian_case, prog, "out_a").strategy(
-        cases.ConstInitializer(0)
-    )()
+    out_a = cases.allocate(cartesian_case, prog, "out_a").strategy(cases.ConstInitializer(0))()
+    out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
 
     cases.verify(
         cartesian_case,
@@ -263,9 +263,9 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
     c = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(3))()
-    out_a, out_b, out_c = cases.allocate(cartesian_case, prog, "out_a").strategy(
-        cases.ConstInitializer(0)
-    )()
+    out_a = cases.allocate(cartesian_case, prog, "out_a").strategy(cases.ConstInitializer(0))()
+    out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
+    out_c = cases.allocate(cartesian_case, prog, "out_c").strategy(cases.ConstInitializer(0))()
 
     cases.verify(
         cartesian_case,
