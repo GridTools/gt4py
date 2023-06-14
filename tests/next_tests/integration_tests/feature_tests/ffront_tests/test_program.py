@@ -145,7 +145,12 @@ def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
     )()
 
     cases.verify(
-        cartesian_case, copy_restrict_program, in_field, out_field, inout=out_field.array(), ref=expected
+        cartesian_case,
+        copy_restrict_program,
+        in_field,
+        out_field,
+        inout=out_field.array(),
+        ref=expected,
     )
 
 
