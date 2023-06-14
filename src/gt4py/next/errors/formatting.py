@@ -11,4 +11,5 @@ def compilation_error_hook(fallback: Callable, type_: type, value: exceptions.Co
         fallback(type_, value, traceback)
 
 
-sys.excepthook = lambda ty, val, tb: compilation_error_hook(sys.excepthook, ty, val, tb)
+_fallback = sys.excepthook
+sys.excepthook = lambda ty, val, tb: compilation_error_hook(_fallback, ty, val, tb)
