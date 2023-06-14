@@ -16,7 +16,7 @@ from typing import Optional, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next.common import DimensionKind, GTTypeError
+from gt4py.next.common import DimensionKind
 from gt4py.next.ffront import (  # noqa
     dialect_ast_enums,
     fbuiltins,
@@ -52,7 +52,7 @@ def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
         return scalar_bool
     elif type_class is ts.FieldType:
         return ts.FieldType(dtype=scalar_bool, dims=type_info.extract_dims(symbol_type))
-    raise GTTypeError(f"Can not boolify type {symbol_type}!")
+    raise ValueError(f"Can not boolify type {symbol_type}!")
 
 
 def construct_tuple_type(
@@ -527,7 +527,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # transform operands to have bool dtype and use regular promotion
             #  mechanism to handle dimension promotion
             return type_info.promote(boolified_type(left.type), boolified_type(right.type))
-        except GTTypeError as ex:
+        except ValueError as ex:
             raise CompilationError(node.location,
                 f"Could not promote `{left.type}` and `{right.type}` to common type"
                 f" in call to `{node.op}`.",
@@ -569,7 +569,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         try:
             return type_info.promote(left_type, right_type)
-        except GTTypeError as ex:
+        except ValueError as ex:
             raise CompilationError(node.location,
                 f"Could not promote `{left_type}` and `{right_type}` to common type"
                 f" in call to `{node.op}`.",
@@ -644,7 +644,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 with_kwargs=kwarg_types,
                 raise_exception=True,
             )
-        except GTTypeError as err:
+        except ValueError as err:
             raise CompilationError(node.location, f"Invalid argument types in call to `{new_func}`!"
             ) from err
 
@@ -723,7 +723,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 return_type = type_info.promote(
                     *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
                 )
-            except GTTypeError as ex:
+            except ValueError as ex:
                 raise CompilationError(node.location, error_msg_preamble
                 ) from ex
         else:
@@ -853,7 +853,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
                 return_type = promote_to_mask_type(mask_type, promoted_type)
 
-        except GTTypeError as ex:
+        except ValueError as ex:
             raise CompilationError(node.location,
                 f"Incompatible argument in call to `{str(node.func)}`.",
             ) from ex
@@ -900,7 +900,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
         try:
             type_ = type_translation.from_value(node.value)
-        except GTTypeError as e:
+        except ValueError as e:
             raise CompilationError(node.location, "Could not deduce type of constant."
             ) from e
         return foast.Constant(value=node.value, location=node.location, type=type_)

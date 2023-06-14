@@ -40,7 +40,7 @@ import re
 import pytest
 
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next.common import Field
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.fbuiltins import (
@@ -75,7 +75,6 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.type_system.type_translation import TypingError
 from gt4py.next.errors import *
 
 
@@ -119,7 +118,7 @@ def test_mistyped_arg():
         return inp
 
     with pytest.raises(
-        TypingError,
+        ValueError,
         match="Field type requires two arguments, got 0!",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
@@ -318,7 +317,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> Field[[], float]:
         return 1.0
 
-    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
+    with pytest.raises(CompilationError, match=r"Expected `float.*`"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
@@ -401,7 +400,7 @@ def test_wrong_return_type_annotation():
         return a
 
     with pytest.raises(
-        GTTypeError,
+        CompilationError,
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
@@ -412,7 +411,7 @@ def test_empty_dims_type():
         return 1.0
 
     with pytest.raises(
-        GTTypeError,
+        CompilationError,
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)

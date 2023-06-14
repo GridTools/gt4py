@@ -19,7 +19,7 @@ import re
 import numpy as np
 import pytest
 
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next.common import Field
 from gt4py.next.errors import *
 from gt4py.next.ffront.decorator import field_operator, program
 from gt4py.next.iterator.embedded import np_as_located_field
@@ -266,7 +266,7 @@ def test_dimensions_domain():
         empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
 
     with pytest.raises(
-        GTTypeError,
+        ValueError,
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})

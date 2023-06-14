@@ -14,7 +14,7 @@
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
+from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront.decorator import _deduce_grid_type
 from gt4py.next.ffront.fbuiltins import FieldOffset
 
@@ -38,7 +38,7 @@ def test_domain_deduction_unstructured():
 
 def test_domain_complies_with_request_cartesian():
     assert _deduce_grid_type(GridType.CARTESIAN, {CartesianOffset}) == GridType.CARTESIAN
-    with pytest.raises(GTTypeError, match="unstructured.*FieldOffset.*found"):
+    with pytest.raises(ValueError, match="unstructured.*FieldOffset.*found"):
         _deduce_grid_type(GridType.CARTESIAN, {UnstructuredOffset})
         _deduce_grid_type(GridType.CARTESIAN, {LocalDim})
 

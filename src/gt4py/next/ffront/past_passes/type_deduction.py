@@ -15,7 +15,6 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.common import GTTypeError
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -34,7 +33,7 @@ def _ensure_no_sliced_field(entry: past.Expr):
     For example, if argument is of type past.Subscript, this function will throw an error as both slicing and domain are being applied
     """
     if not isinstance(entry, past.Name) and not isinstance(entry, past.TupleExpr):
-        raise GTTypeError("Either only domain or slicing allowed")
+        raise ValueError("Either only domain or slicing allowed")
     elif isinstance(entry, past.TupleExpr):
         for param in entry.elts:
             _ensure_no_sliced_field(param)
@@ -57,39 +56,39 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
         new_func.type,
         (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
     ):
-        raise GTTypeError(
+        raise ValueError(
             f"Only calls `FieldOperator`s and `ScanOperator`s "
             f"allowed in `Program`, but got `{new_func.type}`."
         )
 
     if "out" not in new_kwargs:
-        raise GTTypeError("Missing required keyword argument(s) `out`.")
+        raise ValueError("Missing required keyword argument(s) `out`.")
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
 
         domain_kwarg = new_kwargs["domain"]
         if not isinstance(domain_kwarg, past.Dict):
-            raise GTTypeError(
+            raise ValueError(
                 f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
             )
 
         if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
-            raise GTTypeError("Empty domain not allowed.")
+            raise ValueError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
             if not isinstance(dim.type, ts.DimensionType):
-                raise GTTypeError(
+                raise ValueError(
                     f"Only Dimension allowed in domain dictionary keys, but got `{dim}` which is of type `{dim.type}`."
                 )
         for domain_values in domain_kwarg.values_:
             if len(domain_values.elts) != 2:
-                raise GTTypeError(
+                raise ValueError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
             if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
                 domain_values.elts[1]
             ):
-                raise GTTypeError(
+                raise ValueError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
                 )
 
@@ -166,7 +165,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         try:
             return type_info.promote(left_type, right_type)
-        except GTTypeError as ex:
+        except ValueError as ex:
             raise CompilationError(
                 node.location,
                 f"Could not promote `{left_type}` and `{right_type}` to common type"
@@ -211,14 +210,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     new_func.type, with_args=arg_types, with_kwargs=kwarg_types
                 )
                 if operator_return_type != new_kwargs["out"].type:
-                    raise GTTypeError(
+                    raise ValueError(
                         f"Expected keyword argument `out` to be of "
                         f"type {operator_return_type}, but got "
                         f"{new_kwargs['out'].type}."
                     )
             elif new_func.id in ["minimum", "maximum"]:
                 if new_args[0].type != new_args[1].type:
-                    raise GTTypeError(
+                    raise ValueError(
                         f"First and second argument in {new_func.id} must be the same type."
                         f"Got `{new_args[0].type}` and `{new_args[1].type}`."
                     )
@@ -228,7 +227,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     "Only calls `FieldOperator`s, `ScanOperator`s or minimum and maximum builtins allowed"
                 )
 
-        except GTTypeError as ex:
+        except ValueError as ex:
             raise CompilationError(
                 node.location, f"Invalid call to `{node.func.id}`."
             ) from ex

@@ -18,7 +18,7 @@ import pytest
 
 import gt4py.eve as eve
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GridType, GTTypeError
+from gt4py.next.common import Field, GridType
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
@@ -154,7 +154,7 @@ def test_inout_prohibited(identity_def):
         identity(inout_field, out=inout_field)
 
     with pytest.raises(
-        GTTypeError,
+        ValueError,
         match=(r"Call to function with field as input and output not allowed."),
     ):
         ProgramLowering.apply(

@@ -31,7 +31,7 @@ from devtools import debug
 
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import DimensionKind, GridType, GTTypeError, Scalar
+from gt4py.next.common import DimensionKind, GridType, Scalar
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -142,7 +142,7 @@ def _deduce_grid_type(
             break
 
     if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
-        raise GTTypeError(
+        raise ValueError(
             "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
         )
 
@@ -330,7 +330,7 @@ class Program:
                 with_kwargs=kwarg_types,
                 raise_exception=True,
             )
-        except GTTypeError as err:
+        except ValueError as err:
             raise ValueError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
@@ -383,7 +383,7 @@ class Program:
                 f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
             ]
 
-            raise GTTypeError(
+            raise TypeError(
                 "Only `ScanOperator`s defined on the same axis "
                 + "can be used in a `Program`, but found:\n"
                 + "\n".join(scanops_per_axis_strs)

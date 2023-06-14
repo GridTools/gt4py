@@ -104,7 +104,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                raise common.GTTypeError(
+                raise CompilationError(
+                    foast_node.location,
                     f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                     f", but got `{annotated_return_type}`."
                 )
@@ -472,7 +473,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)
-        except common.GTTypeError as e:
+        except ValueError as e:
             raise CompilationError(loc, f"constants of type {type(node.value)} are not permitted") from None
 
         return foast.Constant(

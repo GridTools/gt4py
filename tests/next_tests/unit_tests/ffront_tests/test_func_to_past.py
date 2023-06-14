@@ -18,7 +18,7 @@ import pytest
 
 import gt4py.eve as eve
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GTTypeError
+from gt4py.next.common import Field
 from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.decorator import field_operator
 from gt4py.next.ffront.fbuiltins import float64

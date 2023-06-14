@@ -108,23 +108,3 @@ class NeighborTable(Connectivity, Protocol):
 class GridType(StrEnum):
     CARTESIAN = "cartesian"
     UNSTRUCTURED = "unstructured"
-
-
-class GTError:
-    """Base class for GridTools exceptions.
-
-    Notes:
-        This base class has to be always inherited together with a standard
-        exception, and thus it should not be used as direct superclass
-        for custom exceptions. Inherit directly from :class:`GTTypeError`,
-        :class:`GTTypeError`, ...
-
-    """
-
-    ...
-
-
-class GTTypeError(GTError, TypeError):
-    """Base class for GridTools type errors."""
-
-    ...

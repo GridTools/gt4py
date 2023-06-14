@@ -17,7 +17,7 @@ from typing import Optional, Pattern
 import pytest
 
 import gt4py.next.ffront.type_specifications
-from gt4py.next.common import DimensionKind, GTTypeError
+from gt4py.next.common import DimensionKind
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import (
@@ -271,7 +271,7 @@ def test_accept_args(
 
     if len(expected) > 0:
         with pytest.raises(
-            GTTypeError,
+            ValueError,
         ) as exc_info:
             type_info.accepts_args(
                 func_type, with_args=args, with_kwargs=kwargs, raise_exception=True
