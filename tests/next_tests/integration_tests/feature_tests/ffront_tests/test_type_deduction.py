@@ -17,21 +17,23 @@ from typing import Optional, Pattern
 import pytest
 
 import gt4py.next.ffront.type_specifications
-from gt4py.next.common import DimensionKind, GTTypeError
-from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.ffront.fbuiltins import (
+from gt4py.next import (
     Dimension,
+    DimensionKind,
     Field,
     FieldOffset,
     astype,
     broadcast,
     float32,
     float64,
+    int32,
     int64,
     neighbor_sum,
     where,
 )
+from gt4py.next.common import GTTypeError
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
+from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -480,26 +482,26 @@ def test_remap_nbfield(remap_setup):
 def test_remap_reduce(remap_setup):
     X, Y, Y2XDim, Y2X = remap_setup
 
-    def remap_fo(bar: Field[[X], int64]) -> Field[[Y], int64]:
+    def remap_fo(bar: Field[[X], int32]) -> Field[[Y], int32]:
         return 2 * neighbor_sum(bar(Y2X), axis=Y2XDim)
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
-        dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+        dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)
     )
 
 
 def test_remap_reduce_sparse(remap_setup):
     X, Y, Y2XDim, Y2X = remap_setup
 
-    def remap_fo(bar: Field[[Y, Y2XDim], int64]) -> Field[[Y], int64]:
+    def remap_fo(bar: Field[[Y, Y2XDim], int32]) -> Field[[Y], int32]:
         return 5 * neighbor_sum(bar, axis=Y2XDim)
 
     parsed = FieldOperatorParser.apply_to_function(remap_fo)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
-        dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)
+        dims=[Y], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)
     )
 
 

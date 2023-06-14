@@ -40,7 +40,7 @@ def test_reduce():
     testee = ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="plus"), ir.Literal(value="0.0", type="float")],
+            args=[ir.SymRef(id="plus"), ir.Literal(value="0.0", type="float64")],
         ),
         args=[
             ir.FunCall(

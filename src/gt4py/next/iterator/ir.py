@@ -169,8 +169,10 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-INTEGER_BUILTINS = {"int", "int32", "int64"}
-FLOATING_POINT_BUILTINS = {"float", "float32", "float64"}
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_BUILTINS = {"int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 GRAMMAR_BUILTINS = {

@@ -31,14 +31,14 @@ from devtools import debug
 
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import DimensionKind, GridType, GTTypeError, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError, Scalar
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -686,12 +686,13 @@ def scan_operator(
 
     Examples:
         >>> import numpy as np
+        >>> import gt4py.next as gtx
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-        >>> inp = embedded.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = embedded.np_as_located_field(KDim)(np.zeros((10,)))
-        >>> @scan_operator(axis=KDim, forward=True, init=0.)
+        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
+        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP

@@ -18,9 +18,9 @@ from collections import abc
 from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.next.common import Connectivity, Dimension, DimensionKind
+import gt4py.next as gtx
+from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
@@ -281,6 +281,22 @@ class Primitive(Type):
         return True
 
 
+class UnionPrimitive(Type):
+    """Union of primitive types."""
+
+    names: tuple[str, ...]
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if isinstance(other, UnionPrimitive):
+            raise AssertionError("`UnionPrimitive` may only appear on one side of a constraint.")
+        if not isinstance(other, Primitive):
+            return False
+
+        return other.name in self.names
+
+
 class Value(Type):
     """Marker for values."""
 
@@ -339,9 +355,16 @@ class LetPolymorphic(Type):
     dtype: Type
 
 
+def _default_constraints():
+    return {
+        (FLOAT_DTYPE, UnionPrimitive(names=("float32", "float64"))),
+        (INT_DTYPE, UnionPrimitive(names=("int32", "int64"))),
+    }
+
+
 BOOL_DTYPE = Primitive(name="bool")
-INT_DTYPE = Primitive(name="int")
-FLOAT_DTYPE = Primitive(name="float")
+INT_DTYPE = TypeVar.fresh()
+FLOAT_DTYPE = TypeVar.fresh()
 AXIS_DTYPE = Primitive(name="axis")
 NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
@@ -523,9 +546,13 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                 axis = offset_provider[offset]
                 if isinstance(axis, CartesianAxis):
                     continue  # Cartesian shifts don’t change the location type
-                elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
+                elif isinstance(
+                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
+                ):
                     assert (
-                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                        axis.origin_axis.kind
+                        == axis.neighbor_axis.kind
+                        == gtx.DimensionKind.HORIZONTAL
                     )
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
@@ -549,9 +576,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             See `unify` for more information.
     """
 
-    offset_provider: Optional[dict[str, Connectivity | Dimension]]
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]]
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
-    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
+    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=_default_constraints)
 
     def visit(self, node, **kwargs) -> typing.Any:
         result = super().visit(node, **kwargs)
@@ -650,8 +677,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
             raise TypeError("`tuple_get` requires exactly two arguments.")
-        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        if (
+            not isinstance(node.args[0], ir.Literal)
+            or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
+        ):
+            raise TypeError(
+                f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
+            )
         self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
@@ -913,7 +945,7 @@ def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
 def infer_all(
     node: ir.Node,
     *,
-    offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]] = None,
     reindex: bool = True,
     save_to_annex=False,
 ) -> dict[int, Type]:

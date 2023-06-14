@@ -66,9 +66,9 @@ def primitive_constituents(
     """
     Return the primitive types contained in a composite type.
 
-    >>> from gt4py.next.common import Dimension
+    >>> from gt4py.next import Dimension
     >>> I = Dimension(value="I")
-    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
     >>> tuple_type = ts.TupleType(types=[int_type, field_type])
@@ -100,7 +100,7 @@ def apply_to_primitive_constituents(
     """
     Apply function to all primitive constituents of a type.
 
-    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> tuple_type = ts.TupleType(types=[int_type, int_type])
     >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)))
     tuple[Field[[], int64], Field[[], int64]]
@@ -169,17 +169,14 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
 
     Examples:
     ---------
-    >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT))
-    True
     >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.INT32))
     True
     >>> is_integral(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     False
-    >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT)))
+    >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
     return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.INT,
         ts.ScalarKind.INT32,
         ts.ScalarKind.INT64,
     ]
@@ -197,7 +194,7 @@ def is_number(symbol_type: ts.TypeSpec) -> bool:
     True
     >>> is_number(ts.ScalarType(kind=ts.ScalarKind.BOOL))
     False
-    >>> is_number(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT)))
+    >>> is_number(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     False
     """
     if not isinstance(symbol_type, ts.ScalarType):
@@ -245,7 +242,7 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
 
     Examples:
     ---------
-    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
     >>> is_type_or_tuple_of_type(field_type, ts.FieldType)
     True
@@ -265,7 +262,7 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
 
     Examples:
     ---------
-    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT)
+    >>> scalar_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
     >>> is_tuple_of_type(field_type, ts.FieldType)
     False

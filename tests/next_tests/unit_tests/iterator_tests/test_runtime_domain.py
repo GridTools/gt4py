@@ -12,14 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
 
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import deref
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
 
 from next_tests.unit_tests.conftest import DummyConnectivity
@@ -46,18 +44,20 @@ def test_deduce_domain():
     )
 
 
-I = Dimension("I")
+I = gtx.Dimension("I")
 
 
 def test_embedded_error_on_wrong_domain():
     dom = CartesianDomain([("I", range(1))])
 
-    out = np_as_located_field(I)(
+    out = gtx.np_as_located_field(I)(
         np.zeros(
             1,
         )
     )
     with pytest.raises(RuntimeError, match="expected `UnstructuredDomain`"):
         foo[dom](
-            np_as_located_field(I)(np.zeros((1,))), out=out, offset_provider={"bar": connectivity}
+            gtx.np_as_located_field(I)(np.zeros((1,))),
+            out=out,
+            offset_provider={"bar": connectivity},
         )

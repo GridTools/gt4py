@@ -24,15 +24,17 @@ from typing import Any, Callable, Literal, Optional, Protocol, TypeAlias
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
-from gt4py.next.ffront import decorator, fbuiltins
-from gt4py.next.iterator import embedded, ir as itir
+from gt4py.next.ffront import decorator
+from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+    Cell,
     Edge,
     IDim,
     Ioff,
@@ -47,28 +49,39 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 # mypy does not accept [IDim, ...] as a type
-IField: TypeAlias = common.Field[[IDim], np.int64]  # type: ignore [valid-type]
-IJKField: TypeAlias = common.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
-IJKFloatField: TypeAlias = common.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = common.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = common.Field[[Edge], np.int64]  # type: ignore [valid-type]
+
+IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
+KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
+IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
+IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int32]  # type: ignore [valid-type]
+IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
+IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
+IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
+VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
+CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
+EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
 #   by `unstructured_case`.
-V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
-E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
-V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = fbuiltins.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
-FieldValue: TypeAlias = common.Field | embedded.LocatedFieldImpl
+FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
 ReferenceValue: TypeAlias = (
-    common.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
+    gtx.Field | np.typing.NDArray[ScalarValue] | tuple["ReferenceValue", ...]
 )
-OffsetProvider: TypeAlias = dict[str, common.Connectivity | common.Dimension]
+OffsetProvider: TypeAlias = dict[str, common.Connectivity | gtx.Dimension]
 
 
 #: To allocate the return value of a field operator, we must pass
@@ -91,7 +104,7 @@ class DataInitializer(Protocol):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         ...
@@ -118,10 +131,10 @@ class ConstInitializer(DataInitializer):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        return embedded.np_as_located_field(*sizes.keys())(
+        return gtx.np_as_located_field(*sizes.keys())(
             np.full(tuple(sizes.values()), self.value, dtype=dtype)
         )
 
@@ -154,14 +167,14 @@ class UniqueInitializer(DataInitializer):
     def field(
         self,
         backend: ppi.ProgramProcessor,
-        sizes: dict[common.Dimension, int],
+        sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         start = self.start
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return embedded.np_as_located_field(*sizes.keys())(
+        return gtx.np_as_located_field(*sizes.keys())(
             np.arange(start, start + n_data, dtype=dtype).reshape(svals)
         )
 
@@ -277,10 +290,10 @@ def allocate(
     fieldview_prog: decorator.FieldOperator | decorator.Program,
     name: str,
     *,
-    sizes: Optional[dict[common.Dimension, int]] = None,
+    sizes: Optional[dict[gtx.Dimension, int]] = None,
     strategy: Optional[DataInitializer] = None,
     dtype: Optional[np.typing.DTypeLike] = None,
-    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
+    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
 ) -> FieldViewArg:
     """
     Allocate a parameter or return value from a fieldview code object.
@@ -423,16 +436,7 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def no_default_backend():
-    """Temporarily switch off default backend for feature tests."""
-    backup_backend = decorator.DEFAULT_BACKEND
-    decorator.DEFAULT_BACKEND = no_backend
-    yield
-    decorator.DEFAULT_BACKEND = backup_backend
-
-
-@pytest.fixture
-def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
@@ -442,15 +446,15 @@ def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtu
 
 
 @pytest.fixture
-def unstructured_case(
-    no_default_backend, reduction_setup, fieldview_backend  # noqa: F811 # fixtures
-):
+def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
+            Cell: reduction_setup.num_cells,
+            KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
@@ -459,7 +463,7 @@ def unstructured_case(
 def _allocate_from_type(
     case: Case,
     arg_type: ts.TypeSpec,
-    sizes: dict[common.Dimension, int],
+    sizes: dict[gtx.Dimension, int],
     strategy: DataInitializer,
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
@@ -502,7 +506,7 @@ def get_param_types(
     }
 
 
-def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) -> int:
+def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> int:
     match param_type:
         case ts.FieldType(dims=dims):
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
@@ -515,9 +519,9 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[common.Dimension, int]) 
 
 
 def extend_sizes(
-    sizes: dict[common.Dimension, int],
-    extend: Optional[dict[common.Dimension, tuple[int, int]]] = None,
-) -> dict[common.Dimension, int]:
+    sizes: dict[gtx.Dimension, int],
+    extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
+) -> dict[gtx.Dimension, int]:
     """Calculate the sizes per dimension given a set of extensions."""
     sizes = sizes.copy()
     if extend:
@@ -529,7 +533,7 @@ def extend_sizes(
 def get_default_data(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
-) -> tuple[tuple[common.Field | ScalarValue | tuple, ...], dict[str, common.Field]]:
+) -> tuple[tuple[gtx.Field | ScalarValue | tuple, ...], dict[str, gtx.Field]]:
     """
     Allocate default data for a fieldview code object given a test case.
 
@@ -549,16 +553,11 @@ def get_default_data(
     return inps, kwfields
 
 
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-
 @dataclasses.dataclass
 class Case:
     """Parametrizable components for single feature integration tests."""
 
     backend: ppi.ProgramProcessor
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
-    default_sizes: dict[common.Dimension, int]
+    offset_provider: dict[str, common.Connectivity | gtx.Dimension]
+    default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType

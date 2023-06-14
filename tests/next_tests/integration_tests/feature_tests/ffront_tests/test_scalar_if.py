@@ -13,16 +13,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-#
 from functools import reduce
 
 import numpy as np
 import pytest
 
-from gt4py.next.ffront.decorator import field_operator
-from gt4py.next.ffront.fbuiltins import Field, float64
+from gt4py.next import Field, field_operator, float64, index_field, np_as_located_field
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
@@ -40,13 +37,11 @@ from next_tests.integration_tests.feature_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    no_default_backend,
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
     fieldview_backend,
-    reduction_setup,
     size,
 )
 

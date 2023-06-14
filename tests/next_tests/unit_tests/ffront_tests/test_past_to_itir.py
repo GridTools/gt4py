@@ -17,9 +17,9 @@ import re
 import pytest
 
 import gt4py.eve as eve
+import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import Field, GridType, GTTypeError
-from gt4py.next.ffront.decorator import field_operator
+from gt4py.next.common import GTTypeError
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
@@ -46,7 +46,7 @@ def itir_identity_fundef():
 def test_copy_lowering(copy_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_program_def)
     itir_node = ProgramLowering.apply(
-        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+        past_node, function_definitions=[itir_identity_fundef], grid_type=gtx.GridType.CARTESIAN
     )
     closure_pattern = P(
         itir.StencilClosure,
@@ -59,7 +59,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int"),
+                        P(itir.Literal, value="0", type=itir.INTEGER_INDEX_BUILTIN),
                         P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
                     ],
                 )
@@ -87,7 +87,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
 def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
     itir_node = ProgramLowering.apply(
-        past_node, function_definitions=[itir_identity_fundef], grid_type=GridType.CARTESIAN
+        past_node, function_definitions=[itir_identity_fundef], grid_type=gtx.GridType.CARTESIAN
     )
     closure_pattern = P(
         itir.StencilClosure,
@@ -100,8 +100,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type="int"),
-                        P(itir.Literal, value="2", type="int"),
+                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
                     ],
                 )
             ],
@@ -124,12 +124,14 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
 
 def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     def tuple_program(
-        inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
+        inp: gtx.Field[[IDim], float64],
+        out1: gtx.Field[[IDim], float64],
+        out2: gtx.Field[[IDim], float64],
     ):
         make_tuple_op(inp, out=(out1[1:], out2[1:]))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail(
@@ -137,19 +139,21 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
 )  # see ADR 10
 def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     def tuple_program(
-        inp: Field[[IDim], float64], out1: Field[[IDim], float64], out2: Field[[IDim], float64]
+        inp: gtx.Field[[IDim], float64],
+        out1: gtx.Field[[IDim], float64],
+        out2: gtx.Field[[IDim], float64],
     ):
         make_tuple_op(inp, out=(out1[1:], out2))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(parsed, function_definitions=[], grid_type=GridType.CARTESIAN)
+    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
 
 
 @pytest.mark.xfail
 def test_inout_prohibited(identity_def):
-    identity = field_operator(identity_def)
+    identity = gtx.field_operator(identity_def)
 
-    def inout_field_program(inout_field: Field[[IDim], "float64"]):
+    def inout_field_program(inout_field: gtx.Field[[IDim], "float64"]):
         identity(inout_field, out=inout_field)
 
     with pytest.raises(
@@ -159,7 +163,7 @@ def test_inout_prohibited(identity_def):
         ProgramLowering.apply(
             ProgramParser.apply_to_function(inout_field_program),
             function_definitions=[],
-            grid_type=GridType.CARTESIAN,
+            grid_type=gtx.GridType.CARTESIAN,
         )
 
 
@@ -170,7 +174,7 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
             function_definitions=[],
-            grid_type=GridType.CARTESIAN,
+            grid_type=gtx.GridType.CARTESIAN,
         )
 
     assert exc_info.match("Invalid call to `identity`")

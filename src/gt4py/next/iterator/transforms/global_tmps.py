@@ -15,11 +15,10 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Optional
 
+import gt4py.next as gtx
 from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
-from gt4py.next.common import DimensionKind
 from gt4py.next.iterator import ir, type_inference
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
@@ -238,12 +237,12 @@ def _named_range_with_offsets(
     if lower_offset:
         lower_bound = ir.FunCall(
             fun=ir.SymRef(id="plus"),
-            args=[lower_bound, ir.Literal(value=str(lower_offset), type="int")],
+            args=[lower_bound, ir.Literal(value=str(lower_offset), type=ir.INTEGER_INDEX_BUILTIN)],
         )
     if upper_offset:
         upper_bound = ir.FunCall(
             fun=ir.SymRef(id="plus"),
-            args=[upper_bound, ir.Literal(value=str(upper_offset), type="int")],
+            args=[upper_bound, ir.Literal(value=str(upper_offset), type=ir.INTEGER_INDEX_BUILTIN)],
         )
     return ir.FunCall(
         fun=ir.SymRef(id="named_range"), args=[axis_literal, lower_bound, upper_bound]
@@ -328,7 +327,7 @@ def _location_type_from_offsets(
     for o in offsets:
         if isinstance(o, ir.OffsetLiteral) and isinstance(o.value, str):
             provider = offset_provider[o.value]
-            if isinstance(provider, NeighborTableOffsetProvider):
+            if isinstance(provider, gtx.NeighborTableOffsetProvider):
                 location = provider.neighbor_axis.value
     return location
 
@@ -344,8 +343,8 @@ def _unstructured_domain(
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value=axis),
-                    ir.Literal(value="0", type="int"),
-                    ir.Literal(value=str(size), type="int"),
+                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    ir.Literal(value=str(size), type=ir.INTEGER_INDEX_BUILTIN),
                 ],
             )
         ]
@@ -361,9 +360,9 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
     """
     sizes = dict[str, int]()
     for provider in offset_provider.values():
-        if isinstance(provider, NeighborTableOffsetProvider):
-            assert provider.origin_axis.kind == DimensionKind.HORIZONTAL
-            assert provider.neighbor_axis.kind == DimensionKind.HORIZONTAL
+        if isinstance(provider, gtx.NeighborTableOffsetProvider):
+            assert provider.origin_axis.kind == gtx.DimensionKind.HORIZONTAL
+            assert provider.neighbor_axis.kind == gtx.DimensionKind.HORIZONTAL
             sizes[provider.origin_axis.value] = max(
                 sizes.get(provider.origin_axis.value, 0),
                 provider.table.shape[0],  # TODO properly expose the size
