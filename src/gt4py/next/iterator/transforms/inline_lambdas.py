@@ -21,10 +21,21 @@ from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, Rename
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
+def _is_applied_lift(arg: ir.Node) -> bool:
+    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, ir.FunCall)
+        and isinstance(arg.fun, ir.FunCall)
+        and isinstance(arg.fun.fun, ir.SymRef)
+        and arg.fun.fun.id == "lift"
+    )
+
+
 def inline_lambda(
     node: ir.FunCall,
     opcount_preserving=False,
     force_inline_lift=False,
+    force_inline_trivial_lift=False,
     eligible_params: Optional[list[bool]] = None,
 ):
     assert isinstance(node.fun, ir.Lambda)
@@ -43,14 +54,16 @@ def inline_lambda(
             ):
                 eligible_params[i] = False
 
+    # inline lifts, i.e. `lift(λ(...) → ...)(...)`
     if force_inline_lift:
         for i, arg in enumerate(node.args):
-            if (
-                isinstance(arg, ir.FunCall)
-                and isinstance(arg.fun, ir.FunCall)
-                and isinstance(arg.fun.fun, ir.SymRef)
-                and arg.fun.fun.id == "lift"
-            ):
+            if _is_applied_lift(arg):
+                eligible_params[i] = True
+
+    # inline trivial lifts, i.e. `lift(λ() → 1)()`
+    if force_inline_trivial_lift:
+        for i, arg in enumerate(node.args):
+            if _is_applied_lift(arg) and len(arg.args) == 0:
                 eligible_params[i] = True
 
     if node.fun.params and not any(eligible_params):
@@ -110,12 +123,22 @@ def inline_lambda(
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
+    PRESERVED_ANNEX_ATTRS = ["type"]
+
     opcount_preserving: bool
 
     force_inline_lift: bool
 
+    force_inline_trivial_lift: bool
+
     @classmethod
-    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False):
+    def apply(
+        cls,
+        node: ir.Node,
+        opcount_preserving=False,
+        force_inline_lift=False,
+        force_inline_trivial_lift=False,
+    ):
         """
         Inline lambda calls by substituting every arguments by its value.
 
@@ -133,6 +156,7 @@ class InlineLambdas(NodeTranslator):
         return cls(
             opcount_preserving=opcount_preserving,
             force_inline_lift=force_inline_lift,
+            force_inline_trivial_lift=force_inline_trivial_lift,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -142,6 +166,7 @@ class InlineLambdas(NodeTranslator):
                 node,
                 opcount_preserving=self.opcount_preserving,
                 force_inline_lift=self.force_inline_lift,
+                force_inline_trivial_lift=self.force_inline_trivial_lift,
             )
 
         return node

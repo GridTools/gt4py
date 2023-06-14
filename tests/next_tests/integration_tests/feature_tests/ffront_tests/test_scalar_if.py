@@ -49,7 +49,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_simple_if(condition, cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -69,7 +73,11 @@ def test_simple_if(condition, cartesian_case):
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -105,7 +113,11 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_local_if(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -126,7 +138,11 @@ def test_local_if(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_temporary_if(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -150,7 +166,11 @@ def test_temporary_if(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_if_return(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -174,7 +194,11 @@ def test_if_return(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_if_stmt_if_branch_returns(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -195,7 +219,11 @@ def test_if_stmt_if_branch_returns(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_if_stmt_else_branch_returns(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -218,7 +246,11 @@ def test_if_stmt_else_branch_returns(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_if_stmt_both_branches_return(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -241,7 +273,11 @@ def test_if_stmt_both_branches_return(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 def test_nested_if_stmt_conditinal(cartesian_case, condition1, condition2):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -280,7 +316,11 @@ def test_nested_if_stmt_conditinal(cartesian_case, condition1, condition2):
 
 @pytest.mark.parametrize("condition", [True, False])
 def test_nested_if(cartesian_case, condition):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator
@@ -317,7 +357,11 @@ def test_nested_if(cartesian_case, condition):
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 def test_if_without_else(cartesian_case, condition1, condition2):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("If-stmts are not supported yet.")
 
     @field_operator

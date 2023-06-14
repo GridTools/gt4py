@@ -80,7 +80,9 @@ class FendefDispatcher:
             from .tracing import fendef_tracing
 
             fendef_codegen = fendef_tracing
+
         fencil_definition = fendef_codegen(self.function, *args, **kwargs)
+
         if "debug" in kwargs:
             debug(fencil_definition)
         return fencil_definition

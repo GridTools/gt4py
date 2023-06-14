@@ -39,6 +39,15 @@ TYPED_IR_NODES: typing.Final = (
 )
 
 
+class UnsatisfiableConstraintsError(Exception):
+    def __init__(self, unsatisfiable_constraints):
+        self.unsatisfiable_constraints = unsatisfiable_constraints
+        msg = "Type inference failed: Can not satisfy constraints:"
+        for lhs, rhs in unsatisfiable_constraints:
+            msg += f"\n  {lhs.value} ≡ {rhs.value}"
+        super().__init__(msg)
+
+
 class EmptyTuple(Type):
     def __iter__(self) -> abc.Iterator[Type]:
         return
@@ -397,6 +406,12 @@ BUILTIN_CATEGORY_MAPPING = (
         ),
     ),
     (
+        {"power"},
+        FunctionType(
+            args=Tuple.from_elems(Val_T0_T1, Val(kind=Value(), dtype=T2, size=T1)), ret=Val_T0_T1
+        ),
+    ),
+    (
         ir.BINARY_MATH_NUMBER_BUILTINS,
         FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     ),
@@ -441,10 +456,8 @@ BUILTIN_TYPES: dict[str, Type] = {
         ret=Val_BOOL_T1,
     ),
     "if_": FunctionType(
-        args=Tuple.from_elems(
-            Val_BOOL_T1, Val(kind=T2, dtype=T0, size=T1), Val(kind=T2, dtype=T0, size=T1)
-        ),
-        ret=Val(kind=T2, dtype=T0, size=T1),
+        args=Tuple.from_elems(Val_BOOL_T1, T2, T2),
+        ret=T2,
     ),
     "lift": FunctionType(
         args=Tuple.from_elems(
@@ -584,6 +597,12 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, TYPED_IR_NODES):
             assert isinstance(result, Type)
+            if not (
+                id(node) not in self.collected_types or self.collected_types[id(node)] == result
+            ):
+                # using the same node in multiple places is fine as long as the type is the same
+                # for all occurences
+                self.constraints.add((result, self.collected_types[id(node)]))
             self.collected_types[id(node)] = result
 
         return result
@@ -709,6 +728,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
             raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
 
+        # Visit arguments such that their type is also inferred
+        self.visit(node.args, **kwargs)
+
         max_length: Type = TypeVar.fresh()
         has_skip_values: Type = TypeVar.fresh()
         if self.offset_provider:
@@ -822,9 +844,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         node: ir.FunCall,
         **kwargs,
     ) -> Type:
-        if isinstance(node.fun, ir.SymRef) and hasattr(self, f"_visit_{node.fun.id}"):
+        if isinstance(node.fun, ir.SymRef) and node.fun.id in ir.GRAMMAR_BUILTINS:
             # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
             return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
+        elif isinstance(node.fun, ir.SymRef) and node.fun.id in ir.TYPEBUILTINS:
+            return Val(kind=Value(), dtype=Primitive(name=node.fun.id))
 
         fun = self.visit(node.fun, **kwargs)
         args = Tuple.from_elems(*self.visit(node.args, **kwargs))
@@ -888,6 +912,8 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                         size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
                         current_loc=ANYWHERE,
+                        # defined_loc=TypeVar.fresh()
+                        # TODO(tehrengruber): breaks for scalars
                         defined_loc=stencil_param.defined_loc,
                     ),
                 )
@@ -965,10 +991,14 @@ def infer_all(
     collected_types = dict(reversed(inferrer.collected_types.items()))
 
     # Compute the most general type that satisfies all constraints
-    unified_types = unify(list(collected_types.values()), inferrer.constraints)
+    unified_types, unsatisfiable_constraints = unify(
+        list(collected_types.values()), inferrer.constraints
+    )
 
     if reindex:
-        unified_types = reindex_vars(list(unified_types))
+        unified_types, unsatisfiable_constraints = reindex_vars(
+            (unified_types, unsatisfiable_constraints)
+        )
 
     result = {
         id_: unified_type
@@ -977,6 +1007,9 @@ def infer_all(
 
     if save_to_annex:
         _save_types_to_annex(node, result)
+
+    if unsatisfiable_constraints:
+        raise UnsatisfiableConstraintsError(unsatisfiable_constraints)
 
     return result
 

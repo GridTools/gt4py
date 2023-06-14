@@ -46,7 +46,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(copy_fencil, [None] * 5)
+    prog = trace(copy_fencil, [None] * 5, use_arg_types=False)
     generated_code = generate(prog, offset_provider={})
 
     with open(output_file, "w+") as output:

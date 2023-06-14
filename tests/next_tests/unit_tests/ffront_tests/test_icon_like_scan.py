@@ -212,7 +212,11 @@ def test_setup():
 
 
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("Needs implementation of scan projector.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Inline into scan breaks embedded execution.")
@@ -230,6 +234,8 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Needs implementation of scan projector.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail(
             "Inline into scan breaks embedded execution and relies on CollapseTuple ignore_tuple_size==True."
@@ -248,6 +254,8 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Inline into scan breaks embedded execution.")
 
@@ -265,6 +273,8 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Only working in gtfn with CollapseTuple ignore_tuple_size==True.")
 

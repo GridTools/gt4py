@@ -18,7 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
@@ -75,7 +75,11 @@ def hdiff(inp, coeff, out, x, y):
 
 def test_hdiff(hdiff_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("origin not yet supported in gtfn")
 
     inp, coeff, out = hdiff_reference

@@ -31,16 +31,17 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
 
 def promote_zero_dims(
     args: list[ts.TypeSpec],
-    function_type: ts_ffront.FieldOperatorType | ts_ffront.ProgramType | ts.FunctionType,
+    function_type: ts.FunctionType,
 ) -> list:
     """Promote arg types to zero dimensional fields if compatible and required by function signature."""
     new_args = []
     for arg_i, arg in enumerate(args):
-        def_type = (
-            function_type.args[arg_i]
-            if isinstance(function_type, ts.FunctionType)
-            else function_type.definition.args[arg_i]
-        )
+        if arg_i >= len(function_type.args):
+            # too many arguments for function. just take argument as is
+            new_args.append(arg)
+            continue
+
+        def_type = function_type.args[arg_i]
 
         def _as_field(arg: ts.TypeSpec, path: tuple):
             el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
@@ -78,7 +79,7 @@ def function_signature_incompatibilities_fieldop(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    new_args = promote_zero_dims(args, fieldop_type)
+    new_args = promote_zero_dims(args, fieldop_type.definition)
     yield from type_info.function_signature_incompatibilities_func(
         fieldop_type.definition, new_args, kwargs
     )
@@ -144,7 +145,7 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    new_args = promote_zero_dims(args, program_type)
+    new_args = promote_zero_dims(args, program_type.definition)
     yield from type_info.function_signature_incompatibilities_func(
         program_type.definition, new_args, kwargs
     )

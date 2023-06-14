@@ -266,7 +266,11 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -331,6 +335,9 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_offset_field(cartesian_case):
+    if cartesian_case.backend == gtfn_cpu.run_gtfn_with_temporaries:
+        pytest.xfail("Dynamic offsets not supported in gtfn")
+
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -418,6 +425,55 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
+def test_something(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+
+    @field_operator
+    def reduction_tuple(a: Field[[Edge], int64], b: Field[[Edge], int64]) -> Field[[Vertex], int64]:
+        a = neighbor_sum(a(V2E), axis=V2EDim)
+        b = neighbor_sum(b(V2E), axis=V2EDim)
+        return a + b
+
+    reduction_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1) * 2
+    assert np.allclose(ref, rs.out)
+
+
+def test_something2(reduction_setup):
+    rs = reduction_setup
+    Edge = rs.Edge
+    Vertex = rs.Vertex
+    V2EDim = rs.V2EDim
+    V2E = rs.V2E
+    E2VDim = rs.E2VDim
+    E2V = rs.E2V
+
+    num_vertices = rs.num_vertices
+    num_edges = rs.num_edges
+
+    # TODO(tehrengruber): use different values per location
+    a = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
+    b = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
+    out = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
+
+    @field_operator
+    def nested_reduction(
+        a: Field[[Vertex], int64], b: Field[[Vertex], int64]
+    ) -> Field[[Vertex], int64]:
+        edge_avg = a(E2V[0]) + a(E2V[1])
+        return edge_avg(V2E[0]) + edge_avg(V2E[1]) + a
+
+    nested_reduction(a, a, out=out, offset_provider=rs.offset_provider)
+
+    ref = np.sum(rs.v2e_table, axis=1) * 2
+    assert np.allclose(ref, rs.out)
+
+
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -484,7 +540,11 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("Transformation passes fail in putting `scan` to the top.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -581,6 +641,9 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 def test_ternary_scan(cartesian_case):
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
+
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
@@ -600,6 +663,9 @@ def test_ternary_scan(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(forward, cartesian_case):
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
+
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
     expected = np.arange(1, 1 + k_size, 1, dtype=int32)
@@ -682,7 +748,11 @@ def test_domain(cartesian_case):
 
 
 def test_domain_input_bounds(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
 
     lower_i = 1
@@ -793,7 +863,11 @@ def test_domain_tuple(cartesian_case):
 
 
 def test_where_k_offset(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("IndexFields are not supported yet.")
 
     @gtx.field_operator

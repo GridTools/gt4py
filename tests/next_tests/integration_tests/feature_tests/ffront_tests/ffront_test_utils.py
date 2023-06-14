@@ -30,7 +30,7 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_with_temporaries])
 def fieldview_backend(request):
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend

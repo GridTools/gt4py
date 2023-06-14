@@ -19,6 +19,8 @@ from gt4py.next.iterator import ir
 
 
 class RemapSymbolRefs(NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ["type"]
+
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
         return symbol_map.get(str(node.id), node)
 
@@ -38,6 +40,8 @@ class RemapSymbolRefs(NodeTranslator):
 
 
 class RenameSymbols(NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ["type"]
+
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):

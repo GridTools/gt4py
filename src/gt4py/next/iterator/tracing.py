@@ -19,6 +19,7 @@ from typing import List
 from gt4py.eve import Node
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir_makers as im
+from gt4py.next.iterator.embedded import LocatedField
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -33,6 +34,7 @@ from gt4py.next.iterator.ir import (
     SymRef,
 )
 from gt4py.next.iterator.runtime import CartesianAxis
+from gt4py.next.type_system import type_info, type_specifications, type_translation
 
 
 TRACING = "tracing"
@@ -172,6 +174,7 @@ def trace_function_call(fun, *, args=None):
     body = fun(*list(args))
 
     if isinstance(body, tuple):
+        # TODO(tehrengruber): This fails for nested tuples.
         return _f("make_tuple", *tuple(make_node(b) for b in body))
     else:
         return make_node(body) if body is not None else None
@@ -248,34 +251,54 @@ def closure(domain, stencil, output, inputs):
     )
 
 
-def _make_param_names(fun, args):
-    """Expand *args parameter with remaining args."""
-    args = [*args]
-    param_names = []
-    for p in inspect.signature(fun).parameters.values():
-        if (
-            p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-            or p.kind == inspect.Parameter.POSITIONAL_ONLY
-        ):
-            args.pop(0)
-            param_names.append(p.name)
-        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
-            for i in range(len(args)):
-                param_names.append(f"_var{i}")
+def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
+    params: list[Sym] = []
+    param_infos = list(inspect.signature(fun).parameters.values())
+    for i, arg in enumerate(args):
+        if i < len(param_infos):
+            param_info = param_infos[i]
+        else:
+            param_info = param_infos[-1]
+            assert param_info.kind == inspect.Parameter.VAR_POSITIONAL
+
+        if param_info.kind == inspect.Parameter.VAR_POSITIONAL:
+            param_name = f"_{param_info.name}{i}"
+        elif param_info.kind in [
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.VAR_KEYWORD,
+        ]:
+            param_name = param_info.name
         else:
             raise RuntimeError("Illegal parameter kind")
-    return param_names
+
+        kind, dtype = None, None
+        if use_arg_types:
+            # TODO(tehrengruber): Fields of tuples are not supported yet. Just ignore them for now.
+            is_tuple_field = isinstance(arg, LocatedField) and arg.dtype.fields is not None
+
+            if not is_tuple_field:
+                arg_type = type_translation.from_value(arg)
+                # TODO(tehrengruber): Support more types.
+                if isinstance(arg_type, type_specifications.FieldType):
+                    kind = "Iterator"
+                    dtype = (
+                        arg_type.dtype.kind.name.lower(),  # actual dtype
+                        type_info.is_local_field(arg_type),  # is list
+                    )
+
+        params.append(Sym(id=param_name, kind=kind, dtype=dtype))
+    return params
 
 
-def trace(fun, args):
+def trace(fun, args, *, use_arg_types=True) -> FencilDefinition:
     with TracerContext() as _:
-        param_names = _make_param_names(fun, args)
-        trace_function_call(fun, args=(_s(p) for p in param_names))
+        params = _make_fencil_params(fun, args, use_arg_types=use_arg_types)
+        trace_function_call(fun, args=(_s(param.id) for param in params))
 
         return FencilDefinition(
             id=fun.__name__,
             function_definitions=TracerContext.fundefs,
-            params=list(Sym(id=param) for param in param_names),
+            params=params,
             closures=TracerContext.closures,
         )
 

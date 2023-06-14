@@ -36,7 +36,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_maxover_execution(reduction_setup, fieldview_backend):
     """Testing max_over functionality."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn or fieldview_backend, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn or fieldview_backend,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -57,7 +61,11 @@ def test_maxover_execution(reduction_setup, fieldview_backend):
 
 def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
     """Testing max_over functionality for negative values in array."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip("not yet supported.")
 
     rs = reduction_setup
@@ -79,7 +87,11 @@ def test_maxover_execution_negatives(reduction_setup, fieldview_backend):
 
 def test_minover_execution(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -100,7 +112,11 @@ def test_minover_execution(reduction_setup, fieldview_backend):
 
 def test_minover_execution_float(reduction_setup, fieldview_backend):
     """Testing the min_over functionality"""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip("not implemented yet")
 
     rs = reduction_setup
@@ -142,7 +158,11 @@ def test_reduction_execution(reduction_setup, fieldview_backend):
 
 def test_reduction_expression(reduction_setup, fieldview_backend):
     """Test reduction with an expression directly inside the call."""
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip("Has a bug.")
 
     rs = reduction_setup

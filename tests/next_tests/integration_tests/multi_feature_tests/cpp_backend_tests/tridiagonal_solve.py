@@ -64,7 +64,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(tridiagonal_solve_fencil, [None] * 8)
+    prog = trace(tridiagonal_solve_fencil, [None] * 8, use_arg_types=False)
     offset_provider = {"I": CartesianAxis("IDim"), "J": CartesianAxis("JDim")}
     generated_code = generate(
         prog,

@@ -21,7 +21,7 @@ from gt4py.next.iterator.transforms.global_tmps import (
     Temporary,
     collect_tmps_info,
     split_closures,
-    update_cartesian_domains,
+    update_domains,
 )
 
 
@@ -88,8 +88,8 @@ def test_split_closures():
             ir.Sym(id="d"),
             ir.Sym(id="inp"),
             ir.Sym(id="out"),
-            ir.Sym(id="_gtmp_0"),
-            ir.Sym(id="_gtmp_1"),
+            ir.Sym(id="_tmp_1"),
+            ir.Sym(id="_tmp_2"),
             ir.Sym(id="_gtmp_auto_domain"),
         ],
         closures=[
@@ -102,7 +102,7 @@ def test_split_closures():
                         args=[ir.SymRef(id="foo_inp")],
                     ),
                 ),
-                output=ir.SymRef(id="_gtmp_1"),
+                output=ir.SymRef(id="_tmp_2"),
                 inputs=[ir.SymRef(id="inp")],
             ),
             ir.StencilClosure(
@@ -110,34 +110,34 @@ def test_split_closures():
                 stencil=ir.Lambda(
                     params=[
                         ir.Sym(id="bar_inp"),
-                        ir.Sym(id="_lift_1"),
+                        ir.Sym(id="_tmp_2"),
                     ],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
                         args=[
-                            ir.SymRef(id="_lift_1"),
+                            ir.SymRef(id="_tmp_2"),
                         ],
                     ),
                 ),
-                output=ir.SymRef(id="_gtmp_0"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_1")],
+                output=ir.SymRef(id="_tmp_1"),
+                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_2")],
             ),
             ir.StencilClosure(
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
                 stencil=ir.Lambda(
-                    params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
+                    params=[ir.Sym(id="baz_inp"), ir.Sym(id="_tmp_1")],
                     expr=ir.FunCall(
                         fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="_lift_2")],
+                        args=[ir.SymRef(id="_tmp_1")],
                     ),
                 ),
                 output=ir.SymRef(id="out"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_0")],
+                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_1")],
             ),
         ],
     )
-    actual = split_closures(testee)
-    assert actual.tmps == [Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")]
+    actual = split_closures(testee, offset_provider={})
+    assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
     assert actual.fencil == expected
 
 
@@ -365,7 +365,7 @@ def test_update_cartesian_domains():
             Temporary(id="_gtmp_1"),
         ],
     )
-    actual = update_cartesian_domains(testee, {"I": CartesianAxis("IDim")})
+    actual = update_domains(testee, {"I": CartesianAxis("IDim")})
     assert actual == expected
 
 
@@ -408,8 +408,8 @@ def test_collect_tmps_info():
                 ir.Sym(id="i"),
                 ir.Sym(id="j"),
                 ir.Sym(id="k"),
-                ir.Sym(id="inp"),
-                ir.Sym(id="out"),
+                ir.Sym(id="inp", dtype=("float64", False)),
+                ir.Sym(id="out", dtype=("float64", False)),
                 ir.Sym(id="_gtmp_0"),
                 ir.Sym(id="_gtmp_1"),
             ],
@@ -486,8 +486,8 @@ def test_collect_tmps_info():
         fencil=testee.fencil,
         params=testee.params,
         tmps=[
-            Temporary(id="_gtmp_0", domain=tmp_domain, dtype=3),
-            Temporary(id="_gtmp_1", domain=tmp_domain, dtype=3),
+            Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
+            Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
         ],
     )
     actual = collect_tmps_info(testee, offset_provider={})

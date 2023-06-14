@@ -36,7 +36,7 @@ from next_tests.past_common_fixtures import (
 )
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn])
+@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_with_temporaries])
 def fieldview_backend(request):
     yield request.param
 

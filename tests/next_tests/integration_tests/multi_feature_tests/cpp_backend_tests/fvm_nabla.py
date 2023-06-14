@@ -93,7 +93,7 @@ if __name__ == "__main__":
     imperative = sys.argv[2].lower() == "true"
 
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
-    prog = trace(nabla_fencil, [None] * 7)
+    prog = trace(nabla_fencil, [None] * 7, use_arg_types=False)
     offset_provider = {
         "V2E": DummyConnectivity(max_neighbors=6, has_skip_values=True),
         "E2V": DummyConnectivity(max_neighbors=2, has_skip_values=False),

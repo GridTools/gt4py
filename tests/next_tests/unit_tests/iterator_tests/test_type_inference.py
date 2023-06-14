@@ -19,6 +19,23 @@ from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
 from gt4py.next.iterator.runtime import CartesianAxis
 
 
+def test_insatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    expected_error = (
+        "Type inference failed: Can not satisfy constraints:\n"
+        "  Primitive(name='int32') ≡ Primitive(name='float32')"
+    )
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) == expected_error
+
+
 def test_sym_ref():
     testee = ir.SymRef(id="x")
     expected = ti.TypeVar(idx=0)
@@ -135,11 +152,19 @@ def test_eq():
 def test_if():
     testee = ir.SymRef(id="if_")
     c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
-    t = ti.Val(kind=ti.TypeVar(idx=1), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=0))
+    t = ti.TypeVar(idx=1)
     expected = ti.FunctionType(args=ti.Tuple.from_elems(c, t, t), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(bool⁰, ItOrVal₁[T₂⁰], ItOrVal₁[T₂⁰]) → ItOrVal₁[T₂⁰]"
+    assert ti.pformat(inferred) == "(bool⁰, T₁, T₁) → T₁"
+
+
+def test_if_call():
+    testee = im.if_("cond", im.literal("1", "int32"), im.literal("1", "int32"))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int32⁰"
 
 
 def test_not():
@@ -684,6 +709,9 @@ def test_stencil_closure():
             dtype=ti.TypeVar(idx=0),
             size=ti.Column(),
             current_loc=ti.ANYWHERE,
+            # TODO: remove comment below
+            # TODO(tehrengruber): the TypeVar here should match the defined_loc of the input, but
+            #  we are currently not enforcing it as it breaks for scalar fencil arguments
             defined_loc=ti.TypeVar(idx=1),
         ),
         inputs=ti.Tuple.from_elems(

@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import enum
 from collections.abc import Callable
 from typing import Optional
 
@@ -108,15 +109,25 @@ def _transform_and_extract_lift_args(
 class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """Inline lifted function calls.
 
-    Optionally a predicate function can be passed which can enable or disable inlining of specific function nodes.
+    Optionally a predicate function can be passed which can enable or disable inlining of specific
+    function nodes.
     """
 
-    def __init__(self, predicate: Optional[Callable[[ir.Expr, bool], bool]] = None) -> None:
-        super().__init__()
-        if predicate is None:
-            self.predicate = lambda _1, _2: True
-        else:
-            self.predicate = predicate
+    class Flag(enum.IntEnum):
+        PROPAGATE_SHIFT = 1
+        INLINE_TRIVIAL_DEREF_LIFT = 2
+        INLINE_DEREF_LIFT = 2 + 4
+        PROPAGATE_CAN_DEREF = 8
+        INLINE_LIFTED_ARGS = 16
+
+    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
+
+    flags: int = (
+        Flag.PROPAGATE_SHIFT
+        | Flag.INLINE_DEREF_LIFT
+        | Flag.PROPAGATE_CAN_DEREF
+        | Flag.INLINE_LIFTED_ARGS
+    )
 
     def visit_FunCall(
         self, node: ir.FunCall, *, is_scan_pass_context=False, recurse=True, **kwargs
@@ -132,7 +143,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else node
         )
 
-        if _is_shift_lift(node):
+        if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
             shift = node.fun
             assert len(node.args) == 1
@@ -143,9 +154,15 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ]
             result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             return self.visit(result, recurse=False, **kwargs)
-        elif node.fun == ir.SymRef(id="deref"):
+        elif self.flags & self.Flag.INLINE_DEREF_LIFT and node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
-            if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
+            is_lift = _is_lift(node.args[0])
+            is_eligible = is_lift and self.predicate(node.args[0], is_scan_pass_context)
+            is_trivial = is_lift and len(node.args[0].args) == 0
+            if (
+                self.flags & self.Flag.INLINE_DEREF_LIFT
+                or (self.flags & self.Flag.INLINE_TRIVIAL_DEREF_LIFT and is_trivial)
+            ) and is_eligible:
                 # deref(lift(f)(args...)) -> f(args...)
                 assert isinstance(node.args[0], ir.FunCall) and isinstance(
                     node.args[0].fun, ir.FunCall
@@ -157,7 +174,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 if isinstance(f, ir.Lambda):
                     new_node = inline_lambda(new_node, opcount_preserving=True)
                 return self.visit(new_node, **kwargs)
-        elif node.fun == ir.SymRef(id="can_deref"):
+        elif self.flags & self.Flag.PROPAGATE_CAN_DEREF and node.fun == ir.SymRef(id="can_deref"):
             # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions,
             #  this need to be changed to be 100% compliant
             assert len(node.args) == 1
@@ -178,7 +195,12 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
                     )
                 return res
-        elif _is_lift(node) and len(node.args) > 0 and self.predicate(node, is_scan_pass_context):
+        elif (
+            self.flags & self.Flag.INLINE_LIFTED_ARGS
+            and _is_lift(node)
+            and len(node.args) > 0
+            and self.predicate(node, is_scan_pass_context)
+        ):
             # Inline arguments to lifted stencil calls, e.g.:
             #  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
             # is transformed into:

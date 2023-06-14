@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Iterable, Sequence
+from typing import Iterable, Optional, Sequence
 
 import gt4py.eve as eve
 from gt4py.next.iterator import ir as itir
@@ -21,36 +21,51 @@ from gt4py.next.iterator import ir as itir
 
 @dataclasses.dataclass
 class CountSymbolRefs(eve.NodeVisitor):
-    ref_counts: dict[str, int]
+    ref_counts: dict[str, int] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def apply(
-        cls, node: itir.Node | Sequence[itir.Node], symbol_names: Iterable[str]
+        cls,
+        node: itir.Node | Sequence[itir.Node],
+        symbol_names: Optional[Iterable[str]] = None,
+        *,
+        ignore_builtins: bool = True,
     ) -> dict[str, int]:
-        ref_counts = {name: 0 for name in symbol_names}
-        active_refs = set(symbol_names)
+        if ignore_builtins:
+            inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}
+        else:
+            inactive_refs = set()
 
-        obj = cls(ref_counts=ref_counts)
-        obj.visit(node, active_refs=active_refs)
+        obj = cls()
+        obj.visit(node, inactive_refs=inactive_refs)
 
+        if symbol_names:
+            return {k: obj.ref_counts.get(k, 0) for k in symbol_names}
         return obj.ref_counts
 
-    def visit_SymRef(self, node: itir.SymRef, *, active_refs: set[str]):
-        if node.id in active_refs:
+    def visit_SymRef(self, node: itir.SymRef, *, inactive_refs: set[str]):
+        if node.id not in inactive_refs:
+            if node.id not in self.ref_counts:
+                self.ref_counts[node.id] = 0
             self.ref_counts[node.id] += 1
 
-    def visit_Lambda(self, node: itir.Lambda, *, active_refs: set[str]):
-        active_refs = active_refs - {param.id for param in node.params}
+    def visit_Lambda(self, node: itir.Lambda, *, inactive_refs: set[str]):
+        inactive_refs = inactive_refs | {param.id for param in node.params}
 
-        self.generic_visit(node, active_refs=active_refs)
+        self.generic_visit(node, inactive_refs=inactive_refs)
 
 
 def collect_symbol_refs(
-    node: itir.Node | Sequence[itir.Node], symbol_names: Iterable[str]
+    node: itir.Node | Sequence[itir.Node],
+    symbol_names: Optional[Iterable[str]] = None,
+    *,
+    ignore_builtins: bool = True,
 ) -> list[str]:
     return [
         symbol_name
-        for symbol_name, count in CountSymbolRefs.apply(node, symbol_names).items()
+        for symbol_name, count in CountSymbolRefs.apply(
+            node, symbol_names, ignore_builtins=ignore_builtins
+        ).items()
         if count > 0
     ]
 

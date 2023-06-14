@@ -15,29 +15,32 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.eve.datamodels import field
 from gt4py.next.iterator import embedded
 
 
+FooDim = gtx.Dimension(value="Foo")
+BarDim = gtx.Dimension(value="Foo")
+
+
 def make_located_field(dtype=np.float64):
-    return gtx.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
+    return gtx.np_as_located_field(FooDim, BarDim)(np.zeros((1, 1), dtype=dtype))
 
 
 def test_located_field_1d():
-    foo = gtx.np_as_located_field("foo")(np.zeros((1,)))
+    foo = gtx.np_as_located_field(FooDim)(np.zeros((1,)))
 
     foo[0] = 42
 
-    assert foo.axes[0] == "foo"
+    assert foo.axes[0] == FooDim
     assert foo[0] == 42
 
 
 def test_located_field_2d():
-    foo = gtx.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
+    foo = gtx.np_as_located_field(FooDim, BarDim)(np.zeros((1, 1), dtype=np.float64))
 
     foo[0, 0] = 42
 
-    assert foo.axes[0] == "foo"
+    assert foo.axes[0] == FooDim
     assert foo[0, 0] == 42
     assert foo.dtype == np.float64
 

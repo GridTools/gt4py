@@ -15,7 +15,7 @@
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Union
+from typing import Any, Final, Iterable, Literal
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
@@ -26,8 +26,12 @@ VALUE_TOKEN = types.new_class("VALUE_TOKEN")
 TYPE_TOKEN = types.new_class("TYPE_TOKEN")
 
 
+class IteratorTracer:
+    pass
+
+
 @dataclass(frozen=True)
-class InputTracer:
+class InputTracer(IteratorTracer):
     inp: str
     register_deref: Callable[[str, tuple[ir.OffsetLiteral, ...]], None]
     offsets: tuple[ir.OffsetLiteral, ...] = ()
@@ -43,6 +47,20 @@ class InputTracer:
 
     def deref(self):
         self.register_deref(self.inp, self.offsets)
+        return VALUE_TOKEN
+
+
+@dataclass(frozen=True)
+class CombinedTracer(IteratorTracer):
+    its: tuple[IteratorTracer, ...]
+
+    def shift(self, offsets):
+        return CombinedTracer(tuple(_shift(it) for it in self.its))
+
+    def deref(self):
+        derefed_its = [it.deref() for it in self.its]
+        if not all(it == VALUE_TOKEN for it in derefed_its[1:]):
+            raise AssertionError("The result of a `deref` must be a `VALUE_TOKEN`.")
         return VALUE_TOKEN
 
 
@@ -72,9 +90,9 @@ def _shift(*offsets):
 
 
 @dataclass(frozen=True)
-class AppliedLift:
+class AppliedLift(IteratorTracer):
     stencil: Callable
-    its: tuple[Union[InputTracer, "AppliedLift"]]
+    its: tuple[IteratorTracer, ...]
 
     def shift(self, offsets):
         return AppliedLift(self.stencil, tuple(_shift(it) for it in self.its))
@@ -85,7 +103,7 @@ class AppliedLift:
 
 def _lift(f):
     def apply(*its):
-        if not all(isinstance(it, (InputTracer, AppliedLift)) for it in its):
+        if not all(isinstance(it, IteratorTracer) for it in its):
             raise AssertionError("All arguments must be iterators.")
         return AppliedLift(f, its)
 
@@ -111,6 +129,60 @@ def _scan(f, forward, init):
     return apply
 
 
+def _primitive_constituents(
+    val: Literal[VALUE_TOKEN] | IteratorTracer | tuple,
+) -> Iterable[Literal[VALUE_TOKEN] | IteratorTracer]:
+    if val is VALUE_TOKEN or isinstance(val, IteratorTracer):
+        yield val
+    elif isinstance(val, tuple):
+        for el in val:
+            if isinstance(el, tuple):
+                yield from _primitive_constituents(el)
+            elif el is VALUE_TOKEN or isinstance(el, IteratorTracer):
+                yield el
+            else:
+                raise AssertionError("Expected a `VALUE_TOKEN`, `IteratorTracer` or tuple thereof.")
+    else:
+        raise ValueError()
+
+
+def _if(cond: Literal[VALUE_TOKEN], true_branch, false_branch):
+    assert cond is VALUE_TOKEN
+    if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
+        # broadcast branches to tuple of same length
+        if not isinstance(true_branch, tuple):
+            true_branch = (true_branch,) * len(false_branch)
+        if not isinstance(false_branch, tuple):
+            false_branch = (false_branch,) * len(true_branch)
+
+        result = []
+        for el_true_branch, el_false_branch in zip(true_branch, false_branch):
+            # just reuse `if_` to recursively build up the result
+            result.append(_if(VALUE_TOKEN, el_true_branch, el_false_branch))
+        return tuple(result)
+
+    is_iterator_arg = tuple(
+        isinstance(arg, IteratorTracer) for arg in (cond, true_branch, false_branch)
+    )
+    if is_iterator_arg == (False, True, True):
+        return CombinedTracer((true_branch, false_branch))
+    assert is_iterator_arg == (False, False, False) and all(
+        arg in [VALUE_TOKEN, TYPE_TOKEN] for arg in (cond, true_branch, false_branch)
+    )
+    return VALUE_TOKEN
+
+
+def _make_tuple(*args):
+    return args
+
+
+def _tuple_get(index, tuple_val):
+    if isinstance(tuple_val, tuple):
+        return tuple_val[index]
+    assert tuple_val is VALUE_TOKEN
+    return VALUE_TOKEN
+
+
 _START_CTX: Final = {
     "deref": _deref,
     "can_deref": _can_deref,
@@ -120,6 +192,8 @@ _START_CTX: Final = {
     "reduce": _reduce,
     "neighbors": _neighbors,
     "map_": _map,
+    "if_": _if,
+    "make_tuple": _make_tuple,
 }
 
 
@@ -135,6 +209,10 @@ class TraceShifts(NodeTranslator):
         return _combine
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
+        if node.fun == ir.SymRef(id="tuple_get"):
+            index = int(node.args[0].value)
+            return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
+
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
         return fun(*args)
@@ -157,7 +235,7 @@ class TraceShifts(NodeTranslator):
             tracers.append(InputTracer(inp=inp.id, register_deref=register_deref))
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
-        assert result is VALUE_TOKEN
+        assert all(el is VALUE_TOKEN for el in _primitive_constituents(result))
 
     @classmethod
     def apply(cls, node: ir.StencilClosure) -> dict[str, list[tuple[ir.OffsetLiteral, ...]]]:

@@ -81,12 +81,26 @@ def apply_common_transforms(
         else:
             raise RuntimeError("Inlining lift and lambdas did not converge.")
     else:
-        ir = InlineLambdas.apply(
-            ir, opcount_preserving=True, force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE)
-        )
+        for _ in range(10):
+            inlined = InlineLambdas.apply(
+                ir,
+                opcount_preserving=True,
+                force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
+                force_inline_trivial_lift=True,
+            )  # needed to inline trivial lifts
+            inlined = InlineLifts(
+                flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
+                | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
+                | InlineLifts.Flag.INLINE_LIFTED_ARGS  # needed for UnrollReduce and lift args like `(↑(λ() → constant)`
+            ).visit(inlined)
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining lift and lambdas did not converge.")
 
+    ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
     if lift_mode == LiftMode.FORCE_INLINE:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
         for _ in range(10):
             # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
             inlined = InlineIntoScan().visit(ir)

@@ -47,7 +47,11 @@ def test_external_local_field(reduction_setup, fieldview_backend):
 
 
 def test_external_local_field_only(reduction_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.skip(
             "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
         )
