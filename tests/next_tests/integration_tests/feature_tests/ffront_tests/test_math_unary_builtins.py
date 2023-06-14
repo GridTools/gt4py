@@ -42,8 +42,9 @@ from gt4py.next.program_processors.runners import gtfn_cpu
 from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend
+    fieldview_backend,
 )
+
 
 # Math builtins
 
