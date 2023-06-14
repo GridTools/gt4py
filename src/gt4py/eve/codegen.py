@@ -179,7 +179,6 @@ def format_source(language: str, source: str, *, skip_errors: bool = True, **kwa
     """Format source code if a formatter exists for the specific language."""
     formatter = SOURCE_FORMATTERS.get(language, None)
     try:
-        return source
         if formatter:
             return formatter(source, **kwargs)
         else:
