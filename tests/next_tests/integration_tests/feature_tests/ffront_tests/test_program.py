@@ -164,19 +164,13 @@ def test_calling_fo_from_fo_execution(cartesian_case):
         return field * pow_two(field)
 
     @program
-    def fo_from_fo_program(in_field: cases.IFloatField, out_field: cases.IFloatField):
-        pow_three(in_field, out=out_field)
+    def fo_from_fo_program(in_field: cases.IFloatField, out: cases.IFloatField):
+        pow_three(in_field, out=out)
 
-    in_field = cases.allocate(cartesian_case, fo_from_fo_program, "in_field")()
-    out_field = cases.allocate(cartesian_case, pow_three, cases.RETURN)()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         fo_from_fo_program,
-        in_field,
-        out_field,
-        inout=out_field.array(),
-        ref=in_field.array() ** 3,
+        ref=lambda in_field: in_field**3,
     )
 
 
@@ -198,8 +192,7 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
 
     a = cases.allocate(cartesian_case, prog, "a")()
     b = cases.allocate(cartesian_case, prog, "b")()
-    out_a = cases.allocate(cartesian_case, prog, "out_a")()
-    out_b = cases.allocate(cartesian_case, prog, "out_b")()
+    out_a, out_b = cases.allocate(cartesian_case, prog, "out_a")()
 
     cases.verify(
         cartesian_case,
@@ -223,17 +216,15 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
     @program
     def prog(
-        a: cases.IFloatField,
-        b: cases.IFloatField,
-        out_a: cases.IFloatField,
-        out_b: cases.IFloatField,
+        a: cases.IFloatField, b: cases.IFloatField, out: tuple[cases.IFloatField, cases.IFloatFiel]
     ):
-        pack_tuple(a, b, out=(out_a[1:], out_b[1:]))
+        pack_tuple(a, b, out=(out[0][1:], out[1][1:]))
 
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
-    out_a = cases.allocate(cartesian_case, prog, "out_a").strategy(cases.ConstInitializer(0))()
-    out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
+    out_a, out_b = cases.allocate(cartesian_case, prog, "out_a").strategy(
+        cases.ConstInitializer(0)
+    )()
 
     cases.verify(
         cartesian_case,
@@ -265,18 +256,16 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
         a: cases.IFloatField,
         b: cases.IFloatField,
         c: cases.IFloatField,
-        out_a: cases.IFloatField,
-        out_b: cases.IFloatField,
-        out_c: cases.IFloatField,
+        out: tuple[tuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
     ):
-        pack_tuple(a, b, c, out=((out_a, out_b), out_c))
+        pack_tuple(a, b, c, out=out)
 
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
     c = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(3))()
-    out_a = cases.allocate(cartesian_case, prog, "out_a").strategy(cases.ConstInitializer(0))()
-    out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
-    out_c = cases.allocate(cartesian_case, prog, "out_c").strategy(cases.ConstInitializer(0))()
+    out_a, out_b, out_c = cases.allocate(cartesian_case, prog, "out_a").strategy(
+        cases.ConstInitializer(0)
+    )()
 
     cases.verify(
         cartesian_case,
