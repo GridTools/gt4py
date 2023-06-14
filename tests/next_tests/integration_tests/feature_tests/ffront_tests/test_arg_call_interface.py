@@ -32,7 +32,6 @@ from next_tests.integration_tests.feature_tests.cases import (
     JDim,
     KDim,
     cartesian_case,
-    no_default_backend,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
