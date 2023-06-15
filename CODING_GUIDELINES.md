@@ -139,6 +139,56 @@ Temporarily it may be allowed to split unit tests for a module into multiple `te
 
 Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
 
+#### Feature Test Utils
+
+Feature tests comprise their own utility functions, found under feature_tests/cases.py:
+
+- Fields definitions, e.g. IJKField = Field[[IDim, JDim, KDim], np.int64]:
+
+```
+   @field_operator
+   def decorator_name(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
+       ...
+```
+
+Backend are set automatically with default switched off. However, if explication is needed, they are set as cases attributes.
+
+- Cases fixtures: cartesian_case for structured, e.g. IDim, JDim; unstructured_case for reduction_setup.
+- Parameters allocations to objects, derived directly from the decorator's definitions:
+
+```
+   input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
+	output_param = cases.allocate(case_fixture, decorator_name, cases.RETURN)()
+```
+
+- Data initializations/modifications functions: `allocate` supports additional functionalities, e.g. extend() for dimensions extensions or ConstInitializer() to set a given value across the coordinate space.
+- Decorators verification functions:
+  - cases.verify_with_default_data: used when only ref specification is needed (with usage of lambda function with decorator arguments):
+  ```
+  cases.verify_with_default_data(
+       case_fixture,
+       decorator_name,
+       ref=lambda equivalent expression
+   )
+  ```
+  - cases.verify: used when field and ref specifications are needed
+  ```
+  cases.verify(
+       case_fixture,
+       decorator_name,
+       input_params,
+       out=output_param,
+       ref=numpy.ndarray() equivalent expression
+  )
+  ```
+  FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py:
+- Dimension definition
+- Fieldview backend fixture
+- structured and unstructured dimensions
+- reduction setup fixture, including offsets definition and tables
+
+Note: _The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones)._
+
 TODO: add missing test conventions.
 
 <!--
