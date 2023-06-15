@@ -32,7 +32,7 @@ def _is_applied_lift(arg: ir.Node) -> bool:
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
-#  and introduce a generic predicate argument instead.
+#  and introduce a generic predicate argument for the `eligible_params` instead.
 def inline_lambda(  # noqa: C901  # see todo above
     node: ir.FunCall,
     opcount_preserving=False,
