@@ -273,8 +273,12 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
 
         kind, dtype = None, None
         if use_arg_types:
+            # TODO(tehrengruber): The LocatedField protocol does not have a dtype property and the
+            #  various implementations have different behaviour (some return e.g. `np.dtype("int32")`
+            #  other `np.int32`). We just ignore the error here and postpone fixing this to when
+            #  the new storages land (The implementation here works for LocatedFieldImpl).
             # TODO(tehrengruber): Fields of tuples are not supported yet. Just ignore them for now.
-            is_tuple_field = isinstance(arg, LocatedField) and arg.dtype.fields is not None
+            is_tuple_field = isinstance(arg, LocatedField) and arg.dtype.fields is not None  # type: ignore[attr-defined]
 
             if not is_tuple_field:
                 arg_type = type_translation.from_value(arg)

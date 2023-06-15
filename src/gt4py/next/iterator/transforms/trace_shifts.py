@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-import types
+import enum
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Iterable, Literal
@@ -22,8 +21,9 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.collect_shifts import ALL_NEIGHBORS
 
 
-VALUE_TOKEN = types.new_class("VALUE_TOKEN")
-TYPE_TOKEN = types.new_class("TYPE_TOKEN")
+class Sentinel(enum.Enum):
+    VALUE = object()
+    TYPE = object()
 
 
 class IteratorTracer:
@@ -47,7 +47,7 @@ class InputTracer(IteratorTracer):
 
     def deref(self):
         self.register_deref(self.inp, self.offsets)
-        return VALUE_TOKEN
+        return Sentinel.VALUE
 
 
 @dataclass(frozen=True)
@@ -59,18 +59,19 @@ class CombinedTracer(IteratorTracer):
 
     def deref(self):
         derefed_its = [it.deref() for it in self.its]
-        if not all(it == VALUE_TOKEN for it in derefed_its[1:]):
-            raise AssertionError("The result of a `deref` must be a `VALUE_TOKEN`.")
-        return VALUE_TOKEN
+        if not all(it == Sentinel.VALUE for it in derefed_its[1:]):
+            raise AssertionError("The result of a `deref` must be a `Sentinel.VALUE`.")
+        return Sentinel.VALUE
 
 
 def _combine(*values):
     # `OffsetLiteral`s may occur in `list_get` calls
     if not all(
-        val in [VALUE_TOKEN, TYPE_TOKEN] or isinstance(val, ir.OffsetLiteral) for val in values
+        val in [Sentinel.VALUE, Sentinel.TYPE] or isinstance(val, ir.OffsetLiteral)
+        for val in values
     ):
         raise AssertionError("All arguments must be values or types.")
-    return VALUE_TOKEN
+    return Sentinel.VALUE
 
 
 # implementations of builtins
@@ -79,7 +80,7 @@ def _deref(x):
 
 
 def _can_deref(x):
-    return VALUE_TOKEN
+    return Sentinel.VALUE
 
 
 def _shift(*offsets):
@@ -130,24 +131,26 @@ def _scan(f, forward, init):
 
 
 def _primitive_constituents(
-    val: Literal[VALUE_TOKEN] | IteratorTracer | tuple,
-) -> Iterable[Literal[VALUE_TOKEN] | IteratorTracer]:
-    if val is VALUE_TOKEN or isinstance(val, IteratorTracer):
+    val: Literal[Sentinel.VALUE] | IteratorTracer | tuple,
+) -> Iterable[Literal[Sentinel.VALUE] | IteratorTracer]:
+    if val is Sentinel.VALUE or isinstance(val, IteratorTracer):
         yield val
     elif isinstance(val, tuple):
         for el in val:
             if isinstance(el, tuple):
                 yield from _primitive_constituents(el)
-            elif el is VALUE_TOKEN or isinstance(el, IteratorTracer):
+            elif el is Sentinel.VALUE or isinstance(el, IteratorTracer):
                 yield el
             else:
-                raise AssertionError("Expected a `VALUE_TOKEN`, `IteratorTracer` or tuple thereof.")
+                raise AssertionError(
+                    "Expected a `Sentinel.VALUE`, `IteratorTracer` or tuple thereof."
+                )
     else:
         raise ValueError()
 
 
-def _if(cond: Literal[VALUE_TOKEN], true_branch, false_branch):
-    assert cond is VALUE_TOKEN
+def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
+    assert cond is Sentinel.VALUE
     if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
         # broadcast branches to tuple of same length
         if not isinstance(true_branch, tuple):
@@ -158,7 +161,7 @@ def _if(cond: Literal[VALUE_TOKEN], true_branch, false_branch):
         result = []
         for el_true_branch, el_false_branch in zip(true_branch, false_branch):
             # just reuse `if_` to recursively build up the result
-            result.append(_if(VALUE_TOKEN, el_true_branch, el_false_branch))
+            result.append(_if(Sentinel.VALUE, el_true_branch, el_false_branch))
         return tuple(result)
 
     is_iterator_arg = tuple(
@@ -167,9 +170,9 @@ def _if(cond: Literal[VALUE_TOKEN], true_branch, false_branch):
     if is_iterator_arg == (False, True, True):
         return CombinedTracer((true_branch, false_branch))
     assert is_iterator_arg == (False, False, False) and all(
-        arg in [VALUE_TOKEN, TYPE_TOKEN] for arg in (cond, true_branch, false_branch)
+        arg in [Sentinel.VALUE, Sentinel.TYPE] for arg in (cond, true_branch, false_branch)
     )
-    return VALUE_TOKEN
+    return Sentinel.VALUE
 
 
 def _make_tuple(*args):
@@ -179,8 +182,8 @@ def _make_tuple(*args):
 def _tuple_get(index, tuple_val):
     if isinstance(tuple_val, tuple):
         return tuple_val[index]
-    assert tuple_val is VALUE_TOKEN
-    return VALUE_TOKEN
+    assert tuple_val is Sentinel.VALUE
+    return Sentinel.VALUE
 
 
 _START_CTX: Final = {
@@ -199,17 +202,18 @@ _START_CTX: Final = {
 
 class TraceShifts(NodeTranslator):
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
-        return VALUE_TOKEN
+        return Sentinel.VALUE
 
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
-            return TYPE_TOKEN
+            return Sentinel.TYPE
         return _combine
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):
+            assert isinstance(node.args[0], ir.Literal)
             index = int(node.args[0].value)
             return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
 
@@ -235,7 +239,7 @@ class TraceShifts(NodeTranslator):
             tracers.append(InputTracer(inp=inp.id, register_deref=register_deref))
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
-        assert all(el is VALUE_TOKEN for el in _primitive_constituents(result))
+        assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
 
     @classmethod
     def apply(cls, node: ir.StencilClosure) -> dict[str, list[tuple[ir.OffsetLiteral, ...]]]:

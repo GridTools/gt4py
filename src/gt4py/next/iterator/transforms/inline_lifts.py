@@ -155,7 +155,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             return self.visit(result, recurse=False, **kwargs)
         elif self.flags & self.Flag.INLINE_DEREF_LIFT and node.fun == ir.SymRef(id="deref"):
-            assert len(node.args) == 1
+            assert len(node.args) == 1 and isinstance(node.args[0], ir.FunCall)
             is_lift = _is_lift(node.args[0])
             is_eligible = is_lift and self.predicate(node.args[0], is_scan_pass_context)
             is_trivial = is_lift and len(node.args[0].args) == 0

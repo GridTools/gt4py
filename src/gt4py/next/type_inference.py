@@ -116,17 +116,7 @@ def freshen(dtypes: list[T] | T) -> list[T] | T:
     return [_TypeVarReindexer(indexer).visit(dtype, index_map=index_map) for dtype in dtypes]
 
 
-@typing.overload
-def reindex_vars(dtypes: list[T]) -> list[T]:
-    ...
-
-
-@typing.overload
-def reindex_vars(dtypes: T) -> T:
-    ...
-
-
-def reindex_vars(dtypes: list[T] | T) -> list[T] | T:
+def reindex_vars(dtypes: typing.Any) -> typing.Any:
     """Reindex all type variables, to have nice indices starting at zero."""
 
     def indexer(index_map: dict[int, int]) -> int:

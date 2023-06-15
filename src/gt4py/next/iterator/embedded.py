@@ -1284,8 +1284,8 @@ class TupleOfFields(TupleField):
         return _build_tuple_result(self.data, indices)
 
     def field_setitem(self, indices, value):
-        # if not isinstance(value, tuple):
-        #    raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
+        if not isinstance(value, tuple):
+            raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
 
         _tuple_assign(self.data, value, indices)
 

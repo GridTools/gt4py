@@ -31,7 +31,9 @@ def _is_applied_lift(arg: ir.Node) -> bool:
     )
 
 
-def inline_lambda(
+# TODO(tehrengruber): Reduce complexity of the function by removing the different options here
+#  and introduce a generic predicate argument instead.
+def inline_lambda(  # noqa: C901  # see todo above
     node: ir.FunCall,
     opcount_preserving=False,
     force_inline_lift=False,
@@ -63,7 +65,7 @@ def inline_lambda(
     # inline trivial lifts, i.e. `lift(λ() → 1)()`
     if force_inline_trivial_lift:
         for i, arg in enumerate(node.args):
-            if _is_applied_lift(arg) and len(arg.args) == 0:
+            if _is_applied_lift(arg) and len(arg.args) == 0:  # type: ignore[attr-defined]
                 eligible_params[i] = True
 
     if node.fun.params and not any(eligible_params):
@@ -123,7 +125,7 @@ def inline_lambda(
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
-    PRESERVED_ANNEX_ATTRS = ["type"]
+    PRESERVED_ANNEX_ATTRS = ("type",)
 
     opcount_preserving: bool
 

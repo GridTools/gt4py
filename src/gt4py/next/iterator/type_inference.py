@@ -912,8 +912,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                         size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
                         current_loc=ANYWHERE,
-                        # defined_loc=TypeVar.fresh()
-                        # TODO(tehrengruber): breaks for scalars
+                        # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
                         defined_loc=stencil_param.defined_loc,
                     ),
                 )
