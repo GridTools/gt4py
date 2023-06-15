@@ -113,7 +113,7 @@ def test_undefined_field_program(identity_def):
         identity(in_field, out=out_field)
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=(r"Undeclared or untyped symbol `out_field`."),
     ):
         ProgramParser.apply_to_function(undefined_field_program)
@@ -162,7 +162,7 @@ def test_domain_exception_1(identity_def):
         domain_format_1(in_field, out=in_field, domain=(0, 2))
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_1_program)
 
@@ -181,7 +181,7 @@ def test_domain_exception_2(identity_def):
         domain_format_2(in_field, out=in_field, domain={IDim: (0, 1, 2)})
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_2_program)
 
@@ -200,7 +200,7 @@ def test_domain_exception_3(identity_def):
         domain_format_3(in_field, domain={IDim: (0, 2)})
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_3_program)
 
@@ -221,7 +221,7 @@ def test_domain_exception_4(identity_def):
         )
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_4_program)
 
@@ -240,7 +240,7 @@ def test_domain_exception_5(identity_def):
         domain_format_5(in_field, out=in_field, domain={IDim: ("1.0", 9.0)})
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_5_program)
 
@@ -259,7 +259,7 @@ def test_domain_exception_6(identity_def):
         domain_format_6(in_field, out=in_field, domain={})
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_6_program)
 

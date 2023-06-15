@@ -89,7 +89,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
 
-    with pytest.raises(CompilationError):
+    with pytest.raises(CompilerError):
         cases.verify(cartesian_case, addition, a, b, out=out, ref=a.array() + b.array())
 
 

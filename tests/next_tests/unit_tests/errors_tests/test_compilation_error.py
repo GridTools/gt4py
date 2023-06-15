@@ -1,4 +1,4 @@
-from gt4py.next.errors import CompilationError
+from gt4py.next.errors import CompilerError
 from gt4py.eve import SourceLocation
 
 
@@ -7,10 +7,10 @@ msg = "a message"
 
 
 def test_message():
-    assert CompilationError(loc, msg).msg == msg
+    assert CompilerError(loc, msg).message == msg
 
 
 def test_location():
-    assert CompilationError(loc, msg).location == loc
+    assert CompilerError(loc, msg).location_trace[0] == loc
 
 

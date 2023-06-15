@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
-from gt4py.next.errors import CompilationError, MissingParameterTypeError, InvalidParameterTypeError
+from gt4py.next.errors import CompilerError, MissingParameterAnnotationError, InvalidParameterAnnotationError
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -67,10 +67,10 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_arg(self, node: ast.arg) -> past.DataSymbol:
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
-            raise MissingParameterTypeError(loc, node.arg)
+            raise MissingParameterAnnotationError(loc, node.arg)
         new_type = type_translation.from_type_hint(annotation)
         if not isinstance(new_type, ts.DataType):
-            raise InvalidParameterTypeError(loc, node.arg, new_type)
+            raise InvalidParameterAnnotationError(loc, node.arg, new_type)
         return past.DataSymbol(id=node.arg, location=loc, type=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
@@ -128,7 +128,7 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise CompilationError(loc, "functions must be referenced by their name in function calls")
+            raise CompilerError(loc, "functions must be referenced by their name in function calls")
 
         return past.Call(
             func=new_func,
@@ -166,7 +166,7 @@ class ProgramParser(DialectParser[past.Program]):
             return past.Constant(
                 value=-node.operand.value, type=symbol_type, location=loc
             )
-        raise CompilationError(loc, "unary operators are only applicable to literals")
+        raise CompilerError(loc, "unary operators are only applicable to literals")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)

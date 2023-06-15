@@ -21,6 +21,7 @@ from typing import Callable
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from gt4py.next import common
+from gt4py.next.errors import *
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -34,12 +35,14 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
     try:
         return ast.parse(textwrap.dedent(source_definition.source)).body[0]
     except SyntaxError as err:
-        err.filename = source_definition.filename
-        err.lineno = err.lineno + source_definition.line_offset if err.lineno is not None else None
-        err.offset = err.offset + source_definition.column_offset if err.offset is not None else None
-        err.end_lineno = err.end_lineno + source_definition.line_offset if err.end_lineno is not None else None
-        err.end_offset = err.end_offset + source_definition.column_offset if err.end_offset is not None else None
-        raise err
+        loc = SourceLocation(
+            line=err.lineno + source_definition.line_offset if err.lineno is not None else None,
+            column=err.offset + source_definition.column_offset if err.offset is not None else None,
+            source=source_definition.filename,
+            end_line=err.end_lineno + source_definition.line_offset if err.end_lineno is not None else None,
+            end_column=err.end_offset + source_definition.column_offset if err.end_offset is not None else None
+        )
+        raise CompilerError(loc, err.msg).with_traceback(err.__traceback__)
 
 
 @dataclass(frozen=True, kw_only=True)

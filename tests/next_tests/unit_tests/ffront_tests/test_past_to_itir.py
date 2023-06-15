@@ -166,7 +166,7 @@ def test_inout_prohibited(identity_def):
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
-        CompilationError,
+        CompilerError,
     ) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),

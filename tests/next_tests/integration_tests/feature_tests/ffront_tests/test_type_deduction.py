@@ -386,7 +386,7 @@ def test_adding_bool():
         return a + b
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=(r"Type Field\[\[TDim\], bool\] can not be used in operator `\+`!"),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
@@ -401,7 +401,7 @@ def test_binop_nonmatching_dims():
         return a + b
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=(
             r"Could not promote `Field\[\[X], float64\]` and `Field\[\[Y\], float64\]` to common type in call to +."
         ),
@@ -414,8 +414,8 @@ def test_bitopping_float():
         return a & b
 
     with pytest.raises(
-        CompilationError,
-        match=(r"Type Field\[\[TDim\], float64\] can not be used in operator `\&`! "),
+        CompilerError,
+        match=(r"Type Field\[\[TDim\], float64\] can not be used in operator `\&`!"),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -425,7 +425,7 @@ def test_signing_bool():
         return -a
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Incompatible type for unary operator `\-`: `Field\[\[TDim\], bool\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
@@ -436,7 +436,7 @@ def test_notting_int():
         return not a
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Incompatible type for unary operator `not`: `Field\[\[TDim\], int64\]`!",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
@@ -508,7 +508,7 @@ def test_mismatched_literals():
         return float32("1.0") + float64("1.0")
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=(r"Could not promote `float32` and `float64` to common type in call to +."),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
@@ -538,7 +538,7 @@ def test_broadcast_disjoint():
         return broadcast(a, (BDim, CDim))
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Expected broadcast dimension is missing",
     ):
         _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)
@@ -553,7 +553,7 @@ def test_broadcast_badtype():
         return broadcast(a, (BDim, CDim))
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Expected all broadcast dimensions to be of type Dimension.",
     ):
         _ = FieldOperatorParser.apply_to_function(badtype_broadcast)
@@ -619,7 +619,7 @@ def test_where_bad_dim():
         return where(a, ((5.0, 9.0), (b, 6.0)), b)
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Return arguments need to be of same type",
     ):
         _ = FieldOperatorParser.apply_to_function(bad_dim_where)
@@ -674,7 +674,7 @@ def test_mod_floats():
         return inp % 3.0
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=r"Type float64 can not be used in operator `%`",
     ):
         _ = FieldOperatorParser.apply_to_function(modulo_floats)
@@ -684,7 +684,7 @@ def test_undefined_symbols():
     def return_undefined():
         return undefined_symbol
 
-    with pytest.raises(CompilationError, match="Undeclared symbol"):
+    with pytest.raises(CompilerError, match="Undeclared symbol"):
         _ = FieldOperatorParser.apply_to_function(return_undefined)
 
 
@@ -697,7 +697,7 @@ def test_as_offset_dim():
         return a(as_offset(Boff, b))
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=f"not in list of offset field dimensions",
     ):
         _ = FieldOperatorParser.apply_to_function(as_offset_dim)
@@ -712,7 +712,7 @@ def test_as_offset_dtype():
         return a(as_offset(Boff, b))
 
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=f"Excepted integer for offset field dtype",
     ):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)

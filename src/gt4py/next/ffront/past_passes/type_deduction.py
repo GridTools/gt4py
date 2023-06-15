@@ -145,7 +145,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         # check both types compatible
         for arg in (left, right):
             if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
-                raise CompilationError(
+                raise CompilerError(
                     arg.location, f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
@@ -158,7 +158,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
             right_type
         ):
-            raise CompilationError(
+            raise CompilerError(
                 arg.location,
                 f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
             )
@@ -166,7 +166,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         try:
             return type_info.promote(left_type, right_type)
         except ValueError as ex:
-            raise CompilationError(
+            raise CompilerError(
                 node.location,
                 f"Could not promote `{left_type}` and `{right_type}` to common type"
                 f" in call to `{node.op}`.",
@@ -228,7 +228,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         except ValueError as ex:
-            raise CompilationError(
+            raise CompilerError(
                 node.location, f"Invalid call to `{node.func.id}`."
             ) from ex
 
@@ -243,7 +243,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise CompilationError(
+            raise CompilerError(
                 node.location, f"Undeclared or untyped symbol `{node.id}`."
             )
 

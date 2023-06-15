@@ -875,7 +875,7 @@ def test_where_k_offset(fieldview_backend):
 
 
 def test_undefined_symbols():
-    with pytest.raises(CompilationError, match="Undeclared symbol"):
+    with pytest.raises(CompilerError, match="Undeclared symbol"):
 
         @field_operator
         def return_undefined():
@@ -982,7 +982,7 @@ def test_tuple_unpacking_star_multi(fieldview_backend):
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
     with pytest.raises(
-        CompilationError,
+        CompilerError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
@@ -994,7 +994,7 @@ def test_tuple_unpacking_too_many_values(fieldview_backend):
 
 def test_tuple_unpacking_too_many_values(fieldview_backend):
     with pytest.raises(
-        CompilationError, match=(r"Assignment value must be of type tuple!")
+        CompilerError, match=(r"Assignment value must be of type tuple!")
     ):
 
         @field_operator(backend=fieldview_backend)
