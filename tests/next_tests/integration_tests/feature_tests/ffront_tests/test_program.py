@@ -217,9 +217,12 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
     @program
     def prog(
-        a: cases.IFloatField, b: cases.IFloatField, out: tuple[cases.IFloatField, cases.IFloatFiel]
+        a: cases.IFloatField,
+        b: cases.IFloatField,
+        out_a: cases.IFloatField,
+        out_b: cases.IFloatField,
     ):
-        pack_tuple(a, b, out=(out[0][1:], out[1][1:]))
+        pack_tuple(a, b, out=(out_a[1:], out_b[1:]))
 
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
@@ -256,9 +259,11 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
         a: cases.IFloatField,
         b: cases.IFloatField,
         c: cases.IFloatField,
-        out: tuple[tuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
+        out_a: cases.IFloatField,
+        out_b: cases.IFloatField,
+        out_c: cases.IFloatField,
     ):
-        pack_tuple(a, b, c, out=out)
+        pack_tuple(a, b, c, out=((out_a, out_b), out_c))
 
     a = cases.allocate(cartesian_case, prog, "a").strategy(cases.ConstInitializer(1))()
     b = cases.allocate(cartesian_case, prog, "b").strategy(cases.ConstInitializer(2))()
