@@ -19,7 +19,7 @@ import re
 import numpy as np
 import pytest
 
-from gt4py.next import field_operator, np_as_located_field, program
+import gt4py.next as gtx
 from gt4py.next.common import GTTypeError
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 
@@ -41,7 +41,7 @@ from next_tests.past_common_fixtures import (
 
 
 def test_identity_fo_execution(cartesian_case, identity_def):
-    identity = field_operator(identity_def, backend=cartesian_case.backend)
+    identity = gtx.field_operator(identity_def, backend=cartesian_case.backend)
 
     in_field = cases.allocate(cartesian_case, identity, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -60,7 +60,7 @@ def test_identity_fo_execution(cartesian_case, identity_def):
 
 
 def test_shift_by_one_execution(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def shift_by_one(in_field: cases.IFloatField) -> cases.IFloatField:
         return in_field(Ioff[1])
 
@@ -68,7 +68,7 @@ def test_shift_by_one_execution(cartesian_case):
     # TODO(tehrengruber): slicing located fields not supported currently
     # shift_by_one(in_field, out=out_field[:-1], offset_provider={"Ioff": IDim})
 
-    @program
+    @gtx.program
     def shift_by_one_program(in_field: cases.IFloatField, out_field: cases.IFloatField):
         shift_by_one(in_field, out=out_field[:-1])
 
@@ -88,7 +88,7 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = program(copy_program_def, backend=cartesian_case.backend)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     in_field = cases.allocate(cartesian_case, copy_program, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -108,7 +108,7 @@ def test_copy_execution(cartesian_case, copy_program_def):
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):
-    double_copy_program = program(double_copy_program_def, backend=cartesian_case.backend)
+    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.backend)
 
     in_field = cases.allocate(cartesian_case, double_copy_program, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -132,7 +132,7 @@ def test_double_copy_execution(cartesian_case, double_copy_program_def):
 
 
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
-    copy_restrict_program = program(copy_restrict_program_def, backend=cartesian_case.backend)
+    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
     expected = np.array(
         [1 if i in range(1, 2) else 0 for i in range(0, cartesian_case.default_sizes[IDim])]
     )
@@ -155,15 +155,15 @@ def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
 
 
 def test_calling_fo_from_fo_execution(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def pow_two(field: cases.IFloatField) -> cases.IFloatField:
         return field * field
 
-    @field_operator
+    @gtx.field_operator
     def pow_three(field: cases.IFloatField) -> cases.IFloatField:
         return field * pow_two(field)
 
-    @program
+    @gtx.program
     def fo_from_fo_program(in_field: cases.IFloatField, out: cases.IFloatField):
         pow_three(in_field, out=out)
 
@@ -175,13 +175,13 @@ def test_calling_fo_from_fo_execution(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
     ) -> tuple[cases.IFloatField, cases.IFloatField]:
         return (a, b)
 
-    @program
+    @gtx.program
     def prog(
         a: cases.IFloatField,
         b: cases.IFloatField,
@@ -209,13 +209,13 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
     ) -> tuple[cases.IFloatField, cases.IFloatField]:
         return (a, b)
 
-    @program
+    @gtx.program
     def prog(
         a: cases.IFloatField,
         b: cases.IFloatField,
@@ -248,13 +248,13 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField, c: cases.IFloatField
     ) -> tuple[tuple[cases.IFloatField, cases.IFloatField], cases.IFloatField]:
         return ((a, b), c)
 
-    @program
+    @gtx.program
     def prog(
         a: cases.IFloatField,
         b: cases.IFloatField,
@@ -288,9 +288,9 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
-    copy_program = program(copy_program_def, backend=cartesian_case.backend)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
-    inp = np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
+    inp = gtx.np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out_field").strategy(
         cases.ConstInitializer(1)
     )()
@@ -309,11 +309,11 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
 
 
 def test_dimensions_domain(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def empty_domain_fieldop(a: cases.IJField):
         return a
 
-    @program
+    @gtx.program
     def empty_domain_program(a: cases.IJField, out_field: cases.IJField):
         empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
 
@@ -328,7 +328,7 @@ def test_dimensions_domain(cartesian_case):
 
 
 def test_input_kwargs(cartesian_case):
-    @field_operator(backend=cartesian_case.backend)
+    @gtx.field_operator(backend=cartesian_case.backend)
     def fieldop_input_kwargs(
         a: cases.IJField,
         b: cases.IJField,
@@ -345,7 +345,7 @@ def test_input_kwargs(cartesian_case):
     fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    @program(backend=cartesian_case.backend)
+    @gtx.program(backend=cartesian_case.backend)
     def program_input_kwargs(
         a: cases.IJField,
         b: cases.IJField,
