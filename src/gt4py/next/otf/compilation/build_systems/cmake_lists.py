@@ -23,6 +23,7 @@ from gt4py.next.otf.compilation import common
 class FindDependency(eve.Node):
     name: str
     version: str
+    libraries: list[str]
 
 
 class LinkDependency(eve.Node):
@@ -47,6 +48,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         # Languages
         enable_language(CXX)
+        enable_language(CUDA)
 
         # Paths
         list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
@@ -88,7 +90,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case "gridtools":
                 import gridtools_cpp
 
-                return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
+                snippet = f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
+                if "GridTools::fn_gpu" in dep.libraries:
+                    snippet = f"""
+                        enable_language(CUDA)
+                        {snippet}
+                    """
+                return snippet
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
@@ -103,10 +111,17 @@ def generate_cmakelists_source(
 
     Assumes the name of the gt4py program to be the same as the project name.
     """
-    findlibs = {(d.name, d.version) for d in dependencies}
+    findlibs: dict[tuple[str, str], FindDependency] = {}
+    for dep in dependencies:
+        findlib = findlibs.setdefault(
+            (dep.name, dep.version),
+            FindDependency(name=dep.name, version=dep.version, libraries=[]),
+        )
+        findlib.libraries.append(dep.library)
+
     cmakelists_file = CMakeListsFile(
         project_name=project_name,
-        find_deps=[FindDependency(name=d[0], version=d[1]) for d in findlibs],
+        find_deps=list(findlibs.values()),
         link_deps=[
             LinkDependency(name=d.name, target=project_name, library=d.library)
             for d in dependencies
