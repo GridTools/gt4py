@@ -82,7 +82,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         # hack to try and make the gpu backend work
         target_compile_definitions({{project_name}} PRIVATE GT_FN_GPU)
         target_compile_definitions({{project_name}} PRIVATE GT_FN_BACKEND=gpu)
-        gridtools_setup_target({{project_name}} CUDA_ARCH sm60)
+        gridtools_setup_target({{project_name}} CUDA_ARCH sm_60)
         """
         )
     )
