@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import textwrap
 from typing import Sequence
 
 import gt4py.eve as eve
@@ -42,7 +43,8 @@ class CMakeListsFile(eve.Node):
 
 class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
-        """
+        textwrap.dedent(
+            """
         project({{project_name}})
         cmake_minimum_required(VERSION 3.20.0)
 
@@ -76,7 +78,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         # Link dependencies
         {{"\\n".join(link_deps)}}
+
+        # hack to try and make the gpu backend work
+        target_compile_definitions({{project_name}} PRIVATE GT_FN_GPU)
+        target_compile_definitions({{project_name}} PRIVATE GT_FN_BACKEND=gpu)
+        gridtools_setup_target({{project_name}} CUDA_ARCH sm60)
         """
+        )
     )
 
     LinkDependency = as_jinja("""target_link_libraries({{target}} PUBLIC {{library}})""")
@@ -92,10 +100,12 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 snippet = f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
                 if "GridTools::fn_gpu" in dep.libraries:
-                    snippet = f"""
+                    snippet = textwrap.dedent(
+                        f"""
                         enable_language(CUDA)
                         {snippet}
-                    """
+                        """
+                    )
                 return snippet
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
