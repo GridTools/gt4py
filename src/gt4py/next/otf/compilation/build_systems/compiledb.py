@@ -65,6 +65,8 @@ class CompiledbFactory(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
+            language=source.program_source.language,
+            language_settings=source.program_source.language_settings,
         )
 
         if self.renew_compiledb or not (
@@ -197,19 +199,16 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: cmake.BuildType,
     cmake_flags: list[str],
+    language: type[languages.Cpp],
+    language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        language=languages.Cpp,
-        language_settings=languages.LanguageWithHeaderFilesSettings(
-            formatter_key="",
-            formatter_style=None,
-            file_extension="",
-            header_extension="",
-        ),
+        language=language,
+        language_settings=language_settings,
     )
 
 
