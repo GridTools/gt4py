@@ -141,7 +141,8 @@ Temporarily, tests for testing utilities can be placed next to the module contai
 
 #### Feature Test Utils
 
-Feature tests comprise their own utility functions, found under feature_tests/cases.py:
+Feature tests comprise their own utility functions, found under `feature_tests/cases.py` and are used throughout the whole folder.
+These utils allow for better test automation, thanks to the following features:
 
 - Fields definitions, e.g. IJKField = Field[[IDim, JDim, KDim], np.int64]:
 
@@ -151,27 +152,22 @@ Feature tests comprise their own utility functions, found under feature_tests/ca
        ...
 ```
 
-Backend are set automatically with default switched off. However, if explication is needed, they are set as cases attributes.
+Backend are set automatically with default switched off. However, if explication is needed, they can be set as cases attributes.
 
-- Cases fixtures: cartesian_case for structured, e.g. IDim, JDim; unstructured_case for reduction_setup.
-- Parameters allocations to objects, derived directly from the decorator's definitions:
+- Cases fixtures: cartesian_case for structured, e.g. IDim, JDim; unstructured_case, e.g. EdgeDim.
+- Parameters allocations to objects, derived directly from the decorator's function definition:
 
 ```
    input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
-	output_param = cases.allocate(case_fixture, decorator_name, cases.RETURN)()
+   output_param = cases.allocate(case_fixture, decorator_name, cases.RETURN)()
 ```
 
-- Data initializations/modifications functions: `allocate` supports additional functionalities, e.g. extend() for dimensions extensions or ConstInitializer() to set a given value across the coordinate space.
+- Data initializations/modifications classes to be used as `allocate(...).strategy()` parameters:
+  - ConstInitializer(): initialization with a given value across the coordinate space
+  - ZeroInitializer(): initialization with zeros
+  - UniqueInitializer(): initialization with a unique value in each coordinate point
 - Decorators verification functions:
-  - cases.verify_with_default_data: used when only ref specification is needed (with usage of lambda function with decorator arguments):
-  ```
-  cases.verify_with_default_data(
-       case_fixture,
-       decorator_name,
-       ref=lambda equivalent expression
-   )
-  ```
-  - cases.verify: used when field and ref specifications are needed
+  - `cases.verify()`: used when input and output fields generation cannot be automated. This is for example the case when the `extend()` method needs to be used for an offset or sparse fields are part of the input dataset:
   ```
   cases.verify(
        case_fixture,
@@ -181,11 +177,20 @@ Backend are set automatically with default switched off. However, if explication
        ref=numpy.ndarray() equivalent expression
   )
   ```
-  FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py:
-- Dimension definition
+  - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
+  ```
+  cases.verify_with_default_data(
+       case_fixture,
+       decorator_name,
+       ref=lambda equivalent expression
+   )
+  ```
+
+FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py:
+
 - Fieldview backend fixture
-- structured and unstructured dimensions
-- reduction setup fixture, including offsets definition and tables
+- structured and unstructured dimensions definitions
+- reduction setup fixture, including offsets definitions and tables
 
 Note: _The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones)._
 
