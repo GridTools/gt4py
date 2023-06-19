@@ -59,14 +59,14 @@ def test_copy_parsing(copy_program_def):
         id=eve.SymbolName("copy_program"),
         params=[
             P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out"), type=field_type),
         ],
         body=[
             P(
                 past.Call,
                 func=P(past.Name, id=past.SymbolRef("identity")),
                 args=[P(past.Name, id=past.SymbolRef("in_field"))],
-                kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
+                kwargs={"out": P(past.Name, id=past.SymbolRef("out"))},
             )
         ],
         location=P(past.SourceLocation),
@@ -87,7 +87,7 @@ def test_double_copy_parsing(double_copy_program_def):
         params=[
             P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
             P(past.Symbol, id=eve.SymbolName("intermediate_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out"), type=field_type),
         ],
         body=[
             P(
@@ -100,7 +100,7 @@ def test_double_copy_parsing(double_copy_program_def):
                 past.Call,
                 func=P(past.Name, id=past.SymbolRef("identity")),
                 args=[P(past.Name, id=past.SymbolRef("intermediate_field"))],
-                kwargs={"out": P(past.Name, id=past.SymbolRef("out_field"))},
+                kwargs={"out": P(past.Name, id=past.SymbolRef("out"))},
             ),
         ],
     )
@@ -135,7 +135,7 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
         id=eve.SymbolName("copy_restrict_program"),
         params=[
             P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("out_field"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("out"), type=field_type),
         ],
         body=[
             P(
@@ -145,7 +145,7 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
                 kwargs={
                     "out": P(
                         past.Subscript,
-                        value=P(past.Name, id=past.SymbolRef("out_field")),
+                        value=P(past.Name, id=past.SymbolRef("out")),
                         slice_=slice_pattern_node,
                     )
                 },
