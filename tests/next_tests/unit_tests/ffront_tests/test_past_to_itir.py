@@ -59,7 +59,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int"),
+                        P(itir.Literal, value="0", type="int32"),
                         P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
                     ],
                 )
