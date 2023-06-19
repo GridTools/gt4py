@@ -438,19 +438,20 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 consumed_domains.append(consumed_domain)
 
             # compute the bounds of all consumed domains
-            param_domain_ranges = {}
-            for dim in consumed_domains[0].ranges.keys():
-                start = functools.reduce(
-                    lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
-                    [consumed_domain.ranges[dim].start for consumed_domain in consumed_domains],
-                )
-                stop = functools.reduce(
-                    lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
-                    [consumed_domain.ranges[dim].stop for consumed_domain in consumed_domains],
-                )
-                param_domain_ranges[dim] = SymbolicRange(start, stop)
-            assert domain.fun.id not in domains
-            domains[param] = SymbolicDomain(domain.fun.id, param_domain_ranges).as_expr()
+            if consumed_domains:
+                param_domain_ranges = {}
+                for dim in consumed_domains[0].ranges.keys():
+                    start = functools.reduce(
+                        lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+                        [consumed_domain.ranges[dim].start for consumed_domain in consumed_domains],
+                    )
+                    stop = functools.reduce(
+                        lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+                        [consumed_domain.ranges[dim].stop for consumed_domain in consumed_domains],
+                    )
+                    param_domain_ranges[dim] = SymbolicRange(start, stop)
+                assert domain.fun.id not in domains
+                domains[param] = SymbolicDomain(domain.fun.id, param_domain_ranges).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(

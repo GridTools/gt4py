@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve.utils import UIDs
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir, ir_makers as im
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
@@ -147,25 +147,13 @@ def test_update_cartesian_domains():
             id="f",
             function_definitions=[],
             params=[
-                ir.Sym(id="i"),
-                ir.Sym(id="j"),
-                ir.Sym(id="k"),
-                ir.Sym(id="inp"),
-                ir.Sym(id="out"),
-                ir.Sym(id="_gtmp_0"),
-                ir.Sym(id="_gtmp_1"),
-                ir.Sym(id="_gtmp_auto_domain"),
+                im.sym(name)
+                for name in ("i", "j", "k", "inp", "out", "_gtmp_0", "_gtmp_1", "_gtmp_auto_domain")
             ],
             closures=[
                 ir.StencilClosure(
                     domain=AUTO_DOMAIN,
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="foo_inp")],
-                        expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
-                            args=[ir.SymRef(id="foo_inp")],
-                        ),
-                    ),
+                    stencil=im.lambda_("foo_inp")(im.deref("foo_inp")),
                     output=ir.SymRef(id="_gtmp_1"),
                     inputs=[ir.SymRef(id="inp")],
                 ),
@@ -247,7 +235,10 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                    im.plus(
+                                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
+                                    ),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
                                         args=[
@@ -263,7 +254,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -288,7 +279,10 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                    im.plus(
+                                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
+                                    ),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
                                         args=[
