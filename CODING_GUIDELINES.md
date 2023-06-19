@@ -154,10 +154,13 @@ These utils comprise features for better test automation and simplification:
     - Decorators verification functions:
         - `cases.verify()`: used when input and output fields generation cannot be automated. This is for example the case when the `extend()` method needs to be used for an offset or sparse fields are part of the input dataset:
         - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
-
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
 
-FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py: - Fieldview backend fixture - structured and unstructured dimensions definitions - reduction setup fixture, including offsets definitions and tables
+FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py:
+
+    - Fieldview backend fixture
+    - structured and unstructured dimensions definitions
+    - reduction setup fixture, including offsets definitions and tables
 
 Note: The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones).\_
 
