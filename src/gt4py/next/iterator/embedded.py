@@ -1005,8 +1005,6 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], LocatedFieldImpl]:
-    assert all(isinstance(axis, common.Dimension) for axis in axes)
-
     def _maker(a: np.ndarray) -> LocatedFieldImpl:
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given axes")
