@@ -44,7 +44,7 @@ class UnsatisfiableConstraintsError(Exception):
         self.unsatisfiable_constraints = unsatisfiable_constraints
         msg = "Type inference failed: Can not satisfy constraints:"
         for lhs, rhs in unsatisfiable_constraints:
-            msg += f"\n  {lhs.value} ≡ {rhs.value}"
+            msg += f"\n  {lhs} ≡ {rhs}"
         super().__init__(msg)
 
 
