@@ -20,8 +20,8 @@ import gt4py.next as gtx
 from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     V2E,
     Edge,
     IDim,

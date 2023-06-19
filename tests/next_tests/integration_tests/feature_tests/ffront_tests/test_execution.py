@@ -35,8 +35,8 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     C2E,
     E2V,
     V2E,
